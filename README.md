@@ -9,7 +9,7 @@ A comprehensive Terraform provider for managing your Anypoint Platform resources
 
 ##  Why Use This Provider?
 
--   ** Automate Everything:** Codify your Anypoint Platform setup to ensure consistency and eliminate manual errors
+-   ** Automate Everything:** Codify your Anypoint Platform setup to ensure consistency and eliminate manual errors.
 -   ** Improve Collaboration:** Use version control to manage your infrastructure, making it easier for teams to collaborate and review changes
 -   ** Increase Agility:** Spin up or tear down entire environments in minutes, not hours, allowing you to innovate faster
 -   ** Enhance Governance:** Enforce standards and policies across all your environments by defining them in code
