@@ -530,6 +530,8 @@ make test
 make testacc
 ```
 
+**Note:** This repository requires GPG-signed commits. Ensure your Git is configured with a valid GPG key before committing.
+
 ##  Version History
 
 See [CHANGELOG.md](./CHANGELOG.md) for a detailed version history.
