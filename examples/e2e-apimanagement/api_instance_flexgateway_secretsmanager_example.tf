@@ -1142,47 +1142,6 @@ resource "anypoint_api_instance_alert" "request_count" {
 }
 
 ###############################################################################
-# Step 8 – API Governance Profile
-###############################################################################
-# resource "anypoint_api_governance_profile" "best_practices" {
-#   organization_id = var.organization_id
-#   name            = var.governance_profile_name
-#   description     = "Governance profile created by Terraform comprehensive e2e"
-#   filter          = "scope:http-api"
-
-#   rulesets = [
-#     {
-#       group_id = var.mulesoft_policy_group_id
-#       asset_id = "api-catalog-information-best-practices"
-#       version  = "latest"
-#     },
-#     {
-#       group_id = var.mulesoft_policy_group_id
-#       asset_id = "api-documentation-best-practices"
-#       version  = "latest"
-#     }
-#   ]
-
-#   notification_config = {
-#     enabled = true
-#     notifications = [
-#       {
-#         enabled   = true
-#         condition = "OnFailure"
-#         recipients = [
-#           {
-#             contact_type      = "Publisher"
-#             notification_type = "Email"
-#             value             = ""
-#             label             = ""
-#           }
-#         ]
-#       }
-#     ]
-#   }
-# }
-
-###############################################################################
 # Step 8 – API Instance Promotion
 # Promotes the API instance (with its policies, SLA tiers, and alerts)
 # from the current environment into a target environment.

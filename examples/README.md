@@ -11,7 +11,6 @@ examples/
 ├── accessmanagement/     # Access Management resources
 │   ├── environment/      # Environment management
 │   ├── organization/     # Organization management
-│   ├── rolegroup/        # Role group management
 │   ├── team/            # Team management
 │   └── user/            # User management
 ├── apimanagement/       # API Management resources
@@ -32,9 +31,7 @@ examples/
 │   ├── privatespaceconnection/      # VPN and connections
 │   ├── privatespaceupgrade/         # Private space upgrades
 │   ├── tlscontext/      # TLS/SSL configuration
-│   ├── transitgateway/  # Transit gateway management
 │   └── vpnconnection/   # VPN connection management
-├── governance/          # API Governance resources
 └── secretsmanagement/   # Secrets Management resources
 ```
 
@@ -46,7 +43,6 @@ Manage users, teams, organizations, and environments within Anypoint Platform.
 **Resources:**
 - **Environment** - Development, staging, production environments
 - **Organization** - Business group and organization hierarchy
-- **Role Group** - Role group management and user/role assignments
 - **Team** - Team management with parent-child relationships
 - **User** - User accounts and profile management
 
@@ -82,7 +78,6 @@ Manage CloudHub 2.0 infrastructure including private spaces, networking, and sec
 - **Private Space Connection** - VPN and direct connections
 - **Private Space Upgrade** - Upgrade management and versioning
 - **TLS Context** - SSL/TLS certificate management
-- **Transit Gateway** - Network transit gateway management
 - **VPN Connection** - VPN connection configuration
 - **Firewall Rules** - Inbound and outbound traffic control
 
@@ -144,17 +139,15 @@ provider "anypoint" {
 
 ### 🔧 **Development Environment**
 1. Create a development [environment](./accessmanagement/environment/)
-2. Set up [role groups](./accessmanagement/rolegroup/) for access control
-3. Set up a small [private space](./cloudhub2/privatespace/)
+2. Set up a small [private space](./cloudhub2/privatespace/)
 4. Configure basic [firewall rules](./cloudhub2/firewallrules/)
 
 ### 🏭 **Production Environment**
 1. Create production [organization](./accessmanagement/organization/) structure
-2. Configure [role groups](./accessmanagement/rolegroup/) and permissions
-3. Deploy production [private space](./cloudhub2/privatespace/)
+2. Deploy production [private space](./cloudhub2/privatespace/)
 4. Configure [advanced settings](./cloudhub2/privatespaceadvancedconfig/)
 5. Set up [TLS contexts](./cloudhub2/tlscontext/) for security
-6. Configure [VPN connections](./cloudhub2/vpnconnection/) and [transit gateways](./cloudhub2/transitgateway/)
+6. Configure [VPN connections](./cloudhub2/vpnconnection/)
 7. Implement comprehensive [firewall rules](./cloudhub2/firewallrules/)
 
 ## Best Practices

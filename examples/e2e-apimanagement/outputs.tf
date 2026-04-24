@@ -138,10 +138,3 @@ output "promoted_api_instance_status" {
   description = "Status of the promoted API instance"
   value       = anypoint_api_instance_promotion.to_production.status
 }
-
-# ── Governance ───────────────────────────────────────────────────────────────
-
-# output "governance_profile_id" {
-#   description = "ID of the API governance profile"
-#   value       = anypoint_api_governance_profile.best_practices.id
-# }

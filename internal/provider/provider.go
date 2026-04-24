@@ -23,7 +23,6 @@ import (
 	resourceAgentsTools "github.com/mulesoft/terraform-provider-anypoint/internal/resource/agentstools"
 	resourceApiManagement "github.com/mulesoft/terraform-provider-anypoint/internal/resource/apimanagement"
 	resourceCloudHub2 "github.com/mulesoft/terraform-provider-anypoint/internal/resource/cloudhub2"
-	resourceGovernance "github.com/mulesoft/terraform-provider-anypoint/internal/resource/governance"
 	resourceSecretsManagement "github.com/mulesoft/terraform-provider-anypoint/internal/resource/secretsmanagement"
 )
 
@@ -210,7 +209,6 @@ func (p *AnypointProvider) Resources(ctx context.Context) []func() resource.Reso
 		resourceCloudHub2.NewPrivateSpaceConnectionResource,
 		resourceCloudHub2.NewFirewallRulesResource,
 		resourceCloudHub2.NewVPNConnectionResource,
-		resourceCloudHub2.NewTransitGatewayResource,
 		resourceCloudHub2.NewPrivateSpaceAssociationResource,
 		resourceCloudHub2.NewPrivateSpaceUpgradeResource,
 		resourceCloudHub2.NewPrivateSpaceAdvancedConfigResource,
@@ -221,9 +219,6 @@ func (p *AnypointProvider) Resources(ctx context.Context) []func() resource.Reso
 		resourceAccessManagement.NewTeamResource,
 		resourceAccessManagement.NewConnectedAppResource,
 		resourceAccessManagement.NewConnectedAppScopesResource,
-		resourceAccessManagement.NewRoleGroupResource,
-		resourceAccessManagement.NewRoleGroupRolesResource,
-		resourceAccessManagement.NewRoleGroupUsersResource,
 		resourceAccessManagement.NewTeamRolesResource,
 		resourceAccessManagement.NewTeamMembersResource,
 		// API Management resources
@@ -238,8 +233,6 @@ func (p *AnypointProvider) Resources(ctx context.Context) []func() resource.Reso
 		// Agents Tools resources
 		resourceAgentsTools.NewAgentInstanceResource,
 		resourceAgentsTools.NewMCPServerResource,
-		// Governance resources
-		resourceGovernance.NewGovernanceProfileResource,
 		// Secrets Management resources
 		resourceSecretsManagement.NewSecretGroupResource,
 		resourceSecretsManagement.NewKeystoreResource,

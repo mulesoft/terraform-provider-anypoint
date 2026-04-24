@@ -14,9 +14,6 @@ This document provides a comprehensive summary of all resources supported by the
 - Connected App Scopes
 - Environment
 - Organization
-- Role Group
-- Role Group Roles
-- Role Group Users
 - Team
 - Team Members
 - Team Roles
@@ -39,11 +36,7 @@ This document provides a comprehensive summary of all resources supported by the
 - Private Space Connection
 - Private Space Upgrade
 - TLS Context (CloudHub2)
-- Transit Gateway
 - VPN Connection
-
-### Governance (1 Resource)
-- Governance Profile
 
 ### Secrets Management (8 Resources)
 - Certificate
@@ -86,7 +79,6 @@ Resources that call multiple APIs during creation:
 
 ### Composite Update Operations
 Resources that perform complex update logic:
-- **Role Group Roles/Users**: Remove existing + Add new
 - **Team Members/Roles**: Remove existing + Add new
 - **VPN Connection**: `DeleteVPN() + implicit add through Read`
 
@@ -107,9 +99,6 @@ Resources requiring additional API calls:
 - UpdateConnectedAppScopes(), GetConnectedAppScopes(), DeleteConnectedAppScopes()
 - CreateEnvironment(), GetEnvironment(), UpdateEnvironment(), DeleteEnvironment()
 - CreateOrganization(), GetOrganization(), DeleteOrganization(), WaitForOrganizationDeletion()
-- CreateRoleGroup(), GetRoleGroup(), UpdateRoleGroup(), DeleteRoleGroup()
-- AssignRolesToRoleGroup(), GetRoleGroupRoles(), RemoveRolesFromRoleGroup()
-- AssignUsersToRoleGroup(), GetRoleGroupUsers(), RemoveUsersFromRoleGroup()
 - CreateTeam(), GetTeam(), UpdateTeam(), UpdateTeamParent(), DeleteTeam()
 - AddMembersToTeam(), GetTeamMembers(), RemoveMembersFromTeam()
 - AssignRolesToTeam(), GetTeamRoles(), RemoveRolesFromTeam()
@@ -132,11 +121,7 @@ Resources requiring additional API calls:
 - CreatePrivateSpaceConnection(), GetPrivateSpaceConnection(), UpdatePrivateSpaceConnection(), DeletePrivateSpaceConnection()
 - UpgradePrivateSpace(), DeletePrivateSpaceUpgrade()
 - CreateTLSContext(), GetTLSContext(), UpdateTLSContext(), DeleteTLSContext(), ListTLSContexts()
-- CreateTransitGateway(), GetTransitGateway(), UpdateTransitGateway(), DeleteTransitGateway()
 - CreateVPNConnection(), GetVPNConnection(), DeleteVPN(), DeleteVPNConnection()
-
-### Governance Client Methods
-- CreateProfile(), GetProfile(), UpdateProfile(), DeleteProfile()
 
 ### Secrets Management Client Methods
 - CreateCertificate(), GetCertificate(), UpdateCertificate(), DeleteCertificate()
@@ -167,7 +152,6 @@ Resources requiring additional API calls:
 - **Private Space Association**: No Read API - state maintained client-side only
 - **Private Space Upgrade**: One-time scheduled operation - update not supported
 - **TLS Context**: Create returns 201 with no body, requires ListTLSContexts() to find created resource
-- **Transit Gateway**: Only name field can be updated
 - **VPN Connection**: Update implemented as delete + re-add
 
 ### Secrets Management
@@ -182,7 +166,6 @@ Resources requiring additional API calls:
 - **Access Management**: `/internal/resource/accessmanagement/`
 - **API Management**: `/internal/resource/apimanagement/`
 - **CloudHub 2.0**: `/internal/resource/cloudhub2/`
-- **Governance**: `/internal/resource/governance/`
 - **Secrets Management**: `/internal/resource/secretsmanagement/`
 
 ### Data Source Implementations

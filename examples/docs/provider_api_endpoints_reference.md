@@ -19,7 +19,6 @@ This document provides a comprehensive reference of all REST API endpoints used 
 | Monitoring | `/monitoring/api/alerts/api/v2/` | Alert management |
 | Gateway Manager | `/gatewaymanager/api/v1/` | Flex Gateway management |
 | CloudHub 2.0 | `/runtimefabric/api/` | Private space and networking |
-| Governance | `/governance/xapi/api/v1/` | API governance profiles |
 | Secrets Management | `/secrets-manager/api/v1/` | Secrets, certificates, and TLS contexts |
 
 ---
@@ -61,31 +60,6 @@ This document provides a comprehensive reference of all REST API endpoints used 
 
 **Notes:** Update not supported; Delete includes polling for async completion
 
-### Role Group
-| Operation | Method | Endpoint |
-|-----------|--------|----------|
-| Create | POST | `/accounts/api/organizations/{orgId}/rolegroups` |
-| Read | GET | `/accounts/api/organizations/{orgId}/rolegroups/{roleGroupId}` |
-| Update | PUT | `/accounts/api/organizations/{orgId}/rolegroups/{roleGroupId}` |
-| Delete | DELETE | `/accounts/api/organizations/{orgId}/rolegroups/{roleGroupId}` |
-
-### Role Group Roles
-| Operation | Method | Endpoint |
-|-----------|--------|----------|
-| Assign | POST | `/accounts/api/organizations/{orgId}/rolegroups/{roleGroupId}/roles` |
-| Read | GET | `/accounts/api/organizations/{orgId}/rolegroups/{roleGroupId}/roles` |
-| Remove | DELETE | `/accounts/api/organizations/{orgId}/rolegroups/{roleGroupId}/roles` |
-
-**Notes:** Update = Remove (DELETE) + Assign (POST)
-
-### Role Group Users
-| Operation | Method | Endpoint |
-|-----------|--------|----------|
-| Assign | POST | `/accounts/api/organizations/{orgId}/rolegroups/{roleGroupId}/users` |
-| Read | GET | `/accounts/api/organizations/{orgId}/rolegroups/{roleGroupId}/users` |
-| Remove | DELETE | `/accounts/api/organizations/{orgId}/rolegroups/{roleGroupId}/users` |
-
-**Notes:** Update = Remove (DELETE) + Assign (POST)
 
 ### Team
 | Operation | Method | Endpoint |
@@ -252,16 +226,6 @@ This document provides a comprehensive reference of all REST API endpoints used 
 
 **Notes:** Create returns 201 with no body; Uses List to find created resource
 
-### Transit Gateway
-| Operation | Method | Endpoint |
-|-----------|--------|----------|
-| Create | POST | `/runtimefabric/api/organizations/{orgId}/privatespaces/{privateSpaceId}/transitgateways` |
-| Read | GET | `/runtimefabric/api/organizations/{orgId}/privatespaces/{privateSpaceId}/transitgateways/{transitGatewayId}` |
-| Update | PUT | `/runtimefabric/api/organizations/{orgId}/privatespaces/{privateSpaceId}/transitgateways/{transitGatewayId}` |
-| Delete | DELETE | `/runtimefabric/api/organizations/{orgId}/privatespaces/{privateSpaceId}/transitgateways/{transitGatewayId}` |
-
-**Notes:** Only name field can be updated
-
 ### VPN Connection
 | Operation | Method | Endpoint |
 |-----------|--------|----------|
@@ -271,18 +235,6 @@ This document provides a comprehensive reference of all REST API endpoints used 
 | Delete VPN | DELETE | `/runtimefabric/api/organizations/{orgId}/privatespaces/{privateSpaceId}/connections/{connectionId}/vpns/{vpnId}` |
 
 **Notes:** Update = Delete VPN + implicit re-add through Read
-
----
-
-## Governance APIs
-
-### Governance Profile
-| Operation | Method | Endpoint |
-|-----------|--------|----------|
-| Create | POST | `/governance/xapi/api/v1/profiles` |
-| Read | GET | `/governance/xapi/api/v1/profiles/{profileId}` |
-| Update | PUT | `/governance/xapi/api/v1/profiles/{profileId}` |
-| Delete | DELETE | `/governance/xapi/api/v1/profiles/{profileId}` |
 
 ---
 
@@ -367,7 +319,6 @@ This document provides a comprehensive reference of all REST API endpoints used 
 | `{clientID}` | Connected App Client ID | `abc123def456` |
 | `{userId}` | User ID (UUID) | `c3d4e5f6-a7b8-9012-cdef-123456789012` |
 | `{teamId}` | Team ID (UUID) | `d4e5f6a7-b8c9-0123-def0-123456789abc` |
-| `{roleGroupId}` | Role Group ID (UUID) | `e5f6a7b8-c9d0-1234-ef01-23456789abcd` |
 | `{secretGroupId}` | Secret Group ID | `sg-12345678-abcd-ef01-2345-6789abcdef01` |
 | `{certificateId}` | Certificate ID | `cert-123abc` |
 | `{keystoreId}` | Keystore ID | `ks-456def` |

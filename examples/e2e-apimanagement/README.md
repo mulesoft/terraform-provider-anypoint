@@ -33,7 +33,6 @@ Step 6b (commented)   7 outbound API policies (require upstream_id)
 Step 6c (active)      anypoint_api_instance_sla_tier
 Step 7  (active)      anypoint_api_instance_alert
 Step 8  (active)      anypoint_api_instance_promotion  (promotes to target environment)
-        (commented)   anypoint_api_governance_profile
 ```
 
 Steps 1–3 (private space, network, VPN) are commented out so you can run the example against an existing environment without creating infrastructure. Uncomment them for a fully greenfield deployment.

@@ -3,9 +3,6 @@ Connected App,Access Management,anypoint_connectedapp,CreateConnectedApp(),GetCo
 Connected App Scopes,Access Management,anypoint_connectedapp_scopes,UpdateConnectedAppScopes(),GetConnectedAppScopes(),UpdateConnectedAppScopes(),DeleteConnectedAppScopes(),
 Environment,Access Management,anypoint_environment,CreateEnvironment(),GetEnvironment(),UpdateEnvironment(),DeleteEnvironment(),
 Organization,Access Management,anypoint_organization,CreateOrganization(),GetOrganization(),Not Supported,DeleteOrganization() + WaitForOrganizationDeletion(),Update returns warning
-Role Group,Access Management,anypoint_rolegroup,CreateRoleGroup(),GetRoleGroup(),UpdateRoleGroup(),DeleteRoleGroup(),
-Role Group Roles,Access Management,anypoint_rolegroup_roles,AssignRolesToRoleGroup(),GetRoleGroupRoles(),RemoveRolesFromRoleGroup() + AssignRolesToRoleGroup(),RemoveRolesFromRoleGroup(),
-Role Group Users,Access Management,anypoint_rolegroup_users,AssignUsersToRoleGroup(),GetRoleGroupUsers(),RemoveUsersFromRoleGroup() + AssignUsersToRoleGroup(),RemoveUsersFromRoleGroup(),
 Team,Access Management,anypoint_team,CreateTeam(),GetTeam(),UpdateTeam() + UpdateTeamParent(),DeleteTeam(),
 Team Members,Access Management,anypoint_team_members,AddMembersToTeam(),GetTeamMembers(),RemoveMembersFromTeam() + AddMembersToTeam(),RemoveMembersFromTeam(),
 Team Roles,Access Management,anypoint_team_roles,AssignRolesToTeam(),GetTeamRoles(),RemoveRolesFromTeam() + AssignRolesToTeam(),RemoveRolesFromTeam(),
@@ -24,9 +21,7 @@ Private Space Association,CloudHub 2.0,anypoint_private_space_association,Create
 Private Space Connection,CloudHub 2.0,anypoint_private_space_connection,CreatePrivateSpaceConnection(),GetPrivateSpaceConnection(),UpdatePrivateSpaceConnection(),DeletePrivateSpaceConnection(),
 Private Space Upgrade,CloudHub 2.0,anypoint_private_space_upgrade,UpgradePrivateSpace(),No refresh,Not Supported,DeletePrivateSpaceUpgrade(),One-time operation - update not supported
 TLS Context (CloudHub2),CloudHub 2.0,anypoint_tls_context,CreateTLSContext() + ListTLSContexts(),GetTLSContext(),UpdateTLSContext(),DeleteTLSContext(),Create returns 201 with no body
-Transit Gateway,CloudHub 2.0,anypoint_transit_gateway,CreateTransitGateway(),GetTransitGateway(),UpdateTransitGateway(),DeleteTransitGateway(),Only name can be updated
 VPN Connection,CloudHub 2.0,anypoint_vpn_connection,CreateVPNConnection(),GetVPNConnection(),DeleteVPN() + implicit add,DeleteVPNConnection(),Update calculated via removal
-Governance Profile,Governance,anypoint_api_governance_profile,CreateProfile(),GetProfile(),UpdateProfile(),DeleteProfile(),
 Certificate,Secrets Management,anypoint_secret_group_certificate,CreateCertificate(),GetCertificate(),UpdateCertificate(),DeleteCertificate(),
 Certificate Pin Set,Secrets Management,anypoint_secret_group_certificate_pinset,CreateCertificatePinset(),GetCertificatePinset(),UpdateCertificatePinset(),DeleteCertificatePinset(),
 Keystore,Secrets Management,anypoint_secret_group_keystore,CreateKeystore(),GetKeystore(),UpdateKeystore(),DeleteKeystore(),Supports PEM/JKS/PKCS12/JCEKS formats

@@ -513,10 +513,8 @@ output "private_network" {
 
 # 1. Deploy applications to the private space using the environment IDs
 #
-# 2. Configure VPN or Transit Gateway connections to the private network:
+# 2. Configure VPN connections to the private network:
 #    resource "anypoint_vpn_connection" "site_to_site" { ... }
-#    OR
-#    resource "anypoint_transit_gateway" "tgw" { ... }
 #
 # 3. Set up API instances and policies using the environment IDs
 #

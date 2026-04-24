@@ -213,11 +213,3 @@ variable "alert_email" {
   type        = string
   default     = "admin@example.com"
 }
-
-# ── Governance ───────────────────────────────────────────────────────────────
-
-variable "governance_profile_name" {
-  description = "Name for the API governance profile"
-  type        = string
-  default     = "tf-e2e-governance"
-}

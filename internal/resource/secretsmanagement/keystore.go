@@ -286,13 +286,6 @@ func (r *KeystoreResource) Update(ctx context.Context, req resource.UpdateReques
 
 	r.flattenKeystore(ks, &plan, orgID, envID, sgID)
 
-	// Preserve sensitive inputs that the API doesn't echo back
-	plan.CertificateB64 = plan.CertificateB64
-	plan.KeyB64 = plan.KeyB64
-	plan.KeystoreFileB64 = plan.KeystoreFileB64
-	plan.Passphrase = plan.Passphrase
-	plan.CaPathB64 = plan.CaPathB64
-
 	tflog.Trace(ctx, "updated keystore", map[string]interface{}{"id": ks.Meta.ID})
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
