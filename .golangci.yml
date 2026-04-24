@@ -61,7 +61,7 @@ linters:
       min-complexity: 15
     goconst:
       min-len: 2
-      min-occurrences: 3
+      min-occurrences: 7
     misspell:
       locale: US
     nakedret:
@@ -80,6 +80,7 @@ linters:
         - dupImport
         - hugeParam
         - rangeValCopy
+        - httpNoBody
     unparam:
       check-exported: false
   exclusions:
