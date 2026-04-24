@@ -1,0 +1,23 @@
+# Copy this file to terraform.tfvars and fill in your values
+# cp terraform.tfvars.example terraform.tfvars
+
+# Connected App credentials
+anypoint_client_id     = "your-connected-app-client-id"
+anypoint_client_secret = "your-connected-app-client-secret"
+anypoint_base_url      = "https://stgx.anypoint.mulesoft.com"
+
+# User credentials (for org/env management)
+anypoint_username = "your-username"
+anypoint_password = "your-password"
+
+# Parent org under which to create the Commerce Business Unit
+parent_organization_id = "your-parent-org-id"
+owner_id               = "your-user-id"
+
+# Private Space region
+region = "us-east-1"
+
+# API details
+api_asset_id      = "orders-api"
+api_asset_version = "1.0.0"
+alert_email       = "api-ops@example.com"

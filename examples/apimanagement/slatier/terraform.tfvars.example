@@ -1,0 +1,25 @@
+# Copy this file to terraform.tfvars and fill in your values
+# Note: Provider credentials have defaults, so you only need to override if using different values
+
+# ─────────────────────────────────────────────────────────────
+# Provider Configuration (Optional - defaults provided)
+# ─────────────────────────────────────────────────────────────
+
+# anypoint_client_id     = "e5a776d9862a4f2d8f61ba8450803908"
+# anypoint_client_secret = "0a5E1fbfc1154D9885c32842171F7490"
+# anypoint_base_url      = "https://stgx.anypoint.mulesoft.com"
+
+# ─────────────────────────────────────────────────────────────
+# Resource Configuration (Required)
+# ─────────────────────────────────────────────────────────────
+
+# Organization ID (Optional - has default)
+# organization_id = "542cc7e3-2143-40ce-90e9-cf69da9b4da6"
+
+# Environment ID where your API is deployed (Required)
+environment_id = "your-environment-id-here"
+
+# API Instance ID - The numeric ID of your API instance (Required)
+# You can find this in API Manager → Your API → Copy from URL
+# Example: https://anypoint.mulesoft.com/apimanager/api/v1/organizations/.../environments/.../apis/12345678
+api_instance_id = "12345678"

@@ -1,0 +1,36 @@
+Resource Name,Category,Terraform Resource Type,Create API,Read API,Update API,Delete API,Notes
+Connected App,Access Management,anypoint_connectedapp,CreateConnectedApp(),GetConnectedApp(),Not Supported,DeleteConnectedApp(),Update returns error
+Connected App Scopes,Access Management,anypoint_connectedapp_scopes,UpdateConnectedAppScopes(),GetConnectedAppScopes(),UpdateConnectedAppScopes(),DeleteConnectedAppScopes(),
+Environment,Access Management,anypoint_environment,CreateEnvironment(),GetEnvironment(),UpdateEnvironment(),DeleteEnvironment(),
+Organization,Access Management,anypoint_organization,CreateOrganization(),GetOrganization(),Not Supported,DeleteOrganization() + WaitForOrganizationDeletion(),Update returns warning
+Role Group,Access Management,anypoint_rolegroup,CreateRoleGroup(),GetRoleGroup(),UpdateRoleGroup(),DeleteRoleGroup(),
+Role Group Roles,Access Management,anypoint_rolegroup_roles,AssignRolesToRoleGroup(),GetRoleGroupRoles(),RemoveRolesFromRoleGroup() + AssignRolesToRoleGroup(),RemoveRolesFromRoleGroup(),
+Role Group Users,Access Management,anypoint_rolegroup_users,AssignUsersToRoleGroup(),GetRoleGroupUsers(),RemoveUsersFromRoleGroup() + AssignUsersToRoleGroup(),RemoveUsersFromRoleGroup(),
+Team,Access Management,anypoint_team,CreateTeam(),GetTeam(),UpdateTeam() + UpdateTeamParent(),DeleteTeam(),
+Team Members,Access Management,anypoint_team_members,AddMembersToTeam(),GetTeamMembers(),RemoveMembersFromTeam() + AddMembersToTeam(),RemoveMembersFromTeam(),
+Team Roles,Access Management,anypoint_team_roles,AssignRolesToTeam(),GetTeamRoles(),RemoveRolesFromTeam() + AssignRolesToTeam(),RemoveRolesFromTeam(),
+User,Access Management,anypoint_user,CreateUser(),GetUser(),UpdateUser(),DeleteUser(),
+Alert,API Management,anypoint_api_instance_alert,CreateAlert(),GetAlert(),UpdateAlert(),DeleteAlert(),
+API Instance,API Management,anypoint_api_instance,CreateAPIInstance() + GetGatewayInfo(),GetAPIInstance(),UpdateAPIInstance(),DeleteAPIInstance(),
+API Instance Promotion,API Management,anypoint_api_instance_promotion,PromoteAPIInstance(),GetAPIInstance(),UpdateAPIInstance(),DeleteAPIInstance(),Only instance_label can be updated
+API Policy,API Management,anypoint_api_policy,CreateAPIPolicy(),GetAPIPolicy(),UpdateAPIPolicy(),DeleteAPIPolicy(),Uses LookupPolicy() and ValidatePolicyConfiguration()
+SLA Tier,API Management,anypoint_api_instance_sla_tier,CreateSLATier(),GetSLATier(),UpdateSLATier(),DeleteSLATier(),
+Managed Flex Gateway,API Management,anypoint_managed_flexgateway,CreateManagedFlexGateway() + GetGatewayVersions() + GetDomains(),GetManagedFlexGateway() + GetDomains(),UpdateManagedFlexGateway(),DeleteManagedFlexGateway(),Auto-selects runtime version and builds ingress URLs
+Firewall Rules,CloudHub 2.0,anypoint_firewall_rules,UpdateFirewallRules(),GetFirewallRules(),UpdateFirewallRules(),UpdateFirewallRules() with empty rules,
+Private Network,CloudHub 2.0,anypoint_private_network,CreatePrivateNetwork(),GetPrivateNetwork(),UpdatePrivateNetwork(),No-op,Deleted as part of private space deletion
+Private Space,CloudHub 2.0,anypoint_private_space,CreatePrivateSpace(),GetPrivateSpace(),UpdatePrivateSpace(),DeletePrivateSpace(),
+Private Space Advanced Config,CloudHub 2.0,anypoint_privatespace_advanced_config,UpdatePrivateSpaceAdvancedConfig(),GetPrivateSpace(),UpdatePrivateSpaceAdvancedConfig(),UpdatePrivateSpaceAdvancedConfig() with defaults,Delete resets to defaults
+Private Space Association,CloudHub 2.0,anypoint_private_space_association,CreatePrivateSpaceAssociations(),No Read API,CreatePrivateSpaceAssociations(),DeletePrivateSpaceAssociation() for each,No read API - maintains state
+Private Space Connection,CloudHub 2.0,anypoint_private_space_connection,CreatePrivateSpaceConnection(),GetPrivateSpaceConnection(),UpdatePrivateSpaceConnection(),DeletePrivateSpaceConnection(),
+Private Space Upgrade,CloudHub 2.0,anypoint_private_space_upgrade,UpgradePrivateSpace(),No refresh,Not Supported,DeletePrivateSpaceUpgrade(),One-time operation - update not supported
+TLS Context (CloudHub2),CloudHub 2.0,anypoint_tls_context,CreateTLSContext() + ListTLSContexts(),GetTLSContext(),UpdateTLSContext(),DeleteTLSContext(),Create returns 201 with no body
+Transit Gateway,CloudHub 2.0,anypoint_transit_gateway,CreateTransitGateway(),GetTransitGateway(),UpdateTransitGateway(),DeleteTransitGateway(),Only name can be updated
+VPN Connection,CloudHub 2.0,anypoint_vpn_connection,CreateVPNConnection(),GetVPNConnection(),DeleteVPN() + implicit add,DeleteVPNConnection(),Update calculated via removal
+Governance Profile,Governance,anypoint_api_governance_profile,CreateProfile(),GetProfile(),UpdateProfile(),DeleteProfile(),
+Certificate,Secrets Management,anypoint_secret_group_certificate,CreateCertificate(),GetCertificate(),UpdateCertificate(),DeleteCertificate(),
+Certificate Pin Set,Secrets Management,anypoint_secret_group_certificate_pinset,CreateCertificatePinset(),GetCertificatePinset(),UpdateCertificatePinset(),DeleteCertificatePinset(),
+Keystore,Secrets Management,anypoint_secret_group_keystore,CreateKeystore(),GetKeystore(),UpdateKeystore(),DeleteKeystore(),Supports PEM/JKS/PKCS12/JCEKS formats
+Secret Group,Secrets Management,anypoint_secret_group,CreateSecretGroup(),GetSecretGroup(),UpdateSecretGroup(),DeleteSecretGroup(),
+Shared Secret,Secrets Management,anypoint_secret_group_shared_secret,CreateSharedSecret(),GetSharedSecret(),UpdateSharedSecret(),DeleteSharedSecret(),
+TLS Context (Flex),Secrets Management,anypoint_flex_tls_context,CreateTLSContext(),GetTLSContext(),UpdateTLSContext(),DeleteTLSContext(),Target always set to FlexGateway
+Truststore,Secrets Management,anypoint_secret_group_truststore,CreateTruststore(),GetTruststore(),UpdateTruststore(),DeleteTruststore(),Supports PEM/JKS/PKCS12/JCEKS formats

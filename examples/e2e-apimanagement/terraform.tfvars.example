@@ -1,0 +1,39 @@
+# Copy this file to terraform.tfvars and fill in your values
+
+# Provider credentials
+anypoint_client_id     = "your-connected-app-client-id"
+anypoint_client_secret = "your-connected-app-client-secret"
+anypoint_base_url      = "https://anypoint.mulesoft.com"
+
+# Organisation & Environment
+organization_id = "your-organization-id"
+environment_id  = "your-environment-id"
+
+# Private Space
+private_space_name = "ps-demo"
+region             = "us-east-2"
+network_cidr_block = "10.0.0.0/20"
+
+# VPN
+vpn_local_asn         = "64512"
+vpn_remote_asn        = "65001"
+vpn_remote_ip         = "203.0.113.1"
+vpn_tunnel_1_psk      = ""
+vpn_tunnel_1_ptp_cidr = ""
+vpn_tunnel_2_psk      = ""
+vpn_tunnel_2_ptp_cidr = ""
+
+# Flex Gateway
+gateway_size            = "small"
+gateway_runtime_version = "1.0.0"
+
+# API Instance
+api_asset_id            = "api-test"
+api_asset_version       = "1.0.0"
+api_base_path           = "api-test"
+upstream_primary_uri    = "http://backend-primary.internal:8080"
+upstream_secondary_uri  = "http://backend-secondary.internal:8080"
+upstream_primary_weight = 90
+
+# Policies
+mulesoft_policy_group_id = "68ef9520-24e9-4cf2-b2f5-620025690913"

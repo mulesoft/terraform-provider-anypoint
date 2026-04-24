@@ -1,0 +1,53 @@
+# Example terraform.tfvars file for Sub-Organization with Private Space
+# Copy this file to terraform.tfvars and fill in your actual values
+
+###############################################################################
+# Provider Configuration - Admin Credentials
+###############################################################################
+
+anypoint_admin_client_id     = "e5a776d9862a4f2d8f61ba8450803908"
+anypoint_admin_client_secret = "your-admin-client-secret-here"
+anypoint_admin_username      = "your-admin-username"  # or use env: TF_VAR_anypoint_admin_username
+anypoint_admin_password      = "your-admin-password"  # or use env: TF_VAR_anypoint_admin_password
+
+###############################################################################
+# Provider Configuration - Normal User Credentials (Optional)
+# If not using normal user credentials, comment out these lines and change
+# provider references in the .tf file from "anypoint.normal_user" to "anypoint.admin"
+###############################################################################
+
+anypoint_normal_client_id     = "b77ea48ca94e5f3a9f72ba9561914644"
+anypoint_normal_client_secret = "your-normal-user-client-secret-here"
+
+###############################################################################
+# Common Provider Configuration
+###############################################################################
+
+anypoint_base_url = "https://stgx.anypoint.mulesoft.com"
+
+###############################################################################
+# Organization Configuration
+###############################################################################
+
+parent_organization_id = "542cc7e3-2143-40ce-90e9-cf69da9b4da6"  # Replace with your Salesforce org ID
+owner_user_id          = "f7f43384-b33e-470c-ad4c-285aa0c01212"  # Replace with existing user ID
+sub_org_name           = "my-suborg-test"
+
+###############################################################################
+# Connected App Configuration
+###############################################################################
+
+connected_app_client_id = "e5a776d9862a4f2d8f61ba8450803908"
+
+###############################################################################
+# Private Space Configuration
+###############################################################################
+
+private_space_region = "us-east-1"  # Choose: us-east-1, us-west-2, eu-central-1, etc.
+
+###############################################################################
+# Private Network Configuration
+###############################################################################
+
+network_cidr_block     = "10.111.0.0/16"
+network_reserved_cidrs = []  # Optional: ["10.111.1.0/24", "10.111.2.0/24"]
