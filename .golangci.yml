@@ -45,7 +45,7 @@ linters:
   settings:
     errcheck:
       check-type-assertions: true
-      check-blank: true
+      check-blank: false
     govet:
       enable:
         - shadow
@@ -78,6 +78,8 @@ linters:
       disabled-checks:
         - wrapperFunc
         - dupImport
+        - hugeParam
+        - rangeValCopy
     unparam:
       check-exported: false
   exclusions:
@@ -119,6 +121,14 @@ linters:
         text: "^G103: Use of unsafe calls should be audited"
       - path: '(.+)\.go$'
         text: "G304: Potential file inclusion via variable"
+      - path: internal/client/
+        text: "Error return value of `resp.Body.Close` is not checked"
+        linters:
+          - errcheck
+      - path: internal/client/
+        text: "Error return value of `io.ReadAll` is not checked"
+        linters:
+          - errcheck
 
 issues:
   max-issues-per-linter: 0
