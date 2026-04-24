@@ -1,0 +1,173 @@
+run:
+  timeout: 10m
+  issues-exit-code: 1
+  tests: true
+  skip-dirs:
+    - vendor
+    - .git
+    - dist
+  skip-files:
+    - ".*_test.go"  # Skip test files for some linters
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+  uniq-by-line: true
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+  
+  govet:
+    check-shadowing: true
+    settings:
+      printf:
+        funcs:
+          - (github.com/hashicorp/terraform-plugin-log/tflog).Trace
+          - (github.com/hashicorp/terraform-plugin-log/tflog).Debug
+          - (github.com/hashicorp/terraform-plugin-log/tflog).Info
+          - (github.com/hashicorp/terraform-plugin-log/tflog).Warn
+          - (github.com/hashicorp/terraform-plugin-log/tflog).Error
+
+  golint:
+    min-confidence: 0.8
+
+  goimports:
+    local-prefixes: github.com/mulesoft/terraform-provider-anypoint
+
+  gocyclo:
+    min-complexity: 15
+
+  maligned:
+    suggest-new: true
+
+  dupl:
+    threshold: 100
+
+  goconst:
+    min-len: 2
+    min-occurrences: 3
+
+  misspell:
+    locale: US
+
+  lll:
+    line-length: 120
+
+  unused:
+    check-exported: false
+
+  unparam:
+    check-exported: false
+
+  nakedret:
+    max-func-lines: 30
+
+  prealloc:
+    simple: true
+    range-loops: true
+    for-loops: false
+
+  gocritic:
+    enabled-tags:
+      - performance
+      - style
+      - experimental
+    disabled-checks:
+      - wrapperFunc
+      - dupImport # https://github.com/go-critic/go-critic/issues/845
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - typecheck
+    - unused
+    - varcheck
+    - deadcode
+    - structcheck
+    - misspell
+    - unconvert
+    - gocyclo
+    - goimports
+    - revive
+    - gosec
+    - exportloopref
+    - goconst
+    - unparam
+    - nakedret
+    - prealloc
+    - gocritic
+    - gofmt
+    - gofumpt
+
+issues:
+  exclude-rules:
+    # Exclude some lints from running on tests files.
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - errcheck
+        - dupl
+        - gosec
+        - goconst
+        - unparam
+
+    # Ignore complexity in main package
+    - path: main\.go
+      linters:
+        - gocyclo
+
+    # Ignore long lines in generated files
+    - path: ".*\\.gen\\.go"
+      linters:
+        - lll
+
+    # Ignore missing comments for exported types in internal packages
+    - path: internal/
+      text: "exported .* should have comment"
+      linters:
+        - revive
+
+    # Ignore certain govet issues in tests
+    - path: _test\.go
+      text: "fieldalignment:"
+      linters:
+        - govet
+
+    # Allow globals in main package
+    - path: main\.go
+      text: "G101|G102"  # Gosec: Potential hardcoded credentials
+      linters:
+        - gosec
+
+  exclude:
+    # golint: Annoying issue about not having a comment. The rare codebase has such comments
+    - "should have( a package)? comment"
+    
+    # govet: Common false positives
+    - "^G103: Use of unsafe calls should be audited"
+    
+    # gosec: Too many false positives for file operations
+    - "G304: Potential file inclusion via variable"
+
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  new: false
+
+severity:
+  default-severity: error
+  case-sensitive: false
+  rules:
+    - linters:
+        - dupl
+      severity: info
+    - linters:
+        - goconst
+      severity: info
