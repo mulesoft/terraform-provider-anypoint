@@ -27,7 +27,7 @@ import (
 )
 
 var (
-	_ provider.Provider              = &AnypointProvider{}
+	_ provider.Provider                   = &AnypointProvider{}
 	_ provider.ProviderWithValidateConfig = &AnypointProvider{}
 )
 

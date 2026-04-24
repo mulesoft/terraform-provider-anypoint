@@ -16,9 +16,11 @@ import (
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client/accessmanagement"
 )
 
-var _ resource.Resource = &ConnectedAppResource{}
-var _ resource.ResourceWithConfigure = &ConnectedAppResource{}
-var _ resource.ResourceWithImportState = &ConnectedAppResource{}
+var (
+	_ resource.Resource                = &ConnectedAppResource{}
+	_ resource.ResourceWithConfigure   = &ConnectedAppResource{}
+	_ resource.ResourceWithImportState = &ConnectedAppResource{}
+)
 
 type ConnectedAppResource struct {
 	client *accessmanagement.ConnectedAppClient

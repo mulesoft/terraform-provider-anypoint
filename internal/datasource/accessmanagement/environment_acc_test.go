@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+
 	"github.com/mulesoft/terraform-provider-anypoint/internal/acctest"
 )
 

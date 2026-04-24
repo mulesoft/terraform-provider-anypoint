@@ -35,7 +35,7 @@ type SharedSecret struct {
 	Password string `json:"password,omitempty"`
 
 	// S3Credential
-	AccessKeyID    string `json:"accessKeyId,omitempty"`
+	AccessKeyID     string `json:"accessKeyId,omitempty"`
 	SecretAccessKey string `json:"secretAccessKey,omitempty"`
 
 	// SymmetricKey

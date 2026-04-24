@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client/accessmanagement"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
@@ -14,11 +15,11 @@ import (
 
 func TestNewOrganizationDataSource(t *testing.T) {
 	dataSource := NewOrganizationDataSource()
-	
+
 	if dataSource == nil {
 		t.Error("NewOrganizationDataSource() returned nil")
 	}
-	
+
 	// Verify it implements the expected interfaces
 	var _ datasource.DataSource = dataSource
 	if _, ok := dataSource.(datasource.DataSourceWithConfigure); !ok {
@@ -28,15 +29,15 @@ func TestNewOrganizationDataSource(t *testing.T) {
 
 func TestOrganizationDataSource_Metadata(t *testing.T) {
 	dataSource := NewOrganizationDataSource()
-	
+
 	ctx := context.Background()
 	req := datasource.MetadataRequest{
 		ProviderTypeName: "test",
 	}
 	resp := &datasource.MetadataResponse{}
-	
+
 	dataSource.Metadata(ctx, req, resp)
-	
+
 	if resp.TypeName != "test_organization" {
 		t.Errorf("Metadata() TypeName = %v, want %v", resp.TypeName, "test_organization")
 	}
@@ -44,17 +45,17 @@ func TestOrganizationDataSource_Metadata(t *testing.T) {
 
 func TestOrganizationDataSource_Schema(t *testing.T) {
 	dataSource := NewOrganizationDataSource()
-	
+
 	ctx := context.Background()
 	req := datasource.SchemaRequest{}
 	resp := &datasource.SchemaResponse{}
-	
+
 	dataSource.Schema(ctx, req, resp)
-	
+
 	if resp.Diagnostics.HasError() {
 		t.Errorf("Schema() has errors: %v", resp.Diagnostics.Errors())
 	}
-	
+
 	// Check required attributes (none for this data source)
 	requiredAttrs := []string{}
 	for _, attrName := range requiredAttrs {
@@ -66,7 +67,7 @@ func TestOrganizationDataSource_Schema(t *testing.T) {
 			t.Errorf("Schema() missing required attribute: %s", attrName)
 		}
 	}
-	
+
 	// Check computed attributes (id is Required, not Computed)
 	computedAttrs := []string{"name", "entitlements"}
 	for _, attrName := range computedAttrs {
@@ -82,9 +83,9 @@ func TestOrganizationDataSource_Schema(t *testing.T) {
 
 func TestOrganizationDataSource_Configure(t *testing.T) {
 	dataSource := NewOrganizationDataSource().(*OrganizationDataSource)
-	
+
 	ctx := context.Background()
-	
+
 	// Test with nil provider data - should return without error
 	req := datasource.ConfigureRequest{ProviderData: nil}
 	resp := &datasource.ConfigureResponse{}
@@ -92,7 +93,7 @@ func TestOrganizationDataSource_Configure(t *testing.T) {
 	if resp.Diagnostics.HasError() {
 		t.Errorf("Configure() with nil provider data should not error: %v", resp.Diagnostics.Errors())
 	}
-	
+
 	// Test with valid provider data but missing username (expected to fail)
 	server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
 	config := &client.ClientConfig{
@@ -103,12 +104,12 @@ func TestOrganizationDataSource_Configure(t *testing.T) {
 	req = datasource.ConfigureRequest{ProviderData: config}
 	resp = &datasource.ConfigureResponse{}
 	dataSource.Configure(ctx, req, resp)
-	
+
 	// This should error because username is required for organization operations
 	if !resp.Diagnostics.HasError() {
 		t.Error("Configure() should have errors when username is missing")
 	}
-	
+
 	// Verify error message contains username requirement
 	hasUsernameError := false
 	for _, err := range resp.Diagnostics.Errors() {
@@ -125,7 +126,7 @@ func TestOrganizationDataSource_Configure(t *testing.T) {
 func TestOrganizationDataSourceModel_Validation(t *testing.T) {
 	// Test that all model fields exist and are properly typed
 	model := OrganizationDataSourceModel{}
-	
+
 	// Verify all expected fields exist
 	_ = model.ID
 	// Add other field validations based on your model
@@ -133,12 +134,12 @@ func TestOrganizationDataSourceModel_Validation(t *testing.T) {
 
 func TestOrganizationDataSource_Read(t *testing.T) {
 	tests := []struct {
-		name            string
-		orgID           string
-		mockHandler     func(w http.ResponseWriter, r *http.Request)
-		wantErr         bool
-		errContains     string
-		expectedName    string
+		name         string
+		orgID        string
+		mockHandler  func(w http.ResponseWriter, r *http.Request)
+		wantErr      bool
+		errContains  string
+		expectedName string
 	}{
 		{
 			name:  "successful read",
@@ -146,44 +147,44 @@ func TestOrganizationDataSource_Read(t *testing.T) {
 			mockHandler: func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertHTTPRequest(t, r, "GET", "/accounts/api/organizations/test-org-id")
 				testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
-					"id":   "test-org-id",
-					"name": "Test Organization",
-					"domain": "testorg",
-					"isFederated": false,
-					"parentOrganizationIds": []string{},
-					"subOrganizationIds": []string{},
-					"tenantOrganizationIds": []string{},
-					"mfaRequired": "disabled",
-					"isAutomaticAdminPromotionExempt": false,
+					"id":                               "test-org-id",
+					"name":                             "Test Organization",
+					"domain":                           "testorg",
+					"isFederated":                      false,
+					"parentOrganizationIds":            []string{},
+					"subOrganizationIds":               []string{},
+					"tenantOrganizationIds":            []string{},
+					"mfaRequired":                      "disabled",
+					"isAutomaticAdminPromotionExempt":  false,
 					"createDefaultVirtualPrivateCloud": true,
 					"entitlements": map[string]interface{}{
-						"createSubOrgs": true,
+						"createSubOrgs":      true,
 						"createEnvironments": true,
-						"globalDeployment": true,
+						"globalDeployment":   true,
 						"vcoresProduction": map[string]interface{}{
-							"assigned": 10,
+							"assigned":  10,
 							"available": 8,
 						},
 						"vcoresSandbox": map[string]interface{}{
-							"assigned": 5,
+							"assigned":  5,
 							"available": 3,
 						},
 					},
 					"subscription": map[string]interface{}{
-						"type": "trial",
+						"type":       "trial",
 						"expiration": "2024-01-01T00:00:00Z",
 					},
 					"owner": map[string]interface{}{
-						"id": "owner-id",
+						"id":        "owner-id",
 						"firstName": "John",
-						"lastName": "Doe",
-						"email": "john.doe@example.com",
+						"lastName":  "Doe",
+						"email":     "john.doe@example.com",
 					},
 					"environments": []interface{}{
 						map[string]interface{}{
-							"id": "env-1",
-							"name": "Development",
-							"type": "sandbox",
+							"id":           "env-1",
+							"name":         "Development",
+							"type":         "sandbox",
 							"isProduction": false,
 						},
 					},
@@ -282,7 +283,7 @@ func BenchmarkOrganizationDataSource_Schema(b *testing.B) {
 	dataSource := NewOrganizationDataSource()
 	ctx := context.Background()
 	req := datasource.SchemaRequest{}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		resp := &datasource.SchemaResponse{}

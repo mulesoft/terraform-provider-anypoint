@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client/accessmanagement"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
@@ -14,11 +15,11 @@ import (
 
 func TestNewUserDataSource(t *testing.T) {
 	dataSource := NewUserDataSource()
-	
+
 	if dataSource == nil {
 		t.Error("NewUserDataSource() returned nil")
 	}
-	
+
 	// Verify it implements the expected interfaces
 	var _ datasource.DataSource = dataSource
 	if _, ok := dataSource.(datasource.DataSourceWithConfigure); !ok {
@@ -28,15 +29,15 @@ func TestNewUserDataSource(t *testing.T) {
 
 func TestUserDataSource_Metadata(t *testing.T) {
 	dataSource := NewUserDataSource()
-	
+
 	ctx := context.Background()
 	req := datasource.MetadataRequest{
 		ProviderTypeName: "test",
 	}
 	resp := &datasource.MetadataResponse{}
-	
+
 	dataSource.Metadata(ctx, req, resp)
-	
+
 	if resp.TypeName != "test_user" {
 		t.Errorf("Metadata() TypeName = %v, want %v", resp.TypeName, "test_user")
 	}
@@ -44,17 +45,17 @@ func TestUserDataSource_Metadata(t *testing.T) {
 
 func TestUserDataSource_Schema(t *testing.T) {
 	dataSource := NewUserDataSource()
-	
+
 	ctx := context.Background()
 	req := datasource.SchemaRequest{}
 	resp := &datasource.SchemaResponse{}
-	
+
 	dataSource.Schema(ctx, req, resp)
-	
+
 	if resp.Diagnostics.HasError() {
 		t.Errorf("Schema() has errors: %v", resp.Diagnostics.Errors())
 	}
-	
+
 	// Check required attributes
 	requiredAttrs := []string{"id"}
 	for _, attrName := range requiredAttrs {
@@ -66,7 +67,7 @@ func TestUserDataSource_Schema(t *testing.T) {
 			t.Errorf("Schema() missing required attribute: %s", attrName)
 		}
 	}
-	
+
 	// Check computed attributes
 	computedAttrs := []string{"username", "first_name", "last_name", "email", "phone_number", "is_active", "created_at", "updated_at", "is_federated", "mfa_verification_excluded"}
 	for _, attrName := range computedAttrs {
@@ -78,7 +79,7 @@ func TestUserDataSource_Schema(t *testing.T) {
 			t.Errorf("Schema() missing computed attribute: %s", attrName)
 		}
 	}
-	
+
 	// Check optional attributes
 	optionalAttrs := []string{"organization_id"}
 	for _, attrName := range optionalAttrs {
@@ -94,7 +95,7 @@ func TestUserDataSource_Schema(t *testing.T) {
 
 func TestUserDataSource_Configure(t *testing.T) {
 	dataSource := NewUserDataSource().(*UserDataSource)
-	
+
 	// Test with valid provider data
 	server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
 	providerData := &client.ClientConfig{
@@ -104,19 +105,19 @@ func TestUserDataSource_Configure(t *testing.T) {
 		Username:     "test-user",
 		Password:     "test-pass",
 	}
-	
+
 	ctx := context.Background()
 	req := datasource.ConfigureRequest{
 		ProviderData: providerData,
 	}
 	resp := &datasource.ConfigureResponse{}
-	
+
 	dataSource.Configure(ctx, req, resp)
-	
+
 	if resp.Diagnostics.HasError() {
 		t.Errorf("Configure() has errors: %v", resp.Diagnostics.Errors())
 	}
-	
+
 	// Verify client is configured
 	if dataSource.client == nil {
 		t.Error("Configure() should set client")
@@ -125,19 +126,19 @@ func TestUserDataSource_Configure(t *testing.T) {
 
 func TestUserDataSource_Configure_InvalidProviderData(t *testing.T) {
 	dataSource := NewUserDataSource().(*UserDataSource)
-	
+
 	ctx := context.Background()
 	req := datasource.ConfigureRequest{
 		ProviderData: "invalid-data", // Wrong type
 	}
 	resp := &datasource.ConfigureResponse{}
-	
+
 	dataSource.Configure(ctx, req, resp)
-	
+
 	if !resp.Diagnostics.HasError() {
 		t.Error("Configure() with invalid provider data should have errors")
 	}
-	
+
 	if dataSource.client != nil {
 		t.Error("Configure() with invalid data should not set client")
 	}
@@ -160,7 +161,7 @@ func TestUserDataSource_Read(t *testing.T) {
 			IsFederated: false,
 		},
 	}
-	
+
 	tests := []struct {
 		name        string
 		model       UserDataSourceModel
@@ -178,12 +179,12 @@ func TestUserDataSource_Read(t *testing.T) {
 				if r.Method != "GET" {
 					t.Errorf("Expected GET request, got %s", r.Method)
 				}
-				
+
 				expectedPath := "/accounts/api/organizations/test-org-id/users/test-user-id"
 				if r.URL.Path != expectedPath {
 					t.Errorf("Expected path %s, got %s", expectedPath, r.URL.Path)
 				}
-				
+
 				testutil.JSONResponse(w, http.StatusOK, mockUser)
 			},
 			wantErr: false,
@@ -227,17 +228,17 @@ func TestUserDataSource_Read(t *testing.T) {
 			errContains: "failed to decode response",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			orgID := tt.model.OrganizationID.ValueString()
 			userID := tt.model.ID.ValueString()
-			
+
 			handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 				"/accounts/api/organizations/" + orgID + "/users/" + userID: tt.mockHandler,
 			}
 			server := testutil.MockHTTPServer(t, handlers)
-			
+
 			// Create client
 			userClient := &accessmanagement.UserClient{
 				UserAnypointClient: &client.UserAnypointClient{
@@ -247,11 +248,11 @@ func TestUserDataSource_Read(t *testing.T) {
 					OrgID:      "test-org-id",
 				},
 			}
-			
+
 			// Test the underlying client directly since testing the full Terraform
 			// data source would require complex setup of terraform-plugin-framework types
 			user, err := userClient.GetUser(context.Background(), orgID, userID)
-			
+
 			if tt.wantErr {
 				if err == nil {
 					t.Error("Expected error but got none")
@@ -313,25 +314,25 @@ func TestUserDataSource_ReadWithDefaultOrganization(t *testing.T) {
 			IsFederated: false,
 		},
 	}
-	
+
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
 			t.Errorf("Expected GET request, got %s", r.Method)
 		}
-		
+
 		expectedPath := "/accounts/api/organizations/default-org-id/users/test-user-id"
 		if r.URL.Path != expectedPath {
 			t.Errorf("Expected path %s, got %s", expectedPath, r.URL.Path)
 		}
-		
+
 		testutil.JSONResponse(w, http.StatusOK, mockUser)
 	}
-	
+
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 		"/accounts/api/organizations/default-org-id/users/test-user-id": handler,
 	}
 	server := testutil.MockHTTPServer(t, handlers)
-	
+
 	// Create client with default organization
 	userClient := &accessmanagement.UserClient{
 		UserAnypointClient: &client.UserAnypointClient{
@@ -341,10 +342,9 @@ func TestUserDataSource_ReadWithDefaultOrganization(t *testing.T) {
 			OrgID:      "default-org-id",
 		},
 	}
-	
+
 	// Test reading user with default organization (no organization_id specified)
 	user, err := userClient.GetUser(context.Background(), "default-org-id", "test-user-id")
-	
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -363,7 +363,7 @@ func TestUserDataSource_ReadWithDefaultOrganization(t *testing.T) {
 func TestUserDataSourceModel_Validation(t *testing.T) {
 	// Test that all model fields exist and are properly typed
 	model := UserDataSourceModel{}
-	
+
 	// Verify all expected fields exist
 	_ = model.ID
 	_ = model.Username
@@ -391,7 +391,7 @@ func BenchmarkUserDataSource_Schema(b *testing.B) {
 	dataSource := NewUserDataSource()
 	ctx := context.Background()
 	req := datasource.SchemaRequest{}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		resp := &datasource.SchemaResponse{}
@@ -405,7 +405,7 @@ func BenchmarkUserDataSource_Metadata(b *testing.B) {
 	req := datasource.MetadataRequest{
 		ProviderTypeName: "test",
 	}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		resp := &datasource.MetadataResponse{}

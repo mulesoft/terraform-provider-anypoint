@@ -26,12 +26,12 @@ func NewSecretGroupClient(config *client.ClientConfig) (*SecretGroupClient, erro
 // --- Domain Models ---
 
 type SecretGroup struct {
-	ID             string `json:"meta,omitempty"`
-	Name           string `json:"name"`
-	Downloadable   bool   `json:"downloadable"`
-	CurrentState   string `json:"currentState,omitempty"`
-	CreatedAt      string `json:"createdAt,omitempty"`
-	ModifiedAt     string `json:"modifiedAt,omitempty"`
+	ID           string `json:"meta,omitempty"`
+	Name         string `json:"name"`
+	Downloadable bool   `json:"downloadable"`
+	CurrentState string `json:"currentState,omitempty"`
+	CreatedAt    string `json:"createdAt,omitempty"`
+	ModifiedAt   string `json:"modifiedAt,omitempty"`
 }
 
 type SecretGroupMeta struct {

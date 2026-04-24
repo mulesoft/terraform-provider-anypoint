@@ -82,31 +82,27 @@ func TestAPIPolicyClient_CRUD(t *testing.T) {
 
 	handlers := testutil.StandardMockHandlers()
 
-	handlers["POST /apimanager/api/v1/organizations/org-123/environments/env-456/apis/100/policies"] =
-		func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusCreated)
-			json.NewEncoder(w).Encode(policyResp)
-		}
+	handlers["POST /apimanager/api/v1/organizations/org-123/environments/env-456/apis/100/policies"] = func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(policyResp)
+	}
 
-	handlers["GET /apimanager/api/v1/organizations/org-123/environments/env-456/apis/100/policies/1001"] =
-		func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(policyResp)
-		}
+	handlers["GET /apimanager/api/v1/organizations/org-123/environments/env-456/apis/100/policies/1001"] = func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(policyResp)
+	}
 
 	updatedResp := policyResp
 	updatedResp.Disabled = true
-	handlers["PATCH /apimanager/api/v1/organizations/org-123/environments/env-456/apis/100/policies/1001"] =
-		func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(updatedResp)
-		}
+	handlers["PATCH /apimanager/api/v1/organizations/org-123/environments/env-456/apis/100/policies/1001"] = func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(updatedResp)
+	}
 
-	handlers["DELETE /apimanager/api/v1/organizations/org-123/environments/env-456/apis/100/policies/1001"] =
-		func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusNoContent)
-		}
+	handlers["DELETE /apimanager/api/v1/organizations/org-123/environments/env-456/apis/100/policies/1001"] = func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}
 
 	server := testutil.MockHTTPServer(t, handlers)
 
@@ -186,17 +182,15 @@ func TestAPIPolicyClient_CRUD(t *testing.T) {
 func TestAPIPolicyClient_ErrorHandling(t *testing.T) {
 	handlers := testutil.StandardMockHandlers()
 
-	handlers["GET /apimanager/api/v1/organizations/org-123/environments/env-456/apis/100/policies/9999"] =
-		func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusNotFound)
-		}
+	handlers["GET /apimanager/api/v1/organizations/org-123/environments/env-456/apis/100/policies/9999"] = func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}
 
-	handlers["POST /apimanager/api/v1/organizations/org-123/environments/env-456/apis/100/policies"] =
-		func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(`{"message":"invalid configuration"}`))
-		}
+	handlers["POST /apimanager/api/v1/organizations/org-123/environments/env-456/apis/100/policies"] = func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"message":"invalid configuration"}`))
+	}
 
 	server := testutil.MockHTTPServer(t, handlers)
 
@@ -251,8 +245,8 @@ func TestValidatePolicyConfiguration(t *testing.T) {
 
 	t.Run("unknown field", func(t *testing.T) {
 		errs := ValidatePolicyConfiguration("rate-limiting", map[string]interface{}{
-			"rateLimits":    []interface{}{},
-			"unknownField":  "value",
+			"rateLimits":   []interface{}{},
+			"unknownField": "value",
 		})
 		if len(errs) != 1 {
 			t.Errorf("Expected 1 error, got %d: %v", len(errs), errs)

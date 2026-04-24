@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client/apimanagement"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
@@ -51,39 +52,35 @@ func TestIntegrationAPIPolicyResource_CRUD(t *testing.T) {
 
 	handlers := testutil.StandardMockHandlers()
 
-	handlers["POST /apimanager/api/v1/organizations/test-org-id/environments/test-env-id/apis/100/policies"] =
-		func(w http.ResponseWriter, r *http.Request) {
-			var body apimanagement.CreateAPIPolicyRequest
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-			if body.AssetID == "" || body.GroupID == "" {
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte(`{"message":"missing required fields"}`))
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusCreated)
-			json.NewEncoder(w).Encode(policyResp)
+	handlers["POST /apimanager/api/v1/organizations/test-org-id/environments/test-env-id/apis/100/policies"] = func(w http.ResponseWriter, r *http.Request) {
+		var body apimanagement.CreateAPIPolicyRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
 		}
+		if body.AssetID == "" || body.GroupID == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(`{"message":"missing required fields"}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(policyResp)
+	}
 
-	handlers["GET /apimanager/api/v1/organizations/test-org-id/environments/test-env-id/apis/100/policies/2001"] =
-		func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(policyResp)
-		}
+	handlers["GET /apimanager/api/v1/organizations/test-org-id/environments/test-env-id/apis/100/policies/2001"] = func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(policyResp)
+	}
 
-	handlers["PATCH /apimanager/api/v1/organizations/test-org-id/environments/test-env-id/apis/100/policies/2001"] =
-		func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(updatedResp)
-		}
+	handlers["PATCH /apimanager/api/v1/organizations/test-org-id/environments/test-env-id/apis/100/policies/2001"] = func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(updatedResp)
+	}
 
-	handlers["DELETE /apimanager/api/v1/organizations/test-org-id/environments/test-env-id/apis/100/policies/2001"] =
-		func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusNoContent)
-		}
+	handlers["DELETE /apimanager/api/v1/organizations/test-org-id/environments/test-env-id/apis/100/policies/2001"] = func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}
 
 	server := testutil.MockHTTPServer(t, handlers)
 

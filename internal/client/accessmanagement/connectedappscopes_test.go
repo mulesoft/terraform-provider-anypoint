@@ -49,7 +49,7 @@ func TestNewConnectedAppScopesClient(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
-			
+
 			if tt.config != nil {
 				tt.config.BaseURL = server.URL
 			}
@@ -73,7 +73,6 @@ func TestNewConnectedAppScopesClient(t *testing.T) {
 		})
 	}
 }
-
 
 func TestConnectedAppScopesClient_UpdateConnectedAppScopes(t *testing.T) {
 	mockConnectedAppScopes := &ConnectedAppScopes{
@@ -155,8 +154,6 @@ func TestConnectedAppScopesClient_UpdateConnectedAppScopes(t *testing.T) {
 	}
 }
 
-
-
 func TestConnectedAppScopesClient_GetConnectedAppScopes(t *testing.T) {
 	mockConnectedAppScopes := &ConnectedAppScopes{
 		Scopes: []Scope{},
@@ -223,11 +220,6 @@ func TestConnectedAppScopesClient_GetConnectedAppScopes(t *testing.T) {
 		})
 	}
 }
-
-
-
-
-
 
 // JSON serialization test
 func TestConnectedAppScopes_JSONSerialization(t *testing.T) {

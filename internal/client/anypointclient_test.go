@@ -62,7 +62,7 @@ func TestNewAnypointClient(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create mock server for authentication
 			server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
-			
+
 			// Override baseURL to use mock server
 			if tt.config != nil && tt.config.BaseURL == "" {
 				tt.config.BaseURL = server.URL
@@ -129,13 +129,13 @@ func TestAnypointClient_authenticate(t *testing.T) {
 			name: "successful authentication",
 			mockHandler: func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertHTTPRequestWithAuth(t, r, "POST", "/accounts/api/v2/oauth2/token", false)
-				
+
 				body := testutil.AssertJSONBody(t, r, "client_id", "client_secret", "grant_type")
-				
+
 				if body["grant_type"] != "client_credentials" {
 					t.Errorf("Expected grant_type 'client_credentials', got %v", body["grant_type"])
 				}
-				
+
 				testutil.JSONResponse(w, http.StatusOK, testutil.MockAuthResponse())
 			},
 			wantErr: false,
@@ -174,9 +174,9 @@ func TestAnypointClient_authenticate(t *testing.T) {
 				"/accounts/api/v2/oauth2/token": tt.mockHandler,
 				"/accounts/api/me":              testutil.StandardMockHandlers()["/accounts/api/me"],
 			}
-			
+
 			server := testutil.MockHTTPServer(t, handlers)
-			
+
 			client := &AnypointClient{
 				BaseURL:      server.URL,
 				ClientID:     "test-client-id",
@@ -412,7 +412,7 @@ func TestAnypointClient_ConfigDefaults(t *testing.T) {
 func TestAnypointClient_AuthenticationFlow(t *testing.T) {
 	authCalled := false
 	meCalled := false
-	
+
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 		"/accounts/api/v2/oauth2/token": func(w http.ResponseWriter, r *http.Request) {
 			authCalled = true
@@ -423,9 +423,9 @@ func TestAnypointClient_AuthenticationFlow(t *testing.T) {
 			testutil.JSONResponse(w, http.StatusOK, testutil.MockMeResponse())
 		},
 	}
-	
+
 	server := testutil.MockHTTPServer(t, handlers)
-	
+
 	config := &ClientConfig{
 		BaseURL:      server.URL,
 		ClientID:     "test-client-id",

@@ -52,7 +52,7 @@ func TestNewPrivateSpacesClient(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create mock server
 			server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
-			
+
 			if tt.config != nil {
 				tt.config.BaseURL = server.URL
 			}
@@ -111,16 +111,16 @@ func TestPrivateSpacesClient_CreatePrivateSpace(t *testing.T) {
 			},
 			mockHandler: func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertHTTPRequest(t, r, "POST", "/runtimefabric/api/organizations/test-org-id/privatespaces")
-				
+
 				body := testutil.AssertJSONBody(t, r, "name", "region")
-				
+
 				if body["name"] != "Test Space" {
 					t.Errorf("Expected name 'Test Space', got %v", body["name"])
 				}
 				if body["region"] != "us-east-1" {
 					t.Errorf("Expected region 'us-east-1', got %v", body["region"])
 				}
-				
+
 				testutil.JSONResponse(w, http.StatusCreated, mockPrivateSpace)
 			},
 			wantErr:    false,
@@ -153,7 +153,7 @@ func TestPrivateSpacesClient_CreatePrivateSpace(t *testing.T) {
 			errContains: "failed to decode response",
 		},
 		{
-			name: "nil request",
+			name:    "nil request",
 			request: nil,
 			mockHandler: func(w http.ResponseWriter, r *http.Request) {
 				t.Error("Handler should not be called for nil request")
@@ -330,11 +330,11 @@ func TestPrivateSpacesClient_GetPrivateSpace(t *testing.T) {
 						t.Errorf("GetPrivateSpace() Region = %v, want %v", ps.Region, tt.expectedPS.Region)
 					}
 					if ps.Network.CidrBlock != tt.expectedPS.Network.CidrBlock {
-						t.Errorf("GetPrivateSpace() Network.CidrBlock = %v, want %v", 
+						t.Errorf("GetPrivateSpace() Network.CidrBlock = %v, want %v",
 							ps.Network.CidrBlock, tt.expectedPS.Network.CidrBlock)
 					}
 					if len(ps.FirewallRules) != len(tt.expectedPS.FirewallRules) {
-						t.Errorf("GetPrivateSpace() FirewallRules length = %v, want %v", 
+						t.Errorf("GetPrivateSpace() FirewallRules length = %v, want %v",
 							len(ps.FirewallRules), len(tt.expectedPS.FirewallRules))
 					}
 				}
@@ -368,12 +368,12 @@ func TestPrivateSpacesClient_UpdatePrivateSpace(t *testing.T) {
 			},
 			mockHandler: func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertHTTPRequest(t, r, "PUT", "/runtimefabric/api/organizations/test-org-id/privatespaces/test-space-id")
-				
+
 				body := testutil.AssertJSONBody(t, r, "name")
 				if body["name"] != "Updated Test Space" {
 					t.Errorf("Expected name 'Updated Test Space', got %v", body["name"])
 				}
-				
+
 				testutil.JSONResponse(w, http.StatusOK, mockPrivateSpace)
 			},
 			wantErr: false,

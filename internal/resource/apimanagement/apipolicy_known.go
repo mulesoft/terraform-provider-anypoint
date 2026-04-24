@@ -37,17 +37,17 @@ type KnownPolicyResource struct {
 }
 
 type KnownPolicyResourceModel struct {
-	ID               types.String  `tfsdk:"id"`
-	OrganizationID   types.String  `tfsdk:"organization_id"`
-	EnvironmentID    types.String  `tfsdk:"environment_id"`
-	APIInstanceID    types.String  `tfsdk:"api_instance_id"`
-	Label            types.String  `tfsdk:"label"`
-	Configuration    types.Object  `tfsdk:"configuration"`
-	Order            types.Int64   `tfsdk:"order"`
-	Disabled         types.Bool    `tfsdk:"disabled"`
-	PolicyTemplateID types.String  `tfsdk:"policy_template_id"`
-	AssetVersion     types.String  `tfsdk:"asset_version"`
-	UpstreamIDs      types.List    `tfsdk:"upstream_ids"`
+	ID               types.String `tfsdk:"id"`
+	OrganizationID   types.String `tfsdk:"organization_id"`
+	EnvironmentID    types.String `tfsdk:"environment_id"`
+	APIInstanceID    types.String `tfsdk:"api_instance_id"`
+	Label            types.String `tfsdk:"label"`
+	Configuration    types.Object `tfsdk:"configuration"`
+	Order            types.Int64  `tfsdk:"order"`
+	Disabled         types.Bool   `tfsdk:"disabled"`
+	PolicyTemplateID types.String `tfsdk:"policy_template_id"`
+	AssetVersion     types.String `tfsdk:"asset_version"`
+	UpstreamIDs      types.List   `tfsdk:"upstream_ids"`
 }
 
 func NewKnownPolicyResourceFunc(policyType string) func() resource.Resource {
@@ -836,7 +836,7 @@ func (r *KnownPolicyResource) mergeConfigFromState(stateConfig, apiConfig types.
 	for k, apiVal := range apiAttrs {
 		// If the API returned null/unknown for this field but state has a real
 		// value, keep the state value (the field is write-only / not echoed by API).
-		if (apiVal.IsNull() || apiVal.IsUnknown()) {
+		if apiVal.IsNull() || apiVal.IsUnknown() {
 			if stateVal, ok := stateAttrs[k]; ok && !stateVal.IsNull() && !stateVal.IsUnknown() {
 				merged[k] = stateVal
 				continue

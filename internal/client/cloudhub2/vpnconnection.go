@@ -11,8 +11,6 @@ import (
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 )
 
-
-
 // VPNConnectionClient wraps the AnypointClient for VPN connection operations
 type VPNConnectionClient struct {
 	*client.AnypointClient

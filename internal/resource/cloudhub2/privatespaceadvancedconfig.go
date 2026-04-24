@@ -351,7 +351,6 @@ func (r *PrivateSpaceAdvancedConfigResource) Delete(ctx context.Context, req res
 		resp.Diagnostics.AddError("Failed to reset private space advanced config to defaults", err.Error())
 		return
 	}
-
 }
 
 // ImportState imports the resource.

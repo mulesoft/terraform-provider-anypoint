@@ -5,11 +5,12 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/provider"
-	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
+	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
+
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 )
 
@@ -24,16 +25,16 @@ var testAccProvider *AnypointProvider
 func TestAnypointProvider_Metadata(t *testing.T) {
 	ctx := context.Background()
 	p := &AnypointProvider{version: "1.0.0"}
-	
+
 	req := provider.MetadataRequest{}
 	resp := &provider.MetadataResponse{}
-	
+
 	p.Metadata(ctx, req, resp)
-	
+
 	if resp.TypeName != "anypoint" {
 		t.Errorf("Metadata() TypeName = %v, want %v", resp.TypeName, "anypoint")
 	}
-	
+
 	if resp.Version != "1.0.0" {
 		t.Errorf("Metadata() Version = %v, want %v", resp.Version, "1.0.0")
 	}
@@ -42,33 +43,33 @@ func TestAnypointProvider_Metadata(t *testing.T) {
 func TestAnypointProvider_Schema(t *testing.T) {
 	ctx := context.Background()
 	p := &AnypointProvider{}
-	
+
 	req := provider.SchemaRequest{}
 	resp := &provider.SchemaResponse{}
-	
+
 	p.Schema(ctx, req, resp)
-	
+
 	if resp.Schema.Description != "Interact with Anypoint Platform." {
 		t.Errorf("Schema() Description = %v, want %v", resp.Schema.Description, "Interact with Anypoint Platform.")
 	}
-	
+
 	// Test required attributes exist
 	requiredAttributes := []string{
-		"auth_type", 
-		"client_id", 
-		"client_secret", 
-		"username", 
-		"password", 
-		"base_url", 
+		"auth_type",
+		"client_id",
+		"client_secret",
+		"username",
+		"password",
+		"base_url",
 		"timeout",
 	}
-	
+
 	for _, attrName := range requiredAttributes {
 		if _, exists := resp.Schema.Attributes[attrName]; !exists {
 			t.Errorf("Schema() missing attribute: %s", attrName)
 		}
 	}
-	
+
 	// Test sensitive attributes are marked correctly
 	sensitiveAttributes := []string{"client_secret", "password"}
 	for _, attrName := range sensitiveAttributes {
@@ -83,7 +84,6 @@ func TestAnypointProvider_Schema(t *testing.T) {
 }
 
 func TestAnypointProvider_Configure(t *testing.T) {
-	
 	tests := []struct {
 		name           string
 		config         AnypointProviderModel
@@ -138,7 +138,7 @@ func TestAnypointProvider_Configure(t *testing.T) {
 			wantError: false,
 		},
 		{
-			name: "empty configuration",
+			name:   "empty configuration",
 			config: AnypointProviderModel{},
 			expectedConfig: &client.ClientConfig{
 				ClientID:     "",
@@ -149,26 +149,26 @@ func TestAnypointProvider_Configure(t *testing.T) {
 			wantError: false,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a mock request with the test config
 			configValue := tfsdk.Config{
 				Schema: getProviderSchema(t),
 			}
-			
+
 			// This is a simplified test - in reality, you'd need to properly set up
 			// the config value with the test data, which requires complex marshaling
 			_ = provider.ConfigureRequest{
 				Config: configValue,
 			}
 			resp := &provider.ConfigureResponse{}
-			
+
 			// For this simplified test, we'll set up the response manually
 			// In a real test, you'd parse the config properly
 			resp.ResourceData = tt.expectedConfig
 			resp.DataSourceData = tt.expectedConfig
-			
+
 			// Verify the configuration
 			if clientConfig, ok := resp.ResourceData.(*client.ClientConfig); ok {
 				if clientConfig.ClientID != tt.expectedConfig.ClientID {
@@ -191,13 +191,13 @@ func TestAnypointProvider_Configure(t *testing.T) {
 func TestAnypointProvider_Resources(t *testing.T) {
 	ctx := context.Background()
 	p := &AnypointProvider{}
-	
+
 	resources := p.Resources(ctx)
-	
+
 	if len(resources) == 0 {
 		t.Error("Resources() returned empty slice")
 	}
-	
+
 	// Test that we can instantiate each resource function
 	for i, resourceFunc := range resources {
 		resource := resourceFunc()
@@ -205,7 +205,7 @@ func TestAnypointProvider_Resources(t *testing.T) {
 			t.Errorf("Resources()[%d] returned nil resource", i)
 		}
 	}
-	
+
 	// Check for expected minimum number of resources
 	expectedMinResources := 20 // Based on the resources we saw in the provider
 	if len(resources) < expectedMinResources {
@@ -216,13 +216,13 @@ func TestAnypointProvider_Resources(t *testing.T) {
 func TestAnypointProvider_DataSources(t *testing.T) {
 	ctx := context.Background()
 	p := &AnypointProvider{}
-	
+
 	dataSources := p.DataSources(ctx)
-	
+
 	if len(dataSources) == 0 {
 		t.Error("DataSources() returned empty slice")
 	}
-	
+
 	// Test that we can instantiate each data source function
 	for i, dataSourceFunc := range dataSources {
 		dataSource := dataSourceFunc()
@@ -230,7 +230,7 @@ func TestAnypointProvider_DataSources(t *testing.T) {
 			t.Errorf("DataSources()[%d] returned nil data source", i)
 		}
 	}
-	
+
 	// Check for expected minimum number of data sources
 	expectedMinDataSources := 10 // Based on the data sources we saw in the provider
 	if len(dataSources) < expectedMinDataSources {
@@ -260,19 +260,19 @@ func TestNew(t *testing.T) {
 			version: "",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			providerFunc := New(tt.version)
 			if providerFunc == nil {
 				t.Error("New() returned nil function")
 			}
-			
+
 			provider := providerFunc()
 			if provider == nil {
 				t.Error("New()() returned nil provider")
 			}
-			
+
 			// Verify it's an AnypointProvider
 			if anypointProvider, ok := provider.(*AnypointProvider); ok {
 				if anypointProvider.version != tt.version {
@@ -293,7 +293,7 @@ func TestAnypointProvider_InterfaceCompliance(t *testing.T) {
 func TestAnypointProvider_ProviderModel_Validation(t *testing.T) {
 	// Test the provider model structure
 	model := AnypointProviderModel{}
-	
+
 	// Verify all expected fields exist
 	_ = model.AuthType
 	_ = model.ClientID
@@ -317,16 +317,16 @@ func int64Value(i int64) types.Int64 {
 func getProviderSchema(t *testing.T) schema.Schema {
 	ctx := context.Background()
 	p := &AnypointProvider{}
-	
+
 	req := provider.SchemaRequest{}
 	resp := &provider.SchemaResponse{}
-	
+
 	p.Schema(ctx, req, resp)
-	
+
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("Provider schema has errors: %v", resp.Diagnostics.Errors())
 	}
-	
+
 	return resp.Schema
 }
 
@@ -336,7 +336,7 @@ func BenchmarkAnypointProvider_Metadata(b *testing.B) {
 	ctx := context.Background()
 	p := &AnypointProvider{version: "1.0.0"}
 	req := provider.MetadataRequest{}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		resp := &provider.MetadataResponse{}
@@ -348,7 +348,7 @@ func BenchmarkAnypointProvider_Schema(b *testing.B) {
 	ctx := context.Background()
 	p := &AnypointProvider{}
 	req := provider.SchemaRequest{}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		resp := &provider.SchemaResponse{}
@@ -359,7 +359,7 @@ func BenchmarkAnypointProvider_Schema(b *testing.B) {
 func BenchmarkAnypointProvider_Resources(b *testing.B) {
 	ctx := context.Background()
 	p := &AnypointProvider{}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = p.Resources(ctx)
@@ -369,7 +369,7 @@ func BenchmarkAnypointProvider_Resources(b *testing.B) {
 func BenchmarkAnypointProvider_DataSources(b *testing.B) {
 	ctx := context.Background()
 	p := &AnypointProvider{}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = p.DataSources(ctx)

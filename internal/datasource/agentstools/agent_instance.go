@@ -24,10 +24,10 @@ type AgentInstanceDataSource struct {
 }
 
 type AgentInstanceDataSourceModel struct {
-	ID             types.String               `tfsdk:"id"`
-	OrganizationID types.String               `tfsdk:"organization_id"`
-	EnvironmentID  types.String               `tfsdk:"environment_id"`
-	Instances      []AgentInstanceItemModel   `tfsdk:"instances"`
+	ID             types.String             `tfsdk:"id"`
+	OrganizationID types.String             `tfsdk:"organization_id"`
+	EnvironmentID  types.String             `tfsdk:"environment_id"`
+	Instances      []AgentInstanceItemModel `tfsdk:"instances"`
 }
 
 type AgentInstanceItemModel struct {

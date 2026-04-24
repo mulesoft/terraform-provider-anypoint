@@ -243,28 +243,28 @@ type TelemetryExporterEntitlement struct {
 
 // Entitlements represents the entitlements structure for an organization
 type Entitlements struct {
-	CreateSubOrgs        bool              `json:"createSubOrgs"`
-	CreateEnvironments   bool              `json:"createEnvironments"`
-	GlobalDeployment     bool              `json:"globalDeployment"`
-	VCoresProduction     *VCoreEntitlement `json:"vCoresProduction,omitempty"`
-	VCoresSandbox        *VCoreEntitlement `json:"vCoresSandbox,omitempty"`
-	VCoresDesign         *VCoreEntitlement `json:"vCoresDesign,omitempty"`
-	StaticIps            *VCoreEntitlement `json:"staticIps,omitempty"`
-	Vpcs                 *VCoreEntitlement `json:"vpcs,omitempty"`
-	Vpns                 *VCoreEntitlement `json:"vpns,omitempty"`
-	NetworkConnections   *VCoreEntitlement `json:"networkConnections,omitempty"`
-	Hybrid               *HybridEntitlement                `json:"hybrid,omitempty"`
-	RuntimeFabric        bool                              `json:"runtimeFabric"`
-	FlexGateway          *EnabledEntitlement               `json:"flexGateway,omitempty"`
+	CreateSubOrgs         bool                              `json:"createSubOrgs"`
+	CreateEnvironments    bool                              `json:"createEnvironments"`
+	GlobalDeployment      bool                              `json:"globalDeployment"`
+	VCoresProduction      *VCoreEntitlement                 `json:"vCoresProduction,omitempty"`
+	VCoresSandbox         *VCoreEntitlement                 `json:"vCoresSandbox,omitempty"`
+	VCoresDesign          *VCoreEntitlement                 `json:"vCoresDesign,omitempty"`
+	StaticIps             *VCoreEntitlement                 `json:"staticIps,omitempty"`
+	Vpcs                  *VCoreEntitlement                 `json:"vpcs,omitempty"`
+	Vpns                  *VCoreEntitlement                 `json:"vpns,omitempty"`
+	NetworkConnections    *VCoreEntitlement                 `json:"networkConnections,omitempty"`
+	Hybrid                *HybridEntitlement                `json:"hybrid,omitempty"`
+	RuntimeFabric         bool                              `json:"runtimeFabric"`
+	FlexGateway           *EnabledEntitlement               `json:"flexGateway,omitempty"`
 	WorkerLoggingOverride *WorkerLoggingOverrideEntitlement `json:"workerLoggingOverride,omitempty"`
-	MqMessages           *MqEntitlement                    `json:"mqMessages,omitempty"`
-	MqRequests           *MqEntitlement                    `json:"mqRequests,omitempty"`
-	Gateways             *AssignedEntitlement              `json:"gateways,omitempty"`
-	DesignCenter         *DesignCenterEntitlement          `json:"designCenter,omitempty"`
-	LoadBalancer         *AssignedEntitlement              `json:"loadBalancer,omitempty"`
-	ServiceMesh          *EnabledEntitlement               `json:"serviceMesh,omitempty"`
-	ManagedGatewaySmall  *AssignedEntitlement              `json:"managedGatewaySmall,omitempty"`
-	ManagedGatewayLarge  *AssignedEntitlement              `json:"managedGatewayLarge,omitempty"`
+	MqMessages            *MqEntitlement                    `json:"mqMessages,omitempty"`
+	MqRequests            *MqEntitlement                    `json:"mqRequests,omitempty"`
+	Gateways              *AssignedEntitlement              `json:"gateways,omitempty"`
+	DesignCenter          *DesignCenterEntitlement          `json:"designCenter,omitempty"`
+	LoadBalancer          *AssignedEntitlement              `json:"loadBalancer,omitempty"`
+	ServiceMesh           *EnabledEntitlement               `json:"serviceMesh,omitempty"`
+	ManagedGatewaySmall   *AssignedEntitlement              `json:"managedGatewaySmall,omitempty"`
+	ManagedGatewayLarge   *AssignedEntitlement              `json:"managedGatewayLarge,omitempty"`
 }
 
 // Subscription represents the subscription details for an organization

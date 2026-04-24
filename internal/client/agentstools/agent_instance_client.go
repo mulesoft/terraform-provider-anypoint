@@ -31,36 +31,36 @@ func NewAgentInstanceClient(config *client.ClientConfig) (*AgentInstanceClient, 
 
 // AgentInstance represents an Agent instance in API Manager (similar to API Instance)
 type AgentInstance struct {
-	ID                        int                         `json:"id"`
-	AssetID                   string                      `json:"assetId,omitempty"`
-	AssetVersion              string                      `json:"assetVersion,omitempty"`
-	ProductVersion            string                      `json:"productVersion,omitempty"`
-	GroupID                   string                      `json:"groupId,omitempty"`
-	Technology                string                      `json:"technology,omitempty"`
-	EndpointURI               string                      `json:"endpointUri,omitempty"`
-	ProviderID                *string                     `json:"providerId,omitempty"`
-	InstanceLabel             string                      `json:"instanceLabel,omitempty"`
-	ApprovalMethod            string                      `json:"approvalMethod,omitempty"`
-	Status                    string                      `json:"status,omitempty"`
-	EnvironmentID             string                      `json:"environmentId,omitempty"`
-	AutodiscoveryInstanceName string                      `json:"autodiscoveryInstanceName,omitempty"`
-	Endpoint                  *AgentInstanceEndpoint      `json:"endpoint,omitempty"`
-	Spec                      *AgentInstanceSpec          `json:"spec,omitempty"`
-	Routing                   []AgentInstanceRoute        `json:"routing,omitempty"`
-	Deployment                *AgentInstanceDeployment    `json:"deployment,omitempty"`
+	ID                        int                      `json:"id"`
+	AssetID                   string                   `json:"assetId,omitempty"`
+	AssetVersion              string                   `json:"assetVersion,omitempty"`
+	ProductVersion            string                   `json:"productVersion,omitempty"`
+	GroupID                   string                   `json:"groupId,omitempty"`
+	Technology                string                   `json:"technology,omitempty"`
+	EndpointURI               string                   `json:"endpointUri,omitempty"`
+	ProviderID                *string                  `json:"providerId,omitempty"`
+	InstanceLabel             string                   `json:"instanceLabel,omitempty"`
+	ApprovalMethod            string                   `json:"approvalMethod,omitempty"`
+	Status                    string                   `json:"status,omitempty"`
+	EnvironmentID             string                   `json:"environmentId,omitempty"`
+	AutodiscoveryInstanceName string                   `json:"autodiscoveryInstanceName,omitempty"`
+	Endpoint                  *AgentInstanceEndpoint   `json:"endpoint,omitempty"`
+	Spec                      *AgentInstanceSpec       `json:"spec,omitempty"`
+	Routing                   []AgentInstanceRoute     `json:"routing,omitempty"`
+	Deployment                *AgentInstanceDeployment `json:"deployment,omitempty"`
 }
 
 // AgentInstanceEndpoint represents the endpoint/proxy configuration for agents
 type AgentInstanceEndpoint struct {
-	DeploymentType       string                       `json:"deploymentType,omitempty"`
-	MuleVersion4OrAbove  *bool                        `json:"muleVersion4OrAbove"`
-	Type                 string                       `json:"type,omitempty"`
-	IsCloudHub           *bool                        `json:"isCloudHub"`
-	URI                  *string                      `json:"uri,omitempty"`
-	ProxyURI             *string                      `json:"proxyUri"`
-	ReferencesUserDomain *bool                        `json:"referencesUserDomain"`
-	ResponseTimeout      *int                         `json:"responseTimeout"`
-	TLSContexts          *AgentInstanceTLSContexts    `json:"tlsContexts"`
+	DeploymentType       string                    `json:"deploymentType,omitempty"`
+	MuleVersion4OrAbove  *bool                     `json:"muleVersion4OrAbove"`
+	Type                 string                    `json:"type,omitempty"`
+	IsCloudHub           *bool                     `json:"isCloudHub"`
+	URI                  *string                   `json:"uri,omitempty"`
+	ProxyURI             *string                   `json:"proxyUri"`
+	ReferencesUserDomain *bool                     `json:"referencesUserDomain"`
+	ResponseTimeout      *int                      `json:"responseTimeout"`
+	TLSContexts          *AgentInstanceTLSContexts `json:"tlsContexts"`
 }
 
 // AgentInstanceTLSContexts holds TLS context references
@@ -83,18 +83,18 @@ type AgentInstanceSpec struct {
 
 // AgentInstanceRoute represents a single routing rule with weighted upstreams
 type AgentInstanceRoute struct {
-	Label     string                   `json:"label,omitempty"`
-	Upstreams []AgentInstanceUpstream  `json:"upstreams"`
-	Rules     *AgentInstanceRules      `json:"rules,omitempty"`
+	Label     string                  `json:"label,omitempty"`
+	Upstreams []AgentInstanceUpstream `json:"upstreams"`
+	Rules     *AgentInstanceRules     `json:"rules,omitempty"`
 }
 
 // AgentInstanceUpstream is one backend in a weighted routing set
 type AgentInstanceUpstream struct {
-	ID         string                      `json:"id,omitempty"`
-	Weight     int                         `json:"weight"`
-	URI        string                      `json:"uri,omitempty"`
-	Label      string                      `json:"label,omitempty"`
-	TLSContext *AgentInstanceUpstreamTLS   `json:"tlsContext,omitempty"`
+	ID         string                    `json:"id,omitempty"`
+	Weight     int                       `json:"weight"`
+	URI        string                    `json:"uri,omitempty"`
+	Label      string                    `json:"label,omitempty"`
+	TLSContext *AgentInstanceUpstreamTLS `json:"tlsContext,omitempty"`
 }
 
 // AgentInstanceUpstreamTLS holds TLS context for an upstream backend
@@ -131,26 +131,26 @@ func (c *AgentInstanceClient) GetGatewayInfo(ctx context.Context, orgID, envID, 
 
 // CreateAgentInstanceRequest is the payload sent to create an agent instance
 type CreateAgentInstanceRequest struct {
-	Technology     string                      `json:"technology"`
-	ApprovalMethod *string                     `json:"approvalMethod"`
-	ProviderID     *string                     `json:"providerId"`
-	EndpointURI    *string                     `json:"endpointUri"`
-	InstanceLabel  string                      `json:"instanceLabel,omitempty"`
-	Endpoint       *AgentInstanceEndpoint      `json:"endpoint,omitempty"`
-	Spec           *AgentInstanceSpec          `json:"spec"`
-	Routing        []AgentInstanceRoute        `json:"routing,omitempty"`
-	Deployment     *AgentInstanceDeployment    `json:"deployment,omitempty"`
+	Technology     string                   `json:"technology"`
+	ApprovalMethod *string                  `json:"approvalMethod"`
+	ProviderID     *string                  `json:"providerId"`
+	EndpointURI    *string                  `json:"endpointUri"`
+	InstanceLabel  string                   `json:"instanceLabel,omitempty"`
+	Endpoint       *AgentInstanceEndpoint   `json:"endpoint,omitempty"`
+	Spec           *AgentInstanceSpec       `json:"spec"`
+	Routing        []AgentInstanceRoute     `json:"routing,omitempty"`
+	Deployment     *AgentInstanceDeployment `json:"deployment,omitempty"`
 }
 
 // UpdateAgentInstanceRequest uses pointer fields to distinguish "not provided" from zero value
 type UpdateAgentInstanceRequest struct {
-	Technology    *string                     `json:"technology,omitempty"`
-	EndpointURI   *string                     `json:"endpointUri,omitempty"`
-	InstanceLabel *string                     `json:"instanceLabel,omitempty"`
-	Endpoint      *AgentInstanceEndpoint      `json:"endpoint,omitempty"`
-	Spec          *AgentInstanceSpec          `json:"spec,omitempty"`
-	Routing       []AgentInstanceRoute        `json:"routing,omitempty"`
-	Deployment    *AgentInstanceDeployment    `json:"deployment,omitempty"`
+	Technology    *string                  `json:"technology,omitempty"`
+	EndpointURI   *string                  `json:"endpointUri,omitempty"`
+	InstanceLabel *string                  `json:"instanceLabel,omitempty"`
+	Endpoint      *AgentInstanceEndpoint   `json:"endpoint,omitempty"`
+	Spec          *AgentInstanceSpec       `json:"spec,omitempty"`
+	Routing       []AgentInstanceRoute     `json:"routing,omitempty"`
+	Deployment    *AgentInstanceDeployment `json:"deployment,omitempty"`
 }
 
 // --- CRUD Operations ---

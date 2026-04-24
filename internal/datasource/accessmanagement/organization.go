@@ -302,7 +302,6 @@ func (d *OrganizationDataSource) Schema(_ context.Context, _ datasource.SchemaRe
 	}
 }
 
-
 // Configure adds the provider configured client to the data source.
 func (d *OrganizationDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	if req.ProviderData == nil {

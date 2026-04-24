@@ -1141,25 +1141,25 @@ func (r *APIInstanceResource) flattenInstance(ctx context.Context, inst *apimana
 		for _, route := range inst.Routing {
 			usElems := make([]attr.Value, 0, len(route.Upstreams))
 			for _, us := range route.Upstreams {
-			var tlsCtxVal attr.Value
-			if us.TLSContext != nil && us.TLSContext.SecretGroupID != "" && us.TLSContext.TLSContextID != "" {
-				tlsCtxVal = types.StringValue(fmt.Sprintf("%s/%s", us.TLSContext.SecretGroupID, us.TLSContext.TLSContextID))
-			} else {
-				tlsCtxVal = types.StringNull()
-			}
-			usObj, usDiags := types.ObjectValue(
-				upstreamObjType.AttrTypes,
-				map[string]attr.Value{
-					"weight":         types.Int64Value(int64(us.Weight)),
-					"uri":            types.StringValue(us.URI),
-					"label":          types.StringValue(us.Label),
-					"tls_context_id": tlsCtxVal,
-				},
-			)
-			if usDiags.HasError() {
-				continue
-			}
-			usElems = append(usElems, usObj)
+				var tlsCtxVal attr.Value
+				if us.TLSContext != nil && us.TLSContext.SecretGroupID != "" && us.TLSContext.TLSContextID != "" {
+					tlsCtxVal = types.StringValue(fmt.Sprintf("%s/%s", us.TLSContext.SecretGroupID, us.TLSContext.TLSContextID))
+				} else {
+					tlsCtxVal = types.StringNull()
+				}
+				usObj, usDiags := types.ObjectValue(
+					upstreamObjType.AttrTypes,
+					map[string]attr.Value{
+						"weight":         types.Int64Value(int64(us.Weight)),
+						"uri":            types.StringValue(us.URI),
+						"label":          types.StringValue(us.Label),
+						"tls_context_id": tlsCtxVal,
+					},
+				)
+				if usDiags.HasError() {
+					continue
+				}
+				usElems = append(usElems, usObj)
 			}
 
 			var rulesVal attr.Value
@@ -1186,35 +1186,35 @@ func (r *APIInstanceResource) flattenInstance(ctx context.Context, inst *apimana
 				} else {
 					headersVal = types.MapNull(types.StringType)
 				}
-			rulesObj, rulesDiags := types.ObjectValue(
-				rulesObjType.AttrTypes,
-				map[string]attr.Value{
-					"methods": methods,
-					"path":    pathVal,
-					"host":    hostVal,
-					"headers": headersVal,
-				},
-			)
-			if rulesDiags.HasError() {
-				rulesVal = types.ObjectNull(rulesObjType.AttrTypes)
-			} else {
-				rulesVal = rulesObj
-			}
+				rulesObj, rulesDiags := types.ObjectValue(
+					rulesObjType.AttrTypes,
+					map[string]attr.Value{
+						"methods": methods,
+						"path":    pathVal,
+						"host":    hostVal,
+						"headers": headersVal,
+					},
+				)
+				if rulesDiags.HasError() {
+					rulesVal = types.ObjectNull(rulesObjType.AttrTypes)
+				} else {
+					rulesVal = rulesObj
+				}
 			} else {
 				rulesVal = types.ObjectNull(rulesObjType.AttrTypes)
 			}
 
-		routeObj, routeDiags := types.ObjectValue(
-			routeObjType.AttrTypes,
-			map[string]attr.Value{
-				"label":     types.StringValue(route.Label),
-				"rules":     rulesVal,
-				"upstreams": types.ListValueMust(upstreamObjType, usElems),
-			},
-		)
-		if !routeDiags.HasError() {
-			routeElems = append(routeElems, routeObj)
-		}
+			routeObj, routeDiags := types.ObjectValue(
+				routeObjType.AttrTypes,
+				map[string]attr.Value{
+					"label":     types.StringValue(route.Label),
+					"rules":     rulesVal,
+					"upstreams": types.ListValueMust(upstreamObjType, usElems),
+				},
+			)
+			if !routeDiags.HasError() {
+				routeElems = append(routeElems, routeObj)
+			}
 		}
 
 		data.Routing = types.ListValueMust(routeObjType, routeElems)

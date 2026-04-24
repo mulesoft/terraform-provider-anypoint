@@ -273,69 +273,69 @@ func (r *OrganizationResource) Schema(_ context.Context, _ resource.SchemaReques
 						Description: "Whether global deployment is enabled.",
 						Required:    true,
 					},
-				"vcores_production": schema.SingleNestedAttribute{
-					Description: "Production vCore entitlement.",
-					Optional:    true,
-					Computed:    true,
-					Attributes:  getVCoreEntitlementSchema(),
-					PlanModifiers: []planmodifier.Object{
-						objectplanmodifier.UseStateForUnknown(),
+					"vcores_production": schema.SingleNestedAttribute{
+						Description: "Production vCore entitlement.",
+						Optional:    true,
+						Computed:    true,
+						Attributes:  getVCoreEntitlementSchema(),
+						PlanModifiers: []planmodifier.Object{
+							objectplanmodifier.UseStateForUnknown(),
+						},
 					},
-				},
-				"vcores_sandbox": schema.SingleNestedAttribute{
-					Description: "Sandbox vCore entitlement.",
-					Optional:    true,
-					Computed:    true,
-					Attributes:  getVCoreEntitlementSchema(),
-					PlanModifiers: []planmodifier.Object{
-						objectplanmodifier.UseStateForUnknown(),
+					"vcores_sandbox": schema.SingleNestedAttribute{
+						Description: "Sandbox vCore entitlement.",
+						Optional:    true,
+						Computed:    true,
+						Attributes:  getVCoreEntitlementSchema(),
+						PlanModifiers: []planmodifier.Object{
+							objectplanmodifier.UseStateForUnknown(),
+						},
 					},
-				},
-				"vcores_design": schema.SingleNestedAttribute{
-					Description: "Design vCore entitlement.",
-					Optional:    true,
-					Computed:    true,
-					Attributes:  getVCoreEntitlementSchema(),
-					PlanModifiers: []planmodifier.Object{
-						objectplanmodifier.UseStateForUnknown(),
+					"vcores_design": schema.SingleNestedAttribute{
+						Description: "Design vCore entitlement.",
+						Optional:    true,
+						Computed:    true,
+						Attributes:  getVCoreEntitlementSchema(),
+						PlanModifiers: []planmodifier.Object{
+							objectplanmodifier.UseStateForUnknown(),
+						},
 					},
-				},
-				"static_ips": schema.SingleNestedAttribute{
-					Description: "Static IP entitlement.",
-					Optional:    true,
-					Computed:    true,
-					Attributes:  getVCoreEntitlementSchema(),
-					PlanModifiers: []planmodifier.Object{
-						objectplanmodifier.UseStateForUnknown(),
+					"static_ips": schema.SingleNestedAttribute{
+						Description: "Static IP entitlement.",
+						Optional:    true,
+						Computed:    true,
+						Attributes:  getVCoreEntitlementSchema(),
+						PlanModifiers: []planmodifier.Object{
+							objectplanmodifier.UseStateForUnknown(),
+						},
 					},
-				},
-				"vpcs": schema.SingleNestedAttribute{
-					Description: "VPC entitlement.",
-					Optional:    true,
-					Computed:    true,
-					Attributes:  getVCoreEntitlementSchema(),
-					PlanModifiers: []planmodifier.Object{
-						objectplanmodifier.UseStateForUnknown(),
+					"vpcs": schema.SingleNestedAttribute{
+						Description: "VPC entitlement.",
+						Optional:    true,
+						Computed:    true,
+						Attributes:  getVCoreEntitlementSchema(),
+						PlanModifiers: []planmodifier.Object{
+							objectplanmodifier.UseStateForUnknown(),
+						},
 					},
-				},
-				"vpns": schema.SingleNestedAttribute{
-					Description: "VPN entitlement.",
-					Optional:    true,
-					Computed:    true,
-					Attributes:  getVCoreEntitlementSchema(),
-					PlanModifiers: []planmodifier.Object{
-						objectplanmodifier.UseStateForUnknown(),
+					"vpns": schema.SingleNestedAttribute{
+						Description: "VPN entitlement.",
+						Optional:    true,
+						Computed:    true,
+						Attributes:  getVCoreEntitlementSchema(),
+						PlanModifiers: []planmodifier.Object{
+							objectplanmodifier.UseStateForUnknown(),
+						},
 					},
-				},
-				"network_connections": schema.SingleNestedAttribute{
-					Description: "Network connections entitlement.",
-					Optional:    true,
-					Computed:    true,
-					Attributes:  getVCoreEntitlementSchema(),
-					PlanModifiers: []planmodifier.Object{
-						objectplanmodifier.UseStateForUnknown(),
+					"network_connections": schema.SingleNestedAttribute{
+						Description: "Network connections entitlement.",
+						Optional:    true,
+						Computed:    true,
+						Attributes:  getVCoreEntitlementSchema(),
+						PlanModifiers: []planmodifier.Object{
+							objectplanmodifier.UseStateForUnknown(),
+						},
 					},
-				},
 					"hybrid": schema.SingleNestedAttribute{
 						Description: "Hybrid entitlement.",
 						Optional:    true,
@@ -598,28 +598,28 @@ func getEntitlementsAttributeTypes() map[string]attr.Type {
 	assignedType := types.ObjectType{AttrTypes: map[string]attr.Type{"assigned": types.Int64Type}}
 	mqType := types.ObjectType{AttrTypes: getMqEntitlementAttributeTypes()}
 	return map[string]attr.Type{
-		"create_sub_orgs":          types.BoolType,
-		"create_environments":      types.BoolType,
-		"global_deployment":        types.BoolType,
-		"vcores_production":        vcoreType,
-		"vcores_sandbox":           vcoreType,
-		"vcores_design":            vcoreType,
-		"static_ips":               vcoreType,
-		"vpcs":                     vcoreType,
-		"vpns":                     vcoreType,
-		"network_connections":      vcoreType,
-		"hybrid":                   enabledType,
-		"runtime_fabric":           types.BoolType,
-		"flex_gateway":             enabledType,
-		"worker_logging_override":  enabledType,
-		"mq_messages":              mqType,
-		"mq_requests":              mqType,
-		"gateways":                 assignedType,
-		"design_center":            types.ObjectType{AttrTypes: map[string]attr.Type{"api": types.BoolType, "mozart": types.BoolType}},
-		"load_balancer":            assignedType,
-		"service_mesh":             enabledType,
-		"managed_gateway_small":    assignedType,
-		"managed_gateway_large":    assignedType,
+		"create_sub_orgs":         types.BoolType,
+		"create_environments":     types.BoolType,
+		"global_deployment":       types.BoolType,
+		"vcores_production":       vcoreType,
+		"vcores_sandbox":          vcoreType,
+		"vcores_design":           vcoreType,
+		"static_ips":              vcoreType,
+		"vpcs":                    vcoreType,
+		"vpns":                    vcoreType,
+		"network_connections":     vcoreType,
+		"hybrid":                  enabledType,
+		"runtime_fabric":          types.BoolType,
+		"flex_gateway":            enabledType,
+		"worker_logging_override": enabledType,
+		"mq_messages":             mqType,
+		"mq_requests":             mqType,
+		"gateways":                assignedType,
+		"design_center":           types.ObjectType{AttrTypes: map[string]attr.Type{"api": types.BoolType, "mozart": types.BoolType}},
+		"load_balancer":           assignedType,
+		"service_mesh":            enabledType,
+		"managed_gateway_small":   assignedType,
+		"managed_gateway_large":   assignedType,
 	}
 }
 

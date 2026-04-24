@@ -32,20 +32,20 @@ type KeystoreResource struct {
 }
 
 type KeystoreResourceModel struct {
-	ID               types.String `tfsdk:"id"`
-	OrganizationID   types.String `tfsdk:"organization_id"`
-	EnvironmentID    types.String `tfsdk:"environment_id"`
-	SecretGroupID    types.String `tfsdk:"secret_group_id"`
-	Name             types.String `tfsdk:"name"`
-	Type             types.String `tfsdk:"type"`
-	CertificateB64   types.String `tfsdk:"certificate_base64"`
-	KeyB64           types.String `tfsdk:"key_base64"`
-	KeystoreFileB64  types.String `tfsdk:"keystore_file_base64"`
-	Passphrase       types.String `tfsdk:"passphrase"`
-	Alias            types.String `tfsdk:"alias"`
-	CaPathB64        types.String `tfsdk:"ca_path_base64"`
-	ExpirationDate   types.String `tfsdk:"expiration_date"`
-	Algorithm        types.String `tfsdk:"algorithm"`
+	ID              types.String `tfsdk:"id"`
+	OrganizationID  types.String `tfsdk:"organization_id"`
+	EnvironmentID   types.String `tfsdk:"environment_id"`
+	SecretGroupID   types.String `tfsdk:"secret_group_id"`
+	Name            types.String `tfsdk:"name"`
+	Type            types.String `tfsdk:"type"`
+	CertificateB64  types.String `tfsdk:"certificate_base64"`
+	KeyB64          types.String `tfsdk:"key_base64"`
+	KeystoreFileB64 types.String `tfsdk:"keystore_file_base64"`
+	Passphrase      types.String `tfsdk:"passphrase"`
+	Alias           types.String `tfsdk:"alias"`
+	CaPathB64       types.String `tfsdk:"ca_path_base64"`
+	ExpirationDate  types.String `tfsdk:"expiration_date"`
+	Algorithm       types.String `tfsdk:"algorithm"`
 }
 
 func NewKeystoreResource() resource.Resource {
@@ -131,19 +131,19 @@ func (r *KeystoreResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 			},
 			"passphrase": schema.StringAttribute{
 				Description: "Passphrase for the keystore or encrypted PEM key.",
-				Optional:  true,
-				Sensitive: true,
+				Optional:    true,
+				Sensitive:   true,
 			},
 			"alias": schema.StringAttribute{
 				Description: "Alias of the entry within the keystore. Used for JKS, PKCS12, and JCEKS types.",
-				Optional: true,
+				Optional:    true,
 			},
 
 			// --- Optional CA chain ---
 			"ca_path_base64": schema.StringAttribute{
 				Description: "Base64-encoded CA certificate chain (truststore). Optional for all types.",
-				Optional:  true,
-				Sensitive: true,
+				Optional:    true,
+				Sensitive:   true,
 			},
 
 			// --- Read-only fields from API ---

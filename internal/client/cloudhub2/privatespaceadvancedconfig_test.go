@@ -48,7 +48,7 @@ func TestNewPrivateSpaceAdvancedConfigClient(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
-			
+
 			if tt.config != nil {
 				tt.config.BaseURL = server.URL
 			}
@@ -162,7 +162,7 @@ func TestPrivateSpaceAdvancedConfigClient_UpdatePrivateSpaceAdvancedConfig(t *te
 			name:           "successful update",
 			orgID:          "test-org-id",
 			privateSpaceID: "test-space-id",
-			request: &UpdatePrivateSpaceAdvancedConfigRequest{},
+			request:        &UpdatePrivateSpaceAdvancedConfigRequest{},
 			mockHandler: func(w http.ResponseWriter, r *http.Request) {
 				expectedMethods := []string{"PUT", "PATCH"}
 				found := false

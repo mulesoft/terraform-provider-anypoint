@@ -48,7 +48,7 @@ func TestNewConnectedAppClient(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
-			
+
 			if tt.config != nil {
 				tt.config.BaseURL = server.URL
 			}
@@ -101,12 +101,12 @@ func TestConnectedAppClient_CreateConnectedApp(t *testing.T) {
 			},
 			mockHandler: func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertHTTPRequest(t, r, "POST", "/accounts/api/connectedApplications")
-				
+
 				body := testutil.AssertJSONBody(t, r, "client_name")
 				if body["client_name"] != "Test Connected App" {
 					t.Error("Expected client_name in request body")
 				}
-				
+
 				testutil.JSONResponse(w, http.StatusCreated, mockConnectedApp)
 			},
 			wantErr: false,
@@ -158,7 +158,7 @@ func TestConnectedAppClient_CreateConnectedApp(t *testing.T) {
 				if result == nil {
 					t.Errorf("CreateConnectedApp() returned nil connected app")
 				}
-				
+
 				// Validate returned connected app
 				if result != nil {
 					if result.ClientID != mockConnectedApp.ClientID {

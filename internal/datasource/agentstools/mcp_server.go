@@ -24,10 +24,10 @@ type MCPServerDataSource struct {
 }
 
 type MCPServerDataSourceModel struct {
-	ID             types.String           `tfsdk:"id"`
-	OrganizationID types.String           `tfsdk:"organization_id"`
-	EnvironmentID  types.String           `tfsdk:"environment_id"`
-	Servers        []MCPServerItemModel   `tfsdk:"servers"`
+	ID             types.String         `tfsdk:"id"`
+	OrganizationID types.String         `tfsdk:"organization_id"`
+	EnvironmentID  types.String         `tfsdk:"environment_id"`
+	Servers        []MCPServerItemModel `tfsdk:"servers"`
 }
 
 type MCPServerItemModel struct {

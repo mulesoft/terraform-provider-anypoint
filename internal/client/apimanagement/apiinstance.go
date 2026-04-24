@@ -92,11 +92,11 @@ type APIInstanceRoute struct {
 
 // APIInstanceUpstream is one backend in a weighted routing set
 type APIInstanceUpstream struct {
-	ID         string                     `json:"id,omitempty"`
-	Weight     int                        `json:"weight"`
-	URI        string                     `json:"uri"`
-	Label      string                     `json:"label,omitempty"`
-	TLSContext *APIInstanceUpstreamTLS     `json:"tlsContext,omitempty"`
+	ID         string                  `json:"id,omitempty"`
+	Weight     int                     `json:"weight"`
+	URI        string                  `json:"uri"`
+	Label      string                  `json:"label,omitempty"`
+	TLSContext *APIInstanceUpstreamTLS `json:"tlsContext,omitempty"`
 }
 
 // APIInstanceUpstreamTLS holds TLS context for an upstream backend
@@ -107,9 +107,9 @@ type APIInstanceUpstreamTLS struct {
 
 // APIInstanceRules are match conditions for a route
 type APIInstanceRules struct {
-	Methods string `json:"methods,omitempty"`
-	Host    string `json:"host,omitempty"`
-	Path    string `json:"path,omitempty"`
+	Methods string            `json:"methods,omitempty"`
+	Host    string            `json:"host,omitempty"`
+	Path    string            `json:"path,omitempty"`
 	Headers map[string]string `json:"headers,omitempty"`
 }
 
@@ -205,8 +205,8 @@ type PromoteEntities struct {
 // PromoteAPIInstanceRequest is the payload for promoting an API instance
 // from one environment to another.
 type PromoteAPIInstanceRequest struct {
-	InstanceLabel *string          `json:"instanceLabel"`
-	Promote       PromoteConfig    `json:"promote"`
+	InstanceLabel *string       `json:"instanceLabel"`
+	Promote       PromoteConfig `json:"promote"`
 }
 
 // PromoteConfig holds the promotion source and entity selection.

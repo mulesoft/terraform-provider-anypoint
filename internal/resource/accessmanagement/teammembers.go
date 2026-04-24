@@ -18,8 +18,10 @@ import (
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
-var _ resource.Resource = &TeamMembersResource{}
-var _ resource.ResourceWithImportState = &TeamMembersResource{}
+var (
+	_ resource.Resource                = &TeamMembersResource{}
+	_ resource.ResourceWithImportState = &TeamMembersResource{}
+)
 
 func NewTeamMembersResource() resource.Resource {
 	return &TeamMembersResource{}

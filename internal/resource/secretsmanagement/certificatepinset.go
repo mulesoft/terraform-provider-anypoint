@@ -53,23 +53,23 @@ func (r *CertificatePinsetResource) Schema(_ context.Context, _ resource.SchemaR
 			"A certificate pinset is used for certificate pinning validation.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Description: "Unique identifier of the certificate pinset.",
-				Computed:    true,
+				Description:   "Unique identifier of the certificate pinset.",
+				Computed:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"organization_id": schema.StringAttribute{
 				Description: "Organization ID.",
-				Optional: true, Computed: true,
+				Optional:    true, Computed: true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"environment_id": schema.StringAttribute{
-				Description: "Environment ID.",
-				Required: true,
+				Description:   "Environment ID.",
+				Required:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"secret_group_id": schema.StringAttribute{
-				Description: "Secret group ID that this certificate pinset belongs to.",
-				Required: true,
+				Description:   "Secret group ID that this certificate pinset belongs to.",
+				Required:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"name": schema.StringAttribute{

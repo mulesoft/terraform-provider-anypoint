@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	secretsmgmt "github.com/mulesoft/terraform-provider-anypoint/internal/client/secretsmanagement"
 )
@@ -22,9 +23,9 @@ type SecretGroupDataSource struct {
 }
 
 type SecretGroupDataSourceModel struct {
-	OrganizationID types.String            `tfsdk:"organization_id"`
-	EnvironmentID  types.String            `tfsdk:"environment_id"`
-	SecretGroups   []SecretGroupItemModel  `tfsdk:"secret_groups"`
+	OrganizationID types.String           `tfsdk:"organization_id"`
+	EnvironmentID  types.String           `tfsdk:"environment_id"`
+	SecretGroups   []SecretGroupItemModel `tfsdk:"secret_groups"`
 }
 
 type SecretGroupItemModel struct {

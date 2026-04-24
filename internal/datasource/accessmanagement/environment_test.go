@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client/accessmanagement"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
@@ -14,11 +15,11 @@ import (
 
 func TestNewEnvironmentDataSource(t *testing.T) {
 	dataSource := NewEnvironmentDataSource()
-	
+
 	if dataSource == nil {
 		t.Error("NewEnvironmentDataSource() returned nil")
 	}
-	
+
 	// Verify it implements the expected interfaces
 	var _ datasource.DataSource = dataSource
 	if _, ok := dataSource.(datasource.DataSourceWithConfigure); !ok {
@@ -28,15 +29,15 @@ func TestNewEnvironmentDataSource(t *testing.T) {
 
 func TestEnvironmentDataSource_Metadata(t *testing.T) {
 	dataSource := NewEnvironmentDataSource()
-	
+
 	ctx := context.Background()
 	req := datasource.MetadataRequest{
 		ProviderTypeName: "test",
 	}
 	resp := &datasource.MetadataResponse{}
-	
+
 	dataSource.Metadata(ctx, req, resp)
-	
+
 	if resp.TypeName != "test_environment" {
 		t.Errorf("Metadata() TypeName = %v, want %v", resp.TypeName, "test_environment")
 	}
@@ -44,19 +45,19 @@ func TestEnvironmentDataSource_Metadata(t *testing.T) {
 
 func TestEnvironmentDataSource_Schema(t *testing.T) {
 	dataSource := NewEnvironmentDataSource()
-	
+
 	ctx := context.Background()
 	req := datasource.SchemaRequest{}
 	resp := &datasource.SchemaResponse{}
-	
+
 	dataSource.Schema(ctx, req, resp)
-	
+
 	if resp.Diagnostics.HasError() {
 		t.Errorf("Schema() has errors: %v", resp.Diagnostics.Errors())
 	}
-	
+
 	// Check required attributes (none for this data source - it uses other criteria to find environments)
-	requiredAttrs := []string{} 
+	requiredAttrs := []string{}
 	for _, attrName := range requiredAttrs {
 		if attr, exists := resp.Schema.Attributes[attrName]; exists {
 			if !attr.IsRequired() {
@@ -66,7 +67,7 @@ func TestEnvironmentDataSource_Schema(t *testing.T) {
 			t.Errorf("Schema() missing required attribute: %s", attrName)
 		}
 	}
-	
+
 	// Check computed attributes (id is Required, not Computed)
 	computedAttrs := []string{"name", "type", "organization_id"}
 	for _, attrName := range computedAttrs {
@@ -82,7 +83,7 @@ func TestEnvironmentDataSource_Schema(t *testing.T) {
 
 func TestEnvironmentDataSource_Configure(t *testing.T) {
 	dataSource := NewEnvironmentDataSource().(*EnvironmentDataSource)
-	
+
 	// Test with valid provider data
 	server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
 	providerData := &client.ClientConfig{
@@ -92,19 +93,19 @@ func TestEnvironmentDataSource_Configure(t *testing.T) {
 		Username:     "test-user",
 		Password:     "test-pass",
 	}
-	
+
 	ctx := context.Background()
 	req := datasource.ConfigureRequest{
 		ProviderData: providerData,
 	}
 	resp := &datasource.ConfigureResponse{}
-	
+
 	dataSource.Configure(ctx, req, resp)
-	
+
 	if resp.Diagnostics.HasError() {
 		t.Errorf("Configure() has errors: %v", resp.Diagnostics.Errors())
 	}
-	
+
 	// Verify client is configured
 	if dataSource.client == nil {
 		t.Error("Configure() should set client")
@@ -114,7 +115,7 @@ func TestEnvironmentDataSource_Configure(t *testing.T) {
 func TestEnvironmentDataSourceModel_Validation(t *testing.T) {
 	// Test that all model fields exist and are properly typed
 	model := EnvironmentDataSourceModel{}
-	
+
 	// Verify all expected fields exist
 	_ = model.ID
 	// Add other field validations based on your model
@@ -126,14 +127,14 @@ func TestEnvironmentDataSourceModel_Validation(t *testing.T) {
 
 func TestEnvironmentDataSource_ReadClientTests(t *testing.T) {
 	tests := []struct {
-		name            string
-		envID           string
-		orgID           string
-		clientOrgID     string
-		mockHandler     func(w http.ResponseWriter, r *http.Request)
-		wantErr         bool
-		errContains     string
-		expectedName    string
+		name         string
+		envID        string
+		orgID        string
+		clientOrgID  string
+		mockHandler  func(w http.ResponseWriter, r *http.Request)
+		wantErr      bool
+		errContains  string
+		expectedName string
 	}{
 		{
 			name:        "successful read with provided org ID",
@@ -218,7 +219,7 @@ func TestEnvironmentDataSource_ReadClientTests(t *testing.T) {
 			handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 				"/accounts/api/organizations/test-org-id/environments/test-env-id":           tt.mockHandler,
 				"/accounts/api/organizations/test-org-id/environments/nonexistent-env-id":    tt.mockHandler,
-				"/accounts/api/organizations/default-org-id/environments/test-env-id":       tt.mockHandler,
+				"/accounts/api/organizations/default-org-id/environments/test-env-id":        tt.mockHandler,
 				"/accounts/api/organizations/default-org-id/environments/nonexistent-env-id": tt.mockHandler,
 			}
 			server := testutil.MockHTTPServer(t, handlers)
@@ -275,7 +276,7 @@ func BenchmarkEnvironmentDataSource_Schema(b *testing.B) {
 	dataSource := NewEnvironmentDataSource()
 	ctx := context.Background()
 	req := datasource.SchemaRequest{}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		resp := &datasource.SchemaResponse{}

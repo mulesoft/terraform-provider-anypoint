@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client/accessmanagement"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
@@ -22,15 +23,15 @@ func TestIntegrationUserResource_CRUD(t *testing.T) {
 	username := "terraform-integration-test-user"
 	email := "terraform-integration-test@example.com"
 	emailUpdated := "terraform-integration-updated@example.com"
-	
+
 	// Create mock server for API simulation
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
-		"/accounts/api/organizations/test-org-id/users": testUserCreateHandler(t, username, email),
+		"/accounts/api/organizations/test-org-id/users":              testUserCreateHandler(t, username, email),
 		"/accounts/api/organizations/test-org-id/users/test-user-id": testUserReadUpdateDeleteHandler(t, username, email, emailUpdated),
-		"/accounts/api/v2/oauth2/token": testutil.StandardMockHandlers()["/accounts/api/v2/oauth2/token"],
-		"/accounts/api/me": testutil.StandardMockHandlers()["/accounts/api/me"],
+		"/accounts/api/v2/oauth2/token":                              testutil.StandardMockHandlers()["/accounts/api/v2/oauth2/token"],
+		"/accounts/api/me":                                           testutil.StandardMockHandlers()["/accounts/api/me"],
 	}
-	
+
 	server := testutil.MockHTTPServer(t, handlers)
 	defer server.Close()
 
@@ -43,12 +44,12 @@ func TestIntegrationUserResource_CRUD(t *testing.T) {
 		BaseURL:      server.URL,
 		Timeout:      30,
 	}
-	
+
 	userAnypointClient, err := client.NewUserAnypointClient(clientConfig)
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
-	
+
 	userClient := &accessmanagement.UserClient{
 		UserAnypointClient: userAnypointClient,
 	}
@@ -65,7 +66,7 @@ func TestIntegrationUserResource_CRUD(t *testing.T) {
 		if userResource.client == nil {
 			t.Error("User resource client should be configured")
 		}
-		
+
 		var testResource resource.Resource = userResource
 		if testResource == nil {
 			t.Error("User resource should implement Resource interface")
@@ -78,11 +79,11 @@ func TestIntegrationUserResource_CRUD(t *testing.T) {
 		if err != nil {
 			t.Errorf("GetUser failed: %v", err)
 		}
-		
+
 		if user == nil {
 			t.Error("GetUser returned nil user")
 		}
-		
+
 		if user != nil {
 			if user.Username != username {
 				t.Errorf("Expected username %s, got %s", username, user.Username)
@@ -101,12 +102,12 @@ func TestIntegrationUserResource_CRUD(t *testing.T) {
 		updateReq := &accessmanagement.UpdateUserRequest{
 			Email: &emailUpdated,
 		}
-		
+
 		user, err := userClient.UpdateUser(ctx, "test-org-id", "test-user-id", updateReq)
 		if err != nil {
 			t.Errorf("UpdateUser failed: %v", err)
 		}
-		
+
 		if user != nil && user.Email != emailUpdated {
 			t.Errorf("Expected updated email %s, got %s", emailUpdated, user.Email)
 		}
@@ -138,9 +139,9 @@ func TestIntegrationUserResource_ErrorHandling(t *testing.T) {
 			}
 		},
 		"/accounts/api/v2/oauth2/token": testutil.StandardMockHandlers()["/accounts/api/v2/oauth2/token"],
-		"/accounts/api/me": testutil.StandardMockHandlers()["/accounts/api/me"],
+		"/accounts/api/me":              testutil.StandardMockHandlers()["/accounts/api/me"],
 	}
-	
+
 	server := testutil.MockHTTPServer(t, errorHandlers)
 	defer server.Close()
 
@@ -153,12 +154,12 @@ func TestIntegrationUserResource_ErrorHandling(t *testing.T) {
 		BaseURL:      server.URL,
 		Timeout:      30,
 	}
-	
+
 	userAnypointClient, err := client.NewUserAnypointClient(clientConfig)
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
-	
+
 	userClient := &accessmanagement.UserClient{
 		UserAnypointClient: userAnypointClient,
 	}
@@ -171,13 +172,13 @@ func TestIntegrationUserResource_ErrorHandling(t *testing.T) {
 		if err == nil {
 			t.Error("Expected error for nonexistent user")
 		}
-		
+
 		if err != nil && !strings.Contains(strings.ToLower(err.Error()), "not found") {
 			t.Errorf("Expected 'not found' error, got: %v", err)
 		}
 	})
 
-	// Test validation error handling  
+	// Test validation error handling
 	t.Run("ValidationError", func(t *testing.T) {
 		createReq := &accessmanagement.CreateUserRequest{
 			Username:  "test-user",
@@ -186,7 +187,7 @@ func TestIntegrationUserResource_ErrorHandling(t *testing.T) {
 			LastName:  "User",
 			Password:  "password123",
 		}
-		
+
 		_, err := userClient.CreateUser(ctx, "test-org-id", createReq)
 		if err == nil {
 			t.Error("Expected validation error for invalid email format")
@@ -197,20 +198,20 @@ func TestIntegrationUserResource_ErrorHandling(t *testing.T) {
 // TestIntegrationUserResource_InterfaceCompliance tests that resource implements required interfaces
 func TestIntegrationUserResource_InterfaceCompliance(t *testing.T) {
 	userResource := &UserResource{}
-	
+
 	// Test interface compliance
 	var _ resource.Resource = userResource
 	var _ resource.ResourceWithConfigure = userResource
 	var _ resource.ResourceWithImportState = userResource
-	
+
 	// Test that all required methods exist
 	ctx := context.Background()
-	
+
 	// Test Metadata method
 	req := resource.MetadataRequest{ProviderTypeName: "anypoint"}
 	resp := &resource.MetadataResponse{}
 	userResource.Metadata(ctx, req, resp)
-	
+
 	expected := "anypoint_user"
 	if resp.TypeName != expected {
 		t.Errorf("Expected TypeName %s, got %s", expected, resp.TypeName)
@@ -220,11 +221,11 @@ func TestIntegrationUserResource_InterfaceCompliance(t *testing.T) {
 	schemaReq := resource.SchemaRequest{}
 	schemaResp := &resource.SchemaResponse{}
 	userResource.Schema(ctx, schemaReq, schemaResp)
-	
+
 	if len(schemaResp.Schema.Attributes) == 0 {
 		t.Error("Schema should define attributes")
 	}
-	
+
 	// Verify required attributes exist
 	requiredAttrs := []string{"username", "email", "first_name", "last_name", "password"}
 	for _, attr := range requiredAttrs {
@@ -232,7 +233,7 @@ func TestIntegrationUserResource_InterfaceCompliance(t *testing.T) {
 			t.Errorf("Schema missing required attribute: %s", attr)
 		}
 	}
-	
+
 	// Verify computed attributes exist
 	computedAttrs := []string{"id", "organization_id"}
 	for _, attr := range computedAttrs {
@@ -284,12 +285,12 @@ func TestIntegrationUserResource_EmailValidation(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Test email validation (this would typically be done in the resource validation)
-			isValid := strings.Contains(tc.email, "@") && 
+			isValid := strings.Contains(tc.email, "@") &&
 				len(strings.Split(tc.email, "@")) == 2 &&
 				tc.email != "" &&
 				!strings.HasPrefix(tc.email, "@") &&
 				!strings.HasSuffix(tc.email, "@")
-			
+
 			if tc.shouldErr && isValid {
 				t.Errorf("Expected email %s to be invalid", tc.email)
 			}
@@ -308,9 +309,9 @@ func testUserCreateHandler(t *testing.T, expectedUsername, expectedEmail string)
 			testutil.ErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
 			return
 		}
-		
+
 		testutil.AssertHTTPRequest(t, r, "POST", "/accounts/api/organizations/test-org-id/users")
-		
+
 		// Return created user
 		testutil.JSONResponse(w, http.StatusCreated, map[string]interface{}{
 			"id":             "test-user-id",
@@ -378,7 +379,7 @@ func BenchmarkIntegrationUserResource_Schema(b *testing.B) {
 	userResource := &UserResource{}
 	ctx := context.Background()
 	req := resource.SchemaRequest{}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		resp := &resource.SchemaResponse{}
@@ -390,7 +391,7 @@ func BenchmarkIntegrationUserResource_Metadata(b *testing.B) {
 	userResource := &UserResource{}
 	ctx := context.Background()
 	req := resource.MetadataRequest{ProviderTypeName: "anypoint"}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		resp := &resource.MetadataResponse{}

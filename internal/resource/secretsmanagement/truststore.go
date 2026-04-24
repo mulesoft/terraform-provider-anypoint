@@ -32,16 +32,16 @@ type TruststoreResource struct {
 }
 
 type TruststoreResourceModel struct {
-	ID              types.String `tfsdk:"id"`
-	OrganizationID  types.String `tfsdk:"organization_id"`
-	EnvironmentID   types.String `tfsdk:"environment_id"`
-	SecretGroupID   types.String `tfsdk:"secret_group_id"`
-	Name            types.String `tfsdk:"name"`
-	Type            types.String `tfsdk:"type"`
-	TrustStoreB64   types.String `tfsdk:"truststore_base64"`
-	Passphrase      types.String `tfsdk:"passphrase"`
-	ExpirationDate  types.String `tfsdk:"expiration_date"`
-	Algorithm       types.String `tfsdk:"algorithm"`
+	ID             types.String `tfsdk:"id"`
+	OrganizationID types.String `tfsdk:"organization_id"`
+	EnvironmentID  types.String `tfsdk:"environment_id"`
+	SecretGroupID  types.String `tfsdk:"secret_group_id"`
+	Name           types.String `tfsdk:"name"`
+	Type           types.String `tfsdk:"type"`
+	TrustStoreB64  types.String `tfsdk:"truststore_base64"`
+	Passphrase     types.String `tfsdk:"passphrase"`
+	ExpirationDate types.String `tfsdk:"expiration_date"`
+	Algorithm      types.String `tfsdk:"algorithm"`
 }
 
 func NewTruststoreResource() resource.Resource {
@@ -112,8 +112,8 @@ func (r *TruststoreResource) Schema(_ context.Context, _ resource.SchemaRequest,
 			},
 			"passphrase": schema.StringAttribute{
 				Description: "Passphrase for the truststore. Required for JKS, PKCS12, and JCEKS formats.",
-				Optional:  true,
-				Sensitive: true,
+				Optional:    true,
+				Sensitive:   true,
 			},
 			"expiration_date": schema.StringAttribute{
 				Description: "Expiration date of the certificate in the truststore.",

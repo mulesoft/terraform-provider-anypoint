@@ -42,12 +42,12 @@ type APIInstancePromotionResourceModel struct {
 	IncludeTiers    types.Bool `tfsdk:"include_tiers"`
 
 	// Computed from the API response
-	AssetID        types.String `tfsdk:"asset_id"`
-	AssetVersion   types.String `tfsdk:"asset_version"`
-	ProductVersion types.String `tfsdk:"product_version"`
-	GroupID        types.String `tfsdk:"group_id"`
-	Technology     types.String `tfsdk:"technology"`
-	Status         types.String `tfsdk:"status"`
+	AssetID                   types.String `tfsdk:"asset_id"`
+	AssetVersion              types.String `tfsdk:"asset_version"`
+	ProductVersion            types.String `tfsdk:"product_version"`
+	GroupID                   types.String `tfsdk:"group_id"`
+	Technology                types.String `tfsdk:"technology"`
+	Status                    types.String `tfsdk:"status"`
 	AutodiscoveryInstanceName types.String `tfsdk:"autodiscovery_instance_name"`
 }
 

@@ -14,8 +14,10 @@ import (
 )
 
 // Ensure the implementation satisfies the expected interfaces
-var _ datasource.DataSource = &PrivateSpaceAssociationDataSource{}
-var _ datasource.DataSourceWithConfigure = &PrivateSpaceAssociationDataSource{}
+var (
+	_ datasource.DataSource              = &PrivateSpaceAssociationDataSource{}
+	_ datasource.DataSourceWithConfigure = &PrivateSpaceAssociationDataSource{}
+)
 
 // PrivateSpaceAssociationDataSource is the data source implementation.
 type PrivateSpaceAssociationDataSource struct {

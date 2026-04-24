@@ -57,23 +57,23 @@ func (r *CertificateResource) Schema(_ context.Context, _ resource.SchemaRequest
 			"Supports PEM, JKS, PKCS12, and JCEKS formats.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Description: "Unique identifier of the certificate.",
-				Computed:    true,
+				Description:   "Unique identifier of the certificate.",
+				Computed:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"organization_id": schema.StringAttribute{
 				Description: "Organization ID.",
-				Optional: true, Computed: true,
+				Optional:    true, Computed: true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"environment_id": schema.StringAttribute{
-				Description: "Environment ID.",
-				Required: true,
+				Description:   "Environment ID.",
+				Required:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"secret_group_id": schema.StringAttribute{
-				Description: "Secret group ID that this certificate belongs to.",
-				Required: true,
+				Description:   "Secret group ID that this certificate belongs to.",
+				Required:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"name": schema.StringAttribute{
@@ -82,8 +82,8 @@ func (r *CertificateResource) Schema(_ context.Context, _ resource.SchemaRequest
 			},
 			"type": schema.StringAttribute{
 				Description: "Certificate format: PEM, JKS, PKCS12, or JCEKS.",
-				Optional: true, Computed: true,
-				Default: stringdefault.StaticString("PEM"),
+				Optional:    true, Computed: true,
+				Default:       stringdefault.StaticString("PEM"),
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 				Validators:    []validator.String{stringvalidator.OneOf("PEM", "JKS", "PKCS12", "JCEKS")},
 			},

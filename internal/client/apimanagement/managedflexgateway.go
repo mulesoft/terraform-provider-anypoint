@@ -83,8 +83,8 @@ type IngressConfig struct {
 
 // DomainsResponse represents the response from the domains API
 type DomainsResponse struct {
-	Domains    []string `json:"domains"`
-	AppUniqueID string  `json:"appUniqueId"`
+	Domains     []string `json:"domains"`
+	AppUniqueID string   `json:"appUniqueId"`
 }
 
 // PropertiesConfig represents the runtime properties for the gateway
@@ -108,12 +108,12 @@ type TracingConfig struct {
 
 // CreateManagedFlexGatewayRequest represents the payload to create a gateway
 type CreateManagedFlexGatewayRequest struct {
-	Name            string                   `json:"name"`
-	TargetID        string                   `json:"targetId"`
-	RuntimeVersion  string                   `json:"runtimeVersion"`
-	ReleaseChannel  string                   `json:"releaseChannel"`
-	Size            string                   `json:"size"`
-	Configuration   ManagedFlexGatewayConfig `json:"configuration"`
+	Name           string                   `json:"name"`
+	TargetID       string                   `json:"targetId"`
+	RuntimeVersion string                   `json:"runtimeVersion"`
+	ReleaseChannel string                   `json:"releaseChannel"`
+	Size           string                   `json:"size"`
+	Configuration  ManagedFlexGatewayConfig `json:"configuration"`
 }
 
 // UpdateManagedFlexGatewayRequest represents the full PUT body to update a gateway.
