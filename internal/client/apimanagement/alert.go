@@ -15,7 +15,7 @@ type AlertClient struct {
 	*client.AnypointClient
 }
 
-func NewAlertClient(config *client.ClientConfig) (*AlertClient, error) {
+func NewAlertClient(config *client.Config) (*AlertClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err

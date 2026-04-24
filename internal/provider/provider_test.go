@@ -19,9 +19,6 @@ var TestAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServe
 	"anypoint": providerserver.NewProtocol6WithError(New("test")()),
 }
 
-// testAccProvider is a global reference to the provider for use in acceptance tests
-var testAccProvider *AnypointProvider
-
 func TestAnypointProvider_Metadata(t *testing.T) {
 	ctx := context.Background()
 	p := &AnypointProvider{version: "1.0.0"}
@@ -87,7 +84,7 @@ func TestAnypointProvider_Configure(t *testing.T) {
 	tests := []struct {
 		name           string
 		config         AnypointProviderModel
-		expectedConfig *client.ClientConfig
+		expectedConfig *client.Config
 		wantError      bool
 	}{
 		{
@@ -98,7 +95,7 @@ func TestAnypointProvider_Configure(t *testing.T) {
 				BaseURL:      stringValue("https://custom.anypoint.mulesoft.com"),
 				Timeout:      int64Value(120),
 			},
-			expectedConfig: &client.ClientConfig{
+			expectedConfig: &client.Config{
 				ClientID:     "test-client-id",
 				ClientSecret: "test-client-secret",
 				BaseURL:      "https://custom.anypoint.mulesoft.com",
@@ -112,7 +109,7 @@ func TestAnypointProvider_Configure(t *testing.T) {
 				ClientID:     stringValue("test-client-id"),
 				ClientSecret: stringValue("test-client-secret"),
 			},
-			expectedConfig: &client.ClientConfig{
+			expectedConfig: &client.Config{
 				ClientID:     "test-client-id",
 				ClientSecret: "test-client-secret",
 				BaseURL:      "",
@@ -129,7 +126,7 @@ func TestAnypointProvider_Configure(t *testing.T) {
 				Username:     stringValue("test-user"),
 				Password:     stringValue("test-password"),
 			},
-			expectedConfig: &client.ClientConfig{
+			expectedConfig: &client.Config{
 				ClientID:     "test-client-id",
 				ClientSecret: "test-client-secret",
 				BaseURL:      "",
@@ -140,7 +137,7 @@ func TestAnypointProvider_Configure(t *testing.T) {
 		{
 			name:   "empty configuration",
 			config: AnypointProviderModel{},
-			expectedConfig: &client.ClientConfig{
+			expectedConfig: &client.Config{
 				ClientID:     "",
 				ClientSecret: "",
 				BaseURL:      "",
@@ -170,7 +167,7 @@ func TestAnypointProvider_Configure(t *testing.T) {
 			resp.DataSourceData = tt.expectedConfig
 
 			// Verify the configuration
-			if clientConfig, ok := resp.ResourceData.(*client.ClientConfig); ok {
+			if clientConfig, ok := resp.ResourceData.(*client.Config); ok {
 				if clientConfig.ClientID != tt.expectedConfig.ClientID {
 					t.Errorf("Configure() ClientID = %v, want %v", clientConfig.ClientID, tt.expectedConfig.ClientID)
 				}

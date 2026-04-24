@@ -47,7 +47,7 @@ func TestVPNConnectionResource_Configure(t *testing.T) {
 	res := NewVPNConnectionResource().(*VPNConnectionResource)
 
 	server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
-	providerData := &client.ClientConfig{
+	providerData := &client.Config{
 		BaseURL:      server.URL,
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",

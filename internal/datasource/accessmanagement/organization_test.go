@@ -96,7 +96,7 @@ func TestOrganizationDataSource_Configure(t *testing.T) {
 
 	// Test with valid provider data but missing username (expected to fail)
 	server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
-	config := &client.ClientConfig{
+	config := &client.Config{
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
 		BaseURL:      server.URL,

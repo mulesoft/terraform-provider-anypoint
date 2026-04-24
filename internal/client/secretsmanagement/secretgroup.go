@@ -15,7 +15,7 @@ type SecretGroupClient struct {
 	*client.AnypointClient
 }
 
-func NewSecretGroupClient(config *client.ClientConfig) (*SecretGroupClient, error) {
+func NewSecretGroupClient(config *client.Config) (*SecretGroupClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err

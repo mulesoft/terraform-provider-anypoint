@@ -52,7 +52,7 @@ func TestPrivateSpaceResource_Configure(t *testing.T) {
 
 	// Test with valid provider data
 	server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
-	providerData := &client.ClientConfig{
+	providerData := &client.Config{
 		BaseURL:      server.URL,
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
@@ -160,21 +160,17 @@ func TestPrivateSpaceResource_Create(t *testing.T) {
 
 			ps, err := psClient.CreatePrivateSpace(ctx, "test-org-id", createReq)
 
-			if tt.wantErr {
+			switch {
+			case tt.wantErr:
 				if err == nil {
 					t.Error("Expected error but got none")
 				}
-			} else {
-				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
-				}
-				if ps == nil {
-					t.Error("Expected private space but got nil")
-				} else {
-					if ps.Name != tt.model.Name.ValueString() {
-						t.Errorf("Expected name %s, got %s", tt.model.Name.ValueString(), ps.Name)
-					}
-				}
+			case err != nil:
+				t.Errorf("Unexpected error: %v", err)
+			case ps == nil:
+				t.Error("Expected private space but got nil")
+			case ps.Name != tt.model.Name.ValueString():
+				t.Errorf("Expected name %s, got %s", tt.model.Name.ValueString(), ps.Name)
 			}
 		})
 	}

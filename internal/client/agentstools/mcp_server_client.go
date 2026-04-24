@@ -19,7 +19,7 @@ type MCPServerClient struct {
 }
 
 // NewMCPServerClient creates a new MCPServerClient
-func NewMCPServerClient(config *client.ClientConfig) (*MCPServerClient, error) {
+func NewMCPServerClient(config *client.Config) (*MCPServerClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err
@@ -198,15 +198,15 @@ func (c *MCPServerClient) CreateMCPServer(ctx context.Context, orgID, envID stri
 		if resp.StatusCode == http.StatusCreated || resp.StatusCode == http.StatusOK {
 			var server MCPServer
 			if err := json.NewDecoder(resp.Body).Decode(&server); err != nil {
-				resp.Body.Close()
+				_ = resp.Body.Close()
 				return nil, fmt.Errorf("failed to decode response: %w", err)
 			}
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			return &server, nil
 		}
 
 		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		lastErr = fmt.Errorf("failed to create MCP server with status %d: %s", resp.StatusCode, string(body))
 
 		if resp.StatusCode == http.StatusBadRequest && strings.Contains(string(body), "GatewayNotReadyError") {

@@ -67,10 +67,7 @@ func TestIntegrationUserResource_CRUD(t *testing.T) {
 			t.Error("User resource client should be configured")
 		}
 
-		var testResource resource.Resource = userResource
-		if testResource == nil {
-			t.Error("User resource should implement Resource interface")
-		}
+		var _ resource.Resource = userResource
 	})
 
 	// Test READ operation

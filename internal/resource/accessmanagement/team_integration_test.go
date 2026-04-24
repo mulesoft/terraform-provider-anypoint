@@ -35,7 +35,7 @@ func TestIntegrationTeamResource_CRUD(t *testing.T) {
 	defer server.Close()
 
 	// Create client
-	clientConfig := &client.ClientConfig{
+	clientConfig := &client.Config{
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
 		BaseURL:      server.URL,
@@ -64,10 +64,7 @@ func TestIntegrationTeamResource_CRUD(t *testing.T) {
 			t.Error("Team resource client should be configured")
 		}
 
-		var testResource resource.Resource = teamResource
-		if testResource == nil {
-			t.Error("Team resource should implement Resource interface")
-		}
+		var _ resource.Resource = teamResource
 	})
 
 	// Test READ operation
@@ -140,7 +137,7 @@ func TestIntegrationTeamResource_ErrorHandling(t *testing.T) {
 	defer server.Close()
 
 	// Create client
-	clientConfig := &client.ClientConfig{
+	clientConfig := &client.Config{
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
 		BaseURL:      server.URL,

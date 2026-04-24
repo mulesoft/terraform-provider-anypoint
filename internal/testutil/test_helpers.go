@@ -40,7 +40,7 @@ func CreateTestClientConfig(t *testing.T, baseURL string) map[string]interface{}
 	}
 }
 
-// Common helper functions for tests
+// StringPtr returns a pointer to the given string.
 func StringPtr(s string) *string {
 	return &s
 }

@@ -48,7 +48,7 @@ func TestConnectedAppScopesResource_Configure(t *testing.T) {
 	res := NewConnectedAppScopesResource().(*ConnectedAppScopesResource)
 
 	server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
-	providerData := &client.ClientConfig{
+	providerData := &client.Config{
 		BaseURL:      server.URL,
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
@@ -310,8 +310,8 @@ func createScopeObject(t *testing.T, scopeName string, contextParams map[string]
 }
 
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
-		(len(s) > 0 && len(substr) > 0 && containsHelper(s, substr)))
+	return len(s) >= len(substr) && (s == substr || substr == "" ||
+		(s != "" && substr != "" && containsHelper(s, substr)))
 }
 
 func containsHelper(s, substr string) bool {

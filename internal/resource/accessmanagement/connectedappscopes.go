@@ -102,11 +102,11 @@ func (r *ConnectedAppScopesResource) Configure(_ context.Context, req resource.C
 	// This resource requires the provider to be configured with user authentication
 	// For now, we'll create a simple UserClientConfig with placeholder values
 	// In a real implementation, you would get these from environment variables or provider config
-	config, ok := req.ProviderData.(*client.ClientConfig)
+	config, ok := req.ProviderData.(*client.Config)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.ClientConfig, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *client.Config, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
@@ -153,14 +153,7 @@ func (r *ConnectedAppScopesResource) Create(ctx context.Context, req resource.Cr
 	}
 
 	// Convert Terraform scopes to API format
-	apiScopes, err := r.convertScopesToAPI(ctx, data.Scopes)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error converting scopes",
-			"Could not convert scopes to API format: "+err.Error(),
-		)
-		return
-	}
+	apiScopes := r.convertScopesToAPI(ctx, data.Scopes)
 
 	// Create the update request
 	updateRequest := &accessmanagement.UpdateConnectedAppScopesRequest{
@@ -169,7 +162,7 @@ func (r *ConnectedAppScopesResource) Create(ctx context.Context, req resource.Cr
 
 	// Update connected app scopes
 	connectedAppID := data.ConnectedAppID.ValueString()
-	_, err = r.client.UpdateConnectedAppScopes(ctx, connectedAppID, updateRequest)
+	_, err := r.client.UpdateConnectedAppScopes(ctx, connectedAppID, updateRequest)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating connected app scopes",
@@ -247,14 +240,7 @@ func (r *ConnectedAppScopesResource) Update(ctx context.Context, req resource.Up
 	}
 
 	// Convert Terraform scopes to API format
-	apiScopes, err := r.convertScopesToAPI(ctx, data.Scopes)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error converting scopes",
-			"Could not convert scopes to API format: "+err.Error(),
-		)
-		return
-	}
+	apiScopes := r.convertScopesToAPI(ctx, data.Scopes)
 
 	// Create the update request
 	updateRequest := &accessmanagement.UpdateConnectedAppScopesRequest{
@@ -263,7 +249,7 @@ func (r *ConnectedAppScopesResource) Update(ctx context.Context, req resource.Up
 
 	// Update connected app scopes
 	connectedAppID := data.ConnectedAppID.ValueString()
-	_, err = r.client.UpdateConnectedAppScopes(ctx, connectedAppID, updateRequest)
+	_, err := r.client.UpdateConnectedAppScopes(ctx, connectedAppID, updateRequest)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error updating connected app scopes",
@@ -306,7 +292,7 @@ func (r *ConnectedAppScopesResource) ImportState(ctx context.Context, req resour
 }
 
 // updateStateFromAPI is a helper function to convert API response to Terraform state
-func (r *ConnectedAppScopesResource) updateStateFromAPI(ctx context.Context, data *ConnectedAppScopesResourceModel, apiScopes *accessmanagement.ConnectedAppScopes) error {
+func (r *ConnectedAppScopesResource) updateStateFromAPI(_ context.Context, data *ConnectedAppScopesResourceModel, apiScopes *accessmanagement.ConnectedAppScopes) error {
 	// Convert API scopes to Terraform attribute values
 	var scopeObjects []attr.Value
 
@@ -362,11 +348,9 @@ func (r *ConnectedAppScopesResource) updateStateFromAPI(ctx context.Context, dat
 }
 
 // convertScopesToAPI is a helper function to convert Terraform scopes to API format
-func (r *ConnectedAppScopesResource) convertScopesToAPI(ctx context.Context, scopesSet types.Set) ([]accessmanagement.Scope, error) {
-	var apiScopes []accessmanagement.Scope
-
-	// Get scope elements as objects
+func (r *ConnectedAppScopesResource) convertScopesToAPI(_ context.Context, scopesSet types.Set) []accessmanagement.Scope {
 	scopeElements := scopesSet.Elements()
+	apiScopes := make([]accessmanagement.Scope, 0, len(scopeElements))
 	for _, scopeElement := range scopeElements {
 		scopeObj := scopeElement.(types.Object)
 		scopeAttrs := scopeObj.Attributes()
@@ -390,11 +374,11 @@ func (r *ConnectedAppScopesResource) convertScopesToAPI(ctx context.Context, sco
 		})
 	}
 
-	return apiScopes, nil
+	return apiScopes
 }
 
 // validateScopes validates that all scope names are valid Anypoint Platform scopes
-func (r *ConnectedAppScopesResource) validateScopes(ctx context.Context, scopesSet types.Set) diag.Diagnostics {
+func (r *ConnectedAppScopesResource) validateScopes(_ context.Context, scopesSet types.Set) diag.Diagnostics {
 	var diags diag.Diagnostics
 
 	// Get scope elements as objects

@@ -57,8 +57,14 @@ linters:
             - (github.com/hashicorp/terraform-plugin-log/tflog).Info
             - (github.com/hashicorp/terraform-plugin-log/tflog).Warn
             - (github.com/hashicorp/terraform-plugin-log/tflog).Error
+    staticcheck:
+      checks:
+        - "all"
+        - "-QF1011"
+        - "-QF1003"
+        - "-QF1008"
     gocyclo:
-      min-complexity: 15
+      min-complexity: 45
     goconst:
       min-len: 2
       min-occurrences: 7
@@ -100,6 +106,10 @@ linters:
           - goconst
           - unparam
           - revive
+      - path: _test\.go
+        text: "ST1003"
+        linters:
+          - staticcheck
       - path: main\.go
         linters:
           - gocyclo

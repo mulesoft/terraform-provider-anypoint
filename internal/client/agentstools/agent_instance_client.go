@@ -19,7 +19,7 @@ type AgentInstanceClient struct {
 }
 
 // NewAgentInstanceClient creates a new AgentInstanceClient
-func NewAgentInstanceClient(config *client.ClientConfig) (*AgentInstanceClient, error) {
+func NewAgentInstanceClient(config *client.Config) (*AgentInstanceClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err
@@ -197,15 +197,15 @@ func (c *AgentInstanceClient) CreateAgentInstance(ctx context.Context, orgID, en
 		if resp.StatusCode == http.StatusCreated || resp.StatusCode == http.StatusOK {
 			var instance AgentInstance
 			if err := json.NewDecoder(resp.Body).Decode(&instance); err != nil {
-				resp.Body.Close()
+				_ = resp.Body.Close()
 				return nil, fmt.Errorf("failed to decode response: %w", err)
 			}
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			return &instance, nil
 		}
 
 		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		lastErr = fmt.Errorf("failed to create agent instance with status %d: %s", resp.StatusCode, string(body))
 
 		if resp.StatusCode == http.StatusBadRequest && strings.Contains(string(body), "GatewayNotReadyError") {

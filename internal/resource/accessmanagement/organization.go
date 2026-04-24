@@ -126,9 +126,9 @@ type OrganizationResourceModel struct {
 	ClientID                        types.String `tfsdk:"client_id"`
 	IDProviderID                    types.String `tfsdk:"idprovider_id"`
 	IsFederated                     types.Bool   `tfsdk:"is_federated"`
-	ParentOrganizationIds           types.List   `tfsdk:"parent_organization_ids"`
-	SubOrganizationIds              types.List   `tfsdk:"sub_organization_ids"`
-	TenantOrganizationIds           types.List   `tfsdk:"tenant_organization_ids"`
+	ParentOrganizationIDs           types.List   `tfsdk:"parent_organization_ids"`
+	SubOrganizationIDs              types.List   `tfsdk:"sub_organization_ids"`
+	TenantOrganizationIDs           types.List   `tfsdk:"tenant_organization_ids"`
 	MfaRequired                     types.String `tfsdk:"mfa_required"`
 	IsAutomaticAdminPromotionExempt types.Bool   `tfsdk:"is_automatic_admin_promotion_exempt"`
 	OrgType                         types.String `tfsdk:"org_type"`
@@ -693,13 +693,6 @@ func getEnvironmentsAttributeTypes() map[string]attr.Type {
 	}
 }
 
-func getMonitoringCenterEntitlementAttributeTypes() map[string]attr.Type {
-	return map[string]attr.Type{
-		"product_sku":             types.Int64Type,
-		"raw_storage_override_gb": types.Int64Type,
-	}
-}
-
 // expandEntitlements converts a Terraform types.Object into the client Entitlements struct.
 func expandEntitlements(ctx context.Context, obj types.Object) (accessmanagement.Entitlements, diag.Diagnostics) {
 	var diags diag.Diagnostics
@@ -851,11 +844,11 @@ func (r *OrganizationResource) Configure(_ context.Context, req resource.Configu
 		return
 	}
 
-	config, ok := req.ProviderData.(*client.ClientConfig)
+	config, ok := req.ProviderData.(*client.Config)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.ClientConfig, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *client.Config, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
@@ -1118,56 +1111,6 @@ func designCenterEntitlementToModel(entitlement *accessmanagement.DesignCenterEn
 	return objVal
 }
 
-func monitoringCenterEntitlementFromModel(model types.Object) *accessmanagement.MonitoringCenterEntitlement {
-	if model.IsNull() || model.IsUnknown() {
-		return nil
-	}
-	var entitlementModel MonitoringCenterEntitlementModel
-	diags := model.As(context.Background(), &entitlementModel, basetypes.ObjectAsOptions{})
-	if diags.HasError() {
-		tflog.Error(context.Background(), "Error converting monitoring center entitlement from model", map[string]interface{}{"diagnostics": diags})
-		return nil
-	}
-	return &accessmanagement.MonitoringCenterEntitlement{
-		ProductSKU:           int(entitlementModel.ProductSKU.ValueInt64()),
-		RawStorageOverrideGB: int(entitlementModel.RawStorageOverrideGB.ValueInt64()),
-	}
-}
-
-func monitoringCenterEntitlementToModel(entitlement *accessmanagement.MonitoringCenterEntitlement) types.Object {
-	if entitlement == nil {
-		return types.ObjectNull(getMonitoringCenterEntitlementAttributeTypes())
-	}
-
-	attributeTypes := getMonitoringCenterEntitlementAttributeTypes()
-	attributeValues := map[string]attr.Value{
-		"product_sku":             types.Int64Value(int64(entitlement.ProductSKU)),
-		"raw_storage_override_gb": types.Int64Value(int64(entitlement.RawStorageOverrideGB)),
-	}
-
-	obj, diags := types.ObjectValue(attributeTypes, attributeValues)
-	if diags.HasError() {
-		// Handle error, maybe return a null object or log the diagnostics
-		return types.ObjectNull(attributeTypes)
-	}
-	return obj
-}
-
-func subscriptionToModel(sub *accessmanagement.Subscription) types.Object {
-	if sub == nil {
-		return types.ObjectNull(getSubscriptionAttributeTypes())
-	}
-	obj, diags := types.ObjectValue(getSubscriptionAttributeTypes(), map[string]attr.Value{
-		"category":   types.StringValue(sub.Category),
-		"type":       types.StringValue(sub.Type),
-		"expiration": types.StringValue(sub.Expiration),
-	})
-	if diags.HasError() {
-		return types.ObjectNull(getSubscriptionAttributeTypes())
-	}
-	return obj
-}
-
 func environmentToModel(env *accessmanagement.OrgEnvironment) types.Object {
 	if env == nil {
 		return types.ObjectNull(getEnvironmentsAttributeTypes())
@@ -1229,22 +1172,22 @@ func (r *OrganizationResource) Create(ctx context.Context, req resource.CreateRe
 	data.IDProviderID = types.StringValue(organization.IDProviderID)
 	data.IsFederated = types.BoolValue(organization.IsFederated)
 	// Set organization ID lists - always ensure known values
-	if organization.ParentOrganizationIds != nil {
-		data.ParentOrganizationIds, _ = types.ListValueFrom(ctx, types.StringType, organization.ParentOrganizationIds)
+	if organization.ParentOrganizationIDs != nil {
+		data.ParentOrganizationIDs, _ = types.ListValueFrom(ctx, types.StringType, organization.ParentOrganizationIDs)
 	} else {
-		data.ParentOrganizationIds = types.ListValueMust(types.StringType, []attr.Value{})
+		data.ParentOrganizationIDs = types.ListValueMust(types.StringType, []attr.Value{})
 	}
 
-	if organization.SubOrganizationIds != nil {
-		data.SubOrganizationIds, _ = types.ListValueFrom(ctx, types.StringType, organization.SubOrganizationIds)
+	if organization.SubOrganizationIDs != nil {
+		data.SubOrganizationIDs, _ = types.ListValueFrom(ctx, types.StringType, organization.SubOrganizationIDs)
 	} else {
-		data.SubOrganizationIds = types.ListValueMust(types.StringType, []attr.Value{})
+		data.SubOrganizationIDs = types.ListValueMust(types.StringType, []attr.Value{})
 	}
 
-	if organization.TenantOrganizationIds != nil {
-		data.TenantOrganizationIds, _ = types.ListValueFrom(ctx, types.StringType, organization.TenantOrganizationIds)
+	if organization.TenantOrganizationIDs != nil {
+		data.TenantOrganizationIDs, _ = types.ListValueFrom(ctx, types.StringType, organization.TenantOrganizationIDs)
 	} else {
-		data.TenantOrganizationIds = types.ListValueMust(types.StringType, []attr.Value{})
+		data.TenantOrganizationIDs = types.ListValueMust(types.StringType, []attr.Value{})
 	}
 	if organization.MfaRequired != "" {
 		data.MfaRequired = types.StringValue(organization.MfaRequired)
@@ -1375,28 +1318,28 @@ func (r *OrganizationResource) Read(ctx context.Context, req resource.ReadReques
 	}
 
 	// Convert string slices to Terraform lists - always ensure known values
-	if organization.ParentOrganizationIds != nil {
-		parentOrgIds, diags := types.ListValueFrom(ctx, types.StringType, organization.ParentOrganizationIds)
+	if organization.ParentOrganizationIDs != nil {
+		parentOrgIDs, diags := types.ListValueFrom(ctx, types.StringType, organization.ParentOrganizationIDs)
 		resp.Diagnostics.Append(diags...)
-		data.ParentOrganizationIds = parentOrgIds
+		data.ParentOrganizationIDs = parentOrgIDs
 	} else {
-		data.ParentOrganizationIds = types.ListValueMust(types.StringType, []attr.Value{})
+		data.ParentOrganizationIDs = types.ListValueMust(types.StringType, []attr.Value{})
 	}
 
-	if organization.SubOrganizationIds != nil {
-		subOrgIds, diags := types.ListValueFrom(ctx, types.StringType, organization.SubOrganizationIds)
+	if organization.SubOrganizationIDs != nil {
+		subOrgIDs, diags := types.ListValueFrom(ctx, types.StringType, organization.SubOrganizationIDs)
 		resp.Diagnostics.Append(diags...)
-		data.SubOrganizationIds = subOrgIds
+		data.SubOrganizationIDs = subOrgIDs
 	} else {
-		data.SubOrganizationIds = types.ListValueMust(types.StringType, []attr.Value{})
+		data.SubOrganizationIDs = types.ListValueMust(types.StringType, []attr.Value{})
 	}
 
-	if organization.TenantOrganizationIds != nil {
-		tenantOrgIds, diags := types.ListValueFrom(ctx, types.StringType, organization.TenantOrganizationIds)
+	if organization.TenantOrganizationIDs != nil {
+		tenantOrgIDs, diags := types.ListValueFrom(ctx, types.StringType, organization.TenantOrganizationIDs)
 		resp.Diagnostics.Append(diags...)
-		data.TenantOrganizationIds = tenantOrgIds
+		data.TenantOrganizationIDs = tenantOrgIDs
 	} else {
-		data.TenantOrganizationIds = types.ListValueMust(types.StringType, []attr.Value{})
+		data.TenantOrganizationIDs = types.ListValueMust(types.StringType, []attr.Value{})
 	}
 
 	data.SessionTimeout = types.Int64Value(int64(organization.SessionTimeout))

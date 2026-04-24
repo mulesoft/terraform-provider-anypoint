@@ -179,11 +179,11 @@ func (r *PrivateSpaceAdvancedConfigResource) Configure(_ context.Context, req re
 		return
 	}
 
-	clientConfig, ok := req.ProviderData.(*client.ClientConfig)
+	clientConfig, ok := req.ProviderData.(*client.Config)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.ClientConfig, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *client.Config, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
@@ -215,14 +215,8 @@ func (r *PrivateSpaceAdvancedConfigResource) Create(ctx context.Context, req res
 		orgID = r.client.OrgID
 	}
 
-	// Build the request
-	request, err := r.buildRequest(ctx, &data)
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to build request", err.Error())
-		return
-	}
+	request := r.buildRequest(ctx, &data)
 
-	// Update the private space advanced config
 	privateSpace, err := r.client.UpdatePrivateSpaceAdvancedConfig(ctx, orgID, data.PrivateSpaceID.ValueString(), request)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to create private space advanced config", err.Error())
@@ -230,10 +224,7 @@ func (r *PrivateSpaceAdvancedConfigResource) Create(ctx context.Context, req res
 	}
 
 	// Map response to state
-	if err := r.mapPrivateSpaceToState(ctx, privateSpace, &data); err != nil {
-		resp.Diagnostics.AddError("Failed to map response to state", err.Error())
-		return
-	}
+	r.mapPrivateSpaceToState(ctx, privateSpace, &data)
 
 	data.ID = data.PrivateSpaceID                  // Use private space ID as the resource ID
 	data.OrganizationID = types.StringValue(orgID) // Set the actual org ID used
@@ -268,10 +259,7 @@ func (r *PrivateSpaceAdvancedConfigResource) Read(ctx context.Context, req resou
 	}
 
 	// Map response to state
-	if err := r.mapPrivateSpaceToState(ctx, privateSpace, &data); err != nil {
-		resp.Diagnostics.AddError("Failed to map response to state", err.Error())
-		return
-	}
+	r.mapPrivateSpaceToState(ctx, privateSpace, &data)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -291,14 +279,8 @@ func (r *PrivateSpaceAdvancedConfigResource) Update(ctx context.Context, req res
 		orgID = r.client.OrgID
 	}
 
-	// Build the request
-	request, err := r.buildRequest(ctx, &data)
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to build request", err.Error())
-		return
-	}
+	request := r.buildRequest(ctx, &data)
 
-	// Update the private space advanced config
 	privateSpace, err := r.client.UpdatePrivateSpaceAdvancedConfig(ctx, orgID, data.PrivateSpaceID.ValueString(), request)
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to update private space advanced config", err.Error())
@@ -306,10 +288,7 @@ func (r *PrivateSpaceAdvancedConfigResource) Update(ctx context.Context, req res
 	}
 
 	// Map response to state
-	if err := r.mapPrivateSpaceToState(ctx, privateSpace, &data); err != nil {
-		resp.Diagnostics.AddError("Failed to map response to state", err.Error())
-		return
-	}
+	r.mapPrivateSpaceToState(ctx, privateSpace, &data)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -362,7 +341,7 @@ func (r *PrivateSpaceAdvancedConfigResource) ImportState(ctx context.Context, re
 
 // Helper functions
 
-func (r *PrivateSpaceAdvancedConfigResource) buildRequest(ctx context.Context, data *PrivateSpaceAdvancedConfigResourceModel) (*cloudhub2.UpdatePrivateSpaceAdvancedConfigRequest, error) {
+func (r *PrivateSpaceAdvancedConfigResource) buildRequest(ctx context.Context, data *PrivateSpaceAdvancedConfigResourceModel) *cloudhub2.UpdatePrivateSpaceAdvancedConfigRequest {
 	request := &cloudhub2.UpdatePrivateSpaceAdvancedConfigRequest{
 		EnableIAMRole: data.EnableIAMRole.ValueBool(),
 	}
@@ -416,10 +395,10 @@ func (r *PrivateSpaceAdvancedConfigResource) buildRequest(ctx context.Context, d
 		}
 	}
 
-	return request, nil
+	return request
 }
 
-func (r *PrivateSpaceAdvancedConfigResource) mapPrivateSpaceToState(ctx context.Context, privateSpace *cloudhub2.PrivateSpace, data *PrivateSpaceAdvancedConfigResourceModel) error {
+func (r *PrivateSpaceAdvancedConfigResource) mapPrivateSpaceToState(_ context.Context, privateSpace *cloudhub2.PrivateSpace, data *PrivateSpaceAdvancedConfigResourceModel) {
 	// Set enableIAMRole
 	data.EnableIAMRole = types.BoolValue(privateSpace.EnableIAMRole)
 
@@ -431,7 +410,7 @@ func (r *PrivateSpaceAdvancedConfigResource) mapPrivateSpaceToState(ctx context.
 	}
 
 	// Map logs
-	logFilters := make([]attr.Value, 0)
+	logFilters := make([]attr.Value, 0, len(privateSpace.IngressConfiguration.Logs.Filters))
 	for _, filter := range privateSpace.IngressConfiguration.Logs.Filters {
 		filterAttrs := map[string]attr.Value{
 			"ip":    types.StringValue(filter.IP),
@@ -489,6 +468,4 @@ func (r *PrivateSpaceAdvancedConfigResource) mapPrivateSpaceToState(ctx context.
 	}, ingressConfigAttrs)
 
 	data.IngressConfiguration = ingressConfigObj
-
-	return nil
 }

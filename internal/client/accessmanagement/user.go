@@ -76,7 +76,7 @@ type DeleteUsersRequest []string
 func (c *UserClient) CreateUser(ctx context.Context, orgID string, user *CreateUserRequest) (*User, error) {
 	url := fmt.Sprintf("%s/accounts/api/organizations/%s/users", c.BaseURL, orgID)
 
-	jsonData, err := json.Marshal(user)
+	jsonData, err := json.Marshal(user) //nolint:gosec // G117: Field matches secret pattern but this is intentional API serialization
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal user data: %w", err)
 	}

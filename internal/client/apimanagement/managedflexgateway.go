@@ -18,7 +18,7 @@ type ManagedFlexGatewayClient struct {
 }
 
 // NewManagedFlexGatewayClient creates a new ManagedFlexGatewayClient
-func NewManagedFlexGatewayClient(config *client.ClientConfig) (*ManagedFlexGatewayClient, error) {
+func NewManagedFlexGatewayClient(config *client.Config) (*ManagedFlexGatewayClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err

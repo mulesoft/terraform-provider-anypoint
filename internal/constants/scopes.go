@@ -5,7 +5,7 @@ package constants
 // These scopes control access to various platform services and features.
 
 const (
-	// Admin Scopes - Full administrative access
+	// ScopeAdminAccessControls provides full administrative access to access controls.
 	ScopeAdminAccessControls             = "admin:access_controls"
 	ScopeAdminAngGovernanceProfiles      = "admin:ang_governance_profiles"
 	ScopeAdminAPIManager                 = "admin:api_manager"
@@ -18,16 +18,16 @@ const (
 	ScopeAdminOrgClients                 = "admin:orgclients"
 	ScopeAdminPartnerManager             = "admin:partner_manager"
 
-	// Administer Scopes - Administrative operations
+	// ScopeAdministerDestinations provides administrative operations on destinations.
 	ScopeAdministerDestinations = "administer:destinations"
 
-	// AEH (Anypoint Event Hub) Admin Scope
+	// ScopeAEHAdmin provides Anypoint Event Hub administrative access.
 	ScopeAEHAdmin = "aeh_admin"
 
-	// Clear Scopes - Clear/reset operations
+	// ScopeClearDestinations provides clear/reset operations on destinations.
 	ScopeClearDestinations = "clear:destinations"
 
-	// Create Scopes - Resource creation
+	// ScopeCreateApplications provides application creation access.
 	ScopeCreateApplications       = "create:applications"
 	ScopeCreateClientApplications = "create:client_applications"
 	ScopeCreateDesignCenter       = "create:design_center"
@@ -38,13 +38,13 @@ const (
 	ScopeCreateOrgClients         = "create:orgclients"
 	ScopeCreateSubOrgs            = "create:suborgs"
 
-	// Delete Scopes - Deletion operations
+	// ScopeDeleteApplications provides application deletion access.
 	ScopeDeleteApplications = "delete:applications"
 
-	// Download Scopes - Download operations
+	// ScopeDownloadApplications provides application download access.
 	ScopeDownloadApplications = "download:applications"
 
-	// Edit Scopes - Modify existing resources
+	// ScopeEditAPICatalog provides API catalog editing access.
 	ScopeEditAPICatalog        = "edit:api_catalog"
 	ScopeEditAPIQuery          = "edit:api_query"
 	ScopeEditDesignCenter      = "edit:design_center"
@@ -58,10 +58,10 @@ const (
 	ScopeEditRPA               = "edit:rpa"
 	ScopeEditVisualizer        = "edit:visualizer"
 
-	// Execute Scopes - Execute operations
+	// ScopeExecuteDocumentActions provides document action execution access.
 	ScopeExecuteDocumentActions = "execute:document_actions"
 
-	// Manage Scopes - Manage resources and operations
+	// ScopeManageActivity provides activity management access.
 	ScopeManageActivity             = "manage:activity"
 	ScopeManageAPIAlerts            = "manage:api_alerts"
 	ScopeManageAPIConfiguration     = "manage:api_configuration"
@@ -95,13 +95,13 @@ const (
 	ScopeManageStoreClients         = "manage:store_clients"
 	ScopeManageStoreData            = "manage:store_data"
 
-	// Promote Scopes - Promotion operations
+	// ScopePromoteAPIQuery provides API Query promotion access.
 	ScopePromoteAPIQuery = "promote:api_query"
 
-	// Publish Scopes - Publishing operations
+	// ScopePublishDestinations provides destination publishing access.
 	ScopePublishDestinations = "publish:destinations"
 
-	// Read Scopes - Read-only access
+	// ScopeReadActivity provides read-only access to activity data.
 	ScopeReadActivity                 = "read:activity"
 	ScopeReadAPIConfiguration         = "read:api_configuration"
 	ScopeReadAPIContracts             = "read:api_contracts"
@@ -132,13 +132,13 @@ const (
 	ScopeReadStoreClients             = "read:store_clients"
 	ScopeReadStoreMetrics             = "read:store_metrics"
 
-	// Restart Scopes - Restart operations
+	// ScopeRestartApplications provides application restart access.
 	ScopeRestartApplications = "restart:applications"
 
-	// Subscribe Scopes - Subscription operations
+	// ScopeSubscribeDestinations provides destination subscription access.
 	ScopeSubscribeDestinations = "subscribe:destinations"
 
-	// View Scopes - View/read access (similar to read but for UI)
+	// ScopeViewAccessControls provides view access to access controls.
 	ScopeViewAccessControls        = "view:access_controls"
 	ScopeViewAngGovernanceProfiles = "view:ang_governance_profiles"
 	ScopeViewClients               = "view:clients"
@@ -150,7 +150,7 @@ const (
 	ScopeViewMetering              = "view:metering"
 	ScopeViewMonitoring            = "view:monitoring"
 
-	// Write Scopes - Write operations
+	// ScopeWriteAuditLogSettings provides write access to audit log settings.
 	ScopeWriteAuditLogSettings = "write:audit_log_settings"
 )
 

@@ -136,11 +136,11 @@ func (r *PrivateNetworkResource) Configure(_ context.Context, req resource.Confi
 		return
 	}
 
-	config, ok := req.ProviderData.(*client.ClientConfig)
+	config, ok := req.ProviderData.(*client.Config)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.ClientConfig, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *client.Config, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
@@ -205,13 +205,13 @@ func (r *PrivateNetworkResource) Create(ctx context.Context, req resource.Create
 	data.Name = types.StringValue(privateSpace.Name)
 
 	// Map network configuration from the response
-	if len(privateSpace.Network.Region) > 0 {
+	if privateSpace.Network.Region != "" {
 		data.Region = types.StringValue(privateSpace.Network.Region)
 	}
-	if len(privateSpace.Network.CidrBlock) > 0 {
+	if privateSpace.Network.CidrBlock != "" {
 		data.CidrBlock = types.StringValue(privateSpace.Network.CidrBlock)
 	}
-	if len(privateSpace.Network.DNSTarget) > 0 {
+	if privateSpace.Network.DNSTarget != "" {
 		data.DNSTarget = types.StringValue(privateSpace.Network.DNSTarget)
 	}
 
@@ -270,13 +270,13 @@ func (r *PrivateNetworkResource) Read(ctx context.Context, req resource.ReadRequ
 	data.Name = types.StringValue(privateSpace.Name)
 
 	// Map network configuration from the response
-	if len(privateSpace.Network.Region) > 0 {
+	if privateSpace.Network.Region != "" {
 		data.Region = types.StringValue(privateSpace.Network.Region)
 	}
-	if len(privateSpace.Network.CidrBlock) > 0 {
+	if privateSpace.Network.CidrBlock != "" {
 		data.CidrBlock = types.StringValue(privateSpace.Network.CidrBlock)
 	}
-	if len(privateSpace.Network.DNSTarget) > 0 {
+	if privateSpace.Network.DNSTarget != "" {
 		data.DNSTarget = types.StringValue(privateSpace.Network.DNSTarget)
 	}
 
@@ -344,13 +344,13 @@ func (r *PrivateNetworkResource) Update(ctx context.Context, req resource.Update
 	plan.Name = types.StringValue(privateSpace.Name)
 
 	// Map network configuration from the response
-	if len(privateSpace.Network.Region) > 0 {
+	if privateSpace.Network.Region != "" {
 		plan.Region = types.StringValue(privateSpace.Network.Region)
 	}
-	if len(privateSpace.Network.CidrBlock) > 0 {
+	if privateSpace.Network.CidrBlock != "" {
 		plan.CidrBlock = types.StringValue(privateSpace.Network.CidrBlock)
 	}
-	if len(privateSpace.Network.DNSTarget) > 0 {
+	if privateSpace.Network.DNSTarget != "" {
 		plan.DNSTarget = types.StringValue(privateSpace.Network.DNSTarget)
 	}
 
@@ -373,7 +373,7 @@ func (r *PrivateNetworkResource) Update(ctx context.Context, req resource.Update
 }
 
 // Delete deletes the resource and removes the Terraform state on success.
-func (r *PrivateNetworkResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (r *PrivateNetworkResource) Delete(_ context.Context, _ resource.DeleteRequest, _ *resource.DeleteResponse) {
 	// Private networks are deleted as part of private space deletion
 	// This is a no-op resource deletion
 }

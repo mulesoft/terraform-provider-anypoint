@@ -79,7 +79,7 @@ func TestKeystoreDataSource_Configure(t *testing.T) {
 	dataSource := NewKeystoreDataSource().(*KeystoreDataSource)
 
 	server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
-	providerData := &client.ClientConfig{
+	providerData := &client.Config{
 		BaseURL:      server.URL,
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",

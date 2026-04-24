@@ -148,10 +148,10 @@ func (r *SharedSecretResource) Configure(_ context.Context, req resource.Configu
 	if req.ProviderData == nil {
 		return
 	}
-	config, ok := req.ProviderData.(*client.ClientConfig)
+	config, ok := req.ProviderData.(*client.Config)
 	if !ok {
 		resp.Diagnostics.AddError("Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.ClientConfig, got: %T.", req.ProviderData))
+			fmt.Sprintf("Expected *client.Config, got: %T.", req.ProviderData))
 		return
 	}
 	ssClient, err := secretsmanagement.NewSharedSecretClient(config)

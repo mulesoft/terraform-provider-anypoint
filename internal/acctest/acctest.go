@@ -1,8 +1,6 @@
 package acctest
 
 import (
-	"context"
-	"fmt"
 	"os"
 	"testing"
 
@@ -33,33 +31,13 @@ func TestAccPreCheck(t *testing.T) {
 	}
 }
 
-func testAccProviderConfig() string {
-	return `
-provider "anypoint" {
-  client_id     = "` + os.Getenv("ANYPOINT_CLIENT_ID") + `"
-  client_secret = "` + os.Getenv("ANYPOINT_CLIENT_SECRET") + `"
-  base_url      = "` + os.Getenv("ANYPOINT_BASE_URL") + `"
-}
-`
-}
-
-func generateTestResourceName(prefix string) string {
-	return fmt.Sprintf("tf-test-%s-%v", prefix, testing.Short())
-}
-
-func testAccCheckResourceDestroy(resourceType string, client interface{}) func(interface{}) error {
-	return func(state interface{}) error {
-		return fmt.Errorf("destroy check not implemented for resource type: %s", resourceType)
-	}
-}
-
 // CreateTestClient creates a client for testing purposes using environment variables.
 func CreateTestClient(t *testing.T) *client.AnypointClient {
 	if t != nil {
 		t.Helper()
 	}
 
-	config := &client.ClientConfig{
+	config := &client.Config{
 		ClientID:     os.Getenv("ANYPOINT_CLIENT_ID"),
 		ClientSecret: os.Getenv("ANYPOINT_CLIENT_SECRET"),
 		BaseURL:      os.Getenv("ANYPOINT_BASE_URL"),
@@ -103,8 +81,4 @@ func CreateUserTestClient(t *testing.T) *client.UserAnypointClient {
 	}
 
 	return userClient
-}
-
-func testAccCheckProvider(ctx context.Context) error {
-	return nil
 }

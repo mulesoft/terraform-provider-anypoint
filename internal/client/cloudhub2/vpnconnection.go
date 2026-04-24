@@ -17,7 +17,7 @@ type VPNConnectionClient struct {
 }
 
 // NewVPNConnectionClient creates a new VPNConnectionClient
-func NewVPNConnectionClient(config *client.ClientConfig) (*VPNConnectionClient, error) {
+func NewVPNConnectionClient(config *client.Config) (*VPNConnectionClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err

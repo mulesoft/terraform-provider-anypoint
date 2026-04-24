@@ -18,7 +18,7 @@ type APIPolicyClient struct {
 }
 
 // NewAPIPolicyClient creates a new APIPolicyClient
-func NewAPIPolicyClient(config *client.ClientConfig) (*APIPolicyClient, error) {
+func NewAPIPolicyClient(config *client.Config) (*APIPolicyClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err
@@ -116,17 +116,9 @@ func (c *APIPolicyClient) outboundBasePath(orgID, envID string, apiID int) strin
 		c.BaseURL, orgID, envID, apiID)
 }
 
-// policyBasePath returns the correct base path depending on whether the policy is outbound.
-func (c *APIPolicyClient) policyBasePath(orgID, envID string, apiID int, outbound bool) string {
-	if outbound {
-		return c.outboundBasePath(orgID, envID, apiID)
-	}
-	return c.basePath(orgID, envID, apiID)
-}
-
 // --- internal helpers ---
 
-func (c *APIPolicyClient) doCreatePolicy(ctx context.Context, createURL string, orgID, envID string, request *CreateAPIPolicyRequest) (*APIPolicy, error) {
+func (c *APIPolicyClient) doCreatePolicy(ctx context.Context, createURL, orgID, envID string, request *CreateAPIPolicyRequest) (*APIPolicy, error) {
 	jsonData, err := json.Marshal(request)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal policy request: %w", err)
@@ -156,7 +148,7 @@ func (c *APIPolicyClient) doCreatePolicy(ctx context.Context, createURL string, 
 	return &policy, nil
 }
 
-func (c *APIPolicyClient) doGetPolicy(ctx context.Context, getURL string, orgID, envID string) (*APIPolicy, error) {
+func (c *APIPolicyClient) doGetPolicy(ctx context.Context, getURL, orgID, envID string) (*APIPolicy, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", getURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -184,7 +176,7 @@ func (c *APIPolicyClient) doGetPolicy(ctx context.Context, getURL string, orgID,
 	return &policy, nil
 }
 
-func (c *APIPolicyClient) doUpdatePolicy(ctx context.Context, updateURL string, orgID, envID string, request *UpdateAPIPolicyRequest) (*APIPolicy, error) {
+func (c *APIPolicyClient) doUpdatePolicy(ctx context.Context, updateURL, orgID, envID string, request *UpdateAPIPolicyRequest) (*APIPolicy, error) {
 	jsonData, err := json.Marshal(request)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal policy update request: %w", err)
@@ -217,7 +209,7 @@ func (c *APIPolicyClient) doUpdatePolicy(ctx context.Context, updateURL string, 
 	return &policy, nil
 }
 
-func (c *APIPolicyClient) doDeletePolicy(ctx context.Context, deleteURL string, orgID, envID string) error {
+func (c *APIPolicyClient) doDeletePolicy(ctx context.Context, deleteURL, orgID, envID string) error {
 	req, err := http.NewRequestWithContext(ctx, "DELETE", deleteURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -262,7 +254,7 @@ func (c *APIPolicyClient) DeleteAPIPolicy(ctx context.Context, orgID, envID stri
 
 // --- internal helpers for outbound (separate structs, no pointcutData/order/disabled) ---
 
-func (c *APIPolicyClient) doCreateOutboundPolicy(ctx context.Context, createURL string, orgID, envID string, request *CreateOutboundAPIPolicyRequest) (*APIPolicy, error) {
+func (c *APIPolicyClient) doCreateOutboundPolicy(ctx context.Context, createURL, orgID, envID string, request *CreateOutboundAPIPolicyRequest) (*APIPolicy, error) {
 	jsonData, err := json.Marshal(request)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal outbound policy request: %w", err)
@@ -311,7 +303,7 @@ func (c *APIPolicyClient) doCreateOutboundPolicy(ctx context.Context, createURL 
 	return &policy, nil
 }
 
-func (c *APIPolicyClient) doUpdateOutboundPolicy(ctx context.Context, updateURL string, orgID, envID string, request *UpdateOutboundAPIPolicyRequest) (*APIPolicy, error) {
+func (c *APIPolicyClient) doUpdateOutboundPolicy(ctx context.Context, updateURL, orgID, envID string, request *UpdateOutboundAPIPolicyRequest) (*APIPolicy, error) {
 	jsonData, err := json.Marshal(request)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal outbound policy update request: %w", err)
@@ -514,7 +506,7 @@ func CamelToSnake(s string) string {
 func SnakeToCamel(s string) string {
 	parts := strings.Split(s, "_")
 	for i := 1; i < len(parts); i++ {
-		if len(parts[i]) > 0 {
+		if parts[i] != "" {
 			parts[i] = strings.ToUpper(parts[i][:1]) + parts[i][1:]
 		}
 	}

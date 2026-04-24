@@ -34,7 +34,7 @@ type APIInstancePromotionResourceModel struct {
 	ID             types.String `tfsdk:"id"`
 	OrganizationID types.String `tfsdk:"organization_id"`
 	EnvironmentID  types.String `tfsdk:"environment_id"`
-	SourceApiID    types.Int64  `tfsdk:"source_api_id"`
+	SourceAPIID    types.Int64  `tfsdk:"source_api_id"`
 	InstanceLabel  types.String `tfsdk:"instance_label"`
 
 	IncludeAlerts   types.Bool `tfsdk:"include_alerts"`
@@ -162,11 +162,11 @@ func (r *APIInstancePromotionResource) Configure(_ context.Context, req resource
 		return
 	}
 
-	config, ok := req.ProviderData.(*client.ClientConfig)
+	config, ok := req.ProviderData.(*client.Config)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.ClientConfig, got: %T.", req.ProviderData),
+			fmt.Sprintf("Expected *client.Config, got: %T.", req.ProviderData),
 		)
 		return
 	}
@@ -201,7 +201,7 @@ func (r *APIInstancePromotionResource) Create(ctx context.Context, req resource.
 
 	promoteReq := &apimanagement.PromoteAPIInstanceRequest{
 		Promote: apimanagement.PromoteConfig{
-			OriginApiID: int(data.SourceApiID.ValueInt64()),
+			OriginAPIID: int(data.SourceAPIID.ValueInt64()),
 		},
 	}
 
@@ -261,7 +261,7 @@ func (r *APIInstancePromotionResource) Read(ctx context.Context, req resource.Re
 		return
 	}
 
-	sourceApiID := data.SourceApiID
+	sourceAPIID := data.SourceAPIID
 	includeAlerts := data.IncludeAlerts
 	includePolicies := data.IncludePolicies
 	includeTiers := data.IncludeTiers
@@ -269,7 +269,7 @@ func (r *APIInstancePromotionResource) Read(ctx context.Context, req resource.Re
 
 	r.flattenPromotion(instance, &data, orgID)
 
-	data.SourceApiID = sourceApiID
+	data.SourceAPIID = sourceAPIID
 	data.IncludeAlerts = includeAlerts
 	data.IncludePolicies = includePolicies
 	data.IncludeTiers = includeTiers

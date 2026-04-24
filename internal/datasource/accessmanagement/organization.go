@@ -36,9 +36,9 @@ type OrganizationDataSourceModel struct {
 	ClientID                        types.String `tfsdk:"client_id"`
 	IDProviderID                    types.String `tfsdk:"idprovider_id"`
 	IsFederated                     types.Bool   `tfsdk:"is_federated"`
-	ParentOrganizationIds           types.List   `tfsdk:"parent_organization_ids"`
-	SubOrganizationIds              types.List   `tfsdk:"sub_organization_ids"`
-	TenantOrganizationIds           types.List   `tfsdk:"tenant_organization_ids"`
+	ParentOrganizationIDs           types.List   `tfsdk:"parent_organization_ids"`
+	SubOrganizationIDs              types.List   `tfsdk:"sub_organization_ids"`
+	TenantOrganizationIDs           types.List   `tfsdk:"tenant_organization_ids"`
 	MfaRequired                     types.String `tfsdk:"mfa_required"`
 	IsAutomaticAdminPromotionExempt types.Bool   `tfsdk:"is_automatic_admin_promotion_exempt"`
 	OrgType                         types.String `tfsdk:"org_type"`
@@ -309,11 +309,11 @@ func (d *OrganizationDataSource) Configure(_ context.Context, req datasource.Con
 	}
 
 	// Extract the client configuration
-	config, ok := req.ProviderData.(*client.ClientConfig)
+	config, ok := req.ProviderData.(*client.Config)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *client.ClientConfig, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *client.Config, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
@@ -405,17 +405,17 @@ func (d *OrganizationDataSource) Read(ctx context.Context, req datasource.ReadRe
 	}
 
 	// Convert string slices to Terraform lists
-	parentOrgIds, diags := types.ListValueFrom(ctx, types.StringType, organization.ParentOrganizationIds)
+	parentOrgIDs, diags := types.ListValueFrom(ctx, types.StringType, organization.ParentOrganizationIDs)
 	resp.Diagnostics.Append(diags...)
-	data.ParentOrganizationIds = parentOrgIds
+	data.ParentOrganizationIDs = parentOrgIDs
 
-	subOrgIds, diags := types.ListValueFrom(ctx, types.StringType, organization.SubOrganizationIds)
+	subOrgIDs, diags := types.ListValueFrom(ctx, types.StringType, organization.SubOrganizationIDs)
 	resp.Diagnostics.Append(diags...)
-	data.SubOrganizationIds = subOrgIds
+	data.SubOrganizationIDs = subOrgIDs
 
-	tenantOrgIds, diags := types.ListValueFrom(ctx, types.StringType, organization.TenantOrganizationIds)
+	tenantOrgIDs, diags := types.ListValueFrom(ctx, types.StringType, organization.TenantOrganizationIDs)
 	resp.Diagnostics.Append(diags...)
-	data.TenantOrganizationIds = tenantOrgIds
+	data.TenantOrganizationIDs = tenantOrgIDs
 
 	data.SessionTimeout = types.Int64Value(int64(organization.SessionTimeout))
 

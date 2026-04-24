@@ -19,7 +19,7 @@ type APIInstanceClient struct {
 }
 
 // NewAPIInstanceClient creates a new APIInstanceClient
-func NewAPIInstanceClient(config *client.ClientConfig) (*APIInstanceClient, error) {
+func NewAPIInstanceClient(config *client.Config) (*APIInstanceClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err
@@ -211,7 +211,7 @@ type PromoteAPIInstanceRequest struct {
 
 // PromoteConfig holds the promotion source and entity selection.
 type PromoteConfig struct {
-	OriginApiID int              `json:"originApiId"`
+	OriginAPIID int              `json:"originApiId"`
 	Alerts      *PromoteEntities `json:"alerts,omitempty"`
 	Policies    *PromoteEntities `json:"policies,omitempty"`
 	Tiers       *PromoteEntities `json:"tiers,omitempty"`
@@ -300,15 +300,15 @@ func (c *APIInstanceClient) CreateAPIInstance(ctx context.Context, orgID, envID 
 		if resp.StatusCode == http.StatusCreated || resp.StatusCode == http.StatusOK {
 			var instance APIInstance
 			if err := json.NewDecoder(resp.Body).Decode(&instance); err != nil {
-				resp.Body.Close()
+				_ = resp.Body.Close()
 				return nil, fmt.Errorf("failed to decode response: %w", err)
 			}
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			return &instance, nil
 		}
 
 		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		lastErr = fmt.Errorf("failed to create API instance with status %d: %s", resp.StatusCode, string(body))
 
 		if resp.StatusCode == http.StatusBadRequest && strings.Contains(string(body), "GatewayNotReadyError") {

@@ -12,13 +12,13 @@ import (
 func TestNewAnypointClient(t *testing.T) {
 	tests := []struct {
 		name        string
-		config      *ClientConfig
+		config      *Config
 		wantErr     bool
 		errContains string
 	}{
 		{
 			name: "valid config with defaults",
-			config: &ClientConfig{
+			config: &Config{
 				ClientID:     "test-client-id",
 				ClientSecret: "test-client-secret",
 			},
@@ -26,7 +26,7 @@ func TestNewAnypointClient(t *testing.T) {
 		},
 		{
 			name: "valid config with custom baseURL and timeout",
-			config: &ClientConfig{
+			config: &Config{
 				BaseURL:      "https://custom.anypoint.mulesoft.com",
 				ClientID:     "test-client-id",
 				ClientSecret: "test-client-secret",
@@ -36,7 +36,7 @@ func TestNewAnypointClient(t *testing.T) {
 		},
 		{
 			name: "missing client ID",
-			config: &ClientConfig{
+			config: &Config{
 				ClientSecret: "test-client-secret",
 			},
 			wantErr:     true,
@@ -44,7 +44,7 @@ func TestNewAnypointClient(t *testing.T) {
 		},
 		{
 			name: "missing client secret",
-			config: &ClientConfig{
+			config: &Config{
 				ClientID: "test-client-id",
 			},
 			wantErr:     true,
@@ -384,7 +384,7 @@ func TestAnypointClient_extractOrgID(t *testing.T) {
 }
 
 func TestAnypointClient_ConfigDefaults(t *testing.T) {
-	config := &ClientConfig{
+	config := &Config{
 		ClientID:     "test-id",
 		ClientSecret: "test-secret",
 	}
@@ -426,7 +426,7 @@ func TestAnypointClient_AuthenticationFlow(t *testing.T) {
 
 	server := testutil.MockHTTPServer(t, handlers)
 
-	config := &ClientConfig{
+	config := &Config{
 		BaseURL:      server.URL,
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",

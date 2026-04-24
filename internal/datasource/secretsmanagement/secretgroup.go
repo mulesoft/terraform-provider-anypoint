@@ -84,9 +84,9 @@ func (d *SecretGroupDataSource) Configure(_ context.Context, req datasource.Conf
 	if req.ProviderData == nil {
 		return
 	}
-	cfg, ok := req.ProviderData.(*client.ClientConfig)
+	cfg, ok := req.ProviderData.(*client.Config)
 	if !ok {
-		resp.Diagnostics.AddError("Unexpected provider data type", fmt.Sprintf("expected *client.ClientConfig, got %T", req.ProviderData))
+		resp.Diagnostics.AddError("Unexpected provider data type", fmt.Sprintf("expected *client.Config, got %T", req.ProviderData))
 		return
 	}
 	c, err := secretsmgmt.NewSecretGroupClient(cfg)

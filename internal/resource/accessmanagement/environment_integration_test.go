@@ -66,10 +66,7 @@ func TestIntegrationEnvironmentResource_CRUD(t *testing.T) {
 			t.Error("Environment resource client should be configured")
 		}
 
-		var testResource resource.Resource = envResource
-		if testResource == nil {
-			t.Error("Environment resource should implement Resource interface")
-		}
+		var _ resource.Resource = envResource
 	})
 
 	// Test READ operation

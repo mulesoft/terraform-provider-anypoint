@@ -18,13 +18,13 @@ func stringPtr(s string) *string { return &s }
 func TestNewPrivateSpacesClient(t *testing.T) {
 	tests := []struct {
 		name        string
-		config      *client.ClientConfig
+		config      *client.Config
 		wantErr     bool
 		errContains string
 	}{
 		{
 			name: "valid config",
-			config: &client.ClientConfig{
+			config: &client.Config{
 				ClientID:     "test-client-id",
 				ClientSecret: "test-client-secret",
 			},
@@ -32,7 +32,7 @@ func TestNewPrivateSpacesClient(t *testing.T) {
 		},
 		{
 			name: "missing client ID",
-			config: &client.ClientConfig{
+			config: &client.Config{
 				ClientSecret: "test-client-secret",
 			},
 			wantErr:     true,
@@ -40,7 +40,7 @@ func TestNewPrivateSpacesClient(t *testing.T) {
 		},
 		{
 			name: "missing client secret",
-			config: &client.ClientConfig{
+			config: &client.Config{
 				ClientID: "test-client-id",
 			},
 			wantErr:     true,

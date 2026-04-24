@@ -48,7 +48,7 @@ func TestUserResource_Configure(t *testing.T) {
 	res := NewUserResource().(*UserResource)
 
 	server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
-	providerData := &client.ClientConfig{
+	providerData := &client.Config{
 		BaseURL:      server.URL,
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",

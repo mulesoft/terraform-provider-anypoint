@@ -178,9 +178,7 @@ func TestIntegrationAPIPolicyResource_CRUD(t *testing.T) {
 func TestIntegrationAPIPolicyResource_InterfaceCompliance(t *testing.T) {
 	res := NewAPIPolicyResource()
 
-	if _, ok := res.(resource.Resource); !ok {
-		t.Error("APIPolicyResource does not implement resource.Resource")
-	}
+	var _ resource.Resource = res
 	if _, ok := res.(resource.ResourceWithConfigure); !ok {
 		t.Error("APIPolicyResource does not implement ResourceWithConfigure")
 	}

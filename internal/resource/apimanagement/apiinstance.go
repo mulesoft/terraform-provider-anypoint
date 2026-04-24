@@ -430,11 +430,11 @@ func (r *APIInstanceResource) Configure(_ context.Context, req resource.Configur
 		return
 	}
 
-	config, ok := req.ProviderData.(*client.ClientConfig)
+	config, ok := req.ProviderData.(*client.Config)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.ClientConfig, got: %T.", req.ProviderData),
+			fmt.Sprintf("Expected *client.Config, got: %T.", req.ProviderData),
 		)
 		return
 	}
@@ -664,7 +664,8 @@ func (r *APIInstanceResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	if !plan.GatewayID.IsNull() && !plan.GatewayID.IsUnknown() && (plan.Deployment.IsNull() || plan.Deployment.IsUnknown()) {
-		dep, err := r.resolveGatewayDeployment(ctx, orgID, envID, plan.GatewayID.ValueString())
+		var dep *apimanagement.APIInstanceDeployment
+		dep, err = r.resolveGatewayDeployment(ctx, orgID, envID, plan.GatewayID.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Error resolving gateway_id", err.Error())
 			return
@@ -682,17 +683,16 @@ func (r *APIInstanceResource) Update(ctx context.Context, req resource.UpdateReq
 
 	updateReq := r.expandUpdateRequest(ctx, plan)
 
-	// The PATCH API requires upstream IDs for routing updates.
-	// Fetch the current instance to get server-assigned upstream IDs,
-	// then merge them into the update payload by matching on URI.
 	if len(updateReq.Routing) > 0 {
-		current, err := r.client.GetAPIInstance(ctx, orgID, envID, apiID)
+		var current *apimanagement.APIInstance
+		current, err = r.client.GetAPIInstance(ctx, orgID, envID, apiID)
 		if err == nil && len(current.Routing) > 0 {
 			r.mergeUpstreamIDs(current.Routing, updateReq.Routing)
 		}
 	}
 
-	instance, err := r.client.UpdateAPIInstance(ctx, orgID, envID, apiID, updateReq)
+	var instance *apimanagement.APIInstance
+	instance, err = r.client.UpdateAPIInstance(ctx, orgID, envID, apiID, updateReq)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating API instance", "Could not update API instance: "+err.Error())
 		return
@@ -1027,7 +1027,7 @@ func (r *APIInstanceResource) expandRouting(ctx context.Context, routingList typ
 	return apiRoutes
 }
 
-func (r *APIInstanceResource) flattenInstance(ctx context.Context, inst *apimanagement.APIInstance, data *APIInstanceResourceModel, orgID, envID string) {
+func (r *APIInstanceResource) flattenInstance(_ context.Context, inst *apimanagement.APIInstance, data *APIInstanceResourceModel, orgID, envID string) {
 	data.ID = types.StringValue(strconv.Itoa(inst.ID))
 	data.Status = types.StringValue(inst.Status)
 	data.AssetID = types.StringValue(inst.AssetID)

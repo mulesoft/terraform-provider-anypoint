@@ -200,25 +200,25 @@ func ValidateResourceImplementsInterfaces(t *testing.T, res interface{}) {
 }
 
 // MockCreateRequest creates a mock create request for testing
-func MockCreateRequest(state map[string]interface{}) resource.CreateRequest {
+func MockCreateRequest(_ map[string]interface{}) resource.CreateRequest {
 	// This would create a proper request with state in practice
 	return resource.CreateRequest{}
 }
 
 // MockUpdateRequest creates a mock update request for testing
-func MockUpdateRequest(state, plan map[string]interface{}) resource.UpdateRequest {
+func MockUpdateRequest(_, _ map[string]interface{}) resource.UpdateRequest {
 	// This would create a proper request with state and plan in practice
 	return resource.UpdateRequest{}
 }
 
 // MockDeleteRequest creates a mock delete request for testing
-func MockDeleteRequest(state map[string]interface{}) resource.DeleteRequest {
+func MockDeleteRequest(_ map[string]interface{}) resource.DeleteRequest {
 	// This would create a proper request with state in practice
 	return resource.DeleteRequest{}
 }
 
 // MockReadRequest creates a mock read request for testing
-func MockReadRequest(state map[string]interface{}) resource.ReadRequest {
+func MockReadRequest(_ map[string]interface{}) resource.ReadRequest {
 	// This would create a proper request with state in practice
 	return resource.ReadRequest{}
 }

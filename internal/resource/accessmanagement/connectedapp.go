@@ -115,11 +115,11 @@ func (r *ConnectedAppResource) Configure(_ context.Context, req resource.Configu
 		return
 	}
 
-	config, ok := req.ProviderData.(*client.ClientConfig)
+	config, ok := req.ProviderData.(*client.Config)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.ClientConfig, got: %T.", req.ProviderData),
+			fmt.Sprintf("Expected *client.Config, got: %T.", req.ProviderData),
 		)
 		return
 	}
@@ -258,7 +258,7 @@ func (r *ConnectedAppResource) Read(ctx context.Context, req resource.ReadReques
 	resp.Diagnostics.Append(diags...)
 }
 
-func (r *ConnectedAppResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+func (r *ConnectedAppResource) Update(_ context.Context, _ resource.UpdateRequest, resp *resource.UpdateResponse) {
 	resp.Diagnostics.AddError(
 		"Update Not Supported",
 		"Connected App updates are not currently supported. Changes require replacement.",

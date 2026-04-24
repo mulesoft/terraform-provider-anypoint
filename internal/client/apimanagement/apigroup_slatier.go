@@ -20,7 +20,7 @@ type GroupSLATierClient struct {
 }
 
 // NewGroupSLATierClient creates a new GroupSLATierClient.
-func NewGroupSLATierClient(config *client.ClientConfig) (*GroupSLATierClient, error) {
+func NewGroupSLATierClient(config *client.Config) (*GroupSLATierClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err

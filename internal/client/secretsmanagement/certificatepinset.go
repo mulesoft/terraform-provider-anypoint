@@ -16,7 +16,7 @@ type CertificatePinsetClient struct {
 	*client.AnypointClient
 }
 
-func NewCertificatePinsetClient(config *client.ClientConfig) (*CertificatePinsetClient, error) {
+func NewCertificatePinsetClient(config *client.Config) (*CertificatePinsetClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err

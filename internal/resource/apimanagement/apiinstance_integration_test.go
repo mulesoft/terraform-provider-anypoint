@@ -99,7 +99,7 @@ func TestIntegrationAPIInstanceResource_CRUD(t *testing.T) {
 
 	server := testutil.MockHTTPServer(t, handlers)
 
-	anypointClient, err := client.NewAnypointClient(&client.ClientConfig{
+	anypointClient, err := client.NewAnypointClient(&client.Config{
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
 		BaseURL:      server.URL,

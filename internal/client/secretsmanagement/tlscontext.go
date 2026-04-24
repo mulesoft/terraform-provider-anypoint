@@ -15,7 +15,7 @@ type TLSContextClient struct {
 	*client.AnypointClient
 }
 
-func NewTLSContextClient(config *client.ClientConfig) (*TLSContextClient, error) {
+func NewTLSContextClient(config *client.Config) (*TLSContextClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err

@@ -241,11 +241,11 @@ func (r *KnownPolicyResource) Configure(_ context.Context, req resource.Configur
 		return
 	}
 
-	config, ok := req.ProviderData.(*client.ClientConfig)
+	config, ok := req.ProviderData.(*client.Config)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.ClientConfig, got: %T.", req.ProviderData),
+			fmt.Sprintf("Expected *client.Config, got: %T.", req.ProviderData),
 		)
 		return
 	}
@@ -268,11 +268,9 @@ func (r *KnownPolicyResource) Configure(_ context.Context, req resource.Configur
 // expandConfiguration converts the typed HCL configuration object into the
 // map[string]interface{} that the API expects, mapping snake_case → camelCase.
 // Uses the schema's original camelCase keys to avoid lossy round-trips (e.g. "URL").
-func (r *KnownPolicyResource) expandConfiguration(ctx context.Context, obj types.Object) (map[string]interface{}, diag.Diagnostics) {
-	var allDiags diag.Diagnostics
-
+func (r *KnownPolicyResource) expandConfiguration(_ context.Context, obj types.Object) map[string]interface{} {
 	if obj.IsNull() || obj.IsUnknown() {
-		return map[string]interface{}{}, allDiags
+		return map[string]interface{}{}
 	}
 
 	result := make(map[string]interface{})
@@ -318,7 +316,7 @@ func (r *KnownPolicyResource) expandConfiguration(ctx context.Context, obj types
 		}
 	}
 
-	return result, allDiags
+	return result
 }
 
 // dynamicToNative recursively converts a Terraform attr.Value to a native Go value.
@@ -376,7 +374,7 @@ func dynamicToNative(v attr.Value) interface{} {
 
 // flattenConfiguration converts the API's map[string]interface{} response back
 // into a types.Object matching the schema, mapping camelCase → snake_case.
-func (r *KnownPolicyResource) flattenConfiguration(ctx context.Context, configData map[string]interface{}) (types.Object, diag.Diagnostics) {
+func (r *KnownPolicyResource) flattenConfiguration(_ context.Context, configData map[string]interface{}) (types.Object, diag.Diagnostics) {
 	var allDiags diag.Diagnostics
 	attrTypes := r.configAttrTypes()
 
@@ -513,11 +511,7 @@ func (r *KnownPolicyResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	assetVersion := r.resolveVersion(&data)
-	configData, diags := r.expandConfiguration(ctx, data.Configuration)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
+	configData := r.expandConfiguration(ctx, data.Configuration)
 
 	if errs := apimanagement.ValidatePolicyConfiguration(r.policyInfo.AssetID, configData); len(errs) > 0 {
 		resp.Diagnostics.AddError(
@@ -677,11 +671,7 @@ func (r *KnownPolicyResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	assetVersion := r.resolveVersion(&plan)
-	configData, diags := r.expandConfiguration(ctx, plan.Configuration)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
+	configData := r.expandConfiguration(ctx, plan.Configuration)
 
 	if errs := apimanagement.ValidatePolicyConfiguration(r.policyInfo.AssetID, configData); len(errs) > 0 {
 		resp.Diagnostics.AddError(

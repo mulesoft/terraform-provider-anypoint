@@ -343,11 +343,11 @@ func (r *MCPServerResource) Configure(_ context.Context, req resource.ConfigureR
 		return
 	}
 
-	config, ok := req.ProviderData.(*client.ClientConfig)
+	config, ok := req.ProviderData.(*client.Config)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.ClientConfig, got: %T.", req.ProviderData),
+			fmt.Sprintf("Expected *client.Config, got: %T.", req.ProviderData),
 		)
 		return
 	}
@@ -567,7 +567,8 @@ func (r *MCPServerResource) Update(ctx context.Context, req resource.UpdateReque
 	}
 
 	if !plan.GatewayID.IsNull() && !plan.GatewayID.IsUnknown() && (plan.Deployment.IsNull() || plan.Deployment.IsUnknown()) {
-		dep, err := r.resolveGatewayDeployment(ctx, orgID, envID, plan.GatewayID.ValueString())
+		var dep *agentstools.MCPServerDeployment
+		dep, err = r.resolveGatewayDeployment(ctx, orgID, envID, plan.GatewayID.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Error resolving gateway_id", err.Error())
 			return
@@ -585,17 +586,16 @@ func (r *MCPServerResource) Update(ctx context.Context, req resource.UpdateReque
 
 	updateReq := r.expandUpdateRequest(ctx, plan)
 
-	// The PATCH MCP server requires upstream IDs for routing updates.
-	// Fetch the current instance to get server-assigned upstream IDs,
-	// then merge them into the update payload by matching on URI.
 	if len(updateReq.Routing) > 0 {
-		current, err := r.client.GetMCPServer(ctx, orgID, envID, mcpID)
+		var current *agentstools.MCPServer
+		current, err = r.client.GetMCPServer(ctx, orgID, envID, mcpID)
 		if err == nil && len(current.Routing) > 0 {
 			r.mergeUpstreamIDs(current.Routing, updateReq.Routing)
 		}
 	}
 
-	instance, err := r.client.UpdateMCPServer(ctx, orgID, envID, mcpID, updateReq)
+	var instance *agentstools.MCPServer
+	instance, err = r.client.UpdateMCPServer(ctx, orgID, envID, mcpID, updateReq)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating MCP server", "Could not update MCP server: "+err.Error())
 		return
@@ -939,7 +939,7 @@ func (r *MCPServerResource) expandRouting(ctx context.Context, routingList types
 	return mcpRoutes
 }
 
-func (r *MCPServerResource) flattenInstance(ctx context.Context, inst *agentstools.MCPServer, data *MCPServerResourceModel, orgID, envID string) {
+func (r *MCPServerResource) flattenInstance(_ context.Context, inst *agentstools.MCPServer, data *MCPServerResourceModel, orgID, envID string) {
 	data.ID = types.StringValue(strconv.Itoa(inst.ID))
 	if inst.Status != "" {
 		data.Status = types.StringValue(inst.Status)
