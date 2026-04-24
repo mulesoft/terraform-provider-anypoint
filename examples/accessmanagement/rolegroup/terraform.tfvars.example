@@ -1,0 +1,14 @@
+# Copy this file to terraform.tfvars and update with your actual values
+# Example: cp terraform.tfvars.example terraform.tfvars
+
+# Anypoint Platform Credentials
+anypoint_client_id     = "your-actual-client-id-here"
+anypoint_client_secret = "your-actual-client-secret-here"
+
+# Anypoint Platform URL
+anypoint_base_url = "https://anypoint.mulesoft.com"  # Production
+# anypoint_base_url = "https://stgx.anypoint.mulesoft.com"  # Staging
+
+# Role Group Configuration
+role_group_name = "My Test Role Group"
+role_group_description = "Test role group for demonstration"

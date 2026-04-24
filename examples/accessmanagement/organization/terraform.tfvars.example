@@ -1,0 +1,42 @@
+# Copy this file to terraform.tfvars and update with your actual values
+# Example: cp terraform.tfvars.example terraform.tfvars
+
+# Anypoint Platform Admin Credentials (Connected App with password grant)
+anypoint_admin_client_id     = "your-admin-client-id-here"
+anypoint_admin_client_secret = "your-admin-client-secret-here"
+anypoint_admin_username      = "your-admin-username"
+anypoint_admin_password      = "your-admin-password"
+
+# Anypoint Platform URL
+anypoint_base_url = "https://anypoint.mulesoft.com"  # Production
+# anypoint_base_url = "https://stgx.anypoint.mulesoft.com"  # Staging
+
+# Organization Configuration
+organization_name        = "My Test Organization"
+parent_organization_id   = "your-parent-org-id-here"
+owner_id                = "your-owner-user-id-here"
+
+# Organization Capabilities
+create_sub_orgs      = true
+create_environments  = true
+global_deployment    = false
+
+# vCore Allocations
+vcores_production_assigned    = 0
+vcores_production_reassigned  = 0
+vcores_sandbox_assigned       = 0
+vcores_sandbox_reassigned     = 1
+vcores_design_assigned        = 0
+vcores_design_reassigned      = 0
+
+# Network Resource Allocations
+static_ips_assigned    = 1
+static_ips_reassigned  = 0
+vpcs_assigned          = 1
+vpcs_reassigned        = 0
+vpns_assigned          = 1
+vpns_reassigned        = 0
+
+# Network Connection Allocations
+network_connections_assigned    = 0
+network_connections_reassigned  = 0

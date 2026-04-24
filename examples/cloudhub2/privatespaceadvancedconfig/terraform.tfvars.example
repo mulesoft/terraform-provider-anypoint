@@ -1,0 +1,12 @@
+# Copy this file to terraform.tfvars and update with your actual values
+
+# Anypoint Platform Credentials
+anypoint_client_id     = "your-actual-client-id-here"
+anypoint_client_secret = "your-actual-client-secret-here"
+
+# Anypoint Platform URL (use production or staging)
+anypoint_base_url = "https://anypoint.mulesoft.com"  # Production
+# anypoint_base_url = "https://stgx.anypoint.mulesoft.com"  # Staging
+
+# Private Space Configuration
+private_space_id = "your-private-space-id-here"
