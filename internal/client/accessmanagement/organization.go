@@ -317,7 +317,7 @@ type Organization struct {
 	UpdatedAt                       string                 `json:"updatedAt"`
 	OwnerID                         string                 `json:"ownerId"`
 	ClientID                        string                 `json:"clientId"`
-	IdProviderID                    string                 `json:"idprovider_id"`
+	IDProviderID                    string                 `json:"idprovider_id"`
 	IsFederated                     bool                   `json:"isFederated"`
 	ParentOrganizationIds           []string               `json:"parentOrganizationIds"`
 	SubOrganizationIds              []string               `json:"subOrganizationIds"`

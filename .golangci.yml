@@ -81,6 +81,7 @@ linters:
         - hugeParam
         - rangeValCopy
         - httpNoBody
+        - importShadow
     unparam:
       check-exported: false
   exclusions:
@@ -98,6 +99,7 @@ linters:
           - gosec
           - goconst
           - unparam
+          - revive
       - path: main\.go
         linters:
           - gocyclo

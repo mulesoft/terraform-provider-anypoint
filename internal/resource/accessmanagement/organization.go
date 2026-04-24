@@ -124,7 +124,7 @@ type OrganizationResourceModel struct {
 	CreatedAt                       types.String `tfsdk:"created_at"`
 	UpdatedAt                       types.String `tfsdk:"updated_at"`
 	ClientID                        types.String `tfsdk:"client_id"`
-	IdProviderID                    types.String `tfsdk:"idprovider_id"`
+	IDProviderID                    types.String `tfsdk:"idprovider_id"`
 	IsFederated                     types.Bool   `tfsdk:"is_federated"`
 	ParentOrganizationIds           types.List   `tfsdk:"parent_organization_ids"`
 	SubOrganizationIds              types.List   `tfsdk:"sub_organization_ids"`
@@ -1226,7 +1226,7 @@ func (r *OrganizationResource) Create(ctx context.Context, req resource.CreateRe
 	data.CreatedAt = types.StringValue(organization.CreatedAt)
 	data.UpdatedAt = types.StringValue(organization.UpdatedAt)
 	data.ClientID = types.StringValue(organization.ClientID)
-	data.IdProviderID = types.StringValue(organization.IdProviderID)
+	data.IDProviderID = types.StringValue(organization.IDProviderID)
 	data.IsFederated = types.BoolValue(organization.IsFederated)
 	// Set organization ID lists - always ensure known values
 	if organization.ParentOrganizationIds != nil {
@@ -1342,7 +1342,7 @@ func (r *OrganizationResource) Read(ctx context.Context, req resource.ReadReques
 	data.UpdatedAt = types.StringValue(organization.UpdatedAt)
 	data.OwnerID = types.StringValue(organization.OwnerID)
 	data.ClientID = types.StringValue(organization.ClientID)
-	data.IdProviderID = types.StringValue(organization.IdProviderID)
+	data.IDProviderID = types.StringValue(organization.IDProviderID)
 	data.IsFederated = types.BoolValue(organization.IsFederated)
 	data.IsAutomaticAdminPromotionExempt = types.BoolValue(organization.IsAutomaticAdminPromotionExempt)
 	data.OrgType = types.StringValue(organization.OrgType)
