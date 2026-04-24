@@ -21,7 +21,7 @@ jobs:
   # ──────────────────────────────────────────────
   test:
     name: Unit Tests & Lint
-    runs-on: ubuntu-latest
+    runs-on: mulesoft-ubuntu
 
     steps:
       - uses: actions/checkout@v4
@@ -80,7 +80,7 @@ jobs:
   # ──────────────────────────────────────────────
   build:
     name: Build Verification
-    runs-on: ubuntu-latest
+    runs-on: mulesoft-ubuntu
     needs: test
 
     steps:
@@ -107,7 +107,7 @@ jobs:
   # ──────────────────────────────────────────────
   acceptance-test:
     name: Acceptance Tests
-    runs-on: ubuntu-latest
+    runs-on: mulesoft-ubuntu
     needs: test
     if: |
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
@@ -149,7 +149,7 @@ jobs:
   ci-status:
     name: CI Status
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: mulesoft-ubuntu
     needs: [test, build]
     steps:
       - name: Check required job results
