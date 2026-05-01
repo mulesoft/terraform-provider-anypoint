@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -37,17 +38,17 @@ type KnownPolicyResource struct {
 }
 
 type KnownPolicyResourceModel struct {
-	ID               types.String  `tfsdk:"id"`
-	OrganizationID   types.String  `tfsdk:"organization_id"`
-	EnvironmentID    types.String  `tfsdk:"environment_id"`
-	APIInstanceID    types.String  `tfsdk:"api_instance_id"`
-	Label            types.String  `tfsdk:"label"`
-	Configuration    types.Object  `tfsdk:"configuration"`
-	Order            types.Int64   `tfsdk:"order"`
-	Disabled         types.Bool    `tfsdk:"disabled"`
-	PolicyTemplateID types.String  `tfsdk:"policy_template_id"`
-	AssetVersion     types.String  `tfsdk:"asset_version"`
-	UpstreamIDs      types.List    `tfsdk:"upstream_ids"`
+	ID               types.String `tfsdk:"id"`
+	OrganizationID   types.String `tfsdk:"organization_id"`
+	EnvironmentID    types.String `tfsdk:"environment_id"`
+	APIInstanceID    types.String `tfsdk:"api_instance_id"`
+	Label            types.String `tfsdk:"label"`
+	Configuration    types.Object `tfsdk:"configuration"`
+	Order            types.Int64  `tfsdk:"order"`
+	Disabled         types.Bool   `tfsdk:"disabled"`
+	PolicyTemplateID types.String `tfsdk:"policy_template_id"`
+	AssetVersion     types.String `tfsdk:"asset_version"`
+	UpstreamIDs      types.List   `tfsdk:"upstream_ids"`
 }
 
 func NewKnownPolicyResourceFunc(policyType string) func() resource.Resource {
@@ -94,6 +95,8 @@ func fieldSchemaType(t string) attr.Type {
 		return types.NumberType
 	case "bool":
 		return types.BoolType
+	case "string_array":
+		return types.ListType{ElemType: types.StringType}
 	default:
 		return types.DynamicType
 	}
@@ -120,16 +123,31 @@ func generateConfigurationSchema(assetID string) schema.SingleNestedAttribute {
 				Optional:    !field.Required,
 			}
 		case "int":
+			var numValidators []validator.Number
+			if field.Min != nil {
+				numValidators = append(numValidators, numberAtLeastValidator{min: big.NewFloat(*field.Min)})
+			}
+			if field.Max != nil {
+				numValidators = append(numValidators, numberAtMostValidator{max: big.NewFloat(*field.Max)})
+			}
 			attrs[snakeName] = schema.NumberAttribute{
 				Description: fmt.Sprintf("Policy field '%s'.", camelName),
 				Required:    field.Required,
 				Optional:    !field.Required,
+				Validators:  numValidators,
 			}
 		case "bool":
 			attrs[snakeName] = schema.BoolAttribute{
 				Description: fmt.Sprintf("Policy field '%s'.", camelName),
 				Required:    field.Required,
 				Optional:    !field.Required,
+			}
+		case "string_array":
+			attrs[snakeName] = schema.ListAttribute{
+				Description: fmt.Sprintf("Policy field '%s'. Must be a list of strings.", camelName),
+				Required:    field.Required,
+				Optional:    !field.Required,
+				ElementType: types.StringType,
 			}
 		default:
 			attrs[snakeName] = schema.DynamicAttribute{
@@ -241,11 +259,11 @@ func (r *KnownPolicyResource) Configure(_ context.Context, req resource.Configur
 		return
 	}
 
-	config, ok := req.ProviderData.(*client.ClientConfig)
+	config, ok := req.ProviderData.(*client.Config)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.ClientConfig, got: %T.", req.ProviderData),
+			fmt.Sprintf("Expected *client.Config, got: %T.", req.ProviderData),
 		)
 		return
 	}
@@ -268,11 +286,9 @@ func (r *KnownPolicyResource) Configure(_ context.Context, req resource.Configur
 // expandConfiguration converts the typed HCL configuration object into the
 // map[string]interface{} that the API expects, mapping snake_case → camelCase.
 // Uses the schema's original camelCase keys to avoid lossy round-trips (e.g. "URL").
-func (r *KnownPolicyResource) expandConfiguration(ctx context.Context, obj types.Object) (map[string]interface{}, diag.Diagnostics) {
-	var allDiags diag.Diagnostics
-
+func (r *KnownPolicyResource) expandConfiguration(_ context.Context, obj types.Object) map[string]interface{} {
 	if obj.IsNull() || obj.IsUnknown() {
-		return map[string]interface{}{}, allDiags
+		return map[string]interface{}{}
 	}
 
 	result := make(map[string]interface{})
@@ -311,6 +327,17 @@ func (r *KnownPolicyResource) expandConfiguration(ctx context.Context, obj types
 			if bv, ok := val.(basetypes.BoolValue); ok {
 				result[camelName] = bv.ValueBool()
 			}
+		case "string_array":
+			if lv, ok := val.(basetypes.ListValue); ok {
+				elems := lv.Elements()
+				strs := make([]string, 0, len(elems))
+				for _, e := range elems {
+					if sv, ok := e.(basetypes.StringValue); ok {
+						strs = append(strs, sv.ValueString())
+					}
+				}
+				result[camelName] = strs
+			}
 		default:
 			if dv, ok := val.(basetypes.DynamicValue); ok {
 				result[camelName] = dynamicToNative(dv.UnderlyingValue())
@@ -318,7 +345,7 @@ func (r *KnownPolicyResource) expandConfiguration(ctx context.Context, obj types
 		}
 	}
 
-	return result, allDiags
+	return result
 }
 
 // dynamicToNative recursively converts a Terraform attr.Value to a native Go value.
@@ -376,7 +403,7 @@ func dynamicToNative(v attr.Value) interface{} {
 
 // flattenConfiguration converts the API's map[string]interface{} response back
 // into a types.Object matching the schema, mapping camelCase → snake_case.
-func (r *KnownPolicyResource) flattenConfiguration(ctx context.Context, configData map[string]interface{}) (types.Object, diag.Diagnostics) {
+func (r *KnownPolicyResource) flattenConfiguration(_ context.Context, configData map[string]interface{}) (types.Object, diag.Diagnostics) {
 	var allDiags diag.Diagnostics
 	attrTypes := r.configAttrTypes()
 
@@ -425,6 +452,20 @@ func (r *KnownPolicyResource) flattenConfiguration(ctx context.Context, configDa
 			if b, ok := rawVal.(bool); ok {
 				attrValues[snakeName] = types.BoolValue(b)
 			}
+		case "string_array":
+			var strs []attr.Value
+			if arr, ok := rawVal.([]interface{}); ok {
+				for _, item := range arr {
+					if s, ok := item.(string); ok {
+						strs = append(strs, types.StringValue(s))
+					}
+				}
+			}
+			if strs == nil {
+				strs = []attr.Value{}
+			}
+			lv, _ := types.ListValue(types.StringType, strs)
+			attrValues[snakeName] = lv
 		default:
 			tfVal := nativeToDynamic(rawVal)
 			attrValues[snakeName] = types.DynamicValue(tfVal)
@@ -445,6 +486,10 @@ func nullForType(t attr.Type) attr.Value {
 	case types.BoolType:
 		return types.BoolNull()
 	default:
+		// Handle typed list types (e.g. ListType{ElemType: StringType} for string_array).
+		if lt, ok := t.(types.ListType); ok {
+			return types.ListNull(lt.ElemType)
+		}
 		return types.DynamicNull()
 	}
 }
@@ -513,11 +558,7 @@ func (r *KnownPolicyResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	assetVersion := r.resolveVersion(&data)
-	configData, diags := r.expandConfiguration(ctx, data.Configuration)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
+	configData := r.expandConfiguration(ctx, data.Configuration)
 
 	if errs := apimanagement.ValidatePolicyConfiguration(r.policyInfo.AssetID, configData); len(errs) > 0 {
 		resp.Diagnostics.AddError(
@@ -677,11 +718,7 @@ func (r *KnownPolicyResource) Update(ctx context.Context, req resource.UpdateReq
 	}
 
 	assetVersion := r.resolveVersion(&plan)
-	configData, diags := r.expandConfiguration(ctx, plan.Configuration)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
+	configData := r.expandConfiguration(ctx, plan.Configuration)
 
 	if errs := apimanagement.ValidatePolicyConfiguration(r.policyInfo.AssetID, configData); len(errs) > 0 {
 		resp.Diagnostics.AddError(
@@ -836,7 +873,7 @@ func (r *KnownPolicyResource) mergeConfigFromState(stateConfig, apiConfig types.
 	for k, apiVal := range apiAttrs {
 		// If the API returned null/unknown for this field but state has a real
 		// value, keep the state value (the field is write-only / not echoed by API).
-		if (apiVal.IsNull() || apiVal.IsUnknown()) {
+		if apiVal.IsNull() || apiVal.IsUnknown() {
 			if stateVal, ok := stateAttrs[k]; ok && !stateVal.IsNull() && !stateVal.IsUnknown() {
 				merged[k] = stateVal
 				continue
@@ -892,4 +929,44 @@ func KnownPolicyTypes() []string {
 		result = append(result, k)
 	}
 	return result
+}
+
+// numberAtLeastValidator validates that a Number value is >= min.
+type numberAtLeastValidator struct{ min *big.Float }
+
+func (v numberAtLeastValidator) Description(_ context.Context) string {
+	return fmt.Sprintf("value must be at least %s", v.min.Text('f', 0))
+}
+func (v numberAtLeastValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+func (v numberAtLeastValidator) ValidateNumber(_ context.Context, req validator.NumberRequest, resp *validator.NumberResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	val := req.ConfigValue.ValueBigFloat()
+	if val.Cmp(v.min) < 0 {
+		resp.Diagnostics.AddAttributeError(req.Path, "Value too small",
+			fmt.Sprintf("must be >= %s, got %s", v.min.Text('f', 0), val.Text('f', 0)))
+	}
+}
+
+// numberAtMostValidator validates that a Number value is <= max.
+type numberAtMostValidator struct{ max *big.Float }
+
+func (v numberAtMostValidator) Description(_ context.Context) string {
+	return fmt.Sprintf("value must be at most %s", v.max.Text('f', 0))
+}
+func (v numberAtMostValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+func (v numberAtMostValidator) ValidateNumber(_ context.Context, req validator.NumberRequest, resp *validator.NumberResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	val := req.ConfigValue.ValueBigFloat()
+	if val.Cmp(v.max) > 0 {
+		resp.Diagnostics.AddAttributeError(req.Path, "Value too large",
+			fmt.Sprintf("must be <= %s, got %s", v.max.Text('f', 0), val.Text('f', 0)))
+	}
 }
