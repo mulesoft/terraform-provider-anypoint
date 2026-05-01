@@ -17,7 +17,7 @@ type PrivateSpacesClient struct {
 }
 
 // NewPrivateSpacesClient creates a new PrivateSpacesClient
-func NewPrivateSpacesClient(config *client.ClientConfig) (*PrivateSpacesClient, error) {
+func NewPrivateSpacesClient(config *client.Config) (*PrivateSpacesClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err
