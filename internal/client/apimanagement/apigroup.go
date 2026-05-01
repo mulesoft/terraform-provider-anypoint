@@ -17,7 +17,7 @@ type APIGroupClient struct {
 }
 
 // NewAPIGroupClient creates a new APIGroupClient.
-func NewAPIGroupClient(config *client.ClientConfig) (*APIGroupClient, error) {
+func NewAPIGroupClient(config *client.Config) (*APIGroupClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err
