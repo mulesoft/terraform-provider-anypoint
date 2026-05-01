@@ -54,7 +54,7 @@ func TestNewUserClient(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
-			
+
 			if tt.config != nil {
 				tt.config.BaseURL = server.URL
 			}
@@ -94,12 +94,12 @@ func TestUserClient_CreateUser(t *testing.T) {
 	}
 
 	tests := []struct {
-		name        string
-		orgID       string
-		request     *CreateUserRequest
-		mockHandler func(w http.ResponseWriter, r *http.Request)
-		wantErr     bool
-		errContains string
+		name         string
+		orgID        string
+		request      *CreateUserRequest
+		mockHandler  func(w http.ResponseWriter, r *http.Request)
+		wantErr      bool
+		errContains  string
 		expectedUser *User
 	}{
 		{
@@ -114,16 +114,16 @@ func TestUserClient_CreateUser(t *testing.T) {
 			},
 			mockHandler: func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertHTTPRequest(t, r, "POST", "/accounts/api/organizations/test-org-id/users")
-				
+
 				body := testutil.AssertJSONBody(t, r, "username", "firstName", "lastName", "email", "password")
-				
+
 				if body["username"] != "testuser" {
 					t.Errorf("Expected username 'testuser', got %v", body["username"])
 				}
 				if body["email"] != "test@example.com" {
 					t.Errorf("Expected email 'test@example.com', got %v", body["email"])
 				}
-				
+
 				testutil.JSONResponse(w, http.StatusCreated, mockUser)
 			},
 			wantErr:      false,
@@ -211,7 +211,7 @@ func TestUserClient_CreateUser(t *testing.T) {
 				if user == nil {
 					t.Errorf("CreateUser() returned nil user")
 				}
-				
+
 				// Validate returned user
 				if user != nil && tt.expectedUser != nil {
 					if user.ID != tt.expectedUser.ID {
@@ -248,12 +248,12 @@ func TestUserClient_GetUser(t *testing.T) {
 	}
 
 	tests := []struct {
-		name        string
-		orgID       string
-		userID      string
-		mockHandler func(w http.ResponseWriter, r *http.Request)
-		wantErr     bool
-		errContains string
+		name         string
+		orgID        string
+		userID       string
+		mockHandler  func(w http.ResponseWriter, r *http.Request)
+		wantErr      bool
+		errContains  string
 		expectedUser *User
 	}{
 		{
@@ -319,7 +319,7 @@ func TestUserClient_GetUser(t *testing.T) {
 				if user == nil {
 					t.Errorf("GetUser() returned nil user")
 				}
-				
+
 				// Validate returned user
 				if user != nil && tt.expectedUser != nil {
 					if user.ID != tt.expectedUser.ID {

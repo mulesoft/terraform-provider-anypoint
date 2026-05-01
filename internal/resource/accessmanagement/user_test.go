@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client/accessmanagement"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
@@ -47,7 +48,7 @@ func TestUserResource_Configure(t *testing.T) {
 	res := NewUserResource().(*UserResource)
 
 	server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
-	providerData := &client.ClientConfig{
+	providerData := &client.Config{
 		BaseURL:      server.URL,
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",

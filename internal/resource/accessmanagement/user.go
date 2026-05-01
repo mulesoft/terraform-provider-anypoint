@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client/accessmanagement"
 )
@@ -123,11 +124,11 @@ func (r *UserResource) Configure(_ context.Context, req resource.ConfigureReques
 	}
 
 	// Extract the client configuration
-	config, ok := req.ProviderData.(*client.ClientConfig)
+	config, ok := req.ProviderData.(*client.Config)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.ClientConfig, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *client.Config, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
