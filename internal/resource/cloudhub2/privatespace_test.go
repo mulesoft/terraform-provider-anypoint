@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
+
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client/cloudhub2"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
@@ -16,11 +17,11 @@ import (
 
 func TestNewPrivateSpaceResource(t *testing.T) {
 	r := NewPrivateSpaceResource()
-	
+
 	if r == nil {
 		t.Error("NewPrivateSpaceResource() returned nil")
 	}
-	
+
 	// Verify it implements the expected interfaces
 	var _ resource.Resource = r
 	if _, ok := r.(resource.ResourceWithConfigure); !ok {
@@ -38,27 +39,27 @@ func TestPrivateSpaceResource_Metadata(t *testing.T) {
 
 func TestPrivateSpaceResource_Schema(t *testing.T) {
 	res := NewPrivateSpaceResource()
-	
+
 	requiredAttrs := []string{"name", "region"}
 	optionalAttrs := []string{"enable_iam_role", "enable_egress", "organization_id"}
 	computedAttrs := []string{"id", "status", "root_organization_id", "mule_app_deployment_count", "days_left_for_relaxed_quota", "vpc_migration_in_progress"}
-	
+
 	testutil.TestResourceSchema(t, res, requiredAttrs, optionalAttrs, computedAttrs)
 }
 
 func TestPrivateSpaceResource_Configure(t *testing.T) {
 	res := NewPrivateSpaceResource().(*PrivateSpaceResource)
-	
+
 	// Test with valid provider data
 	server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
-	providerData := &client.ClientConfig{
+	providerData := &client.Config{
 		BaseURL:      server.URL,
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
 	}
-	
+
 	testutil.TestResourceConfigure(t, res, providerData)
-	
+
 	// Verify client is configured
 	if res.client == nil {
 		t.Error("Configure() should set client")
@@ -67,19 +68,19 @@ func TestPrivateSpaceResource_Configure(t *testing.T) {
 
 func TestPrivateSpaceResource_Configure_InvalidProviderData(t *testing.T) {
 	res := NewPrivateSpaceResource().(*PrivateSpaceResource)
-	
+
 	ctx := context.Background()
 	req := resource.ConfigureRequest{
 		ProviderData: "invalid-data", // Wrong type
 	}
 	resp := &resource.ConfigureResponse{}
-	
+
 	res.Configure(ctx, req, resp)
-	
+
 	if !resp.Diagnostics.HasError() {
 		t.Error("Configure() with invalid provider data should have errors")
 	}
-	
+
 	if res.client != nil {
 		t.Error("Configure() with invalid data should not set client")
 	}
@@ -96,7 +97,7 @@ func TestPrivateSpaceResource_Create(t *testing.T) {
 		EnableEgress:       true,
 		EnableIAMRole:      false,
 	}
-	
+
 	tests := []struct {
 		name        string
 		model       PrivateSpaceResourceModel
@@ -133,14 +134,14 @@ func TestPrivateSpaceResource_Create(t *testing.T) {
 			errContains: "failed to create private space",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 				"/runtimefabric/api/organizations/test-org-id/privatespaces": tt.mockHandler,
 			}
 			server := testutil.MockHTTPServer(t, handlers)
-			
+
 			psClient := &cloudhub2.PrivateSpacesClient{
 				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
@@ -149,31 +150,27 @@ func TestPrivateSpaceResource_Create(t *testing.T) {
 					OrgID:      "test-org",
 				},
 			}
-			
+
 			ctx := context.Background()
-			
+
 			createReq := &cloudhub2.CreatePrivateSpaceRequest{
 				Name:   tt.model.Name.ValueString(),
 				Region: tt.model.Region.ValueString(),
 			}
-			
+
 			ps, err := psClient.CreatePrivateSpace(ctx, "test-org-id", createReq)
-			
-			if tt.wantErr {
+
+			switch {
+			case tt.wantErr:
 				if err == nil {
 					t.Error("Expected error but got none")
 				}
-			} else {
-				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
-				}
-				if ps == nil {
-					t.Error("Expected private space but got nil")
-				} else {
-					if ps.Name != tt.model.Name.ValueString() {
-						t.Errorf("Expected name %s, got %s", tt.model.Name.ValueString(), ps.Name)
-					}
-				}
+			case err != nil:
+				t.Errorf("Unexpected error: %v", err)
+			case ps == nil:
+				t.Error("Expected private space but got nil")
+			case ps.Name != tt.model.Name.ValueString():
+				t.Errorf("Expected name %s, got %s", tt.model.Name.ValueString(), ps.Name)
 			}
 		})
 	}
@@ -191,7 +188,7 @@ func TestPrivateSpaceResource_Read(t *testing.T) {
 		DaysLeftForRelaxedQuota: 30,
 		VPCMigrationInProgress:  false,
 	}
-	
+
 	tests := []struct {
 		name        string
 		spaceID     string
@@ -220,14 +217,14 @@ func TestPrivateSpaceResource_Read(t *testing.T) {
 			errContains: "private space not found",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 				"/runtimefabric/api/organizations/test-org-id/privatespaces/" + tt.spaceID: tt.mockHandler,
 			}
 			server := testutil.MockHTTPServer(t, handlers)
-			
+
 			psClient := &cloudhub2.PrivateSpacesClient{
 				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
@@ -236,10 +233,10 @@ func TestPrivateSpaceResource_Read(t *testing.T) {
 					OrgID:      "test-org",
 				},
 			}
-			
+
 			ctx := context.Background()
 			ps, err := psClient.GetPrivateSpace(ctx, "test-org-id", tt.spaceID)
-			
+
 			if tt.wantErr {
 				if err == nil {
 					t.Error("Expected error but got none")
@@ -270,7 +267,7 @@ func TestPrivateSpaceResource_Update(t *testing.T) {
 		Region: "us-east-1",
 		Status: "ACTIVE",
 	}
-	
+
 	tests := []struct {
 		name        string
 		spaceID     string
@@ -300,14 +297,14 @@ func TestPrivateSpaceResource_Update(t *testing.T) {
 			wantErr: true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 				"/runtimefabric/api/organizations/test-org-id/privatespaces/" + tt.spaceID: tt.mockHandler,
 			}
 			server := testutil.MockHTTPServer(t, handlers)
-			
+
 			psClient := &cloudhub2.PrivateSpacesClient{
 				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
@@ -316,15 +313,15 @@ func TestPrivateSpaceResource_Update(t *testing.T) {
 					OrgID:      "test-org",
 				},
 			}
-			
+
 			ctx := context.Background()
 			updateName := tt.updateName
 			updateReq := &cloudhub2.UpdatePrivateSpaceRequest{
 				Name: &updateName,
 			}
-			
+
 			ps, err := psClient.UpdatePrivateSpace(ctx, "test-org-id", tt.spaceID, updateReq)
-			
+
 			if tt.wantErr {
 				if err == nil {
 					t.Error("Expected error but got none")
@@ -370,14 +367,14 @@ func TestPrivateSpaceResource_Delete(t *testing.T) {
 			wantErr: true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 				"/runtimefabric/api/organizations/test-org-id/privatespaces/" + tt.spaceID: tt.mockHandler,
 			}
 			server := testutil.MockHTTPServer(t, handlers)
-			
+
 			psClient := &cloudhub2.PrivateSpacesClient{
 				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
@@ -386,10 +383,10 @@ func TestPrivateSpaceResource_Delete(t *testing.T) {
 					OrgID:      "test-org",
 				},
 			}
-			
+
 			ctx := context.Background()
 			err := psClient.DeletePrivateSpace(ctx, "test-org-id", tt.spaceID)
-			
+
 			if tt.wantErr {
 				if err == nil {
 					t.Error("Expected error but got none")
@@ -438,7 +435,7 @@ func TestPrivateSpaceResource_ImportState(t *testing.T) {
 func TestPrivateSpaceResourceModel_Validation(t *testing.T) {
 	// Test that all model fields exist and are properly typed
 	model := PrivateSpaceResourceModel{}
-	
+
 	// Verify all expected fields exist
 	_ = model.ID
 	_ = model.Name
@@ -462,7 +459,7 @@ func BenchmarkPrivateSpaceResource_Schema(b *testing.B) {
 	res := NewPrivateSpaceResource()
 	ctx := context.Background()
 	req := resource.SchemaRequest{}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		resp := &resource.SchemaResponse{}
@@ -474,7 +471,7 @@ func BenchmarkPrivateSpaceResource_Metadata(b *testing.B) {
 	res := NewPrivateSpaceResource()
 	ctx := context.Background()
 	req := resource.MetadataRequest{}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		resp := &resource.MetadataResponse{}

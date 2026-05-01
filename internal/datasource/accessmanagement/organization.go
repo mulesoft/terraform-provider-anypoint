@@ -34,11 +34,11 @@ type OrganizationDataSourceModel struct {
 	UpdatedAt                       types.String `tfsdk:"updated_at"`
 	OwnerID                         types.String `tfsdk:"owner_id"`
 	ClientID                        types.String `tfsdk:"client_id"`
-	IdProviderID                    types.String `tfsdk:"idprovider_id"`
+	IDProviderID                    types.String `tfsdk:"idprovider_id"`
 	IsFederated                     types.Bool   `tfsdk:"is_federated"`
-	ParentOrganizationIds           types.List   `tfsdk:"parent_organization_ids"`
-	SubOrganizationIds              types.List   `tfsdk:"sub_organization_ids"`
-	TenantOrganizationIds           types.List   `tfsdk:"tenant_organization_ids"`
+	ParentOrganizationIDs           types.List   `tfsdk:"parent_organization_ids"`
+	SubOrganizationIDs              types.List   `tfsdk:"sub_organization_ids"`
+	TenantOrganizationIDs           types.List   `tfsdk:"tenant_organization_ids"`
 	MfaRequired                     types.String `tfsdk:"mfa_required"`
 	IsAutomaticAdminPromotionExempt types.Bool   `tfsdk:"is_automatic_admin_promotion_exempt"`
 	OrgType                         types.String `tfsdk:"org_type"`
@@ -302,7 +302,6 @@ func (d *OrganizationDataSource) Schema(_ context.Context, _ datasource.SchemaRe
 	}
 }
 
-
 // Configure adds the provider configured client to the data source.
 func (d *OrganizationDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	if req.ProviderData == nil {
@@ -310,11 +309,11 @@ func (d *OrganizationDataSource) Configure(_ context.Context, req datasource.Con
 	}
 
 	// Extract the client configuration
-	config, ok := req.ProviderData.(*client.ClientConfig)
+	config, ok := req.ProviderData.(*client.Config)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *client.ClientConfig, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *client.Config, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
@@ -373,7 +372,7 @@ func (d *OrganizationDataSource) Read(ctx context.Context, req datasource.ReadRe
 	data.UpdatedAt = types.StringValue(organization.UpdatedAt)
 	data.OwnerID = types.StringValue(organization.OwnerID)
 	data.ClientID = types.StringValue(organization.ClientID)
-	data.IdProviderID = types.StringValue(organization.IdProviderID)
+	data.IDProviderID = types.StringValue(organization.IDProviderID)
 	data.IsFederated = types.BoolValue(organization.IsFederated)
 	data.IsAutomaticAdminPromotionExempt = types.BoolValue(organization.IsAutomaticAdminPromotionExempt)
 	data.OrgType = types.StringValue(organization.OrgType)
@@ -406,17 +405,17 @@ func (d *OrganizationDataSource) Read(ctx context.Context, req datasource.ReadRe
 	}
 
 	// Convert string slices to Terraform lists
-	parentOrgIds, diags := types.ListValueFrom(ctx, types.StringType, organization.ParentOrganizationIds)
+	parentOrgIDs, diags := types.ListValueFrom(ctx, types.StringType, organization.ParentOrganizationIDs)
 	resp.Diagnostics.Append(diags...)
-	data.ParentOrganizationIds = parentOrgIds
+	data.ParentOrganizationIDs = parentOrgIDs
 
-	subOrgIds, diags := types.ListValueFrom(ctx, types.StringType, organization.SubOrganizationIds)
+	subOrgIDs, diags := types.ListValueFrom(ctx, types.StringType, organization.SubOrganizationIDs)
 	resp.Diagnostics.Append(diags...)
-	data.SubOrganizationIds = subOrgIds
+	data.SubOrganizationIDs = subOrgIDs
 
-	tenantOrgIds, diags := types.ListValueFrom(ctx, types.StringType, organization.TenantOrganizationIds)
+	tenantOrgIDs, diags := types.ListValueFrom(ctx, types.StringType, organization.TenantOrganizationIDs)
 	resp.Diagnostics.Append(diags...)
-	data.TenantOrganizationIds = tenantOrgIds
+	data.TenantOrganizationIDs = tenantOrgIDs
 
 	data.SessionTimeout = types.Int64Value(int64(organization.SessionTimeout))
 
