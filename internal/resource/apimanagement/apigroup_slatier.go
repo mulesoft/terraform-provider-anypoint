@@ -152,11 +152,11 @@ func (r *APIGroupSLATierResource) Configure(_ context.Context, req resource.Conf
 		return
 	}
 
-	cfg, ok := req.ProviderData.(*client.ClientConfig)
+	cfg, ok := req.ProviderData.(*client.Config)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.ClientConfig, got: %T.", req.ProviderData),
+			fmt.Sprintf("Expected *client.Config, got: %T.", req.ProviderData),
 		)
 		return
 	}

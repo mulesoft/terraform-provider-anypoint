@@ -81,26 +81,26 @@ type ApisEntitlement struct {
 	Enabled bool `json:"enabled" tfsdk:"enabled"`
 }
 
-type ApiMonitoringEntitlement struct {
+type APIMonitoringEntitlement struct {
 	Schedules int `json:"schedules" tfsdk:"schedules"`
 }
 
-type ApiCommunityManagerEntitlement struct {
+type APICommunityManagerEntitlement struct {
 	Enabled bool `json:"enabled" tfsdk:"enabled"`
 }
 
-type ApiExperienceHubEntitlement struct {
+type APIExperienceHubEntitlement struct {
 	Enabled bool `json:"enabled" tfsdk:"enabled"`
 }
 
-type ApiQueryEntitlement struct {
+type APIQueryEntitlement struct {
 	Enabled    bool `json:"enabled" tfsdk:"enabled"`
 	Sandbox    int  `json:"sandbox" tfsdk:"sandbox"`
 	ProductSKU int  `json:"productSKU" tfsdk:"product_sku"`
 	Production int  `json:"production" tfsdk:"production"`
 }
 
-type ApiQueryC360Entitlement struct {
+type APIQueryC360Entitlement struct {
 	Enabled bool `json:"enabled" tfsdk:"enabled"`
 }
 
@@ -114,18 +114,18 @@ type IdpEntitlement struct {
 	Enabled bool `json:"enabled" tfsdk:"enabled"`
 }
 
-type ApiGovernanceEntitlement struct {
+type APIGovernanceEntitlement struct {
 	Enabled      bool `json:"enabled" tfsdk:"enabled"`
 	ApisPerMonth int  `json:"apisPerMonth" tfsdk:"apis_per_month"`
 }
 
-type ApiGovernanceDomainEntitlement struct {
+type APIGovernanceDomainEntitlement struct {
 	Domain string `json:"domain" tfsdk:"domain"`
 }
 
 type CrowdEntitlement struct {
-	HideApiManagerDesigner bool `json:"hideApiManagerDesigner" tfsdk:"hide_api_manager_designer"`
-	HideFormerApiPlatform  bool `json:"hideFormerApiPlatform" tfsdk:"hide_former_api_platform"`
+	HideAPIManagerDesigner bool `json:"hideApiManagerDesigner" tfsdk:"hide_api_manager_designer"`
+	HideFormerAPIPlatform  bool `json:"hideFormerApiPlatform" tfsdk:"hide_former_api_platform"`
 	Environments           bool `json:"environments" tfsdk:"environments"`
 }
 
@@ -160,16 +160,16 @@ type RuntimeFabricCloudEntitlement struct {
 	Enabled bool `json:"enabled" tfsdk:"enabled"`
 }
 
-type ApiCatalogEntitlement struct {
+type APICatalogEntitlement struct {
 	Enabled bool `json:"enabled" tfsdk:"enabled"`
 }
 
-type ApiManagerEntitlement struct {
+type APIManagerEntitlement struct {
 	Governance struct {
 		Enabled bool `json:"enabled" tfsdk:"enabled"`
 	} `json:"governance" tfsdk:"governance"`
 	UsageBasedPricing struct {
-		Api struct {
+		API struct {
 			Production struct {
 				Amount int `json:"amount" tfsdk:"amount"`
 			} `json:"production" tfsdk:"production"`
@@ -210,7 +210,7 @@ type UsageBasedPricingEntitlement struct {
 }
 
 type UsageBasedPricingLimitsEntitlement struct {
-	Cpu struct {
+	CPU struct {
 		Base  int `json:"base" tfsdk:"base"`
 		Extra int `json:"extra" tfsdk:"extra"`
 	} `json:"cpu" tfsdk:"cpu"`
@@ -243,28 +243,28 @@ type TelemetryExporterEntitlement struct {
 
 // Entitlements represents the entitlements structure for an organization
 type Entitlements struct {
-	CreateSubOrgs        bool              `json:"createSubOrgs"`
-	CreateEnvironments   bool              `json:"createEnvironments"`
-	GlobalDeployment     bool              `json:"globalDeployment"`
-	VCoresProduction     *VCoreEntitlement `json:"vCoresProduction,omitempty"`
-	VCoresSandbox        *VCoreEntitlement `json:"vCoresSandbox,omitempty"`
-	VCoresDesign         *VCoreEntitlement `json:"vCoresDesign,omitempty"`
-	StaticIps            *VCoreEntitlement `json:"staticIps,omitempty"`
-	Vpcs                 *VCoreEntitlement `json:"vpcs,omitempty"`
-	Vpns                 *VCoreEntitlement `json:"vpns,omitempty"`
-	NetworkConnections   *VCoreEntitlement `json:"networkConnections,omitempty"`
-	Hybrid               *HybridEntitlement                `json:"hybrid,omitempty"`
-	RuntimeFabric        bool                              `json:"runtimeFabric"`
-	FlexGateway          *EnabledEntitlement               `json:"flexGateway,omitempty"`
+	CreateSubOrgs         bool                              `json:"createSubOrgs"`
+	CreateEnvironments    bool                              `json:"createEnvironments"`
+	GlobalDeployment      bool                              `json:"globalDeployment"`
+	VCoresProduction      *VCoreEntitlement                 `json:"vCoresProduction,omitempty"`
+	VCoresSandbox         *VCoreEntitlement                 `json:"vCoresSandbox,omitempty"`
+	VCoresDesign          *VCoreEntitlement                 `json:"vCoresDesign,omitempty"`
+	StaticIps             *VCoreEntitlement                 `json:"staticIps,omitempty"`
+	Vpcs                  *VCoreEntitlement                 `json:"vpcs,omitempty"`
+	Vpns                  *VCoreEntitlement                 `json:"vpns,omitempty"`
+	NetworkConnections    *VCoreEntitlement                 `json:"networkConnections,omitempty"`
+	Hybrid                *HybridEntitlement                `json:"hybrid,omitempty"`
+	RuntimeFabric         bool                              `json:"runtimeFabric"`
+	FlexGateway           *EnabledEntitlement               `json:"flexGateway,omitempty"`
 	WorkerLoggingOverride *WorkerLoggingOverrideEntitlement `json:"workerLoggingOverride,omitempty"`
-	MqMessages           *MqEntitlement                    `json:"mqMessages,omitempty"`
-	MqRequests           *MqEntitlement                    `json:"mqRequests,omitempty"`
-	Gateways             *AssignedEntitlement              `json:"gateways,omitempty"`
-	DesignCenter         *DesignCenterEntitlement          `json:"designCenter,omitempty"`
-	LoadBalancer         *AssignedEntitlement              `json:"loadBalancer,omitempty"`
-	ServiceMesh          *EnabledEntitlement               `json:"serviceMesh,omitempty"`
-	ManagedGatewaySmall  *AssignedEntitlement              `json:"managedGatewaySmall,omitempty"`
-	ManagedGatewayLarge  *AssignedEntitlement              `json:"managedGatewayLarge,omitempty"`
+	MqMessages            *MqEntitlement                    `json:"mqMessages,omitempty"`
+	MqRequests            *MqEntitlement                    `json:"mqRequests,omitempty"`
+	Gateways              *AssignedEntitlement              `json:"gateways,omitempty"`
+	DesignCenter          *DesignCenterEntitlement          `json:"designCenter,omitempty"`
+	LoadBalancer          *AssignedEntitlement              `json:"loadBalancer,omitempty"`
+	ServiceMesh           *EnabledEntitlement               `json:"serviceMesh,omitempty"`
+	ManagedGatewaySmall   *AssignedEntitlement              `json:"managedGatewaySmall,omitempty"`
+	ManagedGatewayLarge   *AssignedEntitlement              `json:"managedGatewayLarge,omitempty"`
 }
 
 // Subscription represents the subscription details for an organization
@@ -317,11 +317,11 @@ type Organization struct {
 	UpdatedAt                       string                 `json:"updatedAt"`
 	OwnerID                         string                 `json:"ownerId"`
 	ClientID                        string                 `json:"clientId"`
-	IdProviderID                    string                 `json:"idprovider_id"`
+	IDProviderID                    string                 `json:"idprovider_id"`
 	IsFederated                     bool                   `json:"isFederated"`
-	ParentOrganizationIds           []string               `json:"parentOrganizationIds"`
-	SubOrganizationIds              []string               `json:"subOrganizationIds"`
-	TenantOrganizationIds           []string               `json:"tenantOrganizationIds"`
+	ParentOrganizationIDs           []string               `json:"parentOrganizationIds"`
+	SubOrganizationIDs              []string               `json:"subOrganizationIds"`
+	TenantOrganizationIDs           []string               `json:"tenantOrganizationIds"`
 	MfaRequired                     string                 `json:"mfaRequired"`
 	IsAutomaticAdminPromotionExempt bool                   `json:"isAutomaticAdminPromotionExempt"`
 	OrgType                         string                 `json:"orgType"`

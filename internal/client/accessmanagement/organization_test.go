@@ -119,14 +119,14 @@ func TestOrganizationClient_CreateOrganization(t *testing.T) {
 			},
 			mockHandler: func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertHTTPRequest(t, r, "POST", "/accounts/api/organizations")
-				
+
 				// Validate request body
 				body := testutil.AssertJSONBody(t, r, "name", "parentOrganizationId", "ownerId", "entitlements")
-				
+
 				if body["name"] != "Test Organization" {
 					t.Errorf("Expected name 'Test Organization', got %v", body["name"])
 				}
-				
+
 				testutil.JSONResponse(w, http.StatusCreated, mockOrganization)
 			},
 			wantErr:     false,
@@ -192,7 +192,7 @@ func TestOrganizationClient_CreateOrganization(t *testing.T) {
 				if org == nil {
 					t.Errorf("CreateOrganization() returned nil organization")
 				}
-				
+
 				// Validate returned organization
 				if org != nil && tt.expectedOrg != nil {
 					if org.ID != tt.expectedOrg.ID {
@@ -313,7 +313,7 @@ func TestOrganizationClient_GetOrganization(t *testing.T) {
 				if org == nil {
 					t.Errorf("GetOrganization() returned nil organization")
 				}
-				
+
 				// Validate returned organization
 				if org != nil && tt.expectedOrg != nil {
 					if org.ID != tt.expectedOrg.ID {
@@ -326,7 +326,7 @@ func TestOrganizationClient_GetOrganization(t *testing.T) {
 						t.Errorf("GetOrganization() Owner.ID = %v, want %v", org.Owner.ID, tt.expectedOrg.Owner.ID)
 					}
 					if org.Entitlements.CreateSubOrgs != tt.expectedOrg.Entitlements.CreateSubOrgs {
-						t.Errorf("GetOrganization() Entitlements.CreateSubOrgs = %v, want %v", 
+						t.Errorf("GetOrganization() Entitlements.CreateSubOrgs = %v, want %v",
 							org.Entitlements.CreateSubOrgs, tt.expectedOrg.Entitlements.CreateSubOrgs)
 					}
 				}
@@ -352,7 +352,7 @@ func TestOrganization_JSONSerialization(t *testing.T) {
 				Reassigned: 5,
 			},
 			VCoresSandbox: &VCoreEntitlement{
-				Assigned:   5,
+				Assigned: 5,
 			},
 		},
 		Subscription: Subscription{
@@ -382,7 +382,7 @@ func TestOrganization_JSONSerialization(t *testing.T) {
 		t.Errorf("Unmarshaled Name = %v, want %v", decoded.Name, org.Name)
 	}
 	if decoded.Entitlements.CreateSubOrgs != org.Entitlements.CreateSubOrgs {
-		t.Errorf("Unmarshaled Entitlements.CreateSubOrgs = %v, want %v", 
+		t.Errorf("Unmarshaled Entitlements.CreateSubOrgs = %v, want %v",
 			decoded.Entitlements.CreateSubOrgs, org.Entitlements.CreateSubOrgs)
 	}
 	if decoded.Entitlements.VCoresProduction == nil || decoded.Entitlements.VCoresProduction.Assigned != org.Entitlements.VCoresProduction.Assigned {
@@ -420,11 +420,11 @@ func TestCreateOrganizationRequest_JSONSerialization(t *testing.T) {
 		t.Errorf("Unmarshaled Name = %v, want %v", decoded.Name, req.Name)
 	}
 	if decoded.ParentOrganizationID != req.ParentOrganizationID {
-		t.Errorf("Unmarshaled ParentOrganizationID = %v, want %v", 
+		t.Errorf("Unmarshaled ParentOrganizationID = %v, want %v",
 			decoded.ParentOrganizationID, req.ParentOrganizationID)
 	}
 	if decoded.Entitlements.CreateSubOrgs != req.Entitlements.CreateSubOrgs {
-		t.Errorf("Unmarshaled Entitlements.CreateSubOrgs = %v, want %v", 
+		t.Errorf("Unmarshaled Entitlements.CreateSubOrgs = %v, want %v",
 			decoded.Entitlements.CreateSubOrgs, req.Entitlements.CreateSubOrgs)
 	}
 }
@@ -477,7 +477,7 @@ func TestOrganizationClient_ErrorHandling(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			client := tt.setupClient()
 			err := tt.operation(client)
-			
+
 			if tt.wantErr && err == nil {
 				t.Errorf("%s expected error, got nil", tt.name)
 			} else if !tt.wantErr && err != nil {

@@ -122,8 +122,8 @@ func (c *UserAnypointClient) authenticate() error {
 
 	// Extract token from response
 	var authResp map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&authResp); err != nil {
-		return fmt.Errorf("failed to decode auth response: %w", err)
+	if decodeErr := json.NewDecoder(resp.Body).Decode(&authResp); decodeErr != nil {
+		return fmt.Errorf("failed to decode auth response: %w", decodeErr)
 	}
 
 	if token, ok := authResp["access_token"].(string); ok {
@@ -133,15 +133,15 @@ func (c *UserAnypointClient) authenticate() error {
 	}
 
 	// Extract OrgID from token - use active organization if available
-	if me, err := c.getMe(); err == nil {
-		orgID, err := c.extractOrgID(me)
-		if err != nil {
-			return fmt.Errorf("failed to extract organization ID: %w", err)
-		}
-		c.OrgID = orgID
-	} else {
+	me, err := c.getMe()
+	if err != nil {
 		return fmt.Errorf("failed to get user info: %w", err)
 	}
+	orgID, err := c.extractOrgID(me)
+	if err != nil {
+		return fmt.Errorf("failed to extract organization ID: %w", err)
+	}
+	c.OrgID = orgID
 
 	return nil
 }
