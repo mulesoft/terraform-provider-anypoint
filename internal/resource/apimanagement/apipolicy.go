@@ -156,11 +156,11 @@ func (r *APIPolicyResource) Configure(_ context.Context, req resource.ConfigureR
 		return
 	}
 
-	config, ok := req.ProviderData.(*client.ClientConfig)
+	config, ok := req.ProviderData.(*client.Config)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.ClientConfig, got: %T.", req.ProviderData),
+			fmt.Sprintf("Expected *client.Config, got: %T.", req.ProviderData),
 		)
 		return
 	}
@@ -261,8 +261,8 @@ func (r *APIPolicyResource) Create(ctx context.Context, req resource.CreateReque
 	}
 
 	var configData map[string]interface{}
-	if err := json.Unmarshal([]byte(configJSON), &configData); err != nil {
-		resp.Diagnostics.AddError("Invalid configuration_data", "Could not parse JSON: "+err.Error())
+	if unmarshalErr := json.Unmarshal([]byte(configJSON), &configData); unmarshalErr != nil {
+		resp.Diagnostics.AddError("Invalid configuration_data", "Could not parse JSON: "+unmarshalErr.Error())
 		return
 	}
 
@@ -370,8 +370,8 @@ func (r *APIPolicyResource) Update(ctx context.Context, req resource.UpdateReque
 	}
 
 	var configData map[string]interface{}
-	if err := json.Unmarshal([]byte(configJSON), &configData); err != nil {
-		resp.Diagnostics.AddError("Invalid configuration_data", "Could not parse JSON: "+err.Error())
+	if unmarshalErr := json.Unmarshal([]byte(configJSON), &configData); unmarshalErr != nil {
+		resp.Diagnostics.AddError("Invalid configuration_data", "Could not parse JSON: "+unmarshalErr.Error())
 		return
 	}
 
