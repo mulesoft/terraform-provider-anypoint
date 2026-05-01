@@ -20,8 +20,10 @@ import (
 )
 
 // Ensure provider defined types fully satisfy framework interfaces.
-var _ resource.Resource = &TeamRolesResource{}
-var _ resource.ResourceWithImportState = &TeamRolesResource{}
+var (
+	_ resource.Resource                = &TeamRolesResource{}
+	_ resource.ResourceWithImportState = &TeamRolesResource{}
+)
 
 func NewTeamRolesResource() resource.Resource {
 	return &TeamRolesResource{}
@@ -46,11 +48,11 @@ type TeamRolesResourceModel struct {
 	ID             types.String `tfsdk:"id"`
 }
 
-func (r *TeamRolesResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+func (r *TeamRolesResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_team_roles"
 }
 
-func (r *TeamRolesResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *TeamRolesResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Resource to manage role assignments for a team in Anypoint Platform.",
 
@@ -103,11 +105,11 @@ func (r *TeamRolesResource) Configure(_ context.Context, req resource.ConfigureR
 		return
 	}
 
-	config, ok := req.ProviderData.(*client.ClientConfig)
+	config, ok := req.ProviderData.(*client.Config)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.ClientConfig, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *client.Config, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
@@ -472,7 +474,7 @@ func (r *TeamRolesResource) createRoleKey(role accessmanagement.TeamRoleAssignme
 	// Add context_params in a deterministic way
 	if role.ContextParams != nil {
 		// Convert map to sorted key=value pairs for consistent comparison
-		var pairs []string
+		pairs := make([]string, 0, len(role.ContextParams))
 		for k, v := range role.ContextParams {
 			pairs = append(pairs, fmt.Sprintf("%s=%v", k, v))
 		}

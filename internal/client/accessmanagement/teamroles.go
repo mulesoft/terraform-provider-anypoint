@@ -23,7 +23,7 @@ type TeamRolesClient struct {
 }
 
 // NewTeamRolesClient creates a new TeamRolesClient
-func NewTeamRolesClient(config *client.ClientConfig) (*TeamRolesClient, error) {
+func NewTeamRolesClient(config *client.Config) (*TeamRolesClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err
