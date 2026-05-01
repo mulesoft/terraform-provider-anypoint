@@ -95,13 +95,13 @@ func (r *PrivateSpaceResource) Schema(_ context.Context, _ resource.SchemaReques
 				Computed:    true,
 				Default:     booldefault.StaticBool(false),
 			},
-		"status": schema.StringAttribute{
-			Description: "The status of the private space.",
-			Computed:    true,
-			PlanModifiers: []planmodifier.String{
-				stringplanmodifier.UseStateForUnknown(),
+			"status": schema.StringAttribute{
+				Description: "The status of the private space.",
+				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
-		},
 			"organization_id": schema.StringAttribute{
 				Description: "The organization ID where the private space will be created. If not specified, uses the organization from provider credentials.",
 				Optional:    true,
@@ -117,27 +117,27 @@ func (r *PrivateSpaceResource) Schema(_ context.Context, _ resource.SchemaReques
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-		"mule_app_deployment_count": schema.Int64Attribute{
-			Description: "The number of mule apps deployed in the private space.",
-			Computed:    true,
-			PlanModifiers: []planmodifier.Int64{
-				int64planmodifier.UseStateForUnknown(),
+			"mule_app_deployment_count": schema.Int64Attribute{
+				Description: "The number of mule apps deployed in the private space.",
+				Computed:    true,
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
 			},
-		},
-		"days_left_for_relaxed_quota": schema.Int64Attribute{
-			Description: "The number of days left for relaxed quota.",
-			Computed:    true,
-			PlanModifiers: []planmodifier.Int64{
-				int64planmodifier.UseStateForUnknown(),
+			"days_left_for_relaxed_quota": schema.Int64Attribute{
+				Description: "The number of days left for relaxed quota.",
+				Computed:    true,
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
 			},
-		},
-		"vpc_migration_in_progress": schema.BoolAttribute{
-			Description: "Whether the VPC migration is in progress.",
-			Computed:    true,
-			PlanModifiers: []planmodifier.Bool{
-				boolplanmodifier.UseStateForUnknown(),
+			"vpc_migration_in_progress": schema.BoolAttribute{
+				Description: "Whether the VPC migration is in progress.",
+				Computed:    true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
-		},
 			"managed_firewall_rules": schema.ListAttribute{
 				Description: "The managed firewall rules for the private space.",
 				Computed:    true,
@@ -172,11 +172,11 @@ func (r *PrivateSpaceResource) Configure(_ context.Context, req resource.Configu
 		return
 	}
 
-	config, ok := req.ProviderData.(*client.ClientConfig)
+	config, ok := req.ProviderData.(*client.Config)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.ClientConfig, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *client.Config, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
