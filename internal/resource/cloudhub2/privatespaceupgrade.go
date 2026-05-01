@@ -54,7 +54,7 @@ func (r *PrivateSpaceUpgradeResource) Metadata(_ context.Context, req resource.M
 // Schema defines the schema for the resource.
 func (r *PrivateSpaceUpgradeResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Schedules an upgrade for a CloudHub 2.0 private space. Scheduled upgrades can be cancelled by deleting this resource.",
+		Description: "Schedules an upgrade for a CloudHub 2.0 private space. Scheduled upgrades can be canceled by deleting this resource.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Description: "The unique identifier for the upgrade operation.",
@@ -107,11 +107,11 @@ func (r *PrivateSpaceUpgradeResource) Configure(_ context.Context, req resource.
 		return
 	}
 
-	config, ok := req.ProviderData.(*client.ClientConfig)
+	config, ok := req.ProviderData.(*client.Config)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.ClientConfig, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *client.Config, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
@@ -203,7 +203,7 @@ func (r *PrivateSpaceUpgradeResource) Read(ctx context.Context, req resource.Rea
 }
 
 // Update updates the resource and sets the updated Terraform state on success.
-func (r *PrivateSpaceUpgradeResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+func (r *PrivateSpaceUpgradeResource) Update(_ context.Context, _ resource.UpdateRequest, resp *resource.UpdateResponse) {
 	// Upgrade operations typically don't support updates
 	// The schema is configured to force replacement for any changes
 	resp.Diagnostics.AddError(

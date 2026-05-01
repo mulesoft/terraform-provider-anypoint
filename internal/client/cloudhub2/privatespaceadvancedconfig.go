@@ -17,7 +17,7 @@ type PrivateSpaceAdvancedConfigClient struct {
 }
 
 // NewPrivateSpaceAdvancedConfigClient creates a new PrivateSpaceAdvancedConfigClient
-func NewPrivateSpaceAdvancedConfigClient(config *client.ClientConfig) (*PrivateSpaceAdvancedConfigClient, error) {
+func NewPrivateSpaceAdvancedConfigClient(config *client.Config) (*PrivateSpaceAdvancedConfigClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err
