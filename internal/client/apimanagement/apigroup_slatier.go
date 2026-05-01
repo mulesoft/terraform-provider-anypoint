@@ -20,7 +20,7 @@ type GroupSLATierClient struct {
 }
 
 // NewGroupSLATierClient creates a new GroupSLATierClient.
-func NewGroupSLATierClient(config *client.ClientConfig) (*GroupSLATierClient, error) {
+func NewGroupSLATierClient(config *client.Config) (*GroupSLATierClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err
@@ -33,12 +33,12 @@ func NewGroupSLATierClient(config *client.ClientConfig) (*GroupSLATierClient, er
 // GroupSLATier is an SLA tier belonging to a group instance. The limits field
 // is named "defaultLimits" in the group instance tier API.
 type GroupSLATier struct {
-	ID             int        `json:"id"`
-	Name           string     `json:"name"`
-	Description    string     `json:"description,omitempty"`
-	AutoApprove    bool       `json:"autoApprove"`
-	Status         string     `json:"status,omitempty"`
-	DefaultLimits  []SLALimit `json:"defaultLimits,omitempty"`
+	ID            int        `json:"id"`
+	Name          string     `json:"name"`
+	Description   string     `json:"description,omitempty"`
+	AutoApprove   bool       `json:"autoApprove"`
+	Status        string     `json:"status,omitempty"`
+	DefaultLimits []SLALimit `json:"defaultLimits,omitempty"`
 }
 
 // --- Request Models ---
