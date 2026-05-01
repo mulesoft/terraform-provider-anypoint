@@ -23,12 +23,11 @@ import (
 	resourceAgentsTools "github.com/mulesoft/terraform-provider-anypoint/internal/resource/agentstools"
 	resourceApiManagement "github.com/mulesoft/terraform-provider-anypoint/internal/resource/apimanagement"
 	resourceCloudHub2 "github.com/mulesoft/terraform-provider-anypoint/internal/resource/cloudhub2"
-	resourceGovernance "github.com/mulesoft/terraform-provider-anypoint/internal/resource/governance"
 	resourceSecretsManagement "github.com/mulesoft/terraform-provider-anypoint/internal/resource/secretsmanagement"
 )
 
 var (
-	_ provider.Provider              = &AnypointProvider{}
+	_ provider.Provider                   = &AnypointProvider{}
 	_ provider.ProviderWithValidateConfig = &AnypointProvider{}
 )
 
@@ -46,12 +45,12 @@ type AnypointProviderModel struct {
 	Timeout      types.Int64  `tfsdk:"timeout"`
 }
 
-func (p *AnypointProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
+func (p *AnypointProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
 	resp.TypeName = "anypoint"
 	resp.Version = p.version
 }
 
-func (p *AnypointProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
+func (p *AnypointProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Interact with Anypoint Platform.",
 		Attributes: map[string]schema.Attribute{
@@ -188,7 +187,7 @@ func (p *AnypointProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
-	clientConfig := &client.ClientConfig{
+	clientConfig := &client.Config{
 		ClientID:     stringValueOrEnv(config.ClientID, "ANYPOINT_CLIENT_ID"),
 		ClientSecret: stringValueOrEnv(config.ClientSecret, "ANYPOINT_CLIENT_SECRET"),
 		Username:     stringValueOrEnv(config.Username, "ANYPOINT_USERNAME"),
@@ -201,8 +200,9 @@ func (p *AnypointProvider) Configure(ctx context.Context, req provider.Configure
 	resp.ResourceData = clientConfig
 }
 
-func (p *AnypointProvider) Resources(ctx context.Context) []func() resource.Resource {
-	resources := []func() resource.Resource{
+func (p *AnypointProvider) Resources(_ context.Context) []func() resource.Resource {
+	resources := make([]func() resource.Resource, 0, 34+len(resourceApiManagement.KnownPolicyTypes()))
+	resources = append(resources, []func() resource.Resource{
 		// CloudHub 2.0 resources
 		resourceCloudHub2.NewPrivateSpaceResource,
 		resourceCloudHub2.NewPrivateNetworkResource,
@@ -210,7 +210,6 @@ func (p *AnypointProvider) Resources(ctx context.Context) []func() resource.Reso
 		resourceCloudHub2.NewPrivateSpaceConnectionResource,
 		resourceCloudHub2.NewFirewallRulesResource,
 		resourceCloudHub2.NewVPNConnectionResource,
-		resourceCloudHub2.NewTransitGatewayResource,
 		resourceCloudHub2.NewPrivateSpaceAssociationResource,
 		resourceCloudHub2.NewPrivateSpaceUpgradeResource,
 		resourceCloudHub2.NewPrivateSpaceAdvancedConfigResource,
@@ -221,9 +220,6 @@ func (p *AnypointProvider) Resources(ctx context.Context) []func() resource.Reso
 		resourceAccessManagement.NewTeamResource,
 		resourceAccessManagement.NewConnectedAppResource,
 		resourceAccessManagement.NewConnectedAppScopesResource,
-		resourceAccessManagement.NewRoleGroupResource,
-		resourceAccessManagement.NewRoleGroupRolesResource,
-		resourceAccessManagement.NewRoleGroupUsersResource,
 		resourceAccessManagement.NewTeamRolesResource,
 		resourceAccessManagement.NewTeamMembersResource,
 		// API Management resources
@@ -238,8 +234,6 @@ func (p *AnypointProvider) Resources(ctx context.Context) []func() resource.Reso
 		// Agents Tools resources
 		resourceAgentsTools.NewAgentInstanceResource,
 		resourceAgentsTools.NewMCPServerResource,
-		// Governance resources
-		resourceGovernance.NewGovernanceProfileResource,
 		// Secrets Management resources
 		resourceSecretsManagement.NewSecretGroupResource,
 		resourceSecretsManagement.NewKeystoreResource,
@@ -248,7 +242,7 @@ func (p *AnypointProvider) Resources(ctx context.Context) []func() resource.Reso
 		resourceSecretsManagement.NewCertificateResource,
 		resourceSecretsManagement.NewCertificatePinsetResource,
 		resourceSecretsManagement.NewSharedSecretResource,
-	}
+	}...)
 
 	for _, policyType := range resourceApiManagement.KnownPolicyTypes() {
 		resources = append(resources, resourceApiManagement.NewKnownPolicyResourceFunc(policyType))
@@ -257,7 +251,7 @@ func (p *AnypointProvider) Resources(ctx context.Context) []func() resource.Reso
 	return resources
 }
 
-func (p *AnypointProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
+func (p *AnypointProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		// Access Management data sources
 		dsAccessManagement.NewEnvironmentDataSource,

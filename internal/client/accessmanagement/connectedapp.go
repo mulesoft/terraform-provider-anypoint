@@ -17,7 +17,7 @@ type ConnectedAppClient struct {
 }
 
 // NewConnectedAppClient creates a new ConnectedAppClient
-func NewConnectedAppClient(config *client.ClientConfig) (*ConnectedAppClient, error) {
+func NewConnectedAppClient(config *client.Config) (*ConnectedAppClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err
@@ -57,8 +57,7 @@ type CreateConnectedAppRequest struct {
 
 // CreateConnectedApp creates a new connected application
 func (c *ConnectedAppClient) CreateConnectedApp(ctx context.Context, req *CreateConnectedAppRequest) (*ConnectedApp, error) {
-	// Marshal the request body
-	body, err := json.Marshal(req)
+	body, err := json.Marshal(req) //nolint:gosec // G117: Field matches secret pattern but this is intentional API serialization
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling request: %w", err)
 	}

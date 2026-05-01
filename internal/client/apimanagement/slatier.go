@@ -15,7 +15,7 @@ type SLATierClient struct {
 	*client.AnypointClient
 }
 
-func NewSLATierClient(config *client.ClientConfig) (*SLATierClient, error) {
+func NewSLATierClient(config *client.Config) (*SLATierClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err

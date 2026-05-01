@@ -50,7 +50,7 @@ func TestNewEnvironmentClient(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
-			
+
 			if tt.config != nil {
 				tt.config.BaseURL = server.URL
 			}
@@ -75,7 +75,6 @@ func TestNewEnvironmentClient(t *testing.T) {
 	}
 }
 
-
 func TestEnvironmentClient_CreateEnvironment(t *testing.T) {
 	mockEnvironment := &Environment{
 		ID:             "test-environment-id",
@@ -96,7 +95,7 @@ func TestEnvironmentClient_CreateEnvironment(t *testing.T) {
 		expectedEnvironment *Environment
 	}{
 		{
-			name: "successful creation",
+			name:  "successful creation",
 			orgID: "test-org-id",
 			request: &CreateEnvironmentRequest{
 				Name:         "Test Environment",
@@ -105,15 +104,15 @@ func TestEnvironmentClient_CreateEnvironment(t *testing.T) {
 			},
 			mockHandler: func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertHTTPRequest(t, r, "POST", "/accounts/api/organizations/test-org-id/environments")
-				
+
 				body := testutil.AssertJSONBody(t, r, "name", "type")
 				if body["name"] != "Test Environment" {
 					t.Errorf("Expected name 'Test Environment', got %v", body["name"])
 				}
-				
+
 				testutil.JSONResponse(w, http.StatusCreated, mockEnvironment)
 			},
-			wantErr: false,
+			wantErr:             false,
 			expectedEnvironment: mockEnvironment,
 		},
 		{
@@ -160,7 +159,7 @@ func TestEnvironmentClient_CreateEnvironment(t *testing.T) {
 				if result == nil {
 					t.Errorf("CreateEnvironment() returned nil environment")
 				}
-				
+
 				// Validate returned environment
 				if result != nil && tt.expectedEnvironment != nil {
 					if result.ID != tt.expectedEnvironment.ID {
@@ -177,8 +176,6 @@ func TestEnvironmentClient_CreateEnvironment(t *testing.T) {
 		})
 	}
 }
-
-
 
 func TestEnvironmentClient_GetEnvironment(t *testing.T) {
 	mockEnvironment := &Environment{
@@ -250,7 +247,7 @@ func TestEnvironmentClient_GetEnvironment(t *testing.T) {
 				if result == nil {
 					t.Errorf("GetEnvironment() returned nil environment")
 				}
-				
+
 				// Validate returned environment
 				if result != nil && tt.expectedEnvironment != nil {
 					if result.ID != tt.expectedEnvironment.ID {
@@ -270,8 +267,6 @@ func TestEnvironmentClient_GetEnvironment(t *testing.T) {
 		})
 	}
 }
-
-
 
 func TestEnvironmentClient_UpdateEnvironment(t *testing.T) {
 	mockEnvironment := &Environment{
@@ -303,12 +298,12 @@ func TestEnvironmentClient_UpdateEnvironment(t *testing.T) {
 			},
 			mockHandler: func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertHTTPRequest(t, r, "PUT", "/accounts/api/organizations/test-org-id/environments/test-environment-id")
-				
+
 				body := testutil.AssertJSONBody(t, r, "name", "type")
 				if body["name"] != "Updated Environment" {
 					t.Errorf("Expected name 'Updated Environment', got %v", body["name"])
 				}
-				
+
 				testutil.JSONResponse(w, http.StatusOK, mockEnvironment)
 			},
 			wantErr: false,
@@ -360,8 +355,6 @@ func TestEnvironmentClient_UpdateEnvironment(t *testing.T) {
 		})
 	}
 }
-
-
 
 func TestEnvironmentClient_DeleteEnvironment(t *testing.T) {
 	tests := []struct {
@@ -424,7 +417,6 @@ func TestEnvironmentClient_DeleteEnvironment(t *testing.T) {
 	}
 }
 
-
 // JSON serialization test
 func TestEnvironment_JSONSerialization(t *testing.T) {
 	env := &Environment{
@@ -462,4 +454,3 @@ func TestEnvironment_JSONSerialization(t *testing.T) {
 		t.Errorf("Unmarshaled IsProduction = %v, want %v", decoded.IsProduction, env.IsProduction)
 	}
 }
-

@@ -17,7 +17,7 @@ type TeamClient struct {
 }
 
 // NewTeamClient creates a new TeamClient
-func NewTeamClient(config *client.ClientConfig) (*TeamClient, error) {
+func NewTeamClient(config *client.Config) (*TeamClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err
