@@ -42,11 +42,11 @@ type PrivateSpaceConnectionResourceModel struct {
 // VPNModel represents a VPN configuration in Terraform (matching official API)
 type VPNModel struct {
 	Name            types.String     `tfsdk:"name"`
-	ConnectionId    types.String     `tfsdk:"connection_id"`
+	ConnectionID    types.String     `tfsdk:"connection_id"`
 	ConnectionName  types.String     `tfsdk:"connection_name"`
 	RemoteAsn       types.Int64      `tfsdk:"remote_asn"`
 	LocalAsn        types.Int64      `tfsdk:"local_asn"`
-	RemoteIpAddress types.String     `tfsdk:"remote_ip_address"`
+	RemoteIPAddress types.String     `tfsdk:"remote_ip_address"`
 	StaticRoutes    []types.String   `tfsdk:"static_routes"`
 	VPNTunnels      []VPNTunnelModel `tfsdk:"vpn_tunnels"`
 }
@@ -132,11 +132,11 @@ func (r *PrivateSpaceConnectionResource) Configure(_ context.Context, req resour
 		return
 	}
 
-	config, ok := req.ProviderData.(*client.ClientConfig)
+	config, ok := req.ProviderData.(*client.Config)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.ClientConfig, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *client.Config, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
