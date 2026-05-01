@@ -18,7 +18,7 @@ type APIPolicyClient struct {
 }
 
 // NewAPIPolicyClient creates a new APIPolicyClient
-func NewAPIPolicyClient(config *client.ClientConfig) (*APIPolicyClient, error) {
+func NewAPIPolicyClient(config *client.Config) (*APIPolicyClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err
@@ -116,17 +116,9 @@ func (c *APIPolicyClient) outboundBasePath(orgID, envID string, apiID int) strin
 		c.BaseURL, orgID, envID, apiID)
 }
 
-// policyBasePath returns the correct base path depending on whether the policy is outbound.
-func (c *APIPolicyClient) policyBasePath(orgID, envID string, apiID int, outbound bool) string {
-	if outbound {
-		return c.outboundBasePath(orgID, envID, apiID)
-	}
-	return c.basePath(orgID, envID, apiID)
-}
-
 // --- internal helpers ---
 
-func (c *APIPolicyClient) doCreatePolicy(ctx context.Context, createURL string, orgID, envID string, request *CreateAPIPolicyRequest) (*APIPolicy, error) {
+func (c *APIPolicyClient) doCreatePolicy(ctx context.Context, createURL, orgID, envID string, request *CreateAPIPolicyRequest) (*APIPolicy, error) {
 	jsonData, err := json.Marshal(request)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal policy request: %w", err)
@@ -156,7 +148,7 @@ func (c *APIPolicyClient) doCreatePolicy(ctx context.Context, createURL string, 
 	return &policy, nil
 }
 
-func (c *APIPolicyClient) doGetPolicy(ctx context.Context, getURL string, orgID, envID string) (*APIPolicy, error) {
+func (c *APIPolicyClient) doGetPolicy(ctx context.Context, getURL, orgID, envID string) (*APIPolicy, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", getURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -184,7 +176,7 @@ func (c *APIPolicyClient) doGetPolicy(ctx context.Context, getURL string, orgID,
 	return &policy, nil
 }
 
-func (c *APIPolicyClient) doUpdatePolicy(ctx context.Context, updateURL string, orgID, envID string, request *UpdateAPIPolicyRequest) (*APIPolicy, error) {
+func (c *APIPolicyClient) doUpdatePolicy(ctx context.Context, updateURL, orgID, envID string, request *UpdateAPIPolicyRequest) (*APIPolicy, error) {
 	jsonData, err := json.Marshal(request)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal policy update request: %w", err)
@@ -217,7 +209,7 @@ func (c *APIPolicyClient) doUpdatePolicy(ctx context.Context, updateURL string, 
 	return &policy, nil
 }
 
-func (c *APIPolicyClient) doDeletePolicy(ctx context.Context, deleteURL string, orgID, envID string) error {
+func (c *APIPolicyClient) doDeletePolicy(ctx context.Context, deleteURL, orgID, envID string) error {
 	req, err := http.NewRequestWithContext(ctx, "DELETE", deleteURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -262,7 +254,7 @@ func (c *APIPolicyClient) DeleteAPIPolicy(ctx context.Context, orgID, envID stri
 
 // --- internal helpers for outbound (separate structs, no pointcutData/order/disabled) ---
 
-func (c *APIPolicyClient) doCreateOutboundPolicy(ctx context.Context, createURL string, orgID, envID string, request *CreateOutboundAPIPolicyRequest) (*APIPolicy, error) {
+func (c *APIPolicyClient) doCreateOutboundPolicy(ctx context.Context, createURL, orgID, envID string, request *CreateOutboundAPIPolicyRequest) (*APIPolicy, error) {
 	jsonData, err := json.Marshal(request)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal outbound policy request: %w", err)
@@ -311,7 +303,7 @@ func (c *APIPolicyClient) doCreateOutboundPolicy(ctx context.Context, createURL 
 	return &policy, nil
 }
 
-func (c *APIPolicyClient) doUpdateOutboundPolicy(ctx context.Context, updateURL string, orgID, envID string, request *UpdateOutboundAPIPolicyRequest) (*APIPolicy, error) {
+func (c *APIPolicyClient) doUpdateOutboundPolicy(ctx context.Context, updateURL, orgID, envID string, request *UpdateOutboundAPIPolicyRequest) (*APIPolicy, error) {
 	jsonData, err := json.Marshal(request)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal outbound policy update request: %w", err)
@@ -406,65 +398,65 @@ type PolicyInfo struct {
 // KnownPolicies maps a human-readable policy type name to its Exchange coordinates.
 // Users can specify policy_type instead of group_id + asset_id.
 var KnownPolicies = map[string]PolicyInfo{
-	"rate-limiting":                    {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "rate-limiting", DefaultVersion: "1.4.1", InboundPolicy: true},
-	"rate-limiting-sla-based":          {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "rate-limiting-sla-based", DefaultVersion: "1.3.1", InboundPolicy: true},
-	"spike-control":                    {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "spike-control", DefaultVersion: "1.2.2", InboundPolicy: true},
-	"ip-blocklist":                     {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "ip-blocklist", DefaultVersion: "1.1.2", InboundPolicy: true},
-	"ip-allowlist":                     {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "ip-allowlist", DefaultVersion: "1.1.2", InboundPolicy: true},
-	"jwt-validation":                   {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "jwt-validation", DefaultVersion: "0.12.0", InboundPolicy: true},
-	"client-id-enforcement":            {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "client-id-enforcement", DefaultVersion: "1.3.3", InboundPolicy: true},
-	"cors":                             {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "cors", DefaultVersion: "1.3.2", InboundPolicy: true},
-	"json-threat-protection":           {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "json-threat-protection", DefaultVersion: "1.2.1", InboundPolicy: true},
-	"xml-threat-protection":            {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "xml-threat-protection", DefaultVersion: "1.2.1", InboundPolicy: true, SupportedTechnologies: []string{"mule4"}},
-	"message-logging":                  {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "message-logging", DefaultVersion: "2.0.2", InboundPolicy: true},
-	"header-injection":                 {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "header-injection", DefaultVersion: "1.3.2", InboundPolicy: true},
-	"header-removal":                   {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "header-removal", DefaultVersion: "1.1.2", InboundPolicy: true},
-	"native-ext-authz":                 {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "native-ext-authz", DefaultVersion: "1.2.1", InboundPolicy: true},
-	"native-ext-proc":                  {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "native-ext-proc", DefaultVersion: "1.1.1", InboundPolicy: true},
-	"sse-logging":                      {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "sse-logging", DefaultVersion: "1.0.1", InboundPolicy: true},
-	"response-timeout":                 {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "response-timeout", DefaultVersion: "1.0.1", InboundPolicy: true},
-	"stream-idle-timeout":              {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "stream-idle-timeout", DefaultVersion: "1.0.1", InboundPolicy: true},
-	"health-check":                     {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "health-check", DefaultVersion: "1.0.1", InboundPolicy: true},
-	"http-caching":                     {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "http-caching", DefaultVersion: "1.1.1", InboundPolicy: true},
-	"oauth2-token-introspection":       {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "oauth2-token-introspection", DefaultVersion: "1.0.1", InboundPolicy: true},
-	"access-block":                     {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "access-block", DefaultVersion: "1.0.0", InboundPolicy: true},
-	"http-basic-authentication":        {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "http-basic-authentication", DefaultVersion: "1.3.2", InboundPolicy: true},
-	"ldap-authentication":              {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "ldap-authentication", DefaultVersion: "1.4.1", InboundPolicy: true},
-	"agent-connection-telemetry":       {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "agent-connection-telemetry", DefaultVersion: "1.0.0", InboundPolicy: true},
-	"tracing":                          {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "tracing", DefaultVersion: "1.1.1", InboundPolicy: true},
-	"injection-protection":             {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "injection-protection", DefaultVersion: "1.0.0", InboundPolicy: true},
-	"dataweave-request-filter":         {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "dataweave-request-filter", DefaultVersion: "1.0.0", InboundPolicy: true},
-	"body-transformation":              {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "body-transformation", DefaultVersion: "1.0.0-20260127.133848", InboundPolicy: true},
-	"header-transformation":            {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "header-transformation", DefaultVersion: "1.0.0-20260127.134148", InboundPolicy: true},
-	"dataweave-body-transformation":    {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "dataweave-body-transformation", DefaultVersion: "1.0.0", InboundPolicy: true},
-	"dataweave-headers-transformation": {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "dataweave-headers-transformation", DefaultVersion: "1.0.0", InboundPolicy: true},
-	"script-evaluation-transformation": {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "script-evaluation-transformation", DefaultVersion: "1.0.0-20260127.133315", InboundPolicy: true},
-	"spec-validation":                              {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "spec-validation", DefaultVersion: "1.0.1", InboundPolicy: true},
-	"external-oauth2-access-token-enforcement":     {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "external-oauth2-access-token-enforcement", DefaultVersion: "1.6.0", InboundPolicy: true, SupportedTechnologies: []string{"mule4"}},
-	"message-logging-outbound":               {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "message-logging-outbound", DefaultVersion: "2.0.3", OutboundPolicy: true},
-	"intask-authorization-code-policy":       {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "intask-authorization-code-policy", DefaultVersion: "1.0.0", OutboundPolicy: true},
-	"credential-injection-oauth2":            {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "credential-injection-oauth2", DefaultVersion: "1.0.1", OutboundPolicy: true},
-	"credential-injection-basic-auth":        {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "credential-injection-basic-auth", DefaultVersion: "1.0.1", OutboundPolicy: true},
-	"credential-injection-oauth2-obo":        {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "credential-injection-oauth2-obo", DefaultVersion: "1.1.0", OutboundPolicy: true},
-	"idle-timeout":                           {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "idle-timeout", DefaultVersion: "1.0.1", OutboundPolicy: true},
-	"circuit-breaker":                        {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "circuit-breaker", DefaultVersion: "1.0.1", OutboundPolicy: true},
-	"intask-authentication-policy":           {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "intask-authentication-policy", DefaultVersion: "1.0.0-20260113204639", OutboundPolicy: true},
-	"native-aws-lambda":                      {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "native-aws-lambda", DefaultVersion: "1.0.1", OutboundPolicy: true},
+	"rate-limiting":                            {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "rate-limiting", DefaultVersion: "1.4.1", InboundPolicy: true},
+	"rate-limiting-sla-based":                  {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "rate-limiting-sla-based", DefaultVersion: "1.3.1", InboundPolicy: true},
+	"spike-control":                            {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "spike-control", DefaultVersion: "1.2.2", InboundPolicy: true},
+	"ip-blocklist":                             {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "ip-blocklist", DefaultVersion: "1.1.2", InboundPolicy: true},
+	"ip-allowlist":                             {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "ip-allowlist", DefaultVersion: "1.1.2", InboundPolicy: true},
+	"jwt-validation":                           {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "jwt-validation", DefaultVersion: "0.12.0", InboundPolicy: true},
+	"client-id-enforcement":                    {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "client-id-enforcement", DefaultVersion: "1.3.3", InboundPolicy: true},
+	"cors":                                     {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "cors", DefaultVersion: "1.3.2", InboundPolicy: true},
+	"json-threat-protection":                   {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "json-threat-protection", DefaultVersion: "1.2.1", InboundPolicy: true},
+	"xml-threat-protection":                    {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "xml-threat-protection", DefaultVersion: "1.2.1", InboundPolicy: true, SupportedTechnologies: []string{"mule4"}},
+	"message-logging":                          {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "message-logging", DefaultVersion: "2.0.2", InboundPolicy: true},
+	"header-injection":                         {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "header-injection", DefaultVersion: "1.3.2", InboundPolicy: true},
+	"header-removal":                           {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "header-removal", DefaultVersion: "1.1.2", InboundPolicy: true},
+	"native-ext-authz":                         {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "native-ext-authz", DefaultVersion: "1.2.1", InboundPolicy: true},
+	"native-ext-proc":                          {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "native-ext-proc", DefaultVersion: "1.1.1", InboundPolicy: true},
+	"sse-logging":                              {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "sse-logging", DefaultVersion: "1.0.1", InboundPolicy: true},
+	"response-timeout":                         {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "response-timeout", DefaultVersion: "1.0.1", InboundPolicy: true},
+	"stream-idle-timeout":                      {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "stream-idle-timeout", DefaultVersion: "1.0.1", InboundPolicy: true},
+	"health-check":                             {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "health-check", DefaultVersion: "1.0.1", InboundPolicy: true},
+	"http-caching":                             {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "http-caching", DefaultVersion: "1.1.1", InboundPolicy: true},
+	"oauth2-token-introspection":               {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "oauth2-token-introspection", DefaultVersion: "1.0.1", InboundPolicy: true},
+	"access-block":                             {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "access-block", DefaultVersion: "1.0.0", InboundPolicy: true},
+	"http-basic-authentication":                {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "http-basic-authentication", DefaultVersion: "1.3.2", InboundPolicy: true},
+	"ldap-authentication":                      {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "ldap-authentication", DefaultVersion: "1.4.1", InboundPolicy: true},
+	"agent-connection-telemetry":               {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "agent-connection-telemetry", DefaultVersion: "1.0.0", InboundPolicy: true},
+	"tracing":                                  {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "tracing", DefaultVersion: "1.1.1", InboundPolicy: true},
+	"injection-protection":                     {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "injection-protection", DefaultVersion: "1.0.0", InboundPolicy: true},
+	"dataweave-request-filter":                 {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "dataweave-request-filter", DefaultVersion: "1.0.0", InboundPolicy: true},
+	"body-transformation":                      {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "body-transformation", DefaultVersion: "1.0.0-20260127.133848", InboundPolicy: true},
+	"header-transformation":                    {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "header-transformation", DefaultVersion: "1.0.0-20260127.134148", InboundPolicy: true},
+	"dataweave-body-transformation":            {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "dataweave-body-transformation", DefaultVersion: "1.0.0", InboundPolicy: true},
+	"dataweave-headers-transformation":         {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "dataweave-headers-transformation", DefaultVersion: "1.0.0", InboundPolicy: true},
+	"script-evaluation-transformation":         {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "script-evaluation-transformation", DefaultVersion: "1.0.0-20260127.133315", InboundPolicy: true},
+	"spec-validation":                          {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "spec-validation", DefaultVersion: "1.0.1", InboundPolicy: true},
+	"external-oauth2-access-token-enforcement": {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "external-oauth2-access-token-enforcement", DefaultVersion: "1.6.0", InboundPolicy: true, SupportedTechnologies: []string{"mule4"}},
+	"message-logging-outbound":                 {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "message-logging-outbound", DefaultVersion: "2.0.3", OutboundPolicy: true},
+	"intask-authorization-code-policy":         {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "intask-authorization-code-policy", DefaultVersion: "1.0.0", OutboundPolicy: true},
+	"credential-injection-oauth2":              {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "credential-injection-oauth2", DefaultVersion: "1.0.1", OutboundPolicy: true},
+	"credential-injection-basic-auth":          {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "credential-injection-basic-auth", DefaultVersion: "1.0.1", OutboundPolicy: true},
+	"credential-injection-oauth2-obo":          {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "credential-injection-oauth2-obo", DefaultVersion: "1.1.0", OutboundPolicy: true},
+	"idle-timeout":                             {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "idle-timeout", DefaultVersion: "1.0.1", OutboundPolicy: true},
+	"circuit-breaker":                          {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "circuit-breaker", DefaultVersion: "1.0.1", OutboundPolicy: true},
+	"intask-authentication-policy":             {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "intask-authentication-policy", DefaultVersion: "1.0.0-20260113204639", OutboundPolicy: true},
+	"native-aws-lambda":                        {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "native-aws-lambda", DefaultVersion: "1.0.1", OutboundPolicy: true},
 	// MCP (Model Context Protocol) policies
-	"mcp-pii-detector":          {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "mcp-pii-detector", DefaultVersion: "1.0.0", InboundPolicy: true},
-	"mcp-schema-validation":     {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "mcp-schema-validation", DefaultVersion: "1.1.0", InboundPolicy: true},
-	"mcp-access-control":        {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "mcp-access-control", DefaultVersion: "1.0.1", InboundPolicy: true},
-	"mcp-support":               {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "mcp-support", DefaultVersion: "1.0.1", InboundPolicy: true},
-	"mcp-global-access-policy":  {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "mcp-global-access-policy", DefaultVersion: "1.0.0", InboundPolicy: true},
-	"mcp-tool-mapping":          {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "mcp-tool-mapping", DefaultVersion: "1.0.0", InboundPolicy: true},
-	"mcp-transcoding-router":    {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "mcp-transcoding-router", DefaultVersion: "1.0.1-20260414150102", InboundPolicy: true},
+	"mcp-pii-detector":         {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "mcp-pii-detector", DefaultVersion: "1.0.0", InboundPolicy: true},
+	"mcp-schema-validation":    {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "mcp-schema-validation", DefaultVersion: "1.1.0", InboundPolicy: true},
+	"mcp-access-control":       {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "mcp-access-control", DefaultVersion: "1.0.1", InboundPolicy: true},
+	"mcp-support":              {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "mcp-support", DefaultVersion: "1.0.1", InboundPolicy: true},
+	"mcp-global-access-policy": {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "mcp-global-access-policy", DefaultVersion: "1.0.0", InboundPolicy: true},
+	"mcp-tool-mapping":         {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "mcp-tool-mapping", DefaultVersion: "1.0.0", InboundPolicy: true},
+	"mcp-transcoding-router":   {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "mcp-transcoding-router", DefaultVersion: "1.0.1-20260414150102", InboundPolicy: true},
 	// LLM Gateway policies
-	"semantic-routing-policy-huggingface":  {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "semantic-routing-policy-huggingface", DefaultVersion: "1.0.0-20260130095514", InboundPolicy: true},
-	"llm-proxy-core-policy":                {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "llm-proxy-core-policy", DefaultVersion: "1.0.0-20260108100848", InboundPolicy: true},
-	"llm-gw-core-policy":                   {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "llm-gw-core-policy", DefaultVersion: "1.0.0-20251230075635", InboundPolicy: true},
-	"llm-proxy-core":                       {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "llm-proxy-core", DefaultVersion: "1.0.0-20260127095720", InboundPolicy: true},
-	"model-based-routing":                  {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "model-based-routing", DefaultVersion: "1.0.0-20260127100214", InboundPolicy: true},
-	"semantic-prompt-guard-policy-openai":   {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "semantic-prompt-guard-policy-openai", DefaultVersion: "1.0.0-20260130084752", InboundPolicy: true},
+	"semantic-routing-policy-huggingface": {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "semantic-routing-policy-huggingface", DefaultVersion: "1.0.0-20260130095514", InboundPolicy: true},
+	"llm-proxy-core-policy":               {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "llm-proxy-core-policy", DefaultVersion: "1.0.0-20260108100848", InboundPolicy: true},
+	"llm-gw-core-policy":                  {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "llm-gw-core-policy", DefaultVersion: "1.0.0-20251230075635", InboundPolicy: true},
+	"llm-proxy-core":                      {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "llm-proxy-core", DefaultVersion: "1.0.0-20260127095720", InboundPolicy: true},
+	"model-based-routing":                 {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "model-based-routing", DefaultVersion: "1.0.0-20260127100214", InboundPolicy: true},
+	"semantic-prompt-guard-policy-openai": {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "semantic-prompt-guard-policy-openai", DefaultVersion: "1.0.0-20260130084752", InboundPolicy: true},
 	// LLM Provider outbound policies
 	"bedrock-llm-provider-policy": {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "bedrock-llm-provider-policy", DefaultVersion: "1.0.1", OutboundPolicy: true},
 	"gemini-llm-provider-policy":  {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "gemini-llm-provider-policy", DefaultVersion: "1.0.0", OutboundPolicy: true},
@@ -514,7 +506,7 @@ func CamelToSnake(s string) string {
 func SnakeToCamel(s string) string {
 	parts := strings.Split(s, "_")
 	for i := 1; i < len(parts); i++ {
-		if len(parts[i]) > 0 {
+		if parts[i] != "" {
 			parts[i] = strings.ToUpper(parts[i][:1]) + parts[i][1:]
 		}
 	}
@@ -526,7 +518,9 @@ func SnakeToCamel(s string) string {
 // PolicySchemaField describes one field in a policy's configuration
 type PolicySchemaField struct {
 	Required bool
-	Type     string // "string", "int", "bool", "array", "object"
+	Type     string   // "string", "int", "bool", "array", "object"
+	Min      *float64 // optional inclusive lower bound (for "int" fields)
+	Max      *float64 // optional inclusive upper bound (for "int" fields)
 }
 
 // KnownPolicySchemas maps assetId → field definitions for built-in validation.
@@ -546,7 +540,7 @@ var KnownPolicySchemas = map[string]map[string]PolicySchemaField{
 	},
 	"spike-control": {
 		"maximumRequests":          {Required: true, Type: "int"},
-		"timePeriodInMilliseconds": {Required: true, Type: "int"},
+		"timePeriodInMilliseconds": {Required: true, Type: "int", Max: float64Ptr(5000)},
 		"delayTimeInMillis":        {Required: true, Type: "int"},
 		"delayAttempts":            {Required: true, Type: "int"},
 		"queuingLimit":             {Required: false, Type: "int"},
@@ -562,51 +556,51 @@ var KnownPolicySchemas = map[string]map[string]PolicySchemaField{
 		"clientSecretExpression": {Required: false, Type: "string"},
 	},
 	"jwt-validation": {
-		"jwtOrigin":                      {Required: true, Type: "string"},
-		"jwtExpression":                  {Required: false, Type: "string"},
-		"signingMethod":                  {Required: false, Type: "string"},
-		"signingKeyLength":               {Required: false, Type: "int"},
-		"jwtKeyOrigin":                   {Required: false, Type: "string"},
-		"textKey":                        {Required: false, Type: "string"},
-		"customKeyExpression":            {Required: false, Type: "string"},
-		"jwksUrl":                        {Required: false, Type: "string"},
-		"jwksServiceTimeToLive":          {Required: false, Type: "int"},
-		"jwksServiceConnectionTimeout":   {Required: false, Type: "int"},
-		"skipClientIdValidation":         {Required: false, Type: "bool"},
-		"clientIdExpression":             {Required: false, Type: "string"},
-		"validateAudClaim":              {Required: false, Type: "bool"},
-		"mandatoryAudClaim":             {Required: false, Type: "bool"},
-		"supportedAudiences":            {Required: false, Type: "string"},
-		"mandatoryExpClaim":             {Required: false, Type: "bool"},
-		"mandatoryNbfClaim":             {Required: false, Type: "bool"},
-		"validateCustomClaim":           {Required: false, Type: "bool"},
-		"claimsToHeaders":               {Required: false, Type: "array"},
-		"mandatoryCustomClaims":         {Required: false, Type: "array"},
-		"nonMandatoryCustomClaims":      {Required: false, Type: "array"},
+		"jwtOrigin":                    {Required: true, Type: "string"},
+		"jwtExpression":                {Required: false, Type: "string"},
+		"signingMethod":                {Required: false, Type: "string"},
+		"signingKeyLength":             {Required: false, Type: "int"},
+		"jwtKeyOrigin":                 {Required: false, Type: "string"},
+		"textKey":                      {Required: false, Type: "string"},
+		"customKeyExpression":          {Required: false, Type: "string"},
+		"jwksUrl":                      {Required: false, Type: "string"},
+		"jwksServiceTimeToLive":        {Required: false, Type: "int"},
+		"jwksServiceConnectionTimeout": {Required: false, Type: "int"},
+		"skipClientIdValidation":       {Required: false, Type: "bool"},
+		"clientIdExpression":           {Required: false, Type: "string"},
+		"validateAudClaim":             {Required: false, Type: "bool"},
+		"mandatoryAudClaim":            {Required: false, Type: "bool"},
+		"supportedAudiences":           {Required: false, Type: "string"},
+		"mandatoryExpClaim":            {Required: false, Type: "bool"},
+		"mandatoryNbfClaim":            {Required: false, Type: "bool"},
+		"validateCustomClaim":          {Required: false, Type: "bool"},
+		"claimsToHeaders":              {Required: false, Type: "array"},
+		"mandatoryCustomClaims":        {Required: false, Type: "array"},
+		"nonMandatoryCustomClaims":     {Required: false, Type: "array"},
 	},
 	"oauth2-access-token-enforcement": {
-		"oauthProvider":       {Required: false, Type: "string"},
-		"scopes":              {Required: false, Type: "string"},
-		"tokenUrl":            {Required: false, Type: "string"},
-		"exposeHeaders":       {Required: false, Type: "bool"},
+		"oauthProvider":          {Required: false, Type: "string"},
+		"scopes":                 {Required: false, Type: "string"},
+		"tokenUrl":               {Required: false, Type: "string"},
+		"exposeHeaders":          {Required: false, Type: "bool"},
 		"skipClientIdValidation": {Required: false, Type: "bool"},
 	},
 	"ip-allowlist": {
-		"ipExpression":          {Required: true, Type: "string"},
-		"ips":                   {Required: true, Type: "array"},
-		"methodsString":         {Required: false, Type: "string"},
+		"ipExpression":  {Required: true, Type: "string"},
+		"ips":           {Required: true, Type: "string_array"},
+		"methodsString": {Required: false, Type: "string"},
 	},
 	"ip-blocklist": {
-		"ipExpression":          {Required: true, Type: "string"},
-		"ips":                   {Required: true, Type: "array"},
-		"methodsString":         {Required: false, Type: "string"},
+		"ipExpression":  {Required: true, Type: "string"},
+		"ips":           {Required: true, Type: "string_array"},
+		"methodsString": {Required: false, Type: "string"},
 	},
 	"json-threat-protection": {
-		"maxContainerDepth":         {Required: false, Type: "int"},
-		"maxStringValueLength":      {Required: false, Type: "int"},
-		"maxObjectEntryNameLength":  {Required: false, Type: "int"},
-		"maxObjectEntryCount":       {Required: false, Type: "int"},
-		"maxArrayElementCount":      {Required: false, Type: "int"},
+		"maxContainerDepth":        {Required: false, Type: "int"},
+		"maxStringValueLength":     {Required: false, Type: "int"},
+		"maxObjectEntryNameLength": {Required: false, Type: "int"},
+		"maxObjectEntryCount":      {Required: false, Type: "int"},
+		"maxArrayElementCount":     {Required: false, Type: "int"},
 	},
 	"message-logging": {
 		"loggingConfiguration": {Required: true, Type: "array"},
@@ -614,7 +608,7 @@ var KnownPolicySchemas = map[string]map[string]PolicySchemaField{
 	"cors": {
 		"publicResource":     {Required: false, Type: "bool"},
 		"supportCredentials": {Required: false, Type: "bool"},
-		"originGroups":       {Required: false, Type: "array"},
+		"originGroups":       {Required: true, Type: "array"},
 	},
 	"header-injection": {
 		"inboundHeaders":  {Required: false, Type: "array"},
@@ -625,31 +619,31 @@ var KnownPolicySchemas = map[string]map[string]PolicySchemaField{
 		"outboundHeaders": {Required: false, Type: "array"},
 	},
 	"native-ext-authz": {
-		"uri":                                       {Required: true, Type: "string"},
-		"serverType":                                 {Required: true, Type: "string"},
-		"requestTimeout":                             {Required: false, Type: "int"},
-		"serverApiVersion":                           {Required: false, Type: "string"},
-		"includePeerCertificate":                     {Required: false, Type: "bool"},
-		"allowedHeaders":                             {Required: false, Type: "array"},
-		"serviceRequestHeadersToAdd":                 {Required: false, Type: "array"},
-		"serviceResponseUpstreamHeaders":             {Required: false, Type: "array"},
-		"serviceResponseUpstreamHeadersToAppend":     {Required: false, Type: "array"},
-		"serviceResponseClientHeaders":               {Required: false, Type: "array"},
-		"serviceResponseClientHeadersOnSuccess":      {Required: false, Type: "array"},
-		"pathPrefix":                                 {Required: false, Type: "string"},
+		"uri":                                    {Required: true, Type: "string"},
+		"serverType":                             {Required: true, Type: "string"},
+		"requestTimeout":                         {Required: false, Type: "int"},
+		"serverApiVersion":                       {Required: false, Type: "string"},
+		"includePeerCertificate":                 {Required: false, Type: "bool"},
+		"allowedHeaders":                         {Required: false, Type: "array"},
+		"serviceRequestHeadersToAdd":             {Required: false, Type: "array"},
+		"serviceResponseUpstreamHeaders":         {Required: false, Type: "array"},
+		"serviceResponseUpstreamHeadersToAppend": {Required: false, Type: "array"},
+		"serviceResponseClientHeaders":           {Required: false, Type: "array"},
+		"serviceResponseClientHeadersOnSuccess":  {Required: false, Type: "array"},
+		"pathPrefix":                             {Required: false, Type: "string"},
 	},
 	"native-ext-proc": {
-		"uri":                   {Required: true, Type: "string"},
-		"messageTimeout":        {Required: false, Type: "int"},
-		"maxMessageTimeout":     {Required: false, Type: "int"},
-		"failureModeAllow":      {Required: false, Type: "bool"},
-		"allowModeOverride":     {Required: false, Type: "bool"},
-		"requestHeaderMode":     {Required: false, Type: "string"},
-		"responseHeaderMode":    {Required: false, Type: "string"},
-		"requestBodyMode":       {Required: false, Type: "string"},
-		"responseBodyMode":      {Required: false, Type: "string"},
-		"requestTrailerMode":    {Required: false, Type: "string"},
-		"responseTrailerMode":   {Required: false, Type: "string"},
+		"uri":                 {Required: true, Type: "string"},
+		"messageTimeout":      {Required: false, Type: "int"},
+		"maxMessageTimeout":   {Required: false, Type: "int"},
+		"failureModeAllow":    {Required: false, Type: "bool"},
+		"allowModeOverride":   {Required: false, Type: "bool"},
+		"requestHeaderMode":   {Required: false, Type: "string"},
+		"responseHeaderMode":  {Required: false, Type: "string"},
+		"requestBodyMode":     {Required: false, Type: "string"},
+		"responseBodyMode":    {Required: false, Type: "string"},
+		"requestTrailerMode":  {Required: false, Type: "string"},
+		"responseTrailerMode": {Required: false, Type: "string"},
 	},
 	"sse-logging": {
 		"logs": {Required: true, Type: "array"},
@@ -713,8 +707,8 @@ var KnownPolicySchemas = map[string]map[string]PolicySchemaField{
 		"maxCommentLength":            {Required: false, Type: "int"},
 	},
 	"injection-protection": {
-		"builtInProtections": {Required: false, Type: "array"},
-		"customProtections":  {Required: false, Type: "array"},
+		"builtInProtections":  {Required: false, Type: "array"},
+		"customProtections":   {Required: false, Type: "array"},
 		"protectPathAndQuery": {Required: false, Type: "bool"},
 		"protectHeaders":      {Required: false, Type: "bool"},
 		"protectBody":         {Required: false, Type: "bool"},
@@ -766,25 +760,25 @@ var KnownPolicySchemas = map[string]map[string]PolicySchemaField{
 		"loggingConfiguration": {Required: true, Type: "array"},
 	},
 	"intask-authorization-code-policy": {
-		"secondaryAuthProvider":        {Required: true, Type: "string"},
-		"authorizationEndpoint":        {Required: true, Type: "string"},
-		"tokenEndpoint":                {Required: true, Type: "string"},
-		"scopes":                       {Required: false, Type: "string"},
-		"redirectUri":                  {Required: true, Type: "string"},
-		"responseType":                 {Required: false, Type: "string"},
-		"codeChallengeMethod":          {Required: false, Type: "string"},
-		"bodyEncoding":                 {Required: false, Type: "string"},
-		"tokenTimeout":                 {Required: false, Type: "int"},
-		"challengeResponseStatusCode":  {Required: false, Type: "int"},
+		"secondaryAuthProvider":       {Required: true, Type: "string"},
+		"authorizationEndpoint":       {Required: true, Type: "string"},
+		"tokenEndpoint":               {Required: true, Type: "string"},
+		"scopes":                      {Required: false, Type: "string"},
+		"redirectUri":                 {Required: true, Type: "string"},
+		"responseType":                {Required: false, Type: "string"},
+		"codeChallengeMethod":         {Required: false, Type: "string"},
+		"bodyEncoding":                {Required: false, Type: "string"},
+		"tokenTimeout":                {Required: false, Type: "int"},
+		"challengeResponseStatusCode": {Required: false, Type: "int"},
 	},
 	"credential-injection-oauth2": {
-		"oauthService":                   {Required: true, Type: "string"},
-		"clientId":                       {Required: true, Type: "string"},
-		"clientSecret":                   {Required: true, Type: "string"},
-		"scope":                          {Required: false, Type: "array"},
-		"overwrite":                      {Required: false, Type: "bool"},
-		"tokenFetchTimeout":              {Required: false, Type: "int"},
-		"allowRequestWithoutCredential":  {Required: false, Type: "bool"},
+		"oauthService":                  {Required: true, Type: "string"},
+		"clientId":                      {Required: true, Type: "string"},
+		"clientSecret":                  {Required: true, Type: "string"},
+		"scope":                         {Required: false, Type: "array"},
+		"overwrite":                     {Required: false, Type: "bool"},
+		"tokenFetchTimeout":             {Required: false, Type: "int"},
+		"allowRequestWithoutCredential": {Required: false, Type: "bool"},
 	},
 	"credential-injection-basic-auth": {
 		"username":     {Required: true, Type: "string"},
@@ -811,27 +805,27 @@ var KnownPolicySchemas = map[string]map[string]PolicySchemaField{
 		"thresholds": {Required: true, Type: "object"},
 	},
 	"intask-authentication-policy": {
-		"secondaryAuthProvider":        {Required: true, Type: "string"},
-		"authorizationEndpoint":        {Required: true, Type: "string"},
-		"tokenEndpoint":                {Required: true, Type: "string"},
-		"scopes":                       {Required: false, Type: "string"},
-		"redirectUri":                  {Required: true, Type: "string"},
-		"responseType":                 {Required: false, Type: "string"},
-		"codeChallengeMethod":          {Required: false, Type: "string"},
-		"tokenAudience":                {Required: false, Type: "string"},
-		"bodyEncoding":                 {Required: false, Type: "string"},
-		"tokenTimeout":                 {Required: false, Type: "int"},
-		"userIdHeader":                 {Required: false, Type: "string"},
-		"userEmailHeader":              {Required: false, Type: "string"},
-		"challengeResponseStatusCode":  {Required: false, Type: "int"},
+		"secondaryAuthProvider":       {Required: true, Type: "string"},
+		"authorizationEndpoint":       {Required: true, Type: "string"},
+		"tokenEndpoint":               {Required: true, Type: "string"},
+		"scopes":                      {Required: false, Type: "string"},
+		"redirectUri":                 {Required: true, Type: "string"},
+		"responseType":                {Required: false, Type: "string"},
+		"codeChallengeMethod":         {Required: false, Type: "string"},
+		"tokenAudience":               {Required: false, Type: "string"},
+		"bodyEncoding":                {Required: false, Type: "string"},
+		"tokenTimeout":                {Required: false, Type: "int"},
+		"userIdHeader":                {Required: false, Type: "string"},
+		"userEmailHeader":             {Required: false, Type: "string"},
+		"challengeResponseStatusCode": {Required: false, Type: "int"},
 	},
 	// credentials is a nested object {accessKeyId, secretAccessKey, sessionToken}; uses DynamicAttribute
 	"native-aws-lambda": {
-		"arn":               {Required: true, Type: "string"},
+		"arn":                {Required: true, Type: "string"},
 		"payloadPassthrough": {Required: false, Type: "bool"},
-		"invocationMode":    {Required: false, Type: "string"},
+		"invocationMode":     {Required: false, Type: "string"},
 		"authenticationMode": {Required: false, Type: "string"},
-		"credentials":       {Required: false, Type: "object"},
+		"credentials":        {Required: false, Type: "object"},
 	},
 	// MCP (Model Context Protocol) policies
 	"mcp-pii-detector": {
@@ -921,9 +915,9 @@ var KnownPolicySchemas = map[string]map[string]PolicySchemaField{
 	},
 	"a2a-schema-validation": {},
 	"a2a-token-rate-limit": {
-		"maximumTokens":              {Required: true, Type: "int"},
-		"timePeriodInMilliseconds":   {Required: true, Type: "int"},
-		"keySelector":               {Required: false, Type: "string"},
+		"maximumTokens":            {Required: true, Type: "int"},
+		"timePeriodInMilliseconds": {Required: true, Type: "int"},
+		"keySelector":              {Required: false, Type: "string"},
 	},
 	"a2a-prompt-decorator": {
 		"textDecorators": {Required: false, Type: "array"},
@@ -956,3 +950,5 @@ func ValidatePolicyConfiguration(assetID string, configData map[string]interface
 
 	return errs
 }
+
+func float64Ptr(v float64) *float64 { return &v }
