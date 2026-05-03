@@ -18,7 +18,7 @@
 terraform {
   required_providers {
     anypoint = {
-      source  = "sf.com/mulesoft/anypoint"
+      source  = "sfprod.com/mulesoft/anypoint"
       version = "0.1.0"
     }
   }
@@ -93,18 +93,10 @@ resource "anypoint_organization" "sub_org" {
       reassigned = 0
     }
 
-    static_ips = {
-      assigned   = 0
-      reassigned = 0
-    }
+    # static_ips and vpns are server-managed; not settable via Terraform.
 
     vpcs = {
       assigned   = 1
-      reassigned = 0
-    }
-
-    vpns = {
-      assigned   = 0
       reassigned = 0
     }
 
@@ -161,18 +153,10 @@ resource "anypoint_organization" "sub_org" {
 #       reassigned = 0
 #     }
 
-#     static_ips = {
-#       assigned   = 0
-#       reassigned = 0
-#     }
+#     # static_ips and vpns are server-managed; not settable via Terraform.
 
 #     vpcs = {
 #       assigned   = 1
-#       reassigned = 0
-#     }
-
-#     vpns = {
-#       assigned   = 0
 #       reassigned = 0
 #     }
 
@@ -222,18 +206,10 @@ resource "anypoint_organization" "sub_org" {
 #       reassigned = 0
 #     }
 
-#     static_ips = {
-#       assigned   = 0
-#       reassigned = 0
-#     }
+#     # static_ips and vpns are server-managed; not settable via Terraform.
 
 #     vpcs = {
 #       assigned   = 1
-#       reassigned = 0
-#     }
-
-#     vpns = {
-#       assigned   = 0
 #       reassigned = 0
 #     }
 
@@ -395,43 +371,29 @@ resource "anypoint_connected_app_scopes" "app_scopes" {
 # NOTE: If normal user credentials are not configured, change to: provider = anypoint.admin
 ###############################################################################
 
-resource "anypoint_private_space" "sandbox_space" {
+resource "anypoint_private_space_config" "sandbox_space" {
   provider = anypoint.normal_user
 
   organization_id = anypoint_organization.sub_org.id
-  name            = "${anypoint_organization.sub_org.name}-sandbox-space"  
-  region          = var.private_space_region
+  name            = "${anypoint_organization.sub_org.name}-sandbox-space"
   enable_egress   = true
   enable_iam_role = false
+
+  network {
+    region         = var.private_space_region
+    cidr_block     = var.network_cidr_block
+    reserved_cidrs = var.network_reserved_cidrs
+  }
 
   depends_on = [
     anypoint_environment.sandbox_suborg,
     anypoint_connected_app_scopes.app_scopes
   ]
-  
+
   lifecycle {
-    ignore_changes = all
+    ignore_changes  = all
     prevent_destroy = true
   }
-}
-
-###############################################################################
-# Step 5 – Create Private Network in Private Space
-# Uses normal_user provider to demonstrate normal user can create private networks
-# NOTE: If normal user credentials are not configured, change to: provider = anypoint.admin
-###############################################################################
-
-resource "anypoint_private_network" "sandbox_network" {
-  provider = anypoint.normal_user
-
-  organization_id  = anypoint_organization.sub_org.id
-  private_space_id = anypoint_private_space.sandbox_space.id  
-  region           = var.private_space_region
-  cidr_block       = var.network_cidr_block
-
-  reserved_cidrs = var.network_reserved_cidrs
-
-  depends_on = [anypoint_private_space.sandbox_space]
 }
 
 ###############################################################################
@@ -443,7 +405,7 @@ resource "anypoint_private_network" "sandbox_network" {
 resource "anypoint_private_space_association" "sandbox_space_association" {
   provider = anypoint.normal_user
   organization_id = anypoint_organization.sub_org.id
-  private_space_id = anypoint_private_space.sandbox_space.id
+  private_space_id = anypoint_private_space_config.sandbox_space.id
   associations = [
     {
       organization_id = "all"
@@ -484,26 +446,18 @@ output "connected_app_scopes" {
 }
 
 output "private_space" {
-  description = "Private space details"
+  description = "Private space and network details"
   value = {
-    id                 = anypoint_private_space.sandbox_space.id
-    name               = anypoint_private_space.sandbox_space.name
-    region             = anypoint_private_space.sandbox_space.region
-    status             = anypoint_private_space.sandbox_space.status
-    organization_id    = anypoint_private_space.sandbox_space.organization_id
-    deployment_count   = anypoint_private_space.sandbox_space.mule_app_deployment_count
-  }
-}
-
-output "private_network" {
-  description = "Private network details"
-  value = {
-    id                   = anypoint_private_network.sandbox_network.id
-    name                 = anypoint_private_network.sandbox_network.name
-    cidr_block           = anypoint_private_network.sandbox_network.cidr_block
-    inbound_static_ips   = anypoint_private_network.sandbox_network.inbound_static_ips
-    outbound_static_ips  = anypoint_private_network.sandbox_network.outbound_static_ips
-    dns_target           = anypoint_private_network.sandbox_network.dns_target
+    id               = anypoint_private_space_config.sandbox_space.id
+    name             = anypoint_private_space_config.sandbox_space.name
+    status           = anypoint_private_space_config.sandbox_space.status
+    organization_id  = anypoint_private_space_config.sandbox_space.organization_id
+    deployment_count = anypoint_private_space_config.sandbox_space.mule_app_deployment_count
+    network_region   = anypoint_private_space_config.sandbox_space.network.region
+    cidr_block       = anypoint_private_space_config.sandbox_space.network.cidr_block
+    inbound_static_ips  = anypoint_private_space_config.sandbox_space.network.inbound_static_ips
+    outbound_static_ips = anypoint_private_space_config.sandbox_space.network.outbound_static_ips
+    dns_target          = anypoint_private_space_config.sandbox_space.network.dns_target
   }
 }
 
@@ -513,10 +467,8 @@ output "private_network" {
 
 # 1. Deploy applications to the private space using the environment IDs
 #
-# 2. Configure VPN or Transit Gateway connections to the private network:
+# 2. Configure VPN connections to the private network:
 #    resource "anypoint_vpn_connection" "site_to_site" { ... }
-#    OR
-#    resource "anypoint_transit_gateway" "tgw" { ... }
 #
 # 3. Set up API instances and policies using the environment IDs
 #

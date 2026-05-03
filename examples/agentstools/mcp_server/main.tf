@@ -13,7 +13,7 @@
 terraform {
   required_providers {
     anypoint = {
-      source = "sf.com/mulesoft/anypoint"
+      source = "sfprod.com/mulesoft/anypoint"
     }
   }
 }

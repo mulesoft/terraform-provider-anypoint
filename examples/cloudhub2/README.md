@@ -51,11 +51,6 @@ This directory contains examples for managing CloudHub 2.0 resources using Terra
 - **Description**: Manage private space upgrades and version management
 - **API**: `/runtimefabric/api/organizations/{orgId}/privatespaces/{privateSpaceId}/upgrade`
 
-### [Transit Gateway](./transitgateway/)
-- **Resource**: `anypoint_transit_gateway`
-- **Description**: Manage transit gateway configurations for network connectivity
-- **API**: `/runtimefabric/api/organizations/{orgId}/transitgateways`
-
 ### [VPN Connection](./vpnconnection/)
 - **Resource**: `anypoint_vpn_connection`
 - **Data Source**: `anypoint_vpnconnection`
@@ -108,7 +103,6 @@ Private Space (Foundation)
 ├── Private Space Associations
 ├── TLS Context
 ├── Firewall Rules
-├── Transit Gateway
 ├── VPN Connections
 └── Private Space Connections
 ```

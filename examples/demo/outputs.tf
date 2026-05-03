@@ -19,7 +19,7 @@ output "production_environment_id" {
 
 output "private_space_id" {
   description = "Private Space ID"
-  value       = anypoint_private_space.private_space.id
+  value       = anypoint_private_space_config.private_space.id
 }
 
 output "flex_gateway_id" {
@@ -27,22 +27,18 @@ output "flex_gateway_id" {
   value       = anypoint_managed_flexgateway.commerce-gateway.id
 }
 
-output "orders_api_id" {
-  description = "Orders API instance ID in Sandbox"
-  value       = anypoint_api_instance.orders_api.id
-}
+# output "orders_api_id" {
+#   description = "Orders API instance ID in Sandbox"
+#   value       = anypoint_api_instance.orders_api.id
+# }
 
-output "payments_api_id" {
-  description = "Payments API instance ID in Sandbox"
-  value       = anypoint_api_instance.payments_api.id
-}
+# output "payments_api_id" {
+#   description = "Payments API instance ID in Sandbox"
+#   value       = anypoint_api_instance.payments_api.id
+# }
 
-output "promoted_api_id" {
-  description = "Orders API instance ID in Production (after promotion)"
-  value       = anypoint_api_instance_promotion.orders_to_prod.id
-}
+# output "promoted_api_id" {
+#   description = "Orders API instance ID in Production (after promotion)"
+#   value       = anypoint_api_instance_promotion.orders_to_prod.id
+# }
 
-output "api_group_id" {
-  description = "Commerce API Group ID"
-  value       = anypoint_api_group.commerce.id
-}

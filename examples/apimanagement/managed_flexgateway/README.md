@@ -70,7 +70,7 @@ resource "anypoint_managed_flexgateway" "example" {
   target_id       = var.target_id
   runtime_version = "1.9.9"
   release_channel = "lts"  # or "stable", "edge"
-  size            = "medium"  # or "small", "large"
+  size            = "small"  # or "large"
 
   ingress = {
     forward_ssl_session = true
@@ -102,11 +102,10 @@ resource "anypoint_managed_flexgateway" "example" {
 
 ### Gateway Sizes
 
-| Size | CPU | Memory | Use Case |
-|------|-----|--------|----------|
-| **small** | 0.5 vCPU | 512 MB | Development, light traffic |
-| **medium** | 1 vCPU | 1 GB | Standard production workloads |
-| **large** | 2 vCPU | 2 GB | High-traffic production |
+| Size | Use Case |
+|------|----------|
+| **small** | Development, light traffic |
+| **large** | Production workloads |
 
 ### Ingress Configuration
 
@@ -246,7 +245,7 @@ resource "anypoint_managed_flexgateway" "gateway" {
   environment_id  = var.environment_id
   target_id       = var.target_id
   runtime_version = "1.9.9"
-  size            = "medium"
+  size            = "large"
 
   ingress = {
     forward_ssl_session = true
@@ -331,7 +330,7 @@ terraform output complete_gateway_internal_url
 1. **Use LTS Channel** - For production stability
 2. **Pin Runtime Version** - Explicit versions prevent unexpected updates
 3. **Enable Logging** - Forward logs for troubleshooting and monitoring
-4. **Size Appropriately** - Start with medium, scale based on traffic
+4. **Size Appropriately** - Start with small, scale to large based on traffic
 5. **Enable Last Mile Security** - Ensure end-to-end encryption
 6. **Set Appropriate Timeouts** - Balance responsiveness and long operations
 7. **Deploy Multiple Instances** - For high availability
@@ -397,7 +396,7 @@ terraform apply
 
 Change size:
 ```hcl
-size = "large"  # Was "medium"
+size = "large"  # Was "small"
 ```
 
 ### Remove Gateway

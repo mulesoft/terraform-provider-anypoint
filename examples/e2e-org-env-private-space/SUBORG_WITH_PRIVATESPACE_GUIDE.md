@@ -184,7 +184,7 @@ The sub-organization is created with the following entitlements:
 | Static IPs | 2 | Outbound connections |
 | VPCs | 1 | Private space |
 | VPNs | 2 | Site-to-site connections |
-| Network Connections | 3 | Transit Gateway, etc. |
+| Network Connections | 3 | VPN, etc. |
 | Runtime Fabric | Enabled | On-premises runtime |
 | Flex Gateway | Enabled | API gateway |
 
@@ -211,26 +211,7 @@ admin:api_manager           # API Manager administration
 
 ## Post-Deployment Tasks
 
-### 1. Assign Organization Administrator Role
-
-The admin user needs to be assigned to the Organization Administrator role group:
-
-```hcl
-# Find the Organization Administrator role group ID for the sub-org
-data "anypoint_rolegroups" "org_admin" {
-  organization_id = anypoint_organization.sub_org.id
-  name            = "Organization Administrator"
-}
-
-# Assign the admin user to the role group
-resource "anypoint_rolegroup_users" "org_admin_assignment" {
-  organization_id = anypoint_organization.sub_org.id
-  rolegroup_id    = data.anypoint_rolegroups.org_admin.id
-  user_ids        = [anypoint_user.sub_org_admin.id]
-}
-```
-
-### 2. Configure VPN or Transit Gateway
+### 1. Configure VPN
 
 Connect your on-premises network to the private space:
 
@@ -249,14 +230,6 @@ resource "anypoint_vpn_connection" "site_to_site" {
       vpn_tunnels       = [...]
     }
   ]
-}
-
-# Option 2: Transit Gateway
-resource "anypoint_transit_gateway" "tgw" {
-  private_space_id = anypoint_private_space.production_space.id
-  organization_id  = anypoint_organization.sub_org.id
-  aws_account_id   = "123456789012"
-  regions          = ["us-east-1"]
 }
 ```
 
@@ -311,8 +284,7 @@ Reserve CIDR ranges for specific purposes:
 ```hcl
 network_reserved_cidrs = [
   "10.111.1.0/24",   # Reserved for VPN
-  "10.111.2.0/24",   # Reserved for Transit Gateway
-  "10.111.3.0/24"    # Reserved for future use
+  "10.111.2.0/24"    # Reserved for future use
 ]
 ```
 
@@ -397,7 +369,7 @@ terraform destroy -var-file=terraform.tfvars
 ## Next Steps
 
 1. ✅ Configure firewall rules for the private space
-2. ✅ Set up VPN or Transit Gateway connectivity
+2. ✅ Set up VPN connectivity
 3. ✅ Deploy Mule applications
 4. ✅ Create API instances and policies
 5. ✅ Configure monitoring and alerting

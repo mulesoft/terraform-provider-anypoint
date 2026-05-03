@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     anypoint = {
-      source = "sf.com/mulesoft/anypoint"
+      source = "sfprod.com/mulesoft/anypoint"
       version = "0.1.0"
     }
   }
@@ -24,6 +24,15 @@ resource "anypoint_environment" "my_env" {
   name            = var.environment_name
   type            = var.environment_type
   is_production   = var.is_production
+}
+
+# Create a design environment
+resource "anypoint_environment" "my_env_1" {
+  provider = anypoint.admin
+  organization_id = var.organization_id
+  name            = "${var.environment_name}-1"
+  type            = "production"
+  is_production   = true
 }
 
 # Output the environment details

@@ -21,7 +21,7 @@
 terraform {
   required_providers {
     anypoint = {
-      source = "sf.com/mulesoft/anypoint"
+      source = "sfprod.com/mulesoft/anypoint"
     }
   }
 }
@@ -66,10 +66,9 @@ resource "anypoint_organization" "commerce_bu" {
     vcores_production   = { assigned = 1, reassigned = 0 }
     vcores_sandbox      = { assigned = 1, reassigned = 0 }
     vcores_design       = { assigned = 1, reassigned = 0 }
-    static_ips          = { assigned = 0, reassigned = 0 }
     vpcs                = { assigned = 1, reassigned = 0 }
-    vpns                = { assigned = 0, reassigned = 0 }
     network_connections = { assigned = 1, reassigned = 0 }
+    # static_ips and vpns are server-managed; not settable via Terraform.
   }
 }
 
@@ -121,25 +120,18 @@ resource "anypoint_connected_app_scopes" "app_permissions" {
   ]
 }
 
-# 2b. Provision a Private Space for workload isolation
-resource "anypoint_private_space" "private_space" {
+# 2b. Provision a Private Space with Network for workload isolation
+resource "anypoint_private_space_config" "private_space" {
   organization_id = anypoint_organization.commerce_bu.id
   name            = "commerce-private-space"
-  region          = var.region
   enable_egress   = true
 
+  network {
+    region     = var.region
+    cidr_block = "10.0.0.0/16"
+  }
+
   depends_on = [anypoint_connected_app_scopes.app_permissions]
-}
-
-# 2c. Provision a Private Network for the Private Space
-resource "anypoint_private_network" "sandbox_network" {
-
-  organization_id  = anypoint_organization.commerce_bu.id
-  private_space_id = anypoint_private_space.private_space.id
-  region           = var.region
-  cidr_block       = "10.0.0.0/16"
-
-  depends_on = [anypoint_private_space.private_space]
 }
 
 ###############################################################################
@@ -149,7 +141,7 @@ resource "anypoint_secret_group" "main" {
   environment_id = var.environment_id
   name           = "commerce-secrets-group"
   downloadable   = false
-  depends_on = [anypoint_private_space.private_space]
+  depends_on = [anypoint_private_space_config.private_space]
 }
 
 resource "anypoint_secret_group_keystore" "tls" {
@@ -500,29 +492,12 @@ resource "anypoint_api_instance" "payments_api" {
   depends_on = [anypoint_managed_flexgateway.commerce-gateway]
 }
 
-resource "anypoint_api_group" "commerce" {
-  organization_id = var.parent_organization_id
-  name = "Commerce APIs"
-
-  versions = [
-    {
-      name = "v1"
-      instances = [
-        {
-          environment_id       = var.environment_id
-          group_instance_label = "commerce-api-group"
-          api_instances        = [anypoint_api_instance.orders_api.id, anypoint_api_instance.payments_api.id]
-        }
-      ]
-    }
-  ]
-}
 
 resource "anypoint_managed_flexgateway" "commerce-suborg-gateway" {
   organization_id = anypoint_organization.commerce_bu.id
   environment_id  = anypoint_environment.sandbox.id
   name            = "commerce-suborg-gateway"
-  target_id       = anypoint_private_space.private_space.id
+  target_id       = anypoint_private_space_config.private_space.id
 
-  depends_on = [anypoint_private_space.private_space]
+  depends_on = [anypoint_private_space_config.private_space]
 }

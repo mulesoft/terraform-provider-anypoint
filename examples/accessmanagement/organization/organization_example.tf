@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     anypoint = {
-      source  = "sf.com/mulesoft/anypoint"
+      source  = "sfprod.com/mulesoft/anypoint"
       version = "0.1.0"
     }
   }
@@ -23,6 +23,12 @@ provider "anypoint" {
 }
 
 # Create an organization
+#
+# The `entitlements` block is optional. Every sub-attribute defaults to the
+# zero value (false for booleans, 0 for quotas), so you only need to declare
+# the entitlements you actually want to override. Omitting the block entirely
+# is equivalent to `entitlements = {}` — the Anypoint API will assign defaults
+# and the provider will surface them on refresh.
 resource "anypoint_organization" "example_org" {
   provider = anypoint.admin
 
@@ -31,39 +37,13 @@ resource "anypoint_organization" "example_org" {
   owner_id               = var.owner_user_id
 
   entitlements = {
-    create_sub_orgs     = false
     create_environments = true
-    global_deployment   = false
 
-    vcores_production = {
-      assigned = 0
-    }
-
-    vcores_sandbox = {
-      assigned = 0
-    }
-
-    vcores_design = {
-      assigned = 0
-    }
-
-    vpcs = {
-      assigned = 0
-    }
-
-    network_connections = {
-      assigned = 0
-    }
-
-    managed_gateway_small = {
-      assigned = 0
-    }
-
-    managed_gateway_large = {
-      assigned = 0
-    }
+    # Example: request 2 production vCores. All other quotas default to 0.
+    # vcores_production = {
+    #   assigned = 2
+    # }
   }
-
 }
 
 # Output the organization information

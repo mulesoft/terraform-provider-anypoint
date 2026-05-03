@@ -41,5 +41,5 @@ variable "connected_app_id" {
 variable "target_organization_id" {
   description = "The organization ID to grant scopes for"
   type        = string
-  default     = "542cc7e3-2143-40ce-90e9-cf69da9b4da6"
+  default     = "a02fab4f-4695-4325-882e-f326d1cef704"
 }

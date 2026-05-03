@@ -170,7 +170,7 @@ terraform apply
 
 1. **Deploy workloads** — Use the output `environments.sandbox.id` and `sub_organization.id` when creating CloudHub 2.0 applications or API instances in the new sub-org.
 
-2. **Add VPN or Transit Gateway** — Connect the private network to on-premises infrastructure:
+2. **Add VPN** — Connect the private network to on-premises infrastructure:
    ```hcl
    resource "anypoint_vpn_connection" "site_to_site" {
      private_space_id = anypoint_private_space.sandbox_space.id

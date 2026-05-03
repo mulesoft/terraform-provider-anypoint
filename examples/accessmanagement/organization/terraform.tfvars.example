@@ -30,12 +30,10 @@ vcores_design_assigned        = 0
 vcores_design_reassigned      = 0
 
 # Network Resource Allocations
-static_ips_assigned    = 1
-static_ips_reassigned  = 0
+# NOTE: static_ips and vpns are server-managed by Anypoint and are not
+# settable from Terraform, so no corresponding variables are exposed here.
 vpcs_assigned          = 1
 vpcs_reassigned        = 0
-vpns_assigned          = 1
-vpns_reassigned        = 0
 
 # Network Connection Allocations
 network_connections_assigned    = 0
