@@ -48,7 +48,7 @@ variable "environment_id" {
 variable "api_instance_id" {
   type        = string
   description = "Numeric ID of the API instance to apply policies to"
-  default     = "4677316"
+  default     = "4696122"
 }
 
 # ─────────────────────────────────────────────────────────────
@@ -385,51 +385,51 @@ resource "anypoint_api_policy_http_caching" "http_caching" {
 # ═════════════════════════════════════════════════════════════
 
 # ─── 18. Message Logging (Outbound) ──────────────────────────
-# Outbound policies use the xapi/v1 endpoint and require upstream_ids
-# (the upstream UUID shown in the Flex Gateway routing configuration).
-resource "anypoint_api_policy_message_logging_outbound" "message_logging_outbound" {
-  organization_id = local.org_id
-  environment_id  = local.env_id
-  api_instance_id = local.api_id
-  order           = 18
-
-  # The upstream_ids identify which upstream(s) this outbound policy applies to.
-  # Find this UUID in the API instance's routing configuration.
-  upstream_ids = ["4bb8ebfb-c9ca-4d5a-bdd5-965714a3afa0"]
-
-  configuration = {
-    logging_configuration = [
-      {
-        itemName = "Default configuration"
-        itemData = {
-          message      = "#[attributes.headers['id']]"
-          conditional  = "#[true]"
-          level        = "INFO"
-          firstSection = true
-          secondSection = true
-        }
-      }
-    ]
-  }
-}
+# Outbound policies require valid upstream_ids from the API instance's
+# Flex Gateway routing configuration. Uncomment and set upstream_ids
+# to a real upstream UUID before applying.
+#
+# resource "anypoint_api_policy_message_logging_outbound" "message_logging_outbound" {
+#   organization_id = local.org_id
+#   environment_id  = local.env_id
+#   api_instance_id = local.api_id
+#   order           = 18
+#   upstream_ids    = ["<your-upstream-uuid>"]
+#   configuration = {
+#     logging_configuration = [
+#       {
+#         itemName = "Default configuration"
+#         itemData = {
+#           message       = "#[attributes.headers['id']]"
+#           conditional   = "#[true]"
+#           level         = "INFO"
+#           firstSection  = true
+#           secondSection = true
+#         }
+#       }
+#     ]
+#   }
+# }
 
 # ═════════════════════════════════════════════════════════════
 # SCHEMA / SPEC VALIDATION POLICIES
 # ═════════════════════════════════════════════════════════════
 
 # ─── 17. Schema Validation ───────────────────────────────────
-resource "anypoint_api_policy_spec_validation" "schema_validation" {
-  organization_id = local.org_id
-  environment_id  = local.env_id
-  api_instance_id = local.api_id
-  label           = "spec-validation"
-  order           = 17
-
-  configuration = {
-    block_operation          = true
-    strict_params_validation = true
-  }
-}
+# Spec validation requires an API instance that has a REST or WSDL
+# specification attached. Uncomment when using a spec-backed API.
+#
+# resource "anypoint_api_policy_spec_validation" "schema_validation" {
+#   organization_id = local.org_id
+#   environment_id  = local.env_id
+#   api_instance_id = local.api_id
+#   label           = "spec-validation"
+#   order           = 17
+#   configuration = {
+#     block_operation          = true
+#     strict_params_validation = true
+#   }
+# }
 
 # ═════════════════════════════════════════════════════════════
 # OUTPUTS
@@ -462,8 +462,7 @@ output "policy_summary" {
     caching = {
       http_caching = anypoint_api_policy_http_caching.http_caching.id
     }
-    spec_validation = {
-      schema_validation = anypoint_api_policy_spec_validation.schema_validation.id
-    }
+    # spec_validation and message_logging_outbound are commented out above —
+    # they require a spec-backed API and valid upstream_ids respectively.
   }
 }

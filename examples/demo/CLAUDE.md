@@ -20,7 +20,6 @@ internal/
 │   ├── apimanagement/       # API instances, policies, SLA tiers, alerts
 │   ├── cloudhub2/           # Private spaces, networks, VPNs, firewalls
 │   ├── secretsmanagement/   # Keystores, truststores, certificates, TLS contexts
-│   └── governance/          # API governance profiles
 ├── client/           # API client implementations per domain
 ├── datasource/       # Data source implementations
 └── constants/        # Shared constants and enums

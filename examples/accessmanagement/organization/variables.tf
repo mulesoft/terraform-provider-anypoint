@@ -48,7 +48,7 @@ variable "owner_user_id" {
 variable "sub_org_name" {
   description = "Name of the sub-organization to create"
   type        = string
-  default     = "terraform-suborg-example"
+  default     = "terraform-suborg-example-renamed"
 }
 
 variable "parent_organization_id" {

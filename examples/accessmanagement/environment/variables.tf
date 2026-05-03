@@ -34,13 +34,13 @@ variable "anypoint_base_url" {
 variable "organization_id" {
   description = "Organization ID"
   type        = string
-  default     = "542cc7e3-2143-40ce-90e9-cf69da9b4da6"
+  default     = "a02fab4f-4695-4325-882e-f326d1cef704"
 }
 
 variable "environment_name" {
   description = "Name of the environment to create"
   type        = string
-  default     = "my-second-env"
+  default     = "my-second-env-renamed"
 }
 
 variable "environment_type" {

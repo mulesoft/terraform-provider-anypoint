@@ -113,7 +113,7 @@ variable "vpn_tunnel_2_ptp_cidr" {
 # ── Flex Gateway ────────────────────────────────────────────────────────────
 
 variable "gateway_size" {
-  description = "Flex Gateway replica size (small, medium, large)"
+  description = "Flex Gateway replica size (small, large)"
   type        = string
   default     = "small"
 }
@@ -212,12 +212,4 @@ variable "alert_email" {
   description = "Email address to receive API alerts"
   type        = string
   default     = "admin@example.com"
-}
-
-# ── Governance ───────────────────────────────────────────────────────────────
-
-variable "governance_profile_name" {
-  description = "Name for the API governance profile"
-  type        = string
-  default     = "tf-e2e-governance"
 }

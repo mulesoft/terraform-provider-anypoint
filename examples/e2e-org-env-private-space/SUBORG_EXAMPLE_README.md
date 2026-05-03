@@ -175,23 +175,12 @@ private_network = {
 
 ### 1. Connect On-Premises Network
 
-Choose VPN or Transit Gateway:
-
 ```hcl
-# VPN Connection
 resource "anypoint_vpn_connection" "vpn" {
   private_space_id = anypoint_private_space.production_space.id
   organization_id  = anypoint_organization.sub_org.id
   name             = "on-prem-vpn"
   vpns = [{ ... }]
-}
-
-# OR Transit Gateway
-resource "anypoint_transit_gateway" "tgw" {
-  private_space_id = anypoint_private_space.production_space.id
-  organization_id  = anypoint_organization.sub_org.id
-  aws_account_id   = "123456789012"
-  regions          = ["us-east-1"]
 }
 ```
 
@@ -228,8 +217,7 @@ Reserve subnets for specific purposes:
 ```hcl
 network_reserved_cidrs = [
   "10.111.1.0/24",   # VPN
-  "10.111.2.0/24",   # Transit Gateway
-  "10.111.3.0/24"    # Future use
+  "10.111.2.0/24"    # Future use
 ]
 ```
 

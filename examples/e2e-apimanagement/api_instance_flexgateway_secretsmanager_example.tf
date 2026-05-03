@@ -32,37 +32,28 @@ provider "anypoint" {
 }
 
 ###############################################################################
-# Step 1 – Private Space
+# Step 1 – Private Space + Network (use anypoint_private_space_config)
 ###############################################################################
 
-# resource "anypoint_private_space" "main" {
+# resource "anypoint_private_space_config" "main" {
 #   name            = var.private_space_name
-#   region          = var.region
 #   organization_id = var.organization_id
 #   enable_egress   = true
+#
+#   network {
+#     region     = var.region
+#     cidr_block = var.network_cidr_block
+#   }
 # }
 
 ###############################################################################
-# Step 2 – Private Network
-###############################################################################
-
-# resource "anypoint_private_network" "main" {
-#   private_space_id = anypoint_private_space.main.id
-#   organization_id  = var.organization_id
-#   region           = var.region
-#   cidr_block       = var.network_cidr_block
-# }
-
-###############################################################################
-# Step 3 – VPN Connection
-# Note: depends_on ensures the private network is created before the VPN.
-# If you need an explicit wait, add the hashicorp/time provider and use
-# time_sleep between the network and VPN resources.
+# Step 2 – VPN Connection
+# Note: depends_on ensures the private space config is created before the VPN.
 ###############################################################################
 
 # resource "anypoint_vpn_connection" "site_to_site" {
-#   depends_on       = [anypoint_private_network.main]
-#   private_space_id = anypoint_private_space.main.id
+#   depends_on       = [anypoint_private_space_config.main]
+#   private_space_id = anypoint_private_space_config.main.id
 #   organization_id  = var.organization_id
 #   name             = "${var.private_space_name}-vpn"
 
@@ -1140,47 +1131,6 @@ resource "anypoint_api_instance_alert" "request_count" {
     }
   ]
 }
-
-###############################################################################
-# Step 8 – API Governance Profile
-###############################################################################
-# resource "anypoint_api_governance_profile" "best_practices" {
-#   organization_id = var.organization_id
-#   name            = var.governance_profile_name
-#   description     = "Governance profile created by Terraform comprehensive e2e"
-#   filter          = "scope:http-api"
-
-#   rulesets = [
-#     {
-#       group_id = var.mulesoft_policy_group_id
-#       asset_id = "api-catalog-information-best-practices"
-#       version  = "latest"
-#     },
-#     {
-#       group_id = var.mulesoft_policy_group_id
-#       asset_id = "api-documentation-best-practices"
-#       version  = "latest"
-#     }
-#   ]
-
-#   notification_config = {
-#     enabled = true
-#     notifications = [
-#       {
-#         enabled   = true
-#         condition = "OnFailure"
-#         recipients = [
-#           {
-#             contact_type      = "Publisher"
-#             notification_type = "Email"
-#             value             = ""
-#             label             = ""
-#           }
-#         ]
-#       }
-#     ]
-#   }
-# }
 
 ###############################################################################
 # Step 8 – API Instance Promotion

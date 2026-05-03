@@ -26,6 +26,15 @@ resource "anypoint_environment" "my_env" {
   is_production   = var.is_production
 }
 
+# Create a design environment
+resource "anypoint_environment" "my_env_1" {
+  provider = anypoint.admin
+  organization_id = var.organization_id
+  name            = "${var.environment_name}-1"
+  type            = "production"
+  is_production   = true
+}
+
 # Output the environment details
 output "environment_id" {
   description = "The ID of the created environment"

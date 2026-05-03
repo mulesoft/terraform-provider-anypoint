@@ -117,7 +117,7 @@ variable "network_cidr_block" {
 }
 
 variable "network_reserved_cidrs" {
-  description = "Reserved CIDR blocks for the private network (for VPN, Transit Gateway, etc.)"
+  description = "Reserved CIDR blocks for the private network (for VPN, etc.)"
   type        = list(string)
   default     = []
 }

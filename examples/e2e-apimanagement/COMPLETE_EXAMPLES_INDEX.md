@@ -290,7 +290,6 @@ examples/comprehensive-e2e/
 ```bash
 # 1. Create organizational structure
 terraform apply -target=anypoint_organization.sub_org
-terraform apply -target=anypoint_user.sub_org_admin
 terraform apply -target=anypoint_environment.production
 terraform apply -target=anypoint_environment.sandbox
 

@@ -17,30 +17,19 @@ provider "anypoint" {
   base_url      = var.anypoint_base_url
 }
 
-# First create a private space
-# resource "anypoint_private_space" "private_space" {
-#   name   = "example-private-space-vpn"
-#   region = var.region_id
-# }
-
-# # Then configure its network
-# resource "anypoint_private_network" "private_network" {
-#   private_space_id = anypoint_private_space.private_space.id
-#   region           = var.region_id
-#   cidr_block       = var.cidr_block
-#   # reserved_cidrs   = var.reserved_cidrs
-# }
-
-# # Introduce a delay to ensure the private network is fully initialized
-# resource "time_sleep" "wait_for_network" {
-#   depends_on      = [anypoint_private_network.private_network]
-#   create_duration = "10s"
+# First create a private space with network
+# resource "anypoint_private_space_config" "private_space" {
+#   name = "example-private-space-vpn"
+#   network {
+#     region     = var.region_id
+#     cidr_block = var.cidr_block
+#   }
 # }
 
 # # Create VPN connection
 # resource "anypoint_vpn_connection" "example" {
-#   depends_on       = [time_sleep.wait_for_network]
-#   private_space_id = anypoint_private_space.private_space.id
+#   depends_on       = [anypoint_private_space_config.private_space]
+#   private_space_id = anypoint_private_space_config.private_space.id
 #   name             = var.connection_name
   
 #   vpns = [
@@ -69,22 +58,17 @@ provider "anypoint" {
 # # Outputs
 # output "private_space_id" {
 #   description = "The ID of the private space"
-#   value       = anypoint_private_space.private_space.id
+#   value       = anypoint_private_space_config.private_space.id
 # }
 
 # output "private_space_name" {
 #   description = "The name of the private space"
-#   value       = anypoint_private_space.private_space.name
+#   value       = anypoint_private_space_config.private_space.name
 # }
 
-# output "private_network_id" {
-#   description = "The ID of the private network"
-#   value       = anypoint_private_network.private_network.id
-# }
-
-# output "private_network_cidr" {
+# output "network_cidr" {
 #   description = "The CIDR block of the private network"
-#   value       = anypoint_private_network.private_network.cidr_block
+#   value       = anypoint_private_space_config.private_space.network.cidr_block
 # }
 
 # output "vpn_connection_id" {
@@ -107,32 +91,27 @@ provider "anypoint" {
 #   value       = anypoint_vpn_connection.example.vpns
 # }
 
-# First create a private space
-resource "anypoint_private_space" "private_space_custom_org" {
-  name   = var.private_space_name
-  region = var.region_id
+# Create a private space with network
+resource "anypoint_private_space_config" "private_space_custom_org" {
+  name            = var.private_space_name
   organization_id = var.organization_id
-}
 
-# Then configure its network
-resource "anypoint_private_network" "private_network_custom_org" {
-  private_space_id = anypoint_private_space.private_space_custom_org.id
-  organization_id = var.organization_id
-  region           = var.region_id
-  cidr_block       = "10.0.0.0/22"
-  # reserved_cidrs   = var.reserved_cidrs
+  network {
+    region     = var.region_id
+    cidr_block = "10.0.0.0/22"
+  }
 }
 
 # Introduce a delay to ensure the private network is fully initialized
 resource "time_sleep" "wait_for_network_custom_org" {
-  depends_on      = [anypoint_private_network.private_network_custom_org]
+  depends_on      = [anypoint_private_space_config.private_space_custom_org]
   create_duration = "10s"
 }
 
 # Create VPN connection
 resource "anypoint_vpn_connection" "example_custom_org" {
   depends_on       = [time_sleep.wait_for_network_custom_org]
-  private_space_id = anypoint_private_space.private_space_custom_org.id
+  private_space_id = anypoint_private_space_config.private_space_custom_org.id
   organization_id = var.organization_id
   name             = var.connection_name
   

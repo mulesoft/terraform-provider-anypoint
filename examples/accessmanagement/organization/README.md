@@ -114,6 +114,45 @@ The organization will be created with the following request payload:
 - **Parent Organization**: The parent organization must exist and you must have permissions to create sub-organizations in it
 - **Owner User**: The owner user must exist in the Anypoint Platform and have appropriate permissions
 
+## Importing an Existing Organization
+
+If the organization already exists on Anypoint (e.g. created manually via the
+UI or by a teammate), you can adopt it into Terraform state without
+recreating it.
+
+1. Declare the resource in HCL with the actual `name`, `parent_organization_id`,
+   and `owner_id` the server already has. See [`import_example.tf`](./import_example.tf)
+   for a commented-out stub — uncomment and edit it to your values.
+
+2. Run `terraform import` with the organization's UUID:
+
+   ```bash
+   terraform import anypoint_organization.imported_org <organization-uuid>
+   ```
+
+   e.g.
+
+   ```bash
+   terraform import anypoint_organization.imported_org a02fab4f-4695-4325-882e-f326d1cef704
+   ```
+
+3. Run `terraform plan`. A clean plan means the import succeeded and your HCL
+   matches the server. Any remaining diffs fall into one of two buckets:
+
+   - **Entitlements / Read-Only fields**: those hydrate on the first refresh
+     from the server, no action needed.
+   - **`name` / `parent_organization_id` / `owner_id` differ**: the HCL you
+     wrote in step 1 doesn't match the server. Update the HCL — do not apply
+     blindly. `parent_organization_id` and `owner_id` have `RequiresReplace`,
+     so applying with a mismatched value would destroy and recreate the
+     organization.
+
+On the first refresh the provider derives `parent_organization_id` from the
+tail of the server-returned ancestor chain (`parent_organization_ids`). If
+your organization sits deep in a hierarchy and the derivation picks a
+different ancestor than you expected, just put the value you want into HCL
+and plan again.
+
 ## Troubleshooting
 
 ### Authentication Errors

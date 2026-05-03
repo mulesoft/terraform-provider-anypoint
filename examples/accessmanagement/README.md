@@ -22,17 +22,6 @@ This directory contains examples for managing Anypoint Platform Access Managemen
 - **Description**: Manage Anypoint Platform teams with hierarchical support
 - **API**: `/accounts/api/organizations/{orgId}/teams`
 
-### [Role Group](./rolegroup/)
-- **Resource**: `anypoint_rolegroup`, `anypoint_rolegroup_roles`, `anypoint_rolegroup_users`
-- **Description**: Manage Anypoint Platform role groups, role assignments, and user assignments
-- **API**: `/accounts/api/organizations/{orgId}/rolegroups`
-
-### [User](./user/)
-- **Resource**: `anypoint_user`
-- **Data Source**: `anypoint_user`
-- **Description**: Manage Anypoint Platform users and their attributes
-- **API**: `/accounts/api/organizations/{orgId}/users`
-
 ## Common Setup
 
 All examples in this category require:
