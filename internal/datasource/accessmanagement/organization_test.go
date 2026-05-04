@@ -21,7 +21,6 @@ func TestNewOrganizationDataSource(t *testing.T) {
 	}
 
 	// Verify it implements the expected interfaces
-	var _ datasource.DataSource = dataSource
 	if _, ok := dataSource.(datasource.DataSourceWithConfigure); !ok {
 		t.Error("OrganizationDataSource does not implement DataSourceWithConfigure")
 	}

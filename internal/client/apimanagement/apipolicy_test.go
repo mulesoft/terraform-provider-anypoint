@@ -85,19 +85,19 @@ func TestAPIPolicyClient_CRUD(t *testing.T) {
 	handlers["POST /apimanager/api/v1/organizations/org-123/environments/env-456/apis/100/policies"] = func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(policyResp)
+		_ = json.NewEncoder(w).Encode(policyResp)
 	}
 
 	handlers["GET /apimanager/api/v1/organizations/org-123/environments/env-456/apis/100/policies/1001"] = func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(policyResp)
+		_ = json.NewEncoder(w).Encode(policyResp)
 	}
 
 	updatedResp := policyResp
 	updatedResp.Disabled = true
 	handlers["PATCH /apimanager/api/v1/organizations/org-123/environments/env-456/apis/100/policies/1001"] = func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(updatedResp)
+		_ = json.NewEncoder(w).Encode(updatedResp)
 	}
 
 	handlers["DELETE /apimanager/api/v1/organizations/org-123/environments/env-456/apis/100/policies/1001"] = func(w http.ResponseWriter, r *http.Request) {

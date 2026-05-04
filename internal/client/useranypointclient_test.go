@@ -16,8 +16,8 @@ func TestNewUserAnypointClient(t *testing.T) {
 	originalUsername := os.Getenv("ANYPOINT_ADMIN_USERNAME")
 	originalPassword := os.Getenv("ANYPOINT_ADMIN_PASSWORD")
 	defer func() {
-		os.Setenv("ANYPOINT_ADMIN_USERNAME", originalUsername)
-		os.Setenv("ANYPOINT_ADMIN_PASSWORD", originalPassword)
+		_ = os.Setenv("ANYPOINT_ADMIN_USERNAME", originalUsername)
+		_ = os.Setenv("ANYPOINT_ADMIN_PASSWORD", originalPassword)
 	}()
 
 	tests := []struct {
@@ -115,11 +115,11 @@ func TestNewUserAnypointClient(t *testing.T) {
 			// Set up environment variables
 			if tt.envVars != nil {
 				for key, value := range tt.envVars {
-					os.Setenv(key, value)
+					_ = os.Setenv(key, value)
 				}
 				defer func() {
 					for key := range tt.envVars {
-						os.Unsetenv(key)
+						_ = os.Unsetenv(key)
 					}
 				}()
 			}
@@ -246,7 +246,7 @@ func TestUserAnypointClient_authenticate(t *testing.T) {
 			mockHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(`{"invalid": "json"`))
+				_, _ = w.Write([]byte(`{"invalid": "json"`))
 			},
 			wantErr:     true,
 			errContains: "failed to decode auth response",
@@ -493,7 +493,7 @@ func TestUserAnypointClient_AuthenticationFlow(t *testing.T) {
 
 			// Verify it's using password grant
 			body := make(map[string]interface{})
-			json.NewDecoder(r.Body).Decode(&body)
+			_ = json.NewDecoder(r.Body).Decode(&body)
 
 			if body["grant_type"] != "password" {
 				t.Errorf("Expected password grant, got %v", body["grant_type"])
@@ -547,13 +547,13 @@ func TestUserAnypointClient_EnvironmentVariableHandling(t *testing.T) {
 	originalUsername := os.Getenv("ANYPOINT_ADMIN_USERNAME")
 	originalPassword := os.Getenv("ANYPOINT_ADMIN_PASSWORD")
 	defer func() {
-		os.Setenv("ANYPOINT_ADMIN_USERNAME", originalUsername)
-		os.Setenv("ANYPOINT_ADMIN_PASSWORD", originalPassword)
+		_ = os.Setenv("ANYPOINT_ADMIN_USERNAME", originalUsername)
+		_ = os.Setenv("ANYPOINT_ADMIN_PASSWORD", originalPassword)
 	}()
 
 	// Set test env vars
-	os.Setenv("ANYPOINT_ADMIN_USERNAME", "env-user")
-	os.Setenv("ANYPOINT_ADMIN_PASSWORD", "env-password")
+	_ = os.Setenv("ANYPOINT_ADMIN_USERNAME", "env-user")
+	_ = os.Setenv("ANYPOINT_ADMIN_PASSWORD", "env-password")
 
 	config := &UserClientConfig{
 		ClientID:     "test-client-id",
@@ -565,7 +565,7 @@ func TestUserAnypointClient_EnvironmentVariableHandling(t *testing.T) {
 		"/accounts/api/v2/oauth2/token": func(w http.ResponseWriter, r *http.Request) {
 			// Verify username from env var is used
 			body := make(map[string]interface{})
-			json.NewDecoder(r.Body).Decode(&body)
+			_ = json.NewDecoder(r.Body).Decode(&body)
 
 			if body["username"] != "env-user" {
 				t.Errorf("Expected username from env var 'env-user', got %v", body["username"])

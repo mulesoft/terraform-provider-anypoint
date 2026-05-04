@@ -225,9 +225,10 @@ func buildTruststoreMultipart(request *CreateTruststoreRequest) (*bytes.Buffer, 
 
 	if len(request.TrustStore) > 0 {
 		ext := "pem"
-		if request.Type == "JKS" || request.Type == "JCEKS" {
+		switch request.Type {
+		case "JKS", "JCEKS":
 			ext = "jks"
-		} else if request.Type == "PKCS12" {
+		case "PKCS12":
 			ext = "p12"
 		}
 		part, err := writer.CreateFormFile("trustStore", "truststore."+ext)

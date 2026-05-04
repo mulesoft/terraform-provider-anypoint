@@ -391,7 +391,8 @@ func (r *TLSContextResource) Create(ctx context.Context, req resource.CreateRequ
 		Source: keystoreType,
 	}
 
-	if keystoreType == "PEM" {
+	switch keystoreType {
+	case "PEM":
 		// Validate PEM required fields
 		if data.Certificate.IsNull() || data.Key.IsNull() {
 			resp.Diagnostics.AddError(
@@ -413,7 +414,7 @@ func (r *TLSContextResource) Create(ctx context.Context, req resource.CreateRequ
 			certFilename := data.CertificateFileName.ValueString()
 			keystoreRequest.CertificateFileName = &certFilename
 		}
-	} else if keystoreType == "JKS" {
+	case "JKS":
 		// Validate JKS required fields
 		if data.KeystoreBase64.IsNull() || data.StorePassphrase.IsNull() || data.Alias.IsNull() {
 			resp.Diagnostics.AddError(
