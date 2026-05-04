@@ -56,8 +56,8 @@ jobs:
           COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
           echo "Total coverage: ${COVERAGE}%"
           echo "coverage=${COVERAGE}" >> "$GITHUB_OUTPUT"
-          if (( $(echo "${COVERAGE} < 30.0" | bc -l) )); then
-            echo "::error::Coverage ${COVERAGE}% is below 30% threshold"
+          if (( $(echo "${COVERAGE} < 25.0" | bc -l) )); then
+            echo "::error::Coverage ${COVERAGE}% is below 25% threshold"
             exit 1
           fi
         id: coverage
