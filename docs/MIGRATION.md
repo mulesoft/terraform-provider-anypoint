@@ -120,8 +120,6 @@ provider "anypoint" {
 | — | `anypoint_api_instance_sla_tier` | **New in official** | |
 | — | `anypoint_api_group` | **New in official** | |
 | — | `anypoint_api_group_sla_tier` | **New in official** | |
-| — | `anypoint_api_instance_alert` | **New in official** | |
-| — | `anypoint_api_instance_promotion` | **New in official** | Cross-environment API instance promotion. |
 
 ### CloudHub 2.0 / Networking
 

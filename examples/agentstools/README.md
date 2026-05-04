@@ -263,7 +263,6 @@ If you encounter build errors when working with these resources:
 - **Add Policies**: Secure agents with JWT validation, rate limiting
 - **Configure SLA Tiers**: Enable consumer self-service
 - **Set Up Monitoring**: Add alerts for agent performance
-- **Promote to Production**: Use `anypoint_api_instance_promotion`
 
 ## Related Documentation
 

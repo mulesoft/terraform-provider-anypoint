@@ -10,9 +10,7 @@ Team,Access Management,anypoint_team,CreateTeam(),GetTeam(),UpdateTeam() + Updat
 Team Members,Access Management,anypoint_team_members,AddMembersToTeam(),GetTeamMembers(),RemoveMembersFromTeam() + AddMembersToTeam(),RemoveMembersFromTeam(),
 Team Roles,Access Management,anypoint_team_roles,AssignRolesToTeam(),GetTeamRoles(),RemoveRolesFromTeam() + AssignRolesToTeam(),RemoveRolesFromTeam(),
 User,Access Management,anypoint_user,CreateUser(),GetUser(),UpdateUser(),DeleteUser(),
-Alert,API Management,anypoint_api_instance_alert,CreateAlert(),GetAlert(),UpdateAlert(),DeleteAlert(),
 API Instance,API Management,anypoint_api_instance,CreateAPIInstance() + GetGatewayInfo(),GetAPIInstance(),UpdateAPIInstance(),DeleteAPIInstance(),
-API Instance Promotion,API Management,anypoint_api_instance_promotion,PromoteAPIInstance(),GetAPIInstance(),UpdateAPIInstance(),DeleteAPIInstance(),Only instance_label can be updated
 API Policy,API Management,anypoint_api_policy,CreateAPIPolicy(),GetAPIPolicy(),UpdateAPIPolicy(),DeleteAPIPolicy(),Uses LookupPolicy() and ValidatePolicyConfiguration()
 SLA Tier,API Management,anypoint_api_instance_sla_tier,CreateSLATier(),GetSLATier(),UpdateSLATier(),DeleteSLATier(),
 Managed Flex Gateway,API Management,anypoint_managed_flexgateway,CreateManagedFlexGateway() + GetGatewayVersions() + GetDomains(),GetManagedFlexGateway() + GetDomains(),UpdateManagedFlexGateway(),DeleteManagedFlexGateway(),Auto-selects runtime version and builds ingress URLs

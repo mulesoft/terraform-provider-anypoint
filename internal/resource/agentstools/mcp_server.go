@@ -55,10 +55,10 @@ type MCPServerResourceModel struct {
 
 	GatewayID types.String `tfsdk:"gateway_id"`
 
-	Spec       *SpecModel     `tfsdk:"spec"`
-	Endpoint   *EndpointModel `tfsdk:"endpoint"`
-	Deployment types.Object   `tfsdk:"deployment"`
-	Routing    types.List     `tfsdk:"routing"`
+	Spec       *SpecModel   `tfsdk:"spec"`
+	Endpoint   types.Object `tfsdk:"endpoint"`
+	Deployment types.Object `tfsdk:"deployment"`
+	Routing    types.List   `tfsdk:"routing"`
 }
 
 func NewMCPServerResource() resource.Resource {
@@ -170,6 +170,9 @@ func (r *MCPServerResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				Description: "Endpoint / proxy configuration for the MCP server.",
 				Optional:    true,
 				Computed:    true,
+				PlanModifiers: []planmodifier.Object{
+					objectplanmodifier.UseStateForUnknown(),
+				},
 				Attributes: map[string]schema.Attribute{
 					"deployment_type": schema.StringAttribute{
 						Description: "Deployment type. Valid values: 'HY' (hybrid), 'CH' (CloudHub), 'RF' (Runtime Fabric).",
@@ -455,9 +458,18 @@ func (r *MCPServerResource) Create(ctx context.Context, req resource.CreateReque
 
 	createReq := r.expandCreateRequest(ctx, data)
 
-	instance, err := r.client.CreateMCPServer(ctx, orgID, envID, createReq)
+	created, err := r.client.CreateMCPServer(ctx, orgID, envID, createReq)
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating MCP server", "Could not create MCP server: "+err.Error())
+		return
+	}
+
+	// POST response omits computed fields such as status. GET immediately so
+	// flattenInstance receives a complete response and all computed attributes
+	// are known in state — preventing Terraform from tainting the resource.
+	instance, err := r.client.GetMCPServer(ctx, orgID, envID, created.ID)
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading MCP server after create", "Could not read MCP server ID "+strconv.Itoa(created.ID)+": "+err.Error())
 		return
 	}
 
@@ -475,12 +487,10 @@ func (r *MCPServerResource) Create(ctx context.Context, req resource.CreateReque
 	} else if !plannedRouting.IsNull() {
 		data.Routing = plannedRouting
 	}
-	if plannedEndpoint != nil {
+	if !plannedEndpoint.IsNull() && !plannedEndpoint.IsUnknown() {
 		data.Endpoint = plannedEndpoint
 	}
-	if !plannedDeployment.IsNull() && !plannedDeployment.IsUnknown() {
-		data.Deployment = plannedDeployment
-	}
+	data.Deployment = mergeDeploymentObjects(data.Deployment, plannedDeployment)
 	if !plannedConsumerEndpoint.IsNull() && !plannedConsumerEndpoint.IsUnknown() {
 		data.ConsumerEndpoint = plannedConsumerEndpoint
 	}
@@ -537,12 +547,10 @@ func (r *MCPServerResource) Read(ctx context.Context, req resource.ReadRequest, 
 	} else if !existingRouting.IsNull() && !existingRouting.IsUnknown() {
 		data.Routing = existingRouting
 	}
-	if existingEndpoint != nil {
+	if !existingEndpoint.IsNull() && !existingEndpoint.IsUnknown() {
 		data.Endpoint = existingEndpoint
 	}
-	if !existingDeployment.IsNull() && !existingDeployment.IsUnknown() {
-		data.Deployment = existingDeployment
-	}
+	data.Deployment = mergeDeploymentObjects(data.Deployment, existingDeployment)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
@@ -613,7 +621,7 @@ func (r *MCPServerResource) Update(ctx context.Context, req resource.UpdateReque
 	} else if !plannedRouting.IsNull() {
 		plan.Routing = plannedRouting
 	}
-	if plannedEndpoint != nil {
+	if !plannedEndpoint.IsNull() && !plannedEndpoint.IsUnknown() {
 		plan.Endpoint = plannedEndpoint
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -690,16 +698,16 @@ func (r *MCPServerResource) expandCreateRequest(ctx context.Context, data MCPSer
 		}
 	}
 
-	if data.Endpoint != nil {
+	if ep := endpointFromObject(data.Endpoint); ep != nil {
 		req.Endpoint = &agentstools.MCPServerEndpoint{
-			DeploymentType: data.Endpoint.DeploymentType.ValueString(),
+			DeploymentType: ep.DeploymentType.ValueString(),
 			Type:           "mcp", // MCP Server type
 		}
 
 		technology := data.Technology.ValueString()
 		if technology == "flexGateway" || technology == "" {
-			if !data.Endpoint.BasePath.IsNull() && !data.Endpoint.BasePath.IsUnknown() {
-				basePath := strings.TrimPrefix(data.Endpoint.BasePath.ValueString(), "/")
+			if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
+				basePath := strings.TrimPrefix(ep.BasePath.ValueString(), "/")
 				proxyURI := "http://0.0.0.0:8081/" + basePath
 				req.Endpoint.ProxyURI = &proxyURI
 			} else {
@@ -713,8 +721,8 @@ func (r *MCPServerResource) expandCreateRequest(ctx context.Context, data MCPSer
 			req.Endpoint.MuleVersion4OrAbove = &mule4
 			req.Endpoint.ProxyURI = nil
 
-			if !data.Endpoint.URI.IsNull() && !data.Endpoint.URI.IsUnknown() {
-				uri := data.Endpoint.URI.ValueString()
+			if !ep.URI.IsNull() && !ep.URI.IsUnknown() {
+				uri := ep.URI.ValueString()
 				req.Endpoint.ProxyURI = &uri
 			}
 
@@ -722,8 +730,8 @@ func (r *MCPServerResource) expandCreateRequest(ctx context.Context, data MCPSer
 			req.Endpoint.ReferencesUserDomain = nil
 		}
 
-		if !data.Endpoint.ResponseTimeout.IsNull() && !data.Endpoint.ResponseTimeout.IsUnknown() {
-			rt := int(data.Endpoint.ResponseTimeout.ValueInt64())
+		if !ep.ResponseTimeout.IsNull() && !ep.ResponseTimeout.IsUnknown() {
+			rt := int(ep.ResponseTimeout.ValueInt64())
 			req.Endpoint.ResponseTimeout = &rt
 		}
 	}
@@ -771,16 +779,16 @@ func (r *MCPServerResource) expandUpdateRequest(ctx context.Context, data MCPSer
 		req.InstanceLabel = &il
 	}
 
-	if data.Endpoint != nil {
+	if ep := endpointFromObject(data.Endpoint); ep != nil {
 		req.Endpoint = &agentstools.MCPServerEndpoint{
-			DeploymentType: data.Endpoint.DeploymentType.ValueString(),
+			DeploymentType: ep.DeploymentType.ValueString(),
 			Type:           "mcp", // MCP Server type
 		}
 
 		technology := data.Technology.ValueString()
 		if technology == "flexGateway" || technology == "" {
-			if !data.Endpoint.BasePath.IsNull() && !data.Endpoint.BasePath.IsUnknown() {
-				basePath := strings.TrimPrefix(data.Endpoint.BasePath.ValueString(), "/")
+			if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
+				basePath := strings.TrimPrefix(ep.BasePath.ValueString(), "/")
 				proxyURI := "http://0.0.0.0:8081/" + basePath
 				req.Endpoint.ProxyURI = &proxyURI
 			} else {
@@ -794,8 +802,8 @@ func (r *MCPServerResource) expandUpdateRequest(ctx context.Context, data MCPSer
 			req.Endpoint.MuleVersion4OrAbove = &mule4
 			req.Endpoint.ProxyURI = nil
 
-			if !data.Endpoint.URI.IsNull() && !data.Endpoint.URI.IsUnknown() {
-				uri := data.Endpoint.URI.ValueString()
+			if !ep.URI.IsNull() && !ep.URI.IsUnknown() {
+				uri := ep.URI.ValueString()
 				req.Endpoint.ProxyURI = &uri
 			}
 
@@ -803,8 +811,8 @@ func (r *MCPServerResource) expandUpdateRequest(ctx context.Context, data MCPSer
 			req.Endpoint.ReferencesUserDomain = nil
 		}
 
-		if !data.Endpoint.ResponseTimeout.IsNull() && !data.Endpoint.ResponseTimeout.IsUnknown() {
-			rt := int(data.Endpoint.ResponseTimeout.ValueInt64())
+		if !ep.ResponseTimeout.IsNull() && !ep.ResponseTimeout.IsUnknown() {
+			rt := int(ep.ResponseTimeout.ValueInt64())
 			req.Endpoint.ResponseTimeout = &rt
 		}
 	}
@@ -981,36 +989,39 @@ func (r *MCPServerResource) flattenInstance(_ context.Context, inst *agentstools
 	}
 
 	if inst.Endpoint != nil {
-		data.Endpoint = &EndpointModel{
+		ep := &EndpointModel{
 			DeploymentType: types.StringValue(inst.Endpoint.DeploymentType),
 			Type:           types.StringValue(inst.Endpoint.Type),
 		}
 
-		// Handle technology-specific endpoint fields
 		technology := inst.Technology
 		if technology == "flexGateway" || technology == "" {
 			if inst.Endpoint.ProxyURI != nil && *inst.Endpoint.ProxyURI != "" {
-				basePath := strings.TrimPrefix(*inst.Endpoint.ProxyURI, "http://0.0.0.0:8081/")
-				data.Endpoint.BasePath = types.StringValue(basePath)
+				ep.BasePath = types.StringValue(strings.TrimPrefix(*inst.Endpoint.ProxyURI, "http://0.0.0.0:8081/"))
 			} else {
-				data.Endpoint.BasePath = types.StringNull()
+				ep.BasePath = types.StringNull()
 			}
-			data.Endpoint.URI = types.StringNull()
+			ep.URI = types.StringNull()
 		} else if technology == "mule4" {
 			if inst.Endpoint.ProxyURI != nil && *inst.Endpoint.ProxyURI != "" {
-				data.Endpoint.URI = types.StringValue(*inst.Endpoint.ProxyURI)
+				ep.URI = types.StringValue(*inst.Endpoint.ProxyURI)
 			} else {
-				data.Endpoint.URI = types.StringNull()
+				ep.URI = types.StringNull()
 			}
-			data.Endpoint.BasePath = types.StringNull()
+			ep.BasePath = types.StringNull()
+		} else {
+			ep.BasePath = types.StringNull()
+			ep.URI = types.StringNull()
 		}
 
-		// Common fields
 		if inst.Endpoint.ResponseTimeout != nil {
-			data.Endpoint.ResponseTimeout = types.Int64Value(int64(*inst.Endpoint.ResponseTimeout))
+			ep.ResponseTimeout = types.Int64Value(int64(*inst.Endpoint.ResponseTimeout))
 		} else {
-			data.Endpoint.ResponseTimeout = types.Int64Null()
+			ep.ResponseTimeout = types.Int64Null()
 		}
+		data.Endpoint = endpointToObject(ep)
+	} else {
+		data.Endpoint = types.ObjectNull(endpointAttrTypes)
 	}
 
 	if inst.EndpointURI != "" {

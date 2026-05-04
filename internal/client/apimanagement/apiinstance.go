@@ -197,65 +197,6 @@ func (c *APIInstanceClient) GetGatewayInfo(ctx context.Context, orgID, envID, ga
 	return &gw, nil
 }
 
-// PromoteEntities controls which entities to copy during promotion.
-type PromoteEntities struct {
-	AllEntities bool `json:"allEntities"`
-}
-
-// PromoteAPIInstanceRequest is the payload for promoting an API instance
-// from one environment to another.
-type PromoteAPIInstanceRequest struct {
-	InstanceLabel *string       `json:"instanceLabel"`
-	Promote       PromoteConfig `json:"promote"`
-}
-
-// PromoteConfig holds the promotion source and entity selection.
-type PromoteConfig struct {
-	OriginAPIID int              `json:"originApiId"`
-	Alerts      *PromoteEntities `json:"alerts,omitempty"`
-	Policies    *PromoteEntities `json:"policies,omitempty"`
-	Tiers       *PromoteEntities `json:"tiers,omitempty"`
-}
-
-// PromoteAPIInstance promotes an API instance into the target environment.
-// It hits the same POST /apis endpoint but with a "promote" payload.
-func (c *APIInstanceClient) PromoteAPIInstance(ctx context.Context, orgID, envID string, request *PromoteAPIInstanceRequest) (*APIInstance, error) {
-	url := fmt.Sprintf("%s/apimanager/api/v1/organizations/%s/environments/%s/apis", c.BaseURL, orgID, envID)
-
-	jsonData, err := json.Marshal(request)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal promote request: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.Token)
-	req.Header.Set("X-ANYPNT-ORG-ID", orgID)
-	req.Header.Set("X-ANYPNT-ENV-ID", envID)
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to promote API instance with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var instance APIInstance
-	if err := json.NewDecoder(resp.Body).Decode(&instance); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &instance, nil
-}
-
 // --- CRUD Operations ---
 
 // CreateAPIInstance creates a new API instance in API Manager.

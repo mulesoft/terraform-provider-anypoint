@@ -522,6 +522,8 @@ type PolicySchemaField struct {
 	Min      *float64 // optional inclusive lower bound (for "int" fields)
 	Max      *float64 // optional inclusive upper bound (for "int" fields)
 	Default  *bool    // optional default for bool fields omitted by the user
+	Enum     []string // optional allowed values for "string" fields
+	ElemEnum []string // optional allowed values for each element of "string_array" fields
 }
 
 // KnownPolicySchemas maps assetId → field definitions for built-in validation.
@@ -607,9 +609,10 @@ var KnownPolicySchemas = map[string]map[string]PolicySchemaField{
 		"loggingConfiguration": {Required: true, Type: "array"},
 	},
 	"cors": {
-		"publicResource":     {Required: false, Type: "bool"},
-		"supportCredentials": {Required: false, Type: "bool"},
-		"originGroups":       {Required: true, Type: "array"},
+		"publicResource":       {Required: false, Type: "bool"},
+		"supportCredentials":   {Required: false, Type: "bool"},
+		"originGroups":         {Required: true, Type: "array"},
+		"accessControlMaxAge": {Required: false, Type: "int"},
 	},
 	"header-injection": {
 		"inboundHeaders":  {Required: false, Type: "array"},
@@ -830,14 +833,14 @@ var KnownPolicySchemas = map[string]map[string]PolicySchemaField{
 	},
 	// MCP (Model Context Protocol) policies
 	"mcp-pii-detector": {
-		"entities": {Required: true, Type: "array"},
+		"entities": {Required: true, Type: "string_array", ElemEnum: []string{"Email", "Credit Card", "Phone Number", "US SSN"}},
 	},
 	"mcp-schema-validation": {
 		"validateToolSchema": {Required: false, Type: "bool"},
 	},
 	"mcp-access-control": {
-		"rules":    {Required: true, Type: "array"},
-		"authType": {Required: false, Type: "string"},
+		"rules":    {Required: true, Type: "string_array"},
+		"authType": {Required: false, Type: "string", Enum: []string{"ClientId", "Other"}},
 	},
 	"mcp-support": {},
 	"mcp-global-access-policy": {
@@ -950,6 +953,68 @@ func ValidatePolicyConfiguration(assetID string, configData map[string]interface
 	}
 
 	return errs
+}
+
+// KnownPolicyExpanders maps assetId → a post-expand transformation function.
+// The function receives the already-expanded configurationData map (camelCase keys)
+// and returns the final map to send to the Platform API. Use this for policies
+// whose Platform schema has conditional branches that cannot be expressed in the
+// generic field-type system (e.g. CORS if/else on publicResource).
+var KnownPolicyExpanders = map[string]func(map[string]interface{}) map[string]interface{}{
+	"cors": expandCORSConfiguration,
+}
+
+// expandCORSConfiguration handles the Platform CORS policy's if/else schema:
+//
+//	if   publicResource == true  → originGroups items use methods ([]string)
+//	else publicResource == false → originGroups items need name (string) +
+//	                               allowedMethods ([]{methodName:string})
+//	                               plus top-level accessControlMaxAge (int)
+//
+// Users always write methods as []string in HCL. This function converts them to
+// allowedMethods objects when publicResource is false, so the Platform receives
+// the correct shape for the else-branch.
+func expandCORSConfiguration(cfg map[string]interface{}) map[string]interface{} {
+	isPublic, _ := cfg["publicResource"].(bool)
+	if isPublic {
+		return cfg
+	}
+
+	groups, ok := cfg["originGroups"].([]interface{})
+	if !ok {
+		return cfg
+	}
+
+	for i, g := range groups {
+		group, ok := g.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Map methods []string → allowedMethods []{methodName: string}
+		if methods, ok := group["methods"]; ok {
+			var allowed []interface{}
+			switch mv := methods.(type) {
+			case []interface{}:
+				for _, m := range mv {
+					if s, ok := m.(string); ok {
+						allowed = append(allowed, map[string]interface{}{"methodName": s})
+					}
+				}
+			case []string:
+				for _, s := range mv {
+					allowed = append(allowed, map[string]interface{}{"methodName": s})
+				}
+			}
+			group["allowedMethods"] = allowed
+			delete(group, "methods")
+		}
+
+		groups[i] = group
+	}
+
+	cfg["originGroups"] = groups
+	return cfg
 }
 
 func float64Ptr(v float64) *float64 { return &v }
