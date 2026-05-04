@@ -16,7 +16,7 @@ type TruststoreClient struct {
 	*client.AnypointClient
 }
 
-func NewTruststoreClient(config *client.ClientConfig) (*TruststoreClient, error) {
+func NewTruststoreClient(config *client.Config) (*TruststoreClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err

@@ -15,12 +15,12 @@ func strPtr(s string) *string { return &s }
 func TestNewAPIInstanceClient(t *testing.T) {
 	tests := []struct {
 		name    string
-		config  *client.ClientConfig
+		config  *client.Config
 		wantErr bool
 	}{
 		{
 			name: "valid config",
-			config: &client.ClientConfig{
+			config: &client.Config{
 				ClientID:     "test-client-id",
 				ClientSecret: "test-client-secret",
 			},
@@ -28,7 +28,7 @@ func TestNewAPIInstanceClient(t *testing.T) {
 		},
 		{
 			name: "missing client ID",
-			config: &client.ClientConfig{
+			config: &client.Config{
 				ClientSecret: "test-client-secret",
 			},
 			wantErr: true,
@@ -146,7 +146,7 @@ func TestAPIInstanceClient_CRUD(t *testing.T) {
 
 	server := testutil.MockHTTPServer(t, handlers)
 
-	anypointClient, err := client.NewAnypointClient(&client.ClientConfig{
+	anypointClient, err := client.NewAnypointClient(&client.Config{
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
 		BaseURL:      server.URL,
@@ -271,7 +271,7 @@ func TestAPIInstanceClient_ErrorHandling(t *testing.T) {
 
 	server := testutil.MockHTTPServer(t, handlers)
 
-	anypointClient, err := client.NewAnypointClient(&client.ClientConfig{
+	anypointClient, err := client.NewAnypointClient(&client.Config{
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
 		BaseURL:      server.URL,

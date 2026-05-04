@@ -19,8 +19,8 @@ type AnypointClient struct {
 	OrgID        string
 }
 
-// ClientConfig represents the configuration for the AnypointClient
-type ClientConfig struct {
+// Config represents the configuration for the AnypointClient
+type Config struct {
 	BaseURL      string
 	ClientID     string
 	ClientSecret string
@@ -30,7 +30,7 @@ type ClientConfig struct {
 }
 
 // NewAnypointClient creates a new Anypoint API client
-func NewAnypointClient(config *ClientConfig) (*AnypointClient, error) {
+func NewAnypointClient(config *Config) (*AnypointClient, error) {
 	if config == nil {
 		return nil, fmt.Errorf("config cannot be nil")
 	}
@@ -101,8 +101,8 @@ func (c *AnypointClient) authenticate() error {
 
 	// Extract token from response
 	var authResp map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&authResp); err != nil {
-		return fmt.Errorf("failed to decode auth response: %w", err)
+	if decodeErr := json.NewDecoder(resp.Body).Decode(&authResp); decodeErr != nil {
+		return fmt.Errorf("failed to decode auth response: %w", decodeErr)
 	}
 
 	if token, ok := authResp["access_token"].(string); ok {
@@ -112,15 +112,15 @@ func (c *AnypointClient) authenticate() error {
 	}
 
 	// Extract OrgID from token
-	if me, err := c.getMe(); err == nil {
-		orgID, err := c.extractOrgID(me)
-		if err != nil {
-			return fmt.Errorf("failed to extract organization ID: %w", err)
-		}
-		c.OrgID = orgID
-	} else {
+	me, err := c.getMe()
+	if err != nil {
 		return fmt.Errorf("failed to get user info: %w", err)
 	}
+	orgID, err := c.extractOrgID(me)
+	if err != nil {
+		return fmt.Errorf("failed to extract organization ID: %w", err)
+	}
+	c.OrgID = orgID
 
 	return nil
 }

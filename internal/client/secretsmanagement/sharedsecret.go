@@ -15,7 +15,7 @@ type SharedSecretClient struct {
 	*client.AnypointClient
 }
 
-func NewSharedSecretClient(config *client.ClientConfig) (*SharedSecretClient, error) {
+func NewSharedSecretClient(config *client.Config) (*SharedSecretClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err
@@ -35,7 +35,7 @@ type SharedSecret struct {
 	Password string `json:"password,omitempty"`
 
 	// S3Credential
-	AccessKeyID    string `json:"accessKeyId,omitempty"`
+	AccessKeyID     string `json:"accessKeyId,omitempty"`
 	SecretAccessKey string `json:"secretAccessKey,omitempty"`
 
 	// SymmetricKey
@@ -64,7 +64,7 @@ func (c *SharedSecretClient) basePath(orgID, envID, sgID string) string {
 func (c *SharedSecretClient) CreateSharedSecret(ctx context.Context, orgID, envID, sgID string, request *SharedSecret) (*SharedSecretResponse, error) {
 	url := c.basePath(orgID, envID, sgID)
 
-	jsonData, err := json.Marshal(request)
+	jsonData, err := json.Marshal(request) //nolint:gosec // G117: Field matches secret pattern but this is intentional API serialization
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal shared secret request: %w", err)
 	}
@@ -136,7 +136,7 @@ func (c *SharedSecretClient) GetSharedSecret(ctx context.Context, orgID, envID, 
 func (c *SharedSecretClient) UpdateSharedSecret(ctx context.Context, orgID, envID, sgID, ssID string, request *SharedSecret) (*SharedSecretResponse, error) {
 	url := fmt.Sprintf("%s/%s", c.basePath(orgID, envID, sgID), ssID)
 
-	jsonData, err := json.Marshal(request)
+	jsonData, err := json.Marshal(request) //nolint:gosec // G117: Field matches secret pattern but this is intentional API serialization
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal shared secret update request: %w", err)
 	}

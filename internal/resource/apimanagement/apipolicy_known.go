@@ -137,11 +137,16 @@ func generateConfigurationSchema(assetID string) schema.SingleNestedAttribute {
 				Validators:  numValidators,
 			}
 		case "bool":
-			attrs[snakeName] = schema.BoolAttribute{
+			boolAttr := schema.BoolAttribute{
 				Description: fmt.Sprintf("Policy field '%s'.", camelName),
 				Required:    field.Required,
 				Optional:    !field.Required,
 			}
+			if field.Default != nil {
+				boolAttr.Computed = true
+				boolAttr.Default = booldefault.StaticBool(*field.Default)
+			}
+			attrs[snakeName] = boolAttr
 		case "string_array":
 			attrs[snakeName] = schema.ListAttribute{
 				Description: fmt.Sprintf("Policy field '%s'. Must be a list of strings.", camelName),

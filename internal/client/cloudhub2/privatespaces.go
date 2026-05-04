@@ -160,7 +160,7 @@ type NetworkConfig struct {
 // CreatePrivateSpaceRequest represents the request to create a private space
 type CreatePrivateSpaceRequest struct {
 	Name          string `json:"name"`
-	Region        string `json:"region"`
+	Region        string `json:"region,omitempty"`
 	EnableIAMRole *bool  `json:"enableIAMRole,omitempty"`
 	EnableEgress  *bool  `json:"enableEgress,omitempty"`
 }

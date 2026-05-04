@@ -13,13 +13,13 @@ import (
 func TestNewManagedFlexGatewayClient(t *testing.T) {
 	tests := []struct {
 		name        string
-		config      *client.ClientConfig
+		config      *client.Config
 		wantErr     bool
 		errContains string
 	}{
 		{
 			name: "valid config",
-			config: &client.ClientConfig{
+			config: &client.Config{
 				ClientID:     "test-client-id",
 				ClientSecret: "test-client-secret",
 			},
@@ -27,7 +27,7 @@ func TestNewManagedFlexGatewayClient(t *testing.T) {
 		},
 		{
 			name: "missing client ID",
-			config: &client.ClientConfig{
+			config: &client.Config{
 				ClientSecret: "test-client-secret",
 			},
 			wantErr:     true,
@@ -35,7 +35,7 @@ func TestNewManagedFlexGatewayClient(t *testing.T) {
 		},
 		{
 			name: "missing client secret",
-			config: &client.ClientConfig{
+			config: &client.Config{
 				ClientID: "test-client-id",
 			},
 			wantErr:     true,
@@ -139,7 +139,7 @@ func TestManagedFlexGatewayClient_CRUD(t *testing.T) {
 
 	server := testutil.MockHTTPServer(t, handlers)
 
-	anypointClient, err := client.NewAnypointClient(&client.ClientConfig{
+	anypointClient, err := client.NewAnypointClient(&client.Config{
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
 		BaseURL:      server.URL,
@@ -240,7 +240,7 @@ func TestManagedFlexGatewayClient_GetDomains(t *testing.T) {
 
 	server := testutil.MockHTTPServer(t, handlers)
 
-	anypointClient, err := client.NewAnypointClient(&client.ClientConfig{
+	anypointClient, err := client.NewAnypointClient(&client.Config{
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
 		BaseURL:      server.URL,
@@ -338,7 +338,7 @@ func TestManagedFlexGatewayClient_ErrorHandling(t *testing.T) {
 
 	server := testutil.MockHTTPServer(t, handlers)
 
-	anypointClient, err := client.NewAnypointClient(&client.ClientConfig{
+	anypointClient, err := client.NewAnypointClient(&client.Config{
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
 		BaseURL:      server.URL,

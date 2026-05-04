@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client/apimanagement"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
@@ -84,10 +85,16 @@ func TestIntegrationAPIInstanceResource_CRUD(t *testing.T) {
 			switch r.Method {
 			case "GET":
 				testutil.JSONResponse(w, http.StatusOK, mockInstance)
-			case "PATCH":
-				testutil.JSONResponse(w, http.StatusOK, &updatedInstance)
 			case "DELETE":
 				w.WriteHeader(http.StatusNoContent)
+			default:
+				testutil.ErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+			}
+		},
+		"/apimanager/xapi/v1/organizations/test-org-id/environments/test-env-id/apis/19876543": func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case "PATCH":
+				testutil.JSONResponse(w, http.StatusOK, &updatedInstance)
 			default:
 				testutil.ErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
 			}
@@ -98,7 +105,7 @@ func TestIntegrationAPIInstanceResource_CRUD(t *testing.T) {
 
 	server := testutil.MockHTTPServer(t, handlers)
 
-	anypointClient, err := client.NewAnypointClient(&client.ClientConfig{
+	anypointClient, err := client.NewAnypointClient(&client.Config{
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
 		BaseURL:      server.URL,

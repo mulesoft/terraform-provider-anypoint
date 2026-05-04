@@ -11,15 +11,13 @@ import (
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 )
 
-
-
 // VPNConnectionClient wraps the AnypointClient for VPN connection operations
 type VPNConnectionClient struct {
 	*client.AnypointClient
 }
 
 // NewVPNConnectionClient creates a new VPNConnectionClient
-func NewVPNConnectionClient(config *client.ClientConfig) (*VPNConnectionClient, error) {
+func NewVPNConnectionClient(config *client.Config) (*VPNConnectionClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err

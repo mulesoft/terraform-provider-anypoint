@@ -8,22 +8,21 @@ import (
 	"os"
 	"strings"
 	"testing"
-
 )
 
 // MockHTTPServer creates a mock HTTP server for testing
 func MockHTTPServer(t *testing.T, handlers map[string]func(w http.ResponseWriter, r *http.Request)) *httptest.Server {
 	t.Helper()
-	
+
 	mux := http.NewServeMux()
-	
+
 	for path, handler := range handlers {
 		mux.HandleFunc(path, handler)
 	}
-	
+
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
-	
+
 	return server
 }
 
@@ -41,7 +40,7 @@ func CreateTestClientConfig(t *testing.T, baseURL string) map[string]interface{}
 	}
 }
 
-// Common helper functions for tests
+// StringPtr returns a pointer to the given string.
 func StringPtr(s string) *string {
 	return &s
 }
@@ -58,16 +57,16 @@ func IntPtr(i int) *int {
 func JSONResponse(w http.ResponseWriter, statusCode int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	
+
 	if data != nil {
-		json.NewEncoder(w).Encode(data)
+		_ = json.NewEncoder(w).Encode(data)
 	}
 }
 
 // ErrorResponse creates an error response for mock handlers
 func ErrorResponse(w http.ResponseWriter, statusCode int, message string) {
 	JSONResponse(w, statusCode, map[string]string{
-		"error": message,
+		"error":  message,
 		"status": fmt.Sprintf("%d", statusCode),
 	})
 }
@@ -81,15 +80,15 @@ func AssertHTTPRequest(t *testing.T, r *http.Request, expectedMethod, expectedPa
 // AssertHTTPRequestWithAuth validates HTTP request with optional auth check
 func AssertHTTPRequestWithAuth(t *testing.T, r *http.Request, expectedMethod, expectedPath string, requireAuth bool) {
 	t.Helper()
-	
+
 	if r.Method != expectedMethod {
 		t.Errorf("Expected method %s, got %s", expectedMethod, r.Method)
 	}
-	
+
 	if r.URL.Path != expectedPath {
 		t.Errorf("Expected path %s, got %s", expectedPath, r.URL.Path)
 	}
-	
+
 	if requireAuth {
 		// Verify authentication header
 		authHeader := r.Header.Get("Authorization")
@@ -102,18 +101,18 @@ func AssertHTTPRequestWithAuth(t *testing.T, r *http.Request, expectedMethod, ex
 // AssertJSONBody validates request body is valid JSON and matches expected structure
 func AssertJSONBody(t *testing.T, r *http.Request, expectedKeys ...string) map[string]interface{} {
 	t.Helper()
-	
+
 	var body map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		t.Fatalf("Failed to decode JSON body: %v", err)
 	}
-	
+
 	for _, key := range expectedKeys {
 		if _, exists := body[key]; !exists {
 			t.Errorf("Expected key '%s' in request body", key)
 		}
 	}
-	
+
 	return body
 }
 

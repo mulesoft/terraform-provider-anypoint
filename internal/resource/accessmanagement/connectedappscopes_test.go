@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/constants"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
@@ -47,7 +48,7 @@ func TestConnectedAppScopesResource_Configure(t *testing.T) {
 	res := NewConnectedAppScopesResource().(*ConnectedAppScopesResource)
 
 	server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
-	providerData := &client.ClientConfig{
+	providerData := &client.Config{
 		BaseURL:      server.URL,
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
@@ -309,8 +310,8 @@ func createScopeObject(t *testing.T, scopeName string, contextParams map[string]
 }
 
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
-		(len(s) > 0 && len(substr) > 0 && containsHelper(s, substr)))
+	return len(s) >= len(substr) && (s == substr || substr == "" ||
+		(s != "" && substr != "" && containsHelper(s, substr)))
 }
 
 func containsHelper(s, substr string) bool {

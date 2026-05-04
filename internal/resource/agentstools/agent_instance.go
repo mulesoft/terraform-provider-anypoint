@@ -60,7 +60,6 @@ type AgentInstanceResourceModel struct {
 	Routing    types.List     `tfsdk:"routing"`
 }
 
-
 func NewAgentInstanceResource() resource.Resource {
 	return &AgentInstanceResource{}
 }
@@ -335,11 +334,11 @@ func (r *AgentInstanceResource) Configure(_ context.Context, req resource.Config
 		return
 	}
 
-	config, ok := req.ProviderData.(*client.ClientConfig)
+	config, ok := req.ProviderData.(*client.Config)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.ClientConfig, got: %T.", req.ProviderData),
+			fmt.Sprintf("Expected *client.Config, got: %T.", req.ProviderData),
 		)
 		return
 	}
@@ -552,7 +551,8 @@ func (r *AgentInstanceResource) Update(ctx context.Context, req resource.UpdateR
 	}
 
 	if !plan.GatewayID.IsNull() && !plan.GatewayID.IsUnknown() && (plan.Deployment.IsNull() || plan.Deployment.IsUnknown()) {
-		dep, err := r.resolveGatewayDeployment(ctx, orgID, envID, plan.GatewayID.ValueString())
+		var dep *agentstools.AgentInstanceDeployment
+		dep, err = r.resolveGatewayDeployment(ctx, orgID, envID, plan.GatewayID.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Error resolving gateway_id", err.Error())
 			return
@@ -570,17 +570,16 @@ func (r *AgentInstanceResource) Update(ctx context.Context, req resource.UpdateR
 
 	updateReq := r.expandUpdateRequest(ctx, plan)
 
-	// The PATCH Agent requires upstream IDs for routing updates.
-	// Fetch the current instance to get server-assigned upstream IDs,
-	// then merge them into the update payload by matching on URI.
 	if len(updateReq.Routing) > 0 {
-		current, err := r.client.GetAgentInstance(ctx, orgID, envID, agentID)
+		var current *agentstools.AgentInstance
+		current, err = r.client.GetAgentInstance(ctx, orgID, envID, agentID)
 		if err == nil && len(current.Routing) > 0 {
 			r.mergeUpstreamIDs(current.Routing, updateReq.Routing)
 		}
 	}
 
-	instance, err := r.client.UpdateAgentInstance(ctx, orgID, envID, agentID, updateReq)
+	var instance *agentstools.AgentInstance
+	instance, err = r.client.UpdateAgentInstance(ctx, orgID, envID, agentID, updateReq)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating Agent instance", "Could not update Agent instance: "+err.Error())
 		return
@@ -924,7 +923,7 @@ func (r *AgentInstanceResource) expandRouting(ctx context.Context, routingList t
 	return agentRoutes
 }
 
-func (r *AgentInstanceResource) flattenInstance(ctx context.Context, inst *agentstools.AgentInstance, data *AgentInstanceResourceModel, orgID, envID string) {
+func (r *AgentInstanceResource) flattenInstance(_ context.Context, inst *agentstools.AgentInstance, data *AgentInstanceResourceModel, orgID, envID string) {
 	data.ID = types.StringValue(strconv.Itoa(inst.ID))
 	if inst.Status != "" {
 		data.Status = types.StringValue(inst.Status)
@@ -1048,25 +1047,25 @@ func (r *AgentInstanceResource) flattenInstance(ctx context.Context, inst *agent
 		for _, route := range inst.Routing {
 			usElems := make([]attr.Value, 0, len(route.Upstreams))
 			for _, us := range route.Upstreams {
-			var tlsCtxVal attr.Value
-			if us.TLSContext != nil && us.TLSContext.SecretGroupID != "" && us.TLSContext.TLSContextID != "" {
-				tlsCtxVal = types.StringValue(fmt.Sprintf("%s/%s", us.TLSContext.SecretGroupID, us.TLSContext.TLSContextID))
-			} else {
-				tlsCtxVal = types.StringNull()
-			}
-			usObj, usDiags := types.ObjectValue(
-				upstreamObjType.AttrTypes,
-				map[string]attr.Value{
-					"weight":         types.Int64Value(int64(us.Weight)),
-					"uri":            types.StringValue(us.URI),
-					"label":          types.StringValue(us.Label),
-					"tls_context_id": tlsCtxVal,
-				},
-			)
-			if usDiags.HasError() {
-				continue
-			}
-			usElems = append(usElems, usObj)
+				var tlsCtxVal attr.Value
+				if us.TLSContext != nil && us.TLSContext.SecretGroupID != "" && us.TLSContext.TLSContextID != "" {
+					tlsCtxVal = types.StringValue(fmt.Sprintf("%s/%s", us.TLSContext.SecretGroupID, us.TLSContext.TLSContextID))
+				} else {
+					tlsCtxVal = types.StringNull()
+				}
+				usObj, usDiags := types.ObjectValue(
+					upstreamObjType.AttrTypes,
+					map[string]attr.Value{
+						"weight":         types.Int64Value(int64(us.Weight)),
+						"uri":            types.StringValue(us.URI),
+						"label":          types.StringValue(us.Label),
+						"tls_context_id": tlsCtxVal,
+					},
+				)
+				if usDiags.HasError() {
+					continue
+				}
+				usElems = append(usElems, usObj)
 			}
 
 			var rulesVal attr.Value
@@ -1093,35 +1092,35 @@ func (r *AgentInstanceResource) flattenInstance(ctx context.Context, inst *agent
 				} else {
 					headersVal = types.MapNull(types.StringType)
 				}
-			rulesObj, rulesDiags := types.ObjectValue(
-				rulesObjType.AttrTypes,
-				map[string]attr.Value{
-					"methods": methods,
-					"path":    pathVal,
-					"host":    hostVal,
-					"headers": headersVal,
-				},
-			)
-			if rulesDiags.HasError() {
-				rulesVal = types.ObjectNull(rulesObjType.AttrTypes)
-			} else {
-				rulesVal = rulesObj
-			}
+				rulesObj, rulesDiags := types.ObjectValue(
+					rulesObjType.AttrTypes,
+					map[string]attr.Value{
+						"methods": methods,
+						"path":    pathVal,
+						"host":    hostVal,
+						"headers": headersVal,
+					},
+				)
+				if rulesDiags.HasError() {
+					rulesVal = types.ObjectNull(rulesObjType.AttrTypes)
+				} else {
+					rulesVal = rulesObj
+				}
 			} else {
 				rulesVal = types.ObjectNull(rulesObjType.AttrTypes)
 			}
 
-		routeObj, routeDiags := types.ObjectValue(
-			routeObjType.AttrTypes,
-			map[string]attr.Value{
-				"label":     types.StringValue(route.Label),
-				"rules":     rulesVal,
-				"upstreams": types.ListValueMust(upstreamObjType, usElems),
-			},
-		)
-		if !routeDiags.HasError() {
-			routeElems = append(routeElems, routeObj)
-		}
+			routeObj, routeDiags := types.ObjectValue(
+				routeObjType.AttrTypes,
+				map[string]attr.Value{
+					"label":     types.StringValue(route.Label),
+					"rules":     rulesVal,
+					"upstreams": types.ListValueMust(upstreamObjType, usElems),
+				},
+			)
+			if !routeDiags.HasError() {
+				routeElems = append(routeElems, routeObj)
+			}
 		}
 
 		data.Routing = types.ListValueMust(routeObjType, routeElems)

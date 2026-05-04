@@ -521,6 +521,7 @@ type PolicySchemaField struct {
 	Type     string   // "string", "int", "bool", "array", "object"
 	Min      *float64 // optional inclusive lower bound (for "int" fields)
 	Max      *float64 // optional inclusive upper bound (for "int" fields)
+	Default  *bool    // optional default for bool fields omitted by the user
 }
 
 // KnownPolicySchemas maps assetId → field definitions for built-in validation.
@@ -776,14 +777,14 @@ var KnownPolicySchemas = map[string]map[string]PolicySchemaField{
 		"clientId":                      {Required: true, Type: "string"},
 		"clientSecret":                  {Required: true, Type: "string"},
 		"scope":                         {Required: false, Type: "array"},
-		"overwrite":                     {Required: false, Type: "bool"},
+		"overwrite":                     {Required: false, Type: "bool", Default: boolPtr(false)},
 		"tokenFetchTimeout":             {Required: false, Type: "int"},
-		"allowRequestWithoutCredential": {Required: false, Type: "bool"},
+		"allowRequestWithoutCredential": {Required: false, Type: "bool", Default: boolPtr(false)},
 	},
 	"credential-injection-basic-auth": {
 		"username":     {Required: true, Type: "string"},
 		"password":     {Required: true, Type: "string"},
-		"overwrite":    {Required: false, Type: "bool"},
+		"overwrite":    {Required: false, Type: "bool", Default: boolPtr(false)},
 		"customHeader": {Required: false, Type: "string"},
 	},
 	"credential-injection-oauth2-obo": {
@@ -952,3 +953,4 @@ func ValidatePolicyConfiguration(assetID string, configData map[string]interface
 }
 
 func float64Ptr(v float64) *float64 { return &v }
+func boolPtr(v bool) *bool          { return &v }

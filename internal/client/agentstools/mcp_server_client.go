@@ -19,7 +19,7 @@ type MCPServerClient struct {
 }
 
 // NewMCPServerClient creates a new MCPServerClient
-func NewMCPServerClient(config *client.ClientConfig) (*MCPServerClient, error) {
+func NewMCPServerClient(config *client.Config) (*MCPServerClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err
@@ -31,35 +31,35 @@ func NewMCPServerClient(config *client.ClientConfig) (*MCPServerClient, error) {
 
 // MCPServer represents an MCP Server instance in API Manager
 type MCPServer struct {
-	ID                        int                    `json:"id"`
-	AssetID                   string                 `json:"assetId,omitempty"`
-	AssetVersion              string                 `json:"assetVersion,omitempty"`
-	ProductVersion            string                 `json:"productVersion,omitempty"`
-	GroupID                   string                 `json:"groupId,omitempty"`
-	Technology                string                 `json:"technology,omitempty"`
-	EndpointURI               string                 `json:"endpointUri,omitempty"`
-	ProviderID                *string                `json:"providerId,omitempty"`
-	InstanceLabel             string                 `json:"instanceLabel,omitempty"`
-	ApprovalMethod            string                 `json:"approvalMethod,omitempty"`
-	Status                    string                 `json:"status,omitempty"`
-	EnvironmentID             string                 `json:"environmentId,omitempty"`
-	AutodiscoveryInstanceName string                 `json:"autodiscoveryInstanceName,omitempty"`
-	Endpoint                  *MCPServerEndpoint     `json:"endpoint,omitempty"`
-	Spec                      *MCPServerSpec         `json:"spec,omitempty"`
-	Routing                   []MCPServerRoute       `json:"routing,omitempty"`
-	Deployment                *MCPServerDeployment   `json:"deployment,omitempty"`
+	ID                        int                  `json:"id"`
+	AssetID                   string               `json:"assetId,omitempty"`
+	AssetVersion              string               `json:"assetVersion,omitempty"`
+	ProductVersion            string               `json:"productVersion,omitempty"`
+	GroupID                   string               `json:"groupId,omitempty"`
+	Technology                string               `json:"technology,omitempty"`
+	EndpointURI               string               `json:"endpointUri,omitempty"`
+	ProviderID                *string              `json:"providerId,omitempty"`
+	InstanceLabel             string               `json:"instanceLabel,omitempty"`
+	ApprovalMethod            string               `json:"approvalMethod,omitempty"`
+	Status                    string               `json:"status,omitempty"`
+	EnvironmentID             string               `json:"environmentId,omitempty"`
+	AutodiscoveryInstanceName string               `json:"autodiscoveryInstanceName,omitempty"`
+	Endpoint                  *MCPServerEndpoint   `json:"endpoint,omitempty"`
+	Spec                      *MCPServerSpec       `json:"spec,omitempty"`
+	Routing                   []MCPServerRoute     `json:"routing,omitempty"`
+	Deployment                *MCPServerDeployment `json:"deployment,omitempty"`
 }
 
 // MCPServerEndpoint represents the MCP-specific endpoint configuration
 type MCPServerEndpoint struct {
-	DeploymentType       string                  `json:"deploymentType,omitempty"`
-	MuleVersion4OrAbove  *bool                   `json:"muleVersion4OrAbove"`
-	Type                 string                  `json:"type,omitempty"` // "mcp" for MCP servers
-	IsCloudHub           *bool                   `json:"isCloudHub"`
-	ProxyURI             *string                 `json:"proxyUri"` // MCP proxy URI (e.g., http://0.0.0.0:8081/mcp1)
-	ReferencesUserDomain *bool                   `json:"referencesUserDomain"`
-	ResponseTimeout      *int                    `json:"responseTimeout"`
-	TLSContexts          *MCPServerTLSContexts   `json:"tlsContexts"`
+	DeploymentType       string                `json:"deploymentType,omitempty"`
+	MuleVersion4OrAbove  *bool                 `json:"muleVersion4OrAbove"`
+	Type                 string                `json:"type,omitempty"` // "mcp" for MCP servers
+	IsCloudHub           *bool                 `json:"isCloudHub"`
+	ProxyURI             *string               `json:"proxyUri"` // MCP proxy URI (e.g., http://0.0.0.0:8081/mcp1)
+	ReferencesUserDomain *bool                 `json:"referencesUserDomain"`
+	ResponseTimeout      *int                  `json:"responseTimeout"`
+	TLSContexts          *MCPServerTLSContexts `json:"tlsContexts"`
 }
 
 // MCPServerTLSContexts holds TLS context references
@@ -89,11 +89,11 @@ type MCPServerRoute struct {
 
 // MCPServerUpstream is one backend in a weighted routing set
 type MCPServerUpstream struct {
-	ID         string                 `json:"id,omitempty"`
-	Weight     int                    `json:"weight"`
-	URI        string                 `json:"uri,omitempty"`
-	Label      string                 `json:"label,omitempty"`
-	TLSContext *MCPServerUpstreamTLS  `json:"tlsContext,omitempty"`
+	ID         string                `json:"id,omitempty"`
+	Weight     int                   `json:"weight"`
+	URI        string                `json:"uri,omitempty"`
+	Label      string                `json:"label,omitempty"`
+	TLSContext *MCPServerUpstreamTLS `json:"tlsContext,omitempty"`
 }
 
 // MCPServerUpstreamTLS holds TLS context for an upstream backend
@@ -130,14 +130,14 @@ func (c *MCPServerClient) GetGatewayInfo(ctx context.Context, orgID, envID, gate
 
 // CreateMCPServerRequest is the payload sent to create an MCP server
 type CreateMCPServerRequest struct {
-	Technology     string              `json:"technology"` // Should be "flexGateway"
-	ApprovalMethod *string             `json:"approvalMethod"`
-	ProviderID     *string             `json:"providerId"`
-	EndpointURI    *string             `json:"endpointUri"`
-	InstanceLabel  string              `json:"instanceLabel,omitempty"`
-	Endpoint       *MCPServerEndpoint  `json:"endpoint,omitempty"`
-	Spec           *MCPServerSpec      `json:"spec"`
-	Routing        []MCPServerRoute    `json:"routing,omitempty"`
+	Technology     string               `json:"technology"` // Should be "flexGateway"
+	ApprovalMethod *string              `json:"approvalMethod"`
+	ProviderID     *string              `json:"providerId"`
+	EndpointURI    *string              `json:"endpointUri"`
+	InstanceLabel  string               `json:"instanceLabel,omitempty"`
+	Endpoint       *MCPServerEndpoint   `json:"endpoint,omitempty"`
+	Spec           *MCPServerSpec       `json:"spec"`
+	Routing        []MCPServerRoute     `json:"routing,omitempty"`
 	Deployment     *MCPServerDeployment `json:"deployment,omitempty"`
 }
 
@@ -198,15 +198,15 @@ func (c *MCPServerClient) CreateMCPServer(ctx context.Context, orgID, envID stri
 		if resp.StatusCode == http.StatusCreated || resp.StatusCode == http.StatusOK {
 			var server MCPServer
 			if err := json.NewDecoder(resp.Body).Decode(&server); err != nil {
-				resp.Body.Close()
+				_ = resp.Body.Close()
 				return nil, fmt.Errorf("failed to decode response: %w", err)
 			}
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			return &server, nil
 		}
 
 		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		lastErr = fmt.Errorf("failed to create MCP server with status %d: %s", resp.StatusCode, string(body))
 
 		if resp.StatusCode == http.StatusBadRequest && strings.Contains(string(body), "GatewayNotReadyError") {

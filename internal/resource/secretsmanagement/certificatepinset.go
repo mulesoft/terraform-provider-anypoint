@@ -53,23 +53,23 @@ func (r *CertificatePinsetResource) Schema(_ context.Context, _ resource.SchemaR
 			"A certificate pinset is used for certificate pinning validation.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Description: "Unique identifier of the certificate pinset.",
-				Computed:    true,
+				Description:   "Unique identifier of the certificate pinset.",
+				Computed:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"organization_id": schema.StringAttribute{
 				Description: "Organization ID.",
-				Optional: true, Computed: true,
+				Optional:    true, Computed: true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"environment_id": schema.StringAttribute{
-				Description: "Environment ID.",
-				Required: true,
+				Description:   "Environment ID.",
+				Required:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"secret_group_id": schema.StringAttribute{
-				Description: "Secret group ID that this certificate pinset belongs to.",
-				Required: true,
+				Description:   "Secret group ID that this certificate pinset belongs to.",
+				Required:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"name": schema.StringAttribute{
@@ -98,10 +98,10 @@ func (r *CertificatePinsetResource) Configure(_ context.Context, req resource.Co
 	if req.ProviderData == nil {
 		return
 	}
-	config, ok := req.ProviderData.(*client.ClientConfig)
+	config, ok := req.ProviderData.(*client.Config)
 	if !ok {
 		resp.Diagnostics.AddError("Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.ClientConfig, got: %T.", req.ProviderData))
+			fmt.Sprintf("Expected *client.Config, got: %T.", req.ProviderData))
 		return
 	}
 	pinClient, err := secretsmanagement.NewCertificatePinsetClient(config)

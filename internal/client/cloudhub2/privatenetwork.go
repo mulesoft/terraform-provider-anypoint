@@ -17,7 +17,7 @@ type PrivateNetworkClient struct {
 }
 
 // NewPrivateNetworkClient creates a new PrivateNetworkClient
-func NewPrivateNetworkClient(config *client.ClientConfig) (*PrivateNetworkClient, error) {
+func NewPrivateNetworkClient(config *client.Config) (*PrivateNetworkClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err

@@ -23,33 +23,33 @@ import (
 )
 
 var (
-	_ resource.Resource                    = &PrivateSpaceConfigResource{}
-	_ resource.ResourceWithConfigure       = &PrivateSpaceConfigResource{}
-	_ resource.ResourceWithImportState     = &PrivateSpaceConfigResource{}
+	_ resource.Resource                     = &PrivateSpaceConfigResource{}
+	_ resource.ResourceWithConfigure        = &PrivateSpaceConfigResource{}
+	_ resource.ResourceWithImportState      = &PrivateSpaceConfigResource{}
 	_ resource.ResourceWithConfigValidators = &PrivateSpaceConfigResource{}
 )
 
 type PrivateSpaceConfigResource struct {
-	spaceClient   *cloudhub2.PrivateSpacesClient
-	networkClient *cloudhub2.PrivateNetworkClient
+	spaceClient    *cloudhub2.PrivateSpacesClient
+	networkClient  *cloudhub2.PrivateNetworkClient
 	firewallClient *cloudhub2.FirewallRulesClient
 }
 
 type PrivateSpaceConfigResourceModel struct {
-	ID                      types.String              `tfsdk:"id"`
-	Name                    types.String              `tfsdk:"name"`
-	EnableIAMRole           types.Bool                `tfsdk:"enable_iam_role"`
-	EnableEgress            types.Bool                `tfsdk:"enable_egress"`
-	OrganizationID          types.String              `tfsdk:"organization_id"`
-	RootOrganizationID      types.String              `tfsdk:"root_organization_id"`
-	Status                  types.String              `tfsdk:"status"`
-	MuleAppDeploymentCount  types.Int64               `tfsdk:"mule_app_deployment_count"`
-	DaysLeftForRelaxedQuota types.Int64               `tfsdk:"days_left_for_relaxed_quota"`
-	VPCMigrationInProgress  types.Bool                `tfsdk:"vpc_migration_in_progress"`
-	ManagedFirewallRules    types.List                `tfsdk:"managed_firewall_rules"`
-	GlobalSpaceStatus       types.Map                 `tfsdk:"global_space_status"`
-	Network                 *NetworkConfigModel       `tfsdk:"network"`
-	FirewallRules           []FirewallRuleModel       `tfsdk:"firewall_rules"`
+	ID                      types.String        `tfsdk:"id"`
+	Name                    types.String        `tfsdk:"name"`
+	EnableIAMRole           types.Bool          `tfsdk:"enable_iam_role"`
+	EnableEgress            types.Bool          `tfsdk:"enable_egress"`
+	OrganizationID          types.String        `tfsdk:"organization_id"`
+	RootOrganizationID      types.String        `tfsdk:"root_organization_id"`
+	Status                  types.String        `tfsdk:"status"`
+	MuleAppDeploymentCount  types.Int64         `tfsdk:"mule_app_deployment_count"`
+	DaysLeftForRelaxedQuota types.Int64         `tfsdk:"days_left_for_relaxed_quota"`
+	VPCMigrationInProgress  types.Bool          `tfsdk:"vpc_migration_in_progress"`
+	ManagedFirewallRules    types.List          `tfsdk:"managed_firewall_rules"`
+	GlobalSpaceStatus       types.Map           `tfsdk:"global_space_status"`
+	Network                 *NetworkConfigModel `tfsdk:"network"`
+	FirewallRules           []FirewallRuleModel `tfsdk:"firewall_rules"`
 }
 
 type NetworkConfigModel struct {

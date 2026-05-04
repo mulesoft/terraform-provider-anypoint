@@ -241,7 +241,21 @@ type TelemetryExporterEntitlement struct {
 	Enabled bool `json:"enabled" tfsdk:"enabled"`
 }
 
-// Entitlements represents the entitlements structure for an organization
+// Entitlements represents the entitlements structure for an organization.
+//
+// Wire-format rules (matching the Anypoint UI's PUT contract):
+//
+//   - CreateSubOrgs / CreateEnvironments / GlobalDeployment are ALWAYS sent,
+//     even when false (plain bools, no omitempty). The UI does the same.
+//   - Every nested entitlement is a pointer with omitempty so unset fields are
+//     omitted from the payload entirely, rather than sent as zero/false. This
+//     is required because the Access Management endpoint 403s on business
+//     groups when the body even MENTIONS master-org-only entitlements (e.g.
+//     hybrid, flexGateway, serviceMesh) — value false/zero is not a get-out.
+//   - RuntimeFabric is a pointer for the same reason; the UI omits it for
+//     sub-orgs and so must we unless the user explicitly declared it.
+//   - StaticIps / Vpns are server-managed and never accepted on write; they
+//     stay as pointer fields here only for decoding GET responses.
 type Entitlements struct {
 	CreateSubOrgs         bool                              `json:"createSubOrgs"`
 	CreateEnvironments    bool                              `json:"createEnvironments"`
@@ -254,7 +268,7 @@ type Entitlements struct {
 	Vpns                  *VCoreEntitlement                 `json:"vpns,omitempty"`
 	NetworkConnections    *VCoreEntitlement                 `json:"networkConnections,omitempty"`
 	Hybrid                *HybridEntitlement                `json:"hybrid,omitempty"`
-	RuntimeFabric         bool                              `json:"runtimeFabric"`
+	RuntimeFabric         *bool                             `json:"runtimeFabric,omitempty"`
 	FlexGateway           *EnabledEntitlement               `json:"flexGateway,omitempty"`
 	WorkerLoggingOverride *WorkerLoggingOverrideEntitlement `json:"workerLoggingOverride,omitempty"`
 	MqMessages            *MqEntitlement                    `json:"mqMessages,omitempty"`
@@ -382,6 +396,75 @@ func (c *OrganizationClient) CreateOrganization(ctx context.Context, org *Create
 	return &createdOrg, nil
 }
 
+// UpdateOrganizationRequest represents the request body for updating an organization.
+// Mirrors the payload the Anypoint UI sends on PUT /accounts/api/organizations/{id}:
+// {id, name, ownerId, properties, entitlements}. parentOrganizationId is intentionally
+// absent because the upstream endpoint treats it as immutable.
+type UpdateOrganizationRequest struct {
+	ID           string                 `json:"id"`
+	Name         string                 `json:"name"`
+	OwnerID      string                 `json:"ownerId"`
+	Properties   map[string]interface{} `json:"properties"`
+	Entitlements Entitlements           `json:"entitlements"`
+}
+
+// UpdateOrganization updates an existing organization in Anypoint. The caller is expected
+// to hydrate Properties from the server's current view (typically by calling GetOrganization
+// first) so that fields the provider does not manage (e.g. flow_designer flags) are
+// preserved across the PUT.
+func (c *OrganizationClient) UpdateOrganization(ctx context.Context, organizationID string, org *UpdateOrganizationRequest) (*Organization, error) {
+	if organizationID == "" {
+		return nil, fmt.Errorf("organization ID is required")
+	}
+	if org == nil {
+		return nil, fmt.Errorf("update request cannot be nil")
+	}
+
+	url := fmt.Sprintf("%s/accounts/api/organizations/%s", c.BaseURL, organizationID)
+
+	// Always send a non-null properties object; the UI sends {} when there is nothing
+	// else to express and the server round-trips it.
+	if org.Properties == nil {
+		org.Properties = map[string]interface{}{}
+	}
+
+	jsonData, err := json.Marshal(org)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal organization update data: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/plain, */*")
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, client.NewNotFoundError("organization")
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to update organization with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var updatedOrg Organization
+	if err := json.NewDecoder(resp.Body).Decode(&updatedOrg); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &updatedOrg, nil
+}
+
 // GetOrganization retrieves an organization by ID
 func (c *OrganizationClient) GetOrganization(ctx context.Context, organizationID string) (*Organization, error) {
 	url := fmt.Sprintf("%s/accounts/api/organizations/%s", c.BaseURL, organizationID)
@@ -460,22 +543,36 @@ func (c *OrganizationClient) DeleteOrganization(ctx context.Context, organizatio
 	return nil
 }
 
-// WaitForOrganizationDeletion waits for the organization to be fully deleted
+// WaitForOrganizationDeletion waits for the organization to be fully deleted.
+//
+// Anypoint's Access Management API soft-deletes organizations: after the DELETE
+// call, GET /accounts/api/organizations/{id} keeps returning 200 for a while
+// with `deletedAt` populated rather than 404. We therefore treat EITHER of
+// these as a successful deletion:
+//   - GET returns "not found" / 404 (hard delete observed)
+//   - GET returns 200 with a non-nil `deletedAt` (soft delete observed)
+//
+// Without the `deletedAt` check this helper would time out on every successful
+// destroy, emitting a misleading "Deletion Timeout" warning to the user.
 // This is necessary to prevent "name already used" errors when recreating an organization
 func (c *OrganizationClient) WaitForOrganizationDeletion(ctx context.Context, organizationID string, maxRetries int, retryInterval time.Duration) error {
 	for i := 0; i < maxRetries; i++ {
-		_, err := c.GetOrganization(ctx, organizationID)
+		org, err := c.GetOrganization(ctx, organizationID)
 		if err != nil {
-			// If we get an error containing "not found", the deletion is complete
-			// This handles various error message formats (e.g., "organization not found", "not found", "404")
+			// Hard-delete path: GET returns 404 / "not found".
 			errMsg := strings.ToLower(err.Error())
 			if strings.Contains(errMsg, "not found") || strings.Contains(errMsg, "404") {
 				return nil
 			}
-			// For other errors, continue retrying as the organization might still be deleting
+			// Other errors (transient network, 5xx): retry.
+		} else if org != nil && org.DeletedAt != nil && *org.DeletedAt != "" {
+			// Soft-delete path: GET returns 200 with a deletedAt timestamp.
+			// The name is released the moment the API records deletedAt, so
+			// the caller is free to recreate with the same name.
+			return nil
 		}
 
-		// Organization still exists, wait before retrying
+		// Organization still exists without a deletedAt marker — keep polling.
 		if i < maxRetries-1 {
 			time.Sleep(retryInterval)
 		}

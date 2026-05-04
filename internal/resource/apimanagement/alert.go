@@ -207,11 +207,11 @@ func (r *AlertResource) Configure(_ context.Context, req resource.ConfigureReque
 		return
 	}
 
-	config, ok := req.ProviderData.(*client.ClientConfig)
+	config, ok := req.ProviderData.(*client.Config)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.ClientConfig, got: %T.", req.ProviderData),
+			fmt.Sprintf("Expected *client.Config, got: %T.", req.ProviderData),
 		)
 		return
 	}
@@ -242,7 +242,7 @@ func (r *AlertResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 	envID := data.EnvironmentID.ValueString()
 
-	createReq, diags := r.expandAlert(&data, orgID, envID, ctx)
+	createReq, diags := r.expandAlert(ctx, &data, orgID, envID)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -302,7 +302,7 @@ func (r *AlertResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	}
 	envID := state.EnvironmentID.ValueString()
 
-	updateReq, diags := r.expandAlert(&plan, orgID, envID, ctx)
+	updateReq, diags := r.expandAlert(ctx, &plan, orgID, envID)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -356,7 +356,7 @@ func (r *AlertResource) ImportState(ctx context.Context, req resource.ImportStat
 
 // --- Helpers ---
 
-func (r *AlertResource) expandAlert(data *AlertResourceModel, orgID, envID string, ctx context.Context) (*apimanagement.CreateAlertRequest, diag.Diagnostics) {
+func (r *AlertResource) expandAlert(ctx context.Context, data *AlertResourceModel, orgID, envID string) (*apimanagement.CreateAlertRequest, diag.Diagnostics) {
 	var allDiags diag.Diagnostics
 
 	var condModel AlertConditionModel
@@ -447,7 +447,8 @@ func (r *AlertResource) flattenAlert(ctx context.Context, alert *apimanagement.A
 
 	notifModels := make([]AlertNotificationModel, len(alert.Notifications))
 	for i, n := range alert.Notifications {
-		recipientList, diags := types.ListValueFrom(ctx, types.StringType, n.Recipients)
+		var recipientList basetypes.ListValue
+		recipientList, diags = types.ListValueFrom(ctx, types.StringType, n.Recipients)
 		allDiags.Append(diags...)
 
 		notifModels[i] = AlertNotificationModel{

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client/apimanagement"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
@@ -59,7 +60,7 @@ func TestIntegrationManagedFlexGatewayResource_CRUD(t *testing.T) {
 			switch r.Method {
 			case "GET":
 				testutil.JSONResponse(w, http.StatusOK, mockGateway)
-			case "PATCH":
+			case "PUT":
 				testutil.JSONResponse(w, http.StatusOK, &updatedGateway)
 			case "DELETE":
 				w.WriteHeader(http.StatusNoContent)
@@ -73,7 +74,7 @@ func TestIntegrationManagedFlexGatewayResource_CRUD(t *testing.T) {
 
 	server := testutil.MockHTTPServer(t, handlers)
 
-	anypointClient, err := client.NewAnypointClient(&client.ClientConfig{
+	anypointClient, err := client.NewAnypointClient(&client.Config{
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
 		BaseURL:      server.URL,

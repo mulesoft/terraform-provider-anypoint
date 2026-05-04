@@ -16,7 +16,7 @@ type CertificateClient struct {
 	*client.AnypointClient
 }
 
-func NewCertificateClient(config *client.ClientConfig) (*CertificateClient, error) {
+func NewCertificateClient(config *client.Config) (*CertificateClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err

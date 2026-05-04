@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	secretsmgmt "github.com/mulesoft/terraform-provider-anypoint/internal/client/secretsmanagement"
 )
@@ -22,10 +23,10 @@ type CertificatePinsetDataSource struct {
 }
 
 type CertificatePinsetDataSourceModel struct {
-	OrganizationID      types.String                  `tfsdk:"organization_id"`
-	EnvironmentID       types.String                  `tfsdk:"environment_id"`
-	SecretGroupID       types.String                  `tfsdk:"secret_group_id"`
-	CertificatePinsets  []CertificatePinsetItemModel  `tfsdk:"certificate_pinsets"`
+	OrganizationID     types.String                 `tfsdk:"organization_id"`
+	EnvironmentID      types.String                 `tfsdk:"environment_id"`
+	SecretGroupID      types.String                 `tfsdk:"secret_group_id"`
+	CertificatePinsets []CertificatePinsetItemModel `tfsdk:"certificate_pinsets"`
 }
 
 type CertificatePinsetItemModel struct {
@@ -88,9 +89,9 @@ func (d *CertificatePinsetDataSource) Configure(_ context.Context, req datasourc
 	if req.ProviderData == nil {
 		return
 	}
-	cfg, ok := req.ProviderData.(*client.ClientConfig)
+	cfg, ok := req.ProviderData.(*client.Config)
 	if !ok {
-		resp.Diagnostics.AddError("Unexpected provider data type", fmt.Sprintf("expected *client.ClientConfig, got %T", req.ProviderData))
+		resp.Diagnostics.AddError("Unexpected provider data type", fmt.Sprintf("expected *client.Config, got %T", req.ProviderData))
 		return
 	}
 	c, err := secretsmgmt.NewCertificatePinsetClient(cfg)
