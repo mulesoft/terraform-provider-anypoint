@@ -122,7 +122,6 @@ func TestIntegrationAPIInstanceResource_CRUD(t *testing.T) {
 		if apiResource.client == nil {
 			t.Fatal("Resource client should be configured")
 		}
-		var _ resource.Resource = apiResource
 	})
 
 	t.Run("Read", func(t *testing.T) {
@@ -179,7 +178,6 @@ func TestIntegrationAPIInstanceResource_CRUD(t *testing.T) {
 func TestIntegrationAPIInstanceResource_InterfaceCompliance(t *testing.T) {
 	apiResource := &APIInstanceResource{}
 
-	var _ resource.Resource = apiResource
 	var _ resource.ResourceWithConfigure = apiResource
 	var _ resource.ResourceWithImportState = apiResource
 

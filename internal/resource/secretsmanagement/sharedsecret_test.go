@@ -17,7 +17,6 @@ func TestNewSharedSecretResource(t *testing.T) {
 		t.Error("NewSharedSecretResource() returned nil")
 	}
 
-	var _ resource.Resource = r
 	if _, ok := r.(resource.ResourceWithConfigure); !ok {
 		t.Error("SharedSecretResource should implement ResourceWithConfigure")
 	}

@@ -17,7 +17,6 @@ func TestNewEnvironmentResource(t *testing.T) {
 		t.Error("NewEnvironmentResource() returned nil")
 	}
 
-	var _ resource.Resource = r
 	if _, ok := r.(resource.ResourceWithConfigure); !ok {
 		t.Error("EnvironmentResource should implement ResourceWithConfigure")
 	}

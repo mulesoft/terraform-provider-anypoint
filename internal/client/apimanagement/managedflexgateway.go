@@ -152,7 +152,7 @@ func (c *ManagedFlexGatewayClient) CreateManagedFlexGateway(ctx context.Context,
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -184,7 +184,7 @@ func (c *ManagedFlexGatewayClient) GetManagedFlexGateway(ctx context.Context, or
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("managed flex gateway")
@@ -226,7 +226,7 @@ func (c *ManagedFlexGatewayClient) UpdateManagedFlexGateway(ctx context.Context,
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("managed flex gateway")
@@ -264,7 +264,7 @@ func (c *ManagedFlexGatewayClient) GetDomains(ctx context.Context, orgID, target
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError(fmt.Sprintf("domains for target %s in environment %s", targetID, envID))
@@ -315,7 +315,7 @@ func (c *ManagedFlexGatewayClient) DeleteManagedFlexGateway(ctx context.Context,
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
 		body, _ := io.ReadAll(resp.Body)
@@ -360,7 +360,7 @@ func (c *ManagedFlexGatewayClient) GetGatewayVersions(ctx context.Context) (*Gat
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -422,7 +422,7 @@ func (c *ManagedFlexGatewayClient) ListManagedFlexGateways(ctx context.Context, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

@@ -64,7 +64,6 @@ func TestIntegrationTeamResource_CRUD(t *testing.T) {
 			t.Error("Team resource client should be configured")
 		}
 
-		var _ resource.Resource = teamResource
 	})
 
 	// Test READ operation
@@ -186,7 +185,6 @@ func TestIntegrationTeamResource_InterfaceCompliance(t *testing.T) {
 	teamResource := &TeamResource{}
 
 	// Test interface compliance
-	var _ resource.Resource = teamResource
 	var _ resource.ResourceWithConfigure = teamResource
 	var _ resource.ResourceWithImportState = teamResource
 

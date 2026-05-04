@@ -21,7 +21,6 @@ func TestNewTeamDataSource(t *testing.T) {
 	}
 
 	// Verify it implements the expected interfaces
-	var _ datasource.DataSource = dataSource
 	if _, ok := dataSource.(datasource.DataSourceWithConfigure); !ok {
 		t.Error("TeamDataSource does not implement DataSourceWithConfigure")
 	}
@@ -202,7 +201,7 @@ func TestTeamDataSource_Read(t *testing.T) {
 			mockHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(`{"invalid": json}`))
+				_, _ = w.Write([]byte(`{"invalid": json}`))
 			},
 			wantErr:     true,
 			errContains: "Could not read team ID test-team-id",

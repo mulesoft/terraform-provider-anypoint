@@ -236,7 +236,7 @@ func (c *AgentInstanceClient) GetAgentInstance(ctx context.Context, orgID, envID
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("Agent instance")
@@ -278,7 +278,7 @@ func (c *AgentInstanceClient) UpdateAgentInstance(ctx context.Context, orgID, en
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("Agent instance")
@@ -314,7 +314,7 @@ func (c *AgentInstanceClient) DeleteAgentInstance(ctx context.Context, orgID, en
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -347,7 +347,7 @@ func (c *AgentInstanceClient) ListAgentInstances(ctx context.Context, orgID, env
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

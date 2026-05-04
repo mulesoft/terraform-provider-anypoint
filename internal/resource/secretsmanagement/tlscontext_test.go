@@ -17,7 +17,6 @@ func TestNewTLSContextResource(t *testing.T) {
 		t.Error("NewTLSContextResource() returned nil")
 	}
 
-	var _ resource.Resource = r
 	if _, ok := r.(resource.ResourceWithConfigure); !ok {
 		t.Error("TLSContextResource should implement ResourceWithConfigure")
 	}

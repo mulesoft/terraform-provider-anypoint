@@ -60,22 +60,22 @@ func TestIntegrationAPIPolicyResource_CRUD(t *testing.T) {
 		}
 		if body.AssetID == "" || body.GroupID == "" {
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(`{"message":"missing required fields"}`))
+			_, _ = w.Write([]byte(`{"message":"missing required fields"}`))
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(policyResp)
+		_ = json.NewEncoder(w).Encode(policyResp)
 	}
 
 	handlers["GET /apimanager/api/v1/organizations/test-org-id/environments/test-env-id/apis/100/policies/2001"] = func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(policyResp)
+		_ = json.NewEncoder(w).Encode(policyResp)
 	}
 
 	handlers["PATCH /apimanager/api/v1/organizations/test-org-id/environments/test-env-id/apis/100/policies/2001"] = func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(updatedResp)
+		_ = json.NewEncoder(w).Encode(updatedResp)
 	}
 
 	handlers["DELETE /apimanager/api/v1/organizations/test-org-id/environments/test-env-id/apis/100/policies/2001"] = func(w http.ResponseWriter, r *http.Request) {
@@ -178,7 +178,6 @@ func TestIntegrationAPIPolicyResource_CRUD(t *testing.T) {
 func TestIntegrationAPIPolicyResource_InterfaceCompliance(t *testing.T) {
 	res := NewAPIPolicyResource()
 
-	var _ resource.Resource = res
 	if _, ok := res.(resource.ResourceWithConfigure); !ok {
 		t.Error("APIPolicyResource does not implement ResourceWithConfigure")
 	}

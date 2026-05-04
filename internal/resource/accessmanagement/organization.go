@@ -804,26 +804,27 @@ func zeroMq() types.Object {
 // `managed_gateway_large = { assigned = 0 }` matches the refreshed state and
 // does not trigger a perpetual in-place update plan.
 func flattenEntitlements(ctx context.Context, ent accessmanagement.Entitlements) (types.Object, diag.Diagnostics) {
+	enabledNull := types.ObjectNull(map[string]attr.Type{"enabled": types.BoolType})
 	var hybrid, flexGateway, workerLogging, serviceMesh types.Object
 	if ent.Hybrid != nil {
 		hybrid = hybridEntitlementToModel(ent.Hybrid)
 	} else {
-		hybrid = zeroEnabled()
+		hybrid = enabledNull
 	}
 	if ent.FlexGateway != nil {
 		flexGateway = enabledEntitlementToModel(ent.FlexGateway)
 	} else {
-		flexGateway = zeroEnabled()
+		flexGateway = enabledNull
 	}
 	if ent.WorkerLoggingOverride != nil {
 		workerLogging = workerLoggingOverrideEntitlementToModel(ent.WorkerLoggingOverride)
 	} else {
-		workerLogging = zeroEnabled()
+		workerLogging = enabledNull
 	}
 	if ent.ServiceMesh != nil {
 		serviceMesh = enabledEntitlementToModel(ent.ServiceMesh)
 	} else {
-		serviceMesh = zeroEnabled()
+		serviceMesh = enabledNull
 	}
 
 	var mqMessages, mqRequests types.Object
@@ -864,7 +865,7 @@ func flattenEntitlements(ctx context.Context, ent accessmanagement.Entitlements)
 	if ent.DesignCenter != nil {
 		designCenter = designCenterEntitlementToModel(ent.DesignCenter)
 	} else {
-		designCenter = zeroDesignCenter()
+		designCenter = types.ObjectNull(map[string]attr.Type{"api": types.BoolType, "mozart": types.BoolType})
 	}
 
 	runtimeFabric := types.BoolValue(false)

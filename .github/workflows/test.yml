@@ -1,0 +1,165 @@
+# CI workflow – runs on every PR and push to main.
+# Unit tests, lint, and build run on every trigger.
+# Acceptance tests run on push to main OR when a PR has the "run-acc-tests" label.
+
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs for the same PR/branch to save CI minutes
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ──────────────────────────────────────────────
+  # Job 1: Unit tests, lint, coverage
+  # ──────────────────────────────────────────────
+  test:
+    name: Unit Tests & Lint
+    runs-on: mulesoft-ubuntu
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+          cache: true
+
+      - name: Tidy and download dependencies
+        run: |
+          go mod tidy
+          go mod download
+
+      - name: Verify dependencies
+        run: go mod verify
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Install golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.11
+
+      - name: Run tests with coverage
+        run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Check coverage threshold
+        run: |
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "Total coverage: ${COVERAGE}%"
+          echo "coverage=${COVERAGE}" >> "$GITHUB_OUTPUT"
+          if (( $(echo "${COVERAGE} < 25.0" | bc -l) )); then
+            echo "::error::Coverage ${COVERAGE}% is below 25% threshold"
+            exit 1
+          fi
+        id: coverage
+
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.out
+          flags: unittests
+          fail_ci_if_error: false
+
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.out
+
+  # ──────────────────────────────────────────────
+  # Job 2: Build verification (all platforms)
+  # ──────────────────────────────────────────────
+  build:
+    name: Build Verification
+    runs-on: mulesoft-ubuntu
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+          cache: true
+
+      - name: Build for multiple platforms
+        run: make build-all
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-provider-binaries
+          path: dist/
+
+  # ──────────────────────────────────────────────
+  # Job 3: Acceptance tests (real API calls)
+  # Runs on: push to main, OR PRs labeled "run-acc-tests"
+  # ──────────────────────────────────────────────
+  acceptance-test:
+    name: Acceptance Tests
+    runs-on: mulesoft-ubuntu
+    needs: test
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-acc-tests'))
+    env:
+      TF_ACC: "1"
+      ANYPOINT_CLIENT_ID: ${{ secrets.ANYPOINT_CLIENT_ID }}
+      ANYPOINT_CLIENT_SECRET: ${{ secrets.ANYPOINT_CLIENT_SECRET }}
+      ANYPOINT_BASE_URL: ${{ secrets.ANYPOINT_BASE_URL }}
+      ANYPOINT_ADMIN_CLIENT_ID: ${{ secrets.ANYPOINT_ADMIN_CLIENT_ID }}
+      ANYPOINT_ADMIN_CLIENT_SECRET: ${{ secrets.ANYPOINT_ADMIN_CLIENT_SECRET }}
+      ANYPOINT_USERNAME: ${{ secrets.ANYPOINT_USERNAME }}
+      ANYPOINT_PASSWORD: ${{ secrets.ANYPOINT_PASSWORD }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+          cache: true
+
+      - name: Validate credentials are available
+        run: |
+          if [ -z "$ANYPOINT_CLIENT_ID" ] || [ -z "$ANYPOINT_CLIENT_SECRET" ]; then
+            echo "::error::Anypoint credentials not configured. Add ANYPOINT_CLIENT_ID and ANYPOINT_CLIENT_SECRET to repository secrets."
+            exit 1
+          fi
+
+      - name: Run acceptance tests
+        run: go test -v -timeout 120m ./... -run="^TestAcc"
+
+  # ──────────────────────────────────────────────
+  # Job 4: Final status gate for branch protection
+  # Always runs – reports aggregate pass/fail so you
+  # can use a single required check in branch rules.
+  # ──────────────────────────────────────────────
+  ci-status:
+    name: CI Status
+    if: always()
+    runs-on: mulesoft-ubuntu
+    needs: [test, build]
+    steps:
+      - name: Check required job results
+        run: |
+          echo "Test result: ${{ needs.test.result }}"
+          echo "Build result: ${{ needs.build.result }}"
+          if [[ "${{ needs.test.result }}" != "success" || "${{ needs.build.result }}" != "success" ]]; then
+            echo "::error::Required CI checks failed"
+            exit 1
+          fi
+          echo "All required checks passed"

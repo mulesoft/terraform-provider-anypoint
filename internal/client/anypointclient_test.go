@@ -161,7 +161,7 @@ func TestAnypointClient_authenticate(t *testing.T) {
 			mockHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(`{"invalid": "json"`))
+				_, _ = w.Write([]byte(`{"invalid": "json"`))
 			},
 			wantErr:     true,
 			errContains: "failed to decode auth response",
@@ -235,7 +235,7 @@ func TestAnypointClient_getMe(t *testing.T) {
 			mockHandler: func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(`{"invalid": json}`))
+				_, _ = w.Write([]byte(`{"invalid": json}`))
 			},
 			wantErr: true,
 		},

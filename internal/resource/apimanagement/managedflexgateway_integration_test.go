@@ -91,7 +91,6 @@ func TestIntegrationManagedFlexGatewayResource_CRUD(t *testing.T) {
 		if gwResource.client == nil {
 			t.Fatal("Resource client should be configured")
 		}
-		var _ resource.Resource = gwResource
 	})
 
 	t.Run("Read", func(t *testing.T) {
@@ -138,7 +137,6 @@ func TestIntegrationManagedFlexGatewayResource_CRUD(t *testing.T) {
 func TestIntegrationManagedFlexGatewayResource_InterfaceCompliance(t *testing.T) {
 	gwResource := &ManagedFlexGatewayResource{}
 
-	var _ resource.Resource = gwResource
 	var _ resource.ResourceWithConfigure = gwResource
 	var _ resource.ResourceWithImportState = gwResource
 

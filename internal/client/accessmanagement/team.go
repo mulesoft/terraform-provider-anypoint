@@ -74,7 +74,7 @@ func (c *TeamClient) CreateTeam(ctx context.Context, orgID string, team *CreateT
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -109,7 +109,7 @@ func (c *TeamClient) GetTeam(ctx context.Context, orgID, teamID string) (*Team, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("team")
@@ -150,7 +150,7 @@ func (c *TeamClient) UpdateTeam(ctx context.Context, orgID, teamID string, team 
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("team")
@@ -190,7 +190,7 @@ func (c *TeamClient) UpdateTeamParent(ctx context.Context, orgID, teamID string,
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return client.NewNotFoundError("team")
@@ -219,7 +219,7 @@ func (c *TeamClient) DeleteTeam(ctx context.Context, orgID, teamID string) error
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusNoContent {
 		body, _ := io.ReadAll(resp.Body)

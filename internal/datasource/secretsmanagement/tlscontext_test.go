@@ -17,7 +17,6 @@ func TestNewTLSContextSMDataSource(t *testing.T) {
 		t.Error("NewTLSContextDataSource() returned nil")
 	}
 
-	var _ datasource.DataSource = dataSource
 	if _, ok := dataSource.(datasource.DataSourceWithConfigure); !ok {
 		t.Error("does not implement DataSourceWithConfigure")
 	}

@@ -73,7 +73,7 @@ func (c *TruststoreClient) CreateTruststore(ctx context.Context, orgID, envID, s
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
@@ -104,7 +104,7 @@ func (c *TruststoreClient) GetTruststore(ctx context.Context, orgID, envID, sgID
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("truststore")
@@ -144,7 +144,7 @@ func (c *TruststoreClient) UpdateTruststore(ctx context.Context, orgID, envID, s
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusCreated {
 		respBody, _ := io.ReadAll(resp.Body)
@@ -170,7 +170,7 @@ func (c *TruststoreClient) DeleteTruststore(ctx context.Context, orgID, envID, s
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
 		body, _ := io.ReadAll(resp.Body)
@@ -196,7 +196,7 @@ func (c *TruststoreClient) ListTruststores(ctx context.Context, orgID, envID, sg
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -225,9 +225,10 @@ func buildTruststoreMultipart(request *CreateTruststoreRequest) (*bytes.Buffer, 
 
 	if len(request.TrustStore) > 0 {
 		ext := "pem"
-		if request.Type == "JKS" || request.Type == "JCEKS" {
+		switch request.Type {
+		case "JKS", "JCEKS":
 			ext = "jks"
-		} else if request.Type == "PKCS12" {
+		case "PKCS12":
 			ext = "p12"
 		}
 		part, err := writer.CreateFormFile("trustStore", "truststore."+ext)

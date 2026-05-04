@@ -136,7 +136,7 @@ func (c *APIPolicyClient) doCreatePolicy(ctx context.Context, createURL, orgID, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("failed to create policy with status %d: %s", resp.StatusCode, string(body))
@@ -161,7 +161,7 @@ func (c *APIPolicyClient) doGetPolicy(ctx context.Context, getURL, orgID, envID 
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("policy")
 	}
@@ -194,7 +194,7 @@ func (c *APIPolicyClient) doUpdatePolicy(ctx context.Context, updateURL, orgID, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("policy")
 	}
@@ -222,7 +222,7 @@ func (c *APIPolicyClient) doDeletePolicy(ctx context.Context, deleteURL, orgID, 
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to delete policy with status %d: %s", resp.StatusCode, string(body))
@@ -272,7 +272,7 @@ func (c *APIPolicyClient) doCreateOutboundPolicy(ctx context.Context, createURL,
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("failed to create policy with status %d: %s", resp.StatusCode, string(body))
@@ -321,7 +321,7 @@ func (c *APIPolicyClient) doUpdateOutboundPolicy(ctx context.Context, updateURL,
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("policy")
 	}

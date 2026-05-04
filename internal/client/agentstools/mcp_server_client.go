@@ -237,7 +237,7 @@ func (c *MCPServerClient) GetMCPServer(ctx context.Context, orgID, envID string,
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("MCP server")
@@ -279,7 +279,7 @@ func (c *MCPServerClient) UpdateMCPServer(ctx context.Context, orgID, envID stri
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("MCP server")
@@ -315,7 +315,7 @@ func (c *MCPServerClient) DeleteMCPServer(ctx context.Context, orgID, envID stri
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -348,7 +348,7 @@ func (c *MCPServerClient) ListMCPServers(ctx context.Context, orgID, envID strin
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

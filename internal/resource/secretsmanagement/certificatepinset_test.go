@@ -17,7 +17,6 @@ func TestNewCertificatePinsetResource(t *testing.T) {
 		t.Error("NewCertificatePinsetResource() returned nil")
 	}
 
-	var _ resource.Resource = r
 	if _, ok := r.(resource.ResourceWithConfigure); !ok {
 		t.Error("CertificatePinsetResource should implement ResourceWithConfigure")
 	}

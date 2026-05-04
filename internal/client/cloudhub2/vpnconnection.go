@@ -97,7 +97,7 @@ func (c *VPNConnectionClient) CreateVPNConnection(ctx context.Context, orgID, pr
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -125,7 +125,7 @@ func (c *VPNConnectionClient) GetVPNConnection(ctx context.Context, orgID, priva
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("VPN connection")
@@ -157,7 +157,7 @@ func (c *VPNConnectionClient) DeleteVPNConnection(ctx context.Context, orgID, pr
 	if err != nil {
 		return fmt.Errorf("failed to execute delete vpn connection request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil // Already deleted is not an error
@@ -184,7 +184,7 @@ func (c *VPNConnectionClient) DeleteVPN(ctx context.Context, orgID, privateSpace
 	if err != nil {
 		return fmt.Errorf("failed to execute delete vpn request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// A 204 No Content is a successful deletion.
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {

@@ -66,7 +66,6 @@ func TestIntegrationEnvironmentResource_CRUD(t *testing.T) {
 			t.Error("Environment resource client should be configured")
 		}
 
-		var _ resource.Resource = envResource
 	})
 
 	// Test READ operation
@@ -191,7 +190,6 @@ func TestIntegrationEnvironmentResource_InterfaceCompliance(t *testing.T) {
 	envResource := &EnvironmentResource{}
 
 	// Test interface compliance
-	var _ resource.Resource = envResource
 	var _ resource.ResourceWithConfigure = envResource
 	var _ resource.ResourceWithImportState = envResource
 

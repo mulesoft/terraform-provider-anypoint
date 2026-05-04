@@ -20,7 +20,6 @@ func TestNewConnectedAppScopesResource(t *testing.T) {
 		t.Error("NewConnectedAppScopesResource() returned nil")
 	}
 
-	var _ resource.Resource = r
 	if _, ok := r.(resource.ResourceWithConfigure); !ok {
 		t.Error("ConnectedAppScopesResource should implement ResourceWithConfigure")
 	}
