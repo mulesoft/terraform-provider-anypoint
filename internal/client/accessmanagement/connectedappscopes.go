@@ -58,7 +58,7 @@ func (c *ConnectedAppScopesClient) GetConnectedAppScopes(ctx context.Context, co
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -99,7 +99,7 @@ func (c *ConnectedAppScopesClient) UpdateConnectedAppScopes(ctx context.Context,
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

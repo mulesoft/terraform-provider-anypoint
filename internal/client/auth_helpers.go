@@ -53,7 +53,7 @@ func GetMe(httpClient *http.Client, baseURL, token string) (map[string]interface
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to get user info with status %d", resp.StatusCode)

@@ -179,7 +179,7 @@ func (c *APIInstanceClient) GetGatewayInfo(ctx context.Context, orgID, envID, ga
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError(fmt.Sprintf("gateway %s", gatewayID))
@@ -279,7 +279,7 @@ func (c *APIInstanceClient) GetAPIInstance(ctx context.Context, orgID, envID str
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("API instance")
@@ -321,7 +321,7 @@ func (c *APIInstanceClient) UpdateAPIInstance(ctx context.Context, orgID, envID 
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("API instance")
@@ -357,7 +357,7 @@ func (c *APIInstanceClient) DeleteAPIInstance(ctx context.Context, orgID, envID 
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -390,7 +390,7 @@ func (c *APIInstanceClient) ListAPIInstances(ctx context.Context, orgID, envID s
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

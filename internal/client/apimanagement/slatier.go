@@ -99,7 +99,7 @@ func (c *SLATierClient) CreateSLATier(ctx context.Context, orgID, envID string, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -136,7 +136,7 @@ func (c *SLATierClient) ListSLATiers(ctx context.Context, orgID, envID string, a
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("SLA tier")
@@ -196,7 +196,7 @@ func (c *SLATierClient) UpdateSLATier(ctx context.Context, orgID, envID string, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("SLA tier")
@@ -231,7 +231,7 @@ func (c *SLATierClient) DeleteSLATier(ctx context.Context, orgID, envID string, 
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

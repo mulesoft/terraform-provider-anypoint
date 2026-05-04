@@ -17,7 +17,6 @@ func TestNewTruststoreResource(t *testing.T) {
 		t.Error("NewTruststoreResource() returned nil")
 	}
 
-	var _ resource.Resource = r
 	if _, ok := r.(resource.ResourceWithConfigure); !ok {
 		t.Error("TruststoreResource should implement ResourceWithConfigure")
 	}

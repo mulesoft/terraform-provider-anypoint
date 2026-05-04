@@ -101,7 +101,7 @@ func (c *PrivateSpaceConnectionClient) CreatePrivateSpaceConnection(ctx context.
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -131,7 +131,7 @@ func (c *PrivateSpaceConnectionClient) GetPrivateSpaceConnection(ctx context.Con
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("private space connection")
@@ -171,7 +171,7 @@ func (c *PrivateSpaceConnectionClient) UpdatePrivateSpaceConnection(ctx context.
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("private space connection")
@@ -205,7 +205,7 @@ func (c *PrivateSpaceConnectionClient) DeletePrivateSpaceConnection(ctx context.
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

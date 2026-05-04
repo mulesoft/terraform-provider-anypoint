@@ -60,7 +60,7 @@ func TestIntegrationAPIPolicyResource_CRUD(t *testing.T) {
 		}
 		if body.AssetID == "" || body.GroupID == "" {
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(`{"message":"missing required fields"}`))
+			_, _ = w.Write([]byte(`{"message":"missing required fields"}`))
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")

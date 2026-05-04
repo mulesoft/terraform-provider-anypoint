@@ -197,7 +197,7 @@ func (c *PrivateSpacesClient) CreatePrivateSpace(ctx context.Context, orgID stri
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -227,7 +227,7 @@ func (c *PrivateSpacesClient) GetPrivateSpace(ctx context.Context, orgID, privat
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("private space")
@@ -267,7 +267,7 @@ func (c *PrivateSpacesClient) UpdatePrivateSpace(ctx context.Context, orgID, pri
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("private space")
@@ -301,7 +301,7 @@ func (c *PrivateSpacesClient) DeletePrivateSpace(ctx context.Context, orgID, pri
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

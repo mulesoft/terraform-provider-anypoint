@@ -381,7 +381,7 @@ func (c *OrganizationClient) CreateOrganization(ctx context.Context, org *Create
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -446,7 +446,7 @@ func (c *OrganizationClient) UpdateOrganization(ctx context.Context, organizatio
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("organization")
@@ -480,7 +480,7 @@ func (c *OrganizationClient) GetOrganization(ctx context.Context, organizationID
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("organization")
@@ -529,7 +529,7 @@ func (c *OrganizationClient) DeleteOrganization(ctx context.Context, organizatio
 	if err != nil {
 		return fmt.Errorf("failed to send delete request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return client.NewNotFoundError("organization")

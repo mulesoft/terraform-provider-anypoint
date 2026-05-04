@@ -189,7 +189,7 @@ func TestAPIPolicyClient_ErrorHandling(t *testing.T) {
 	handlers["POST /apimanager/api/v1/organizations/org-123/environments/env-456/apis/100/policies"] = func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(`{"message":"invalid configuration"}`))
+		_, _ = w.Write([]byte(`{"message":"invalid configuration"}`))
 	}
 
 	server := testutil.MockHTTPServer(t, handlers)

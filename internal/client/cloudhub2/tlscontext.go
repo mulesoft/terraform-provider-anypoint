@@ -166,7 +166,7 @@ func (c *TLSContextClient) CreateTLSContext(ctx context.Context, orgID, privateS
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// API returns 201 with no body on successful creation
 	if resp.StatusCode == http.StatusCreated {
@@ -193,7 +193,7 @@ func (c *TLSContextClient) ListTLSContexts(ctx context.Context, orgID, privateSp
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -223,7 +223,7 @@ func (c *TLSContextClient) GetTLSContext(ctx context.Context, orgID, privateSpac
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("TLS context")
@@ -263,7 +263,7 @@ func (c *TLSContextClient) UpdateTLSContext(ctx context.Context, orgID, privateS
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("TLS context")
@@ -297,7 +297,7 @@ func (c *TLSContextClient) DeleteTLSContext(ctx context.Context, orgID, privateS
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil // Already deleted

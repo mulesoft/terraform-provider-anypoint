@@ -59,7 +59,7 @@ func (c *PrivateSpaceUpgradeClient) UpgradePrivateSpace(ctx context.Context, org
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -89,7 +89,7 @@ func (c *PrivateSpaceUpgradeClient) GetPrivateSpaceUpgradeStatus(ctx context.Con
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("private space upgrade status")
@@ -142,7 +142,7 @@ func (c *PrivateSpaceUpgradeClient) DeletePrivateSpaceUpgrade(ctx context.Contex
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil // Already deleted or doesn't exist
