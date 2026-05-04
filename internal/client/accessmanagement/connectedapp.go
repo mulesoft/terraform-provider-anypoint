@@ -77,7 +77,7 @@ func (c *ConnectedAppClient) CreateConnectedApp(ctx context.Context, req *Create
 	if err != nil {
 		return nil, fmt.Errorf("error making request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Read the response body
 	respBody, err := io.ReadAll(resp.Body)
@@ -115,7 +115,7 @@ func (c *ConnectedAppClient) GetConnectedApp(ctx context.Context, clientID strin
 	if err != nil {
 		return nil, fmt.Errorf("error making request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Read the response body
 	respBody, err := io.ReadAll(resp.Body)
@@ -156,7 +156,7 @@ func (c *ConnectedAppClient) DeleteConnectedApp(ctx context.Context, clientID st
 	if err != nil {
 		return fmt.Errorf("error making request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Check for error status codes
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {

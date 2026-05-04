@@ -17,7 +17,6 @@ func TestNewOrganizationResource(t *testing.T) {
 		t.Error("NewOrganizationResource() returned nil")
 	}
 
-	var _ resource.Resource = r
 	if _, ok := r.(resource.ResourceWithConfigure); !ok {
 		t.Error("OrganizationResource should implement ResourceWithConfigure")
 	}
