@@ -906,7 +906,7 @@ var KnownPolicySchemas = map[string]map[string]PolicySchemaField{
 	"gemini-transcoding-policy": {},
 	// A2A (Agent-to-Agent) policies
 	"a2a-pii-detector": {
-		"entities": {Required: true, Type: "array"},
+		"entities": {Required: true, Type: "string_array", ElemEnum: []string{"Email", "Credit Card", "Phone Number", "US SSN"}},
 		"action":   {Required: false, Type: "string"},
 	},
 	"a2a-agent-card": {
