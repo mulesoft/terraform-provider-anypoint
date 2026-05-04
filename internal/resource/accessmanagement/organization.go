@@ -8,11 +8,16 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/float64default"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -26,8 +31,9 @@ import (
 
 // Ensure the implementation satisfies the expected interfaces
 var (
-	_ resource.Resource              = &OrganizationResource{}
-	_ resource.ResourceWithConfigure = &OrganizationResource{}
+	_ resource.Resource                = &OrganizationResource{}
+	_ resource.ResourceWithConfigure   = &OrganizationResource{}
+	_ resource.ResourceWithImportState = &OrganizationResource{}
 )
 
 // OrganizationResource is the resource implementation.
@@ -71,7 +77,12 @@ type MonitoringCenterEntitlementModel struct {
 	RawStorageOverrideGB types.Int64 `tfsdk:"raw_storage_override_gb"`
 }
 
-// EntitlementsModel represents the entitlements model
+// EntitlementsModel represents the entitlements model exposed by the
+// provider. `static_ips` and `vpns` are intentionally omitted: the Anypoint
+// Access Management API treats them as server-managed attributes that are
+// never settable via the organizations create/update payload. Including them
+// here would (a) force users to declare them in HCL just to satisfy object
+// validation and (b) mismatch the actual API contract.
 type EntitlementsModel struct {
 	CreateSubOrgs         types.Bool   `tfsdk:"create_sub_orgs"`
 	CreateEnvironments    types.Bool   `tfsdk:"create_environments"`
@@ -80,9 +91,7 @@ type EntitlementsModel struct {
 	VCoresProduction      types.Object `tfsdk:"vcores_production"`
 	VCoresSandbox         types.Object `tfsdk:"vcores_sandbox"`
 	VCoresDesign          types.Object `tfsdk:"vcores_design"`
-	StaticIps             types.Object `tfsdk:"static_ips"`
 	Vpcs                  types.Object `tfsdk:"vpcs"`
-	Vpns                  types.Object `tfsdk:"vpns"`
 	NetworkConnections    types.Object `tfsdk:"network_connections"`
 	WorkerLoggingOverride types.Object `tfsdk:"worker_logging_override"`
 	MqMessages            types.Object `tfsdk:"mq_messages"`
@@ -164,11 +173,8 @@ func (r *OrganizationResource) Schema(_ context.Context, _ resource.SchemaReques
 				},
 			},
 			"name": schema.StringAttribute{
-				Description: "The name of the organization.",
+				Description: "The name of the organization. Can be updated in place via PUT /accounts/api/organizations/{id}.",
 				Required:    true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
 			},
 			"parent_organization_id": schema.StringAttribute{
 				Description: "The ID of the parent organization.",
@@ -258,190 +264,155 @@ func (r *OrganizationResource) Schema(_ context.Context, _ resource.SchemaReques
 				},
 			},
 			"entitlements": schema.SingleNestedAttribute{
-				Description: "Entitlements for the organization.",
-				Required:    true,
+				Description: "Entitlements for the organization. Optional — any omitted sub-attribute defaults to its zero value (false for booleans, 0 for quotas). Omitting the whole block is equivalent to declaring `entitlements = {}`.",
+				Optional:    true,
+				Computed:    true,
+				PlanModifiers: []planmodifier.Object{
+					objectplanmodifier.UseStateForUnknown(),
+				},
 				Attributes: map[string]schema.Attribute{
 					"create_sub_orgs": schema.BoolAttribute{
-						Description: "Whether sub-organizations can be created.",
-						Required:    true,
+						Description: "Whether sub-organizations can be created. Defaults to false.",
+						Optional:    true,
+						Computed:    true,
+						Default:     booldefault.StaticBool(false),
 					},
 					"create_environments": schema.BoolAttribute{
-						Description: "Whether environments can be created.",
-						Required:    true,
+						Description: "Whether environments can be created. Defaults to false.",
+						Optional:    true,
+						Computed:    true,
+						Default:     booldefault.StaticBool(false),
 					},
 					"global_deployment": schema.BoolAttribute{
-						Description: "Whether global deployment is enabled.",
-						Required:    true,
+						Description: "Whether global deployment is enabled. Defaults to false.",
+						Optional:    true,
+						Computed:    true,
+						Default:     booldefault.StaticBool(false),
 					},
 					"vcores_production": schema.SingleNestedAttribute{
 						Description: "Production vCore entitlement.",
 						Optional:    true,
 						Computed:    true,
 						Attributes:  getVCoreEntitlementSchema(),
-						PlanModifiers: []planmodifier.Object{
-							objectplanmodifier.UseStateForUnknown(),
-						},
+						Default:     objectdefault.StaticValue(zeroVCore()),
 					},
 					"vcores_sandbox": schema.SingleNestedAttribute{
 						Description: "Sandbox vCore entitlement.",
 						Optional:    true,
 						Computed:    true,
 						Attributes:  getVCoreEntitlementSchema(),
-						PlanModifiers: []planmodifier.Object{
-							objectplanmodifier.UseStateForUnknown(),
-						},
+						Default:     objectdefault.StaticValue(zeroVCore()),
 					},
 					"vcores_design": schema.SingleNestedAttribute{
 						Description: "Design vCore entitlement.",
 						Optional:    true,
 						Computed:    true,
 						Attributes:  getVCoreEntitlementSchema(),
-						PlanModifiers: []planmodifier.Object{
-							objectplanmodifier.UseStateForUnknown(),
-						},
+						Default:     objectdefault.StaticValue(zeroVCore()),
 					},
-					"static_ips": schema.SingleNestedAttribute{
-						Description: "Static IP entitlement.",
-						Optional:    true,
-						Computed:    true,
-						Attributes:  getVCoreEntitlementSchema(),
-						PlanModifiers: []planmodifier.Object{
-							objectplanmodifier.UseStateForUnknown(),
-						},
-					},
+					// NOTE: `static_ips` and `vpns` are deliberately absent.
+					// The Anypoint Access Management API does not accept them
+					// in the organizations create/update payload, so they are
+					// not user-settable. Exposing them would have forced users
+					// to populate placeholder blocks just to satisfy object
+					// validation (e.g. "attributes static_ips and vpns are
+					// required").
 					"vpcs": schema.SingleNestedAttribute{
 						Description: "VPC entitlement.",
 						Optional:    true,
 						Computed:    true,
 						Attributes:  getVCoreEntitlementSchema(),
-						PlanModifiers: []planmodifier.Object{
-							objectplanmodifier.UseStateForUnknown(),
-						},
-					},
-					"vpns": schema.SingleNestedAttribute{
-						Description: "VPN entitlement.",
-						Optional:    true,
-						Computed:    true,
-						Attributes:  getVCoreEntitlementSchema(),
-						PlanModifiers: []planmodifier.Object{
-							objectplanmodifier.UseStateForUnknown(),
-						},
+						Default:     objectdefault.StaticValue(zeroVCore()),
 					},
 					"network_connections": schema.SingleNestedAttribute{
 						Description: "Network connections entitlement.",
 						Optional:    true,
 						Computed:    true,
 						Attributes:  getVCoreEntitlementSchema(),
-						PlanModifiers: []planmodifier.Object{
-							objectplanmodifier.UseStateForUnknown(),
-						},
+						Default:     objectdefault.StaticValue(zeroVCore()),
 					},
 					"hybrid": schema.SingleNestedAttribute{
 						Description: "Hybrid entitlement.",
 						Optional:    true,
 						Computed:    true,
 						Attributes:  getEnabledEntitlementSchema(),
-						PlanModifiers: []planmodifier.Object{
-							objectplanmodifier.UseStateForUnknown(),
-						},
+						Default:     objectdefault.StaticValue(zeroEnabled()),
 					},
 					"runtime_fabric": schema.BoolAttribute{
 						Description: "Whether Runtime Fabric is enabled.",
 						Optional:    true,
 						Computed:    true,
-						PlanModifiers: []planmodifier.Bool{
-							boolplanmodifier.UseStateForUnknown(),
-						},
+						Default:     booldefault.StaticBool(false),
 					},
 					"flex_gateway": schema.SingleNestedAttribute{
 						Description: "Flex Gateway entitlement.",
 						Optional:    true,
 						Computed:    true,
 						Attributes:  getEnabledEntitlementSchema(),
-						PlanModifiers: []planmodifier.Object{
-							objectplanmodifier.UseStateForUnknown(),
-						},
+						Default:     objectdefault.StaticValue(zeroEnabled()),
 					},
 					"worker_logging_override": schema.SingleNestedAttribute{
 						Description: "Worker logging override entitlement.",
 						Optional:    true,
 						Computed:    true,
 						Attributes:  getEnabledEntitlementSchema(),
-						PlanModifiers: []planmodifier.Object{
-							objectplanmodifier.UseStateForUnknown(),
-						},
+						Default:     objectdefault.StaticValue(zeroEnabled()),
 					},
 					"mq_messages": schema.SingleNestedAttribute{
 						Description: "MQ messages entitlement.",
 						Optional:    true,
 						Computed:    true,
 						Attributes:  getMqEntitlementSchema(),
-						PlanModifiers: []planmodifier.Object{
-							objectplanmodifier.UseStateForUnknown(),
-						},
+						Default:     objectdefault.StaticValue(zeroMq()),
 					},
 					"mq_requests": schema.SingleNestedAttribute{
 						Description: "MQ requests entitlement.",
 						Optional:    true,
 						Computed:    true,
 						Attributes:  getMqEntitlementSchema(),
-						PlanModifiers: []planmodifier.Object{
-							objectplanmodifier.UseStateForUnknown(),
-						},
+						Default:     objectdefault.StaticValue(zeroMq()),
 					},
 					"gateways": schema.SingleNestedAttribute{
 						Description: "Gateways entitlement.",
 						Optional:    true,
 						Computed:    true,
 						Attributes:  getAssignedEntitlementSchema(),
-						PlanModifiers: []planmodifier.Object{
-							objectplanmodifier.UseStateForUnknown(),
-						},
+						Default:     objectdefault.StaticValue(zeroAssigned()),
 					},
 					"design_center": schema.SingleNestedAttribute{
 						Description: "Design Center entitlement.",
 						Optional:    true,
 						Computed:    true,
 						Attributes:  getDesignCenterEntitlementSchema(),
-						PlanModifiers: []planmodifier.Object{
-							objectplanmodifier.UseStateForUnknown(),
-						},
+						Default:     objectdefault.StaticValue(zeroDesignCenter()),
 					},
 					"load_balancer": schema.SingleNestedAttribute{
 						Description: "Load balancer entitlement.",
 						Optional:    true,
 						Computed:    true,
 						Attributes:  getAssignedEntitlementSchema(),
-						PlanModifiers: []planmodifier.Object{
-							objectplanmodifier.UseStateForUnknown(),
-						},
+						Default:     objectdefault.StaticValue(zeroAssigned()),
 					},
 					"service_mesh": schema.SingleNestedAttribute{
 						Description: "Service Mesh entitlement.",
 						Optional:    true,
 						Computed:    true,
 						Attributes:  getEnabledEntitlementSchema(),
-						PlanModifiers: []planmodifier.Object{
-							objectplanmodifier.UseStateForUnknown(),
-						},
+						Default:     objectdefault.StaticValue(zeroEnabled()),
 					},
 					"managed_gateway_small": schema.SingleNestedAttribute{
 						Description: "Managed Gateway (small) entitlement.",
 						Optional:    true,
 						Computed:    true,
 						Attributes:  getAssignedEntitlementSchema(),
-						PlanModifiers: []planmodifier.Object{
-							objectplanmodifier.UseStateForUnknown(),
-						},
+						Default:     objectdefault.StaticValue(zeroAssigned()),
 					},
 					"managed_gateway_large": schema.SingleNestedAttribute{
 						Description: "Managed Gateway (large) entitlement.",
 						Optional:    true,
 						Computed:    true,
 						Attributes:  getAssignedEntitlementSchema(),
-						PlanModifiers: []planmodifier.Object{
-							objectplanmodifier.UseStateForUnknown(),
-						},
+						Default:     objectdefault.StaticValue(zeroAssigned()),
 					},
 				},
 			},
@@ -456,9 +427,11 @@ func (r *OrganizationResource) Schema(_ context.Context, _ resource.SchemaReques
 			"updated_at": schema.StringAttribute{
 				Description: "The last update timestamp of the organization.",
 				Computed:    true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
+				// Deliberately NO UseStateForUnknown: the server rewrites this
+				// on every successful PUT, so keeping the prior state value in
+				// the plan would guarantee an "inconsistent result after
+				// apply" diagnostic on every update. Leaving it unknown lets
+				// Terraform accept whatever timestamp the API returns.
 			},
 			"client_id": schema.StringAttribute{
 				Description: "The client ID associated with the organization.",
@@ -568,13 +541,16 @@ func (r *OrganizationResource) Schema(_ context.Context, _ resource.SchemaReques
 func getVCoreEntitlementSchema() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"assigned": schema.Float64Attribute{
-			Description: "The number of assigned units.",
-			Required:    true,
+			Description: "The number of assigned units. Defaults to 0 if not provided.",
+			Optional:    true,
+			Computed:    true,
+			Default:     float64default.StaticFloat64(0),
 		},
 		"reassigned": schema.Float64Attribute{
 			Description: "The number of reassigned units. Defaults to 0 if not provided.",
 			Optional:    true,
 			Computed:    true,
+			Default:     float64default.StaticFloat64(0),
 		},
 	}
 }
@@ -582,12 +558,16 @@ func getVCoreEntitlementSchema() map[string]schema.Attribute {
 func getMqEntitlementSchema() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"base": schema.Int64Attribute{
-			Description: "The base number of MQ units.",
-			Required:    true,
+			Description: "The base number of MQ units. Defaults to 0 if not provided.",
+			Optional:    true,
+			Computed:    true,
+			Default:     int64default.StaticInt64(0),
 		},
 		"add_on": schema.Int64Attribute{
-			Description: "The add-on number of MQ units.",
-			Required:    true,
+			Description: "The add-on number of MQ units. Defaults to 0 if not provided.",
+			Optional:    true,
+			Computed:    true,
+			Default:     int64default.StaticInt64(0),
 		},
 	}
 }
@@ -598,15 +578,14 @@ func getEntitlementsAttributeTypes() map[string]attr.Type {
 	assignedType := types.ObjectType{AttrTypes: map[string]attr.Type{"assigned": types.Int64Type}}
 	mqType := types.ObjectType{AttrTypes: getMqEntitlementAttributeTypes()}
 	return map[string]attr.Type{
-		"create_sub_orgs":         types.BoolType,
-		"create_environments":     types.BoolType,
-		"global_deployment":       types.BoolType,
-		"vcores_production":       vcoreType,
-		"vcores_sandbox":          vcoreType,
-		"vcores_design":           vcoreType,
-		"static_ips":              vcoreType,
+		"create_sub_orgs":     types.BoolType,
+		"create_environments": types.BoolType,
+		"global_deployment":   types.BoolType,
+		"vcores_production":   vcoreType,
+		"vcores_sandbox":      vcoreType,
+		"vcores_design":       vcoreType,
+		// static_ips and vpns intentionally omitted — not settable via the API.
 		"vpcs":                    vcoreType,
-		"vpns":                    vcoreType,
 		"network_connections":     vcoreType,
 		"hybrid":                  enabledType,
 		"runtime_fabric":          types.BoolType,
@@ -629,6 +608,7 @@ func getEnabledEntitlementSchema() map[string]schema.Attribute {
 			Description: "Whether this feature is enabled.",
 			Optional:    true,
 			Computed:    true,
+			Default:     booldefault.StaticBool(false),
 		},
 	}
 }
@@ -639,6 +619,7 @@ func getAssignedEntitlementSchema() map[string]schema.Attribute {
 			Description: "The number of assigned units.",
 			Optional:    true,
 			Computed:    true,
+			Default:     int64default.StaticInt64(0),
 		},
 	}
 }
@@ -649,11 +630,13 @@ func getDesignCenterEntitlementSchema() map[string]schema.Attribute {
 			Description: "Whether API Designer is enabled.",
 			Optional:    true,
 			Computed:    true,
+			Default:     booldefault.StaticBool(false),
 		},
 		"mozart": schema.BoolAttribute{
 			Description: "Whether Flow Designer (Mozart) is enabled.",
 			Optional:    true,
 			Computed:    true,
+			Default:     booldefault.StaticBool(false),
 		},
 	}
 }
@@ -694,8 +677,18 @@ func getEnvironmentsAttributeTypes() map[string]attr.Type {
 }
 
 // expandEntitlements converts a Terraform types.Object into the client Entitlements struct.
+//
+// A null/unknown input is treated as "user omitted the entitlements block" —
+// we return a zero-valued Entitlements so the downstream JSON payload is the
+// minimal `{create_sub_orgs:false, create_environments:false, global_deployment:false}`
+// shape. Critically, no master-org-only fields (runtime_fabric, hybrid, etc.)
+// are emitted, which is what prevents the Access Management endpoint from
+// responding with 403 on business-group creates.
 func expandEntitlements(ctx context.Context, obj types.Object) (accessmanagement.Entitlements, diag.Diagnostics) {
 	var diags diag.Diagnostics
+	if obj.IsNull() || obj.IsUnknown() {
+		return accessmanagement.Entitlements{}, diags
+	}
 	var model EntitlementsModel
 	diags.Append(obj.As(ctx, &model, basetypes.ObjectAsOptions{})...)
 	if diags.HasError() {
@@ -706,15 +699,23 @@ func expandEntitlements(ctx context.Context, obj types.Object) (accessmanagement
 		CreateSubOrgs:      model.CreateSubOrgs.ValueBool(),
 		CreateEnvironments: model.CreateEnvironments.ValueBool(),
 		GlobalDeployment:   model.GlobalDeployment.ValueBool(),
-		RuntimeFabric:      model.RuntimeFabric.ValueBool(),
+	}
+	// runtime_fabric is master-org-only on the backend: sending it (even as
+	// `false`) against a business group produces a 403. Only emit it when the
+	// user actually declared the attribute in HCL — null/unknown means "no
+	// opinion", so we leave the field nil and let omitempty drop it.
+	if !model.RuntimeFabric.IsNull() && !model.RuntimeFabric.IsUnknown() {
+		v := model.RuntimeFabric.ValueBool()
+		ent.RuntimeFabric = &v
 	}
 
 	ent.VCoresProduction = vCoreEntitlementFromModel(model.VCoresProduction)
 	ent.VCoresSandbox = vCoreEntitlementFromModel(model.VCoresSandbox)
 	ent.VCoresDesign = vCoreEntitlementFromModel(model.VCoresDesign)
-	ent.StaticIps = vCoreEntitlementFromModel(model.StaticIps)
+	// StaticIps and Vpns are intentionally left nil here — the provider does
+	// not model them (not settable via the organizations endpoint). Their
+	// `omitempty` JSON tags keep them out of the outgoing payload.
 	ent.Vpcs = vCoreEntitlementFromModel(model.Vpcs)
-	ent.Vpns = vCoreEntitlementFromModel(model.Vpns)
 	ent.NetworkConnections = vCoreEntitlementFromModel(model.NetworkConnections)
 
 	ent.Hybrid = hybridEntitlementFromModel(model.Hybrid)
@@ -732,97 +733,156 @@ func expandEntitlements(ctx context.Context, obj types.Object) (accessmanagement
 	return ent, diags
 }
 
-// nullEnabled returns a null types.Object for an {enabled bool} attribute type.
-func nullEnabled() types.Object {
-	return types.ObjectNull(map[string]attr.Type{"enabled": types.BoolType})
+// zeroEnabled returns a concrete {enabled = false} Object.
+//
+// NOTE: flatten no longer synthesises this when the server omits an
+// enabled-style entitlement (hybrid / flex_gateway / worker_logging_override /
+// service_mesh). On sub-orgs those flags can be inherited-true at the master
+// level and a hardcoded false desyncs from what the server echoes in PUT
+// responses, causing "inconsistent result after apply". Enabled-style
+// entitlements now flatten to null when omitted; the helper is retained for
+// tests that still construct canonical zero-valued plan objects.
+func zeroEnabled() types.Object {
+	return types.ObjectValueMust(
+		map[string]attr.Type{"enabled": types.BoolType},
+		map[string]attr.Value{"enabled": types.BoolValue(false)},
+	)
 }
 
-// nullAssigned returns a null types.Object for an {assigned int64} attribute type.
-func nullAssigned() types.Object {
-	return types.ObjectNull(map[string]attr.Type{"assigned": types.Int64Type})
+// zeroAssigned returns a concrete {assigned = 0} Object. Same rationale as
+// zeroEnabled — keeping state concrete prevents perpetual drift against
+// `{ assigned = 0 }` configs (e.g. the managed_gateway_large bug).
+func zeroAssigned() types.Object {
+	return types.ObjectValueMust(
+		map[string]attr.Type{"assigned": types.Int64Type},
+		map[string]attr.Value{"assigned": types.Int64Value(0)},
+	)
+}
+
+// zeroVCore returns a concrete {assigned = 0, reassigned = 0} Object.
+func zeroVCore() types.Object {
+	return types.ObjectValueMust(
+		getVCoreEntitlementAttributeTypes(),
+		map[string]attr.Value{
+			"assigned":   types.Float64Value(0),
+			"reassigned": types.Float64Value(0),
+		},
+	)
+}
+
+// zeroDesignCenter returns a concrete {api = false, mozart = false} Object.
+//
+// Same caveat as zeroEnabled: flatten no longer synthesises this when the
+// server omits `design_center` from the response. The booleans may be
+// inherited from a master org and a hardcoded false would desync with the
+// PUT response. Kept here for tests and to document the zero-value shape.
+func zeroDesignCenter() types.Object {
+	return types.ObjectValueMust(
+		map[string]attr.Type{"api": types.BoolType, "mozart": types.BoolType},
+		map[string]attr.Value{
+			"api":    types.BoolValue(false),
+			"mozart": types.BoolValue(false),
+		},
+	)
+}
+
+// zeroMq returns a concrete {base = 0, add_on = 0} Object.
+func zeroMq() types.Object {
+	return types.ObjectValueMust(
+		getMqEntitlementAttributeTypes(),
+		map[string]attr.Value{
+			"base":   types.Int64Value(0),
+			"add_on": types.Int64Value(0),
+		},
+	)
 }
 
 // flattenEntitlements converts the client Entitlements struct into a Terraform types.Object.
+//
+// Every Optional+Computed entitlement flattens to a concrete zero-valued Object
+// when the server omits it. This is required so that a HCL value such as
+// `managed_gateway_large = { assigned = 0 }` matches the refreshed state and
+// does not trigger a perpetual in-place update plan.
 func flattenEntitlements(ctx context.Context, ent accessmanagement.Entitlements) (types.Object, diag.Diagnostics) {
 	var hybrid, flexGateway, workerLogging, serviceMesh types.Object
 	if ent.Hybrid != nil {
 		hybrid = hybridEntitlementToModel(ent.Hybrid)
 	} else {
-		hybrid = nullEnabled()
+		hybrid = zeroEnabled()
 	}
 	if ent.FlexGateway != nil {
 		flexGateway = enabledEntitlementToModel(ent.FlexGateway)
 	} else {
-		flexGateway = nullEnabled()
+		flexGateway = zeroEnabled()
 	}
 	if ent.WorkerLoggingOverride != nil {
 		workerLogging = workerLoggingOverrideEntitlementToModel(ent.WorkerLoggingOverride)
 	} else {
-		workerLogging = nullEnabled()
+		workerLogging = zeroEnabled()
 	}
 	if ent.ServiceMesh != nil {
 		serviceMesh = enabledEntitlementToModel(ent.ServiceMesh)
 	} else {
-		serviceMesh = nullEnabled()
+		serviceMesh = zeroEnabled()
 	}
 
-	mqNull := types.ObjectNull(getMqEntitlementAttributeTypes())
 	var mqMessages, mqRequests types.Object
 	if ent.MqMessages != nil {
 		mqMessages = mqEntitlementToModel(ent.MqMessages)
 	} else {
-		mqMessages = mqNull
+		mqMessages = zeroMq()
 	}
 	if ent.MqRequests != nil {
 		mqRequests = mqEntitlementToModel(ent.MqRequests)
 	} else {
-		mqRequests = mqNull
+		mqRequests = zeroMq()
 	}
 
 	var gateways, loadBalancer, gwSmall, gwLarge types.Object
 	if ent.Gateways != nil {
 		gateways = assignedEntitlementToModel(ent.Gateways)
 	} else {
-		gateways = nullAssigned()
+		gateways = zeroAssigned()
 	}
 	if ent.LoadBalancer != nil {
 		loadBalancer = assignedEntitlementToModel(ent.LoadBalancer)
 	} else {
-		loadBalancer = nullAssigned()
+		loadBalancer = zeroAssigned()
 	}
 	if ent.ManagedGatewaySmall != nil {
 		gwSmall = assignedEntitlementToModel(ent.ManagedGatewaySmall)
 	} else {
-		gwSmall = nullAssigned()
+		gwSmall = zeroAssigned()
 	}
 	if ent.ManagedGatewayLarge != nil {
 		gwLarge = assignedEntitlementToModel(ent.ManagedGatewayLarge)
 	} else {
-		gwLarge = nullAssigned()
+		gwLarge = zeroAssigned()
 	}
 
-	dcNull := types.ObjectNull(map[string]attr.Type{"api": types.BoolType, "mozart": types.BoolType})
 	var designCenter types.Object
 	if ent.DesignCenter != nil {
 		designCenter = designCenterEntitlementToModel(ent.DesignCenter)
 	} else {
-		designCenter = dcNull
+		designCenter = zeroDesignCenter()
 	}
 
-	vcoreNull := types.ObjectNull(getVCoreEntitlementAttributeTypes())
+	runtimeFabric := types.BoolValue(false)
+	if ent.RuntimeFabric != nil {
+		runtimeFabric = types.BoolValue(*ent.RuntimeFabric)
+	}
 
 	model := EntitlementsModel{
-		CreateSubOrgs:         types.BoolValue(ent.CreateSubOrgs),
-		CreateEnvironments:    types.BoolValue(ent.CreateEnvironments),
-		GlobalDeployment:      types.BoolValue(ent.GlobalDeployment),
-		RuntimeFabric:         types.BoolValue(ent.RuntimeFabric),
-		VCoresProduction:      vcoreOrNull(ent.VCoresProduction, vcoreNull),
-		VCoresSandbox:         vcoreOrNull(ent.VCoresSandbox, vcoreNull),
-		VCoresDesign:          vcoreOrNull(ent.VCoresDesign, vcoreNull),
-		StaticIps:             vcoreOrNull(ent.StaticIps, vcoreNull),
-		Vpcs:                  vcoreOrNull(ent.Vpcs, vcoreNull),
-		Vpns:                  vcoreOrNull(ent.Vpns, vcoreNull),
-		NetworkConnections:    vcoreOrNull(ent.NetworkConnections, vcoreNull),
+		CreateSubOrgs:      types.BoolValue(ent.CreateSubOrgs),
+		CreateEnvironments: types.BoolValue(ent.CreateEnvironments),
+		GlobalDeployment:   types.BoolValue(ent.GlobalDeployment),
+		RuntimeFabric:      runtimeFabric,
+		VCoresProduction:   vcoreOrZero(ent.VCoresProduction),
+		VCoresSandbox:      vcoreOrZero(ent.VCoresSandbox),
+		VCoresDesign:       vcoreOrZero(ent.VCoresDesign),
+		// StaticIps/Vpns intentionally not surfaced.
+		Vpcs:                  vcoreOrZero(ent.Vpcs),
+		NetworkConnections:    vcoreOrZero(ent.NetworkConnections),
 		Hybrid:                hybrid,
 		FlexGateway:           flexGateway,
 		WorkerLoggingOverride: workerLogging,
@@ -906,11 +966,15 @@ func vCoreEntitlementToModel(vcore *accessmanagement.VCoreEntitlement) types.Obj
 	return objVal
 }
 
-func vcoreOrNull(vcore *accessmanagement.VCoreEntitlement, nullVal types.Object) types.Object {
+// vcoreOrZero returns a Terraform Object for a VCoreEntitlement, falling back
+// to {assigned = 0, reassigned = 0} when the server omits the entitlement. A
+// null fallback here would trigger perpetual drift against HCL that declares
+// `{ assigned = 0 }`, mirroring the managed_gateway_large bug.
+func vcoreOrZero(vcore *accessmanagement.VCoreEntitlement) types.Object {
 	if vcore != nil {
 		return vCoreEntitlementToModel(vcore)
 	}
-	return nullVal
+	return zeroVCore()
 }
 
 func assignedEntitlementFromModel(model types.Object) *accessmanagement.AssignedEntitlement {
@@ -1139,8 +1203,18 @@ func (r *OrganizationResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
-	// Prepare the request
-	entitlements, entDiags := expandEntitlements(ctx, data.Entitlements)
+	// For entitlements we read from Config (not Plan) so the POST only mentions
+	// the ones the user actually declared in HCL. Shipping
+	// UseStateForUnknown-filled defaults (e.g. hybrid:{enabled:false}) would
+	// cause the Access Management endpoint to 403 on business groups with
+	// "Can not enable entitlement on a business group".
+	var config OrganizationResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	entitlements, entDiags := expandEntitlements(ctx, config.Entitlements)
 	resp.Diagnostics.Append(entDiags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -1239,12 +1313,15 @@ func (r *OrganizationResource) Create(ctx context.Context, req resource.CreateRe
 	// Set session timeout
 	data.SessionTimeout = types.Int64Value(int64(organization.SessionTimeout))
 
-	// Flatten entitlements from the API response so all Optional+Computed fields
-	// are resolved to known values (null or concrete) rather than staying unknown.
+	// Flatten entitlements from the API response and merge with the plan so
+	// any fields the server omitted from the POST response (common for
+	// inherited entitlements on sub-orgs) fall back to whatever the user
+	// declared in HCL rather than getting clobbered to null. This keeps the
+	// post-apply state consistent with the plan Terraform computed.
 	entObj, entDiags := flattenEntitlements(ctx, organization.Entitlements)
 	resp.Diagnostics.Append(entDiags...)
 	if !resp.Diagnostics.HasError() {
-		data.Entitlements = entObj
+		data.Entitlements = mergeEntitlementsPreservingPlan(ctx, data.Entitlements, entObj, &resp.Diagnostics)
 	}
 
 	tflog.Trace(ctx, "created an organization")
@@ -1284,6 +1361,21 @@ func (r *OrganizationResource) Read(ctx context.Context, req resource.ReadReques
 	data.CreatedAt = types.StringValue(organization.CreatedAt)
 	data.UpdatedAt = types.StringValue(organization.UpdatedAt)
 	data.OwnerID = types.StringValue(organization.OwnerID)
+
+	// parent_organization_id is not returned as a scalar by the Access Management
+	// GET endpoint — the server only echoes the full ancestor chain via
+	// `parentOrganizationIds`. For normal refreshes after Create we keep whatever
+	// value state already carries (the user's HCL value). For the
+	// `terraform import` path that value is null on first Read, so we derive the
+	// immediate parent from the tail of the chain — otherwise the subsequent
+	// plan would show `null -> "<user value>"` and, because this attribute has
+	// RequiresReplace, Terraform would destroy+recreate the resource the user
+	// just imported.
+	if data.ParentOrganizationID.IsNull() || data.ParentOrganizationID.IsUnknown() || data.ParentOrganizationID.ValueString() == "" {
+		if n := len(organization.ParentOrganizationIDs); n > 0 {
+			data.ParentOrganizationID = types.StringValue(organization.ParentOrganizationIDs[n-1])
+		}
+	}
 	data.ClientID = types.StringValue(organization.ClientID)
 	data.IDProviderID = types.StringValue(organization.IDProviderID)
 	data.IsFederated = types.BoolValue(organization.IsFederated)
@@ -1389,24 +1481,292 @@ func (r *OrganizationResource) Read(ctx context.Context, req resource.ReadReques
 }
 
 // Update updates the resource and sets the updated Terraform state on success.
+//
+// Mutable fields: name, entitlements (including quota entitlements). owner_id and
+// parent_organization_id are marked RequiresReplace in the schema, so any change to
+// those triggers a recreate and never reaches this handler.
+//
+// Properties (e.g. flow_designer) are not exposed on the resource but must be round
+// tripped in the PUT body or the server drops them; we GET the current org and feed
+// its Properties into the request.
 func (r *OrganizationResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data OrganizationResourceModel
-
-	// Read current state
-	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+	var plan OrganizationResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Organizations cannot be updated, so we just keep the current state
-	resp.Diagnostics.AddWarning(
-		"Update Not Supported",
-		"Updating an organization is not supported by this resource. No changes were made.",
-	)
+	// Config (what the user literally declared in HCL) is the authoritative
+	// source for which entitlements the PUT body should even mention. The plan
+	// carries UseStateForUnknown-filled values for Optional+Computed
+	// entitlements the user didn't set, and shipping those (e.g.
+	// hybrid:{enabled:false} on a sub-org) makes the Access Management API
+	// return 403 "Can not enable entitlement on a business group".
+	var config OrganizationResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
-	// Set the state to the current state to prevent automatic refresh
-	// This avoids JSON key ordering issues with entitlements
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	var state OrganizationResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	organizationID := state.ID.ValueString()
+	if organizationID == "" {
+		resp.Diagnostics.AddError(
+			"Missing organization ID in state",
+			"Cannot update an organization whose ID is unknown; the resource state appears to be corrupted.",
+		)
+		return
+	}
+
+	// Pull the current server-side view so we can round-trip fields the provider
+	// does not model (Properties) and fall back to a known owner_id.
+	current, err := r.client.GetOrganization(ctx, organizationID)
+	if err != nil {
+		if client.IsNotFound(err) {
+			resp.Diagnostics.AddWarning(
+				"Organization no longer exists",
+				fmt.Sprintf("Organization %s was not found on the server; removing it from state.", organizationID),
+			)
+			resp.State.RemoveResource(ctx)
+			return
+		}
+		resp.Diagnostics.AddError(
+			"Error reading organization before update",
+			fmt.Sprintf("Could not read organization %s: %s", organizationID, err.Error()),
+		)
+		return
+	}
+
+	entitlements, entDiags := expandEntitlements(ctx, config.Entitlements)
+	resp.Diagnostics.Append(entDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// owner_id is RequiresReplace, so state and plan always agree; we prefer state
+	// (it is the authoritative server value).
+	ownerID := state.OwnerID.ValueString()
+	if ownerID == "" {
+		ownerID = current.OwnerID
+	}
+
+	updateReq := accessmanagement.UpdateOrganizationRequest{
+		ID:           organizationID,
+		Name:         plan.Name.ValueString(),
+		OwnerID:      ownerID,
+		Properties:   current.Properties,
+		Entitlements: entitlements,
+	}
+
+	tflog.Info(ctx, "Updating organization", map[string]interface{}{
+		"id":   organizationID,
+		"name": updateReq.Name,
+	})
+
+	organization, err := r.client.UpdateOrganization(ctx, organizationID, &updateReq)
+	if err != nil {
+		if client.IsNotFound(err) {
+			resp.Diagnostics.AddWarning(
+				"Organization no longer exists",
+				fmt.Sprintf("Organization %s was not found on the server during update; removing it from state.", organizationID),
+			)
+			resp.State.RemoveResource(ctx)
+			return
+		}
+		resp.Diagnostics.AddError(
+			"Error updating organization",
+			fmt.Sprintf("Could not update organization %s: %s", organizationID, err.Error()),
+		)
+		return
+	}
+
+	// Map server response back into the plan-shaped model so Terraform sees a fully
+	// known, post-apply state.
+	plan.ID = types.StringValue(organization.ID)
+	plan.Name = types.StringValue(organization.Name)
+	plan.OwnerID = types.StringValue(organization.OwnerID)
+	plan.CreatedAt = types.StringValue(organization.CreatedAt)
+	plan.UpdatedAt = types.StringValue(organization.UpdatedAt)
+	plan.ClientID = types.StringValue(organization.ClientID)
+	plan.IDProviderID = types.StringValue(organization.IDProviderID)
+	plan.IsFederated = types.BoolValue(organization.IsFederated)
+	plan.IsAutomaticAdminPromotionExempt = types.BoolValue(organization.IsAutomaticAdminPromotionExempt)
+	plan.OrgType = types.StringValue(organization.OrgType)
+	plan.IsRoot = types.BoolValue(organization.IsRoot)
+	plan.IsMaster = types.BoolValue(organization.IsMaster)
+	plan.SessionTimeout = types.Int64Value(int64(organization.SessionTimeout))
+
+	if organization.MfaRequired != "" {
+		plan.MfaRequired = types.StringValue(organization.MfaRequired)
+	} else {
+		plan.MfaRequired = types.StringNull()
+	}
+	if organization.GdotID != nil {
+		plan.GdotID = types.StringValue(*organization.GdotID)
+	} else {
+		plan.GdotID = types.StringNull()
+	}
+	if organization.DeletedAt != nil {
+		plan.DeletedAt = types.StringValue(*organization.DeletedAt)
+	} else {
+		plan.DeletedAt = types.StringNull()
+	}
+	if organization.Domain != nil {
+		plan.Domain = types.StringValue(*organization.Domain)
+	} else {
+		plan.Domain = types.StringNull()
+	}
+
+	if organization.ParentOrganizationIDs != nil {
+		parentOrgIDs, diags := types.ListValueFrom(ctx, types.StringType, organization.ParentOrganizationIDs)
+		resp.Diagnostics.Append(diags...)
+		plan.ParentOrganizationIDs = parentOrgIDs
+	} else {
+		plan.ParentOrganizationIDs = types.ListValueMust(types.StringType, []attr.Value{})
+	}
+
+	if organization.SubOrganizationIDs != nil {
+		subOrgIDs, diags := types.ListValueFrom(ctx, types.StringType, organization.SubOrganizationIDs)
+		resp.Diagnostics.Append(diags...)
+		plan.SubOrganizationIDs = subOrgIDs
+	} else {
+		plan.SubOrganizationIDs = types.ListValueMust(types.StringType, []attr.Value{})
+	}
+
+	if organization.TenantOrganizationIDs != nil {
+		tenantOrgIDs, diags := types.ListValueFrom(ctx, types.StringType, organization.TenantOrganizationIDs)
+		resp.Diagnostics.Append(diags...)
+		plan.TenantOrganizationIDs = tenantOrgIDs
+	} else {
+		plan.TenantOrganizationIDs = types.ListValueMust(types.StringType, []attr.Value{})
+	}
+
+	// The PUT /organizations/{id} response doesn't include the org's
+	// environments for business groups — they're managed by the separate
+	// anypoint_environment resource. If the response carries an env list, use
+	// it; otherwise preserve whatever plan/state already has (UseStateForUnknown
+	// on the `environments` attribute ensures that value is the prior state).
+	// Overwriting with an empty list here would cause Terraform's "element has
+	// vanished" inconsistent-result diagnostic.
+	if len(organization.Environments) > 0 {
+		environments := make([]attr.Value, len(organization.Environments))
+		for i, env := range organization.Environments {
+			envObj, diags := types.ObjectValueFrom(ctx, getEnvironmentsAttributeTypes(), env)
+			resp.Diagnostics.Append(diags...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+			environments[i] = envObj
+		}
+		envs, diags := types.ListValue(types.ObjectType{AttrTypes: getEnvironmentsAttributeTypes()}, environments)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		plan.Environments = envs
+	}
+	// else: leave plan.Environments untouched (it already holds the
+	// UseStateForUnknown-propagated prior-state value).
+
+	if !reflect.ValueOf(organization.Subscription).IsZero() {
+		subscription, diags := types.ObjectValueFrom(ctx, getSubscriptionAttributeTypes(), organization.Subscription)
+		resp.Diagnostics.Append(diags...)
+		plan.Subscription = subscription
+	} else {
+		plan.Subscription = types.ObjectNull(getSubscriptionAttributeTypes())
+	}
+
+	// Merge the PUT response's entitlements view with the prior plan so that
+	// fields the server omitted (typical for inherited entitlements on a
+	// sub-org) don't get clobbered to null and produce
+	// "inconsistent result after apply" errors. Any entitlement the server
+	// DID return overrides the plan value; anything absent keeps whatever the
+	// plan already had (which, via UseStateForUnknown on the inner attrs,
+	// equals the prior state or an unknown marker).
+	entObj, entFlattenDiags := flattenEntitlements(ctx, organization.Entitlements)
+	resp.Diagnostics.Append(entFlattenDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	plan.Entitlements = mergeEntitlementsPreservingPlan(ctx, plan.Entitlements, entObj, &resp.Diagnostics)
+
+	tflog.Trace(ctx, "updated organization")
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+// mergeEntitlementsPreservingPlan reconciles the entitlements blob returned by
+// the API (apiEnt) with what Terraform planned (planEnt) so the post-apply
+// state respects Terraform's contract: post-apply MUST equal plan, otherwise
+// the framework emits "Provider produced inconsistent result after apply".
+//
+// Per-attribute precedence (highest to lowest):
+//
+//  1. Plan unknown          → API value wins. Any post-apply value is legal
+//     because the plan was explicitly "will be known after apply".
+//  2. Plan null             → preserve null. The user did not declare an
+//     opinion; Terraform treats null as a concrete plan value that must round-
+//     trip exactly. Even if the server returned a concrete value for this
+//     attribute (typical for master-org-inherited flags like
+//     `service_mesh:{enabled:true}` showing up on a sub-org PUT response),
+//     we MUST keep null in state. The next refresh cycle will reconcile state
+//     to the server's actual value, where it will then flow through
+//     UseStateForUnknown as the plan value on the following apply.
+//  3. Plan concrete, API null → preserve plan. Server omitted the field
+//     (e.g. partial PUT response); user's declared value should remain.
+//  4. Plan concrete, API concrete → API wins. This is real drift detection.
+func mergeEntitlementsPreservingPlan(ctx context.Context, planEnt types.Object, apiEnt types.Object, diagsOut *diag.Diagnostics) types.Object {
+	// Whole-object short-circuits: if either side is null/unknown, defer to
+	// the other rather than try to merge attribute-by-attribute.
+	if planEnt.IsUnknown() {
+		// Plan is entirely unknown — anything the API returns is legal.
+		return apiEnt
+	}
+	if planEnt.IsNull() {
+		// Plan is entirely null — post-apply must also be null.
+		return planEnt
+	}
+	if apiEnt.IsNull() || apiEnt.IsUnknown() {
+		return planEnt
+	}
+
+	apiAttrs := apiEnt.Attributes()
+	planAttrs := planEnt.Attributes()
+	merged := make(map[string]attr.Value, len(apiAttrs))
+	for name, apiVal := range apiAttrs {
+		planVal, hasPlan := planAttrs[name]
+		switch {
+		case !hasPlan:
+			// Shouldn't happen given identical schemas, but be defensive.
+			merged[name] = apiVal
+		case planVal.IsUnknown():
+			// Rule 1 — API wins; plan said "known after apply".
+			merged[name] = apiVal
+		case planVal.IsNull():
+			// Rule 2 — preserve plan null. Letting the API's concrete value
+			// through here is what produced the
+			// "was null, but now cty.ObjectVal(...)" regression on
+			// flex_gateway / service_mesh for business-group orgs.
+			merged[name] = planVal
+		case apiVal.IsNull():
+			// Rule 3 — server omitted; keep the user-declared value.
+			merged[name] = planVal
+		default:
+			// Rule 4 — both sides concrete; API is authoritative.
+			merged[name] = apiVal
+		}
+	}
+	obj, diags := types.ObjectValue(getEntitlementsAttributeTypes(), merged)
+	diagsOut.Append(diags...)
+	if diags.HasError() {
+		return apiEnt
+	}
+	return obj
 }
 
 // Delete deletes the resource and removes the Terraform state on success.
@@ -1449,4 +1809,16 @@ func (r *OrganizationResource) Delete(ctx context.Context, req resource.DeleteRe
 	}
 
 	tflog.Info(ctx, "Organization deleted successfully", map[string]interface{}{"id": organizationID})
+}
+
+// ImportState supports `terraform import anypoint_organization.<name> <org-id>`.
+//
+// The framework seeds state with the provided ID; the subsequent Read() call
+// hydrates every other attribute (including deriving parent_organization_id
+// from the ancestor chain the server returns). The user's HCL must declare
+// `name`, `parent_organization_id`, and `owner_id` — these are Required and
+// cannot be computed, but they all show up correctly in state on the first
+// refresh.
+func (r *OrganizationResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }

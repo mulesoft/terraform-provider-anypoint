@@ -30,20 +30,20 @@ type SharedSecretResource struct {
 }
 
 type SharedSecretResourceModel struct {
-	ID              types.String `tfsdk:"id"`
-	OrganizationID  types.String `tfsdk:"organization_id"`
-	EnvironmentID   types.String `tfsdk:"environment_id"`
-	SecretGroupID   types.String `tfsdk:"secret_group_id"`
-	Name            types.String `tfsdk:"name"`
-	Type            types.String `tfsdk:"type"`
-	ExpirationDate  types.String `tfsdk:"expiration_date"`
+	ID             types.String `tfsdk:"id"`
+	OrganizationID types.String `tfsdk:"organization_id"`
+	EnvironmentID  types.String `tfsdk:"environment_id"`
+	SecretGroupID  types.String `tfsdk:"secret_group_id"`
+	Name           types.String `tfsdk:"name"`
+	Type           types.String `tfsdk:"type"`
+	ExpirationDate types.String `tfsdk:"expiration_date"`
 
 	// UsernamePassword
 	Username types.String `tfsdk:"username"`
 	Password types.String `tfsdk:"password"`
 
 	// S3Credential
-	AccessKeyID    types.String `tfsdk:"access_key_id"`
+	AccessKeyID     types.String `tfsdk:"access_key_id"`
 	SecretAccessKey types.String `tfsdk:"secret_access_key"`
 
 	// SymmetricKey
@@ -68,23 +68,23 @@ func (r *SharedSecretResource) Schema(_ context.Context, _ resource.SchemaReques
 			"Provide the type-specific fields based on the chosen type.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Description: "Unique identifier of the shared secret.",
-				Computed:    true,
+				Description:   "Unique identifier of the shared secret.",
+				Computed:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"organization_id": schema.StringAttribute{
 				Description: "Organization ID.",
-				Optional: true, Computed: true,
+				Optional:    true, Computed: true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"environment_id": schema.StringAttribute{
-				Description: "Environment ID.",
-				Required: true,
+				Description:   "Environment ID.",
+				Required:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"secret_group_id": schema.StringAttribute{
-				Description: "Secret group ID that this shared secret belongs to.",
-				Required: true,
+				Description:   "Secret group ID that this shared secret belongs to.",
+				Required:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"name": schema.StringAttribute{
@@ -92,8 +92,8 @@ func (r *SharedSecretResource) Schema(_ context.Context, _ resource.SchemaReques
 				Required:    true,
 			},
 			"type": schema.StringAttribute{
-				Description: "Type of shared secret: UsernamePassword, S3Credential, SymmetricKey, or Blob.",
-				Required:    true,
+				Description:   "Type of shared secret: UsernamePassword, S3Credential, SymmetricKey, or Blob.",
+				Required:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 				Validators: []validator.String{
 					stringvalidator.OneOf("UsernamePassword", "S3Credential", "SymmetricKey", "Blob"),
@@ -112,8 +112,8 @@ func (r *SharedSecretResource) Schema(_ context.Context, _ resource.SchemaReques
 			},
 			"password": schema.StringAttribute{
 				Description: "Password (for UsernamePassword type).",
-				Optional:  true,
-				Sensitive: true,
+				Optional:    true,
+				Sensitive:   true,
 			},
 
 			// --- S3Credential fields ---
@@ -123,22 +123,22 @@ func (r *SharedSecretResource) Schema(_ context.Context, _ resource.SchemaReques
 			},
 			"secret_access_key": schema.StringAttribute{
 				Description: "AWS secret access key (for S3Credential type).",
-				Optional:  true,
-				Sensitive: true,
+				Optional:    true,
+				Sensitive:   true,
 			},
 
 			// --- SymmetricKey fields ---
 			"key": schema.StringAttribute{
 				Description: "Base64-encoded symmetric key (for SymmetricKey type).",
-				Optional:  true,
-				Sensitive: true,
+				Optional:    true,
+				Sensitive:   true,
 			},
 
 			// --- Blob fields ---
 			"content": schema.StringAttribute{
 				Description: "Secret content string (for Blob type).",
-				Optional:  true,
-				Sensitive: true,
+				Optional:    true,
+				Sensitive:   true,
 			},
 		},
 	}
@@ -148,10 +148,10 @@ func (r *SharedSecretResource) Configure(_ context.Context, req resource.Configu
 	if req.ProviderData == nil {
 		return
 	}
-	config, ok := req.ProviderData.(*client.ClientConfig)
+	config, ok := req.ProviderData.(*client.Config)
 	if !ok {
 		resp.Diagnostics.AddError("Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.ClientConfig, got: %T.", req.ProviderData))
+			fmt.Sprintf("Expected *client.Config, got: %T.", req.ProviderData))
 		return
 	}
 	ssClient, err := secretsmanagement.NewSharedSecretClient(config)

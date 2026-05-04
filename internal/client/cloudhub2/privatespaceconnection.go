@@ -17,7 +17,7 @@ type PrivateSpaceConnectionClient struct {
 }
 
 // NewPrivateSpaceConnectionClient creates a new PrivateSpaceConnectionClient
-func NewPrivateSpaceConnectionClient(config *client.ClientConfig) (*PrivateSpaceConnectionClient, error) {
+func NewPrivateSpaceConnectionClient(config *client.Config) (*PrivateSpaceConnectionClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err
@@ -46,7 +46,7 @@ type VPN struct {
 	ID                   string      `json:"id,omitempty"`
 	Name                 string      `json:"name"`
 	RemoteAsn            int         `json:"remoteAsn"`
-	RemoteIpAddress      string      `json:"remoteIpAddress"`
+	RemoteIPAddress      string      `json:"remoteIpAddress"`
 	SpecificationVersion string      `json:"specificationVersion"`
 	VPNTunnels           []VPNTunnel `json:"vpnTunnels"`
 }

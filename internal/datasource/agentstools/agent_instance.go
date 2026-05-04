@@ -24,10 +24,10 @@ type AgentInstanceDataSource struct {
 }
 
 type AgentInstanceDataSourceModel struct {
-	ID             types.String               `tfsdk:"id"`
-	OrganizationID types.String               `tfsdk:"organization_id"`
-	EnvironmentID  types.String               `tfsdk:"environment_id"`
-	Instances      []AgentInstanceItemModel   `tfsdk:"instances"`
+	ID             types.String             `tfsdk:"id"`
+	OrganizationID types.String             `tfsdk:"organization_id"`
+	EnvironmentID  types.String             `tfsdk:"environment_id"`
+	Instances      []AgentInstanceItemModel `tfsdk:"instances"`
 }
 
 type AgentInstanceItemModel struct {
@@ -125,11 +125,11 @@ func (d *AgentInstanceDataSource) Configure(_ context.Context, req datasource.Co
 		return
 	}
 
-	config, ok := req.ProviderData.(*client.ClientConfig)
+	config, ok := req.ProviderData.(*client.Config)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *client.ClientConfig, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *client.Config, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}

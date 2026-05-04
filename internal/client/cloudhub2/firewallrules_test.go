@@ -15,13 +15,13 @@ import (
 func TestNewFirewallRulesClient(t *testing.T) {
 	tests := []struct {
 		name        string
-		config      *client.ClientConfig
+		config      *client.Config
 		wantErr     bool
 		errContains string
 	}{
 		{
 			name: "valid config",
-			config: &client.ClientConfig{
+			config: &client.Config{
 				ClientID:     "test-client-id",
 				ClientSecret: "test-client-secret",
 			},
@@ -29,7 +29,7 @@ func TestNewFirewallRulesClient(t *testing.T) {
 		},
 		{
 			name: "missing client ID",
-			config: &client.ClientConfig{
+			config: &client.Config{
 				ClientSecret: "test-client-secret",
 			},
 			wantErr:     true,
@@ -37,7 +37,7 @@ func TestNewFirewallRulesClient(t *testing.T) {
 		},
 		{
 			name: "missing client secret",
-			config: &client.ClientConfig{
+			config: &client.Config{
 				ClientID: "test-client-id",
 			},
 			wantErr:     true,
@@ -48,7 +48,7 @@ func TestNewFirewallRulesClient(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
-			
+
 			if tt.config != nil {
 				tt.config.BaseURL = server.URL
 			}
@@ -115,13 +115,13 @@ func TestFirewallRulesClient_UpdateFirewallRules(t *testing.T) {
 			},
 			mockHandler: func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertHTTPRequest(t, r, "PATCH", "/runtimefabric/api/organizations/test-org-id/privatespaces/test-space-id")
-				
+
 				body := testutil.AssertJSONBody(t, r, "managedFirewallRules")
 				rules, ok := body["managedFirewallRules"].([]interface{})
 				if !ok || len(rules) == 0 {
 					t.Error("Expected managedFirewallRules array in request body")
 				}
-				
+
 				testutil.JSONResponse(w, http.StatusOK, mockPrivateSpace)
 			},
 			wantErr:        false,
@@ -180,7 +180,7 @@ func TestFirewallRulesClient_UpdateFirewallRules(t *testing.T) {
 				if result == nil {
 					t.Errorf("UpdateFirewallRules() returned nil private space")
 				}
-				
+
 				// Validate returned private space
 				if result != nil && tt.expectedResult != nil {
 					if result.ID != tt.expectedResult.ID {

@@ -15,13 +15,13 @@ import (
 func TestNewTeamClient(t *testing.T) {
 	tests := []struct {
 		name        string
-		config      *client.ClientConfig
+		config      *client.Config
 		wantErr     bool
 		errContains string
 	}{
 		{
 			name: "valid config",
-			config: &client.ClientConfig{
+			config: &client.Config{
 				ClientID:     "test-client-id",
 				ClientSecret: "test-client-secret",
 			},
@@ -29,7 +29,7 @@ func TestNewTeamClient(t *testing.T) {
 		},
 		{
 			name: "missing client ID",
-			config: &client.ClientConfig{
+			config: &client.Config{
 				ClientSecret: "test-client-secret",
 			},
 			wantErr:     true,
@@ -37,7 +37,7 @@ func TestNewTeamClient(t *testing.T) {
 		},
 		{
 			name: "missing client secret",
-			config: &client.ClientConfig{
+			config: &client.Config{
 				ClientID: "test-client-id",
 			},
 			wantErr:     true,
@@ -48,7 +48,7 @@ func TestNewTeamClient(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
-			
+
 			if tt.config != nil {
 				tt.config.BaseURL = server.URL
 			}
@@ -101,16 +101,16 @@ func TestTeamClient_CreateTeam(t *testing.T) {
 			},
 			mockHandler: func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertHTTPRequest(t, r, "POST", "/accounts/api/organizations/test-org-id/teams")
-				
+
 				body := testutil.AssertJSONBody(t, r, "team_name", "team_type")
-				
+
 				if body["team_name"] != "Test Team" {
 					t.Errorf("Expected team_name 'Test Team', got %v", body["team_name"])
 				}
 				if body["team_type"] != "internal" {
 					t.Errorf("Expected team_type 'internal', got %v", body["team_type"])
 				}
-				
+
 				testutil.JSONResponse(w, http.StatusCreated, mockTeam)
 			},
 			wantErr:      false,
@@ -126,16 +126,16 @@ func TestTeamClient_CreateTeam(t *testing.T) {
 			},
 			mockHandler: func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertHTTPRequest(t, r, "POST", "/accounts/api/organizations/test-org-id/teams")
-				
+
 				body := testutil.AssertJSONBody(t, r, "team_name", "team_type", "parent_team_id")
-				
+
 				if body["team_name"] != "Child Team" {
 					t.Errorf("Expected team_name 'Child Team', got %v", body["team_name"])
 				}
 				if body["parent_team_id"] != "parent-team-id" {
 					t.Errorf("Expected parent_team_id 'parent-team-id', got %v", body["parent_team_id"])
 				}
-				
+
 				testutil.JSONResponse(w, http.StatusCreated, &Team{
 					ID:        "child-team-id",
 					TeamName:  "Child Team",
@@ -234,7 +234,7 @@ func TestTeamClient_CreateTeam(t *testing.T) {
 				if team == nil {
 					t.Errorf("CreateTeam() returned nil team")
 				}
-				
+
 				// Validate returned team
 				if team != nil && tt.expectedTeam != nil {
 					if team.ID != tt.expectedTeam.ID {
@@ -349,7 +349,7 @@ func TestTeamClient_GetTeam(t *testing.T) {
 				if team == nil {
 					t.Errorf("GetTeam() returned nil team")
 				}
-				
+
 				// Validate returned team
 				if team != nil && tt.expectedTeam != nil {
 					if team.ID != tt.expectedTeam.ID {
@@ -404,12 +404,12 @@ func TestTeamClient_UpdateTeam(t *testing.T) {
 			},
 			mockHandler: func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertHTTPRequest(t, r, "PATCH", "/accounts/api/organizations/test-org-id/teams/test-team-id")
-				
+
 				body := testutil.AssertJSONBody(t, r, "team_name")
 				if body["team_name"] != "Updated Team" {
 					t.Errorf("Expected team_name 'Updated Team', got %v", body["team_name"])
 				}
-				
+
 				testutil.JSONResponse(w, http.StatusOK, mockTeam)
 			},
 			wantErr: false,

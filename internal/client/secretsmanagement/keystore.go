@@ -16,7 +16,7 @@ type KeystoreClient struct {
 	*client.AnypointClient
 }
 
-func NewKeystoreClient(config *client.ClientConfig) (*KeystoreClient, error) {
+func NewKeystoreClient(config *client.Config) (*KeystoreClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err

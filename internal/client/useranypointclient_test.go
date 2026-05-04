@@ -182,7 +182,7 @@ func TestNewUserAnypointClient(t *testing.T) {
 						expectedTimeout = time.Duration(tt.config.Timeout) * time.Second
 					}
 					if client.HTTPClient.Timeout != expectedTimeout {
-						t.Errorf("NewUserAnypointClient() HTTPClient.Timeout = %v, want %v", 
+						t.Errorf("NewUserAnypointClient() HTTPClient.Timeout = %v, want %v",
 							client.HTTPClient.Timeout, expectedTimeout)
 					}
 
@@ -211,16 +211,16 @@ func TestUserAnypointClient_authenticate(t *testing.T) {
 			name: "successful authentication",
 			mockHandler: func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertHTTPRequestWithAuth(t, r, "POST", "/accounts/api/v2/oauth2/token", false)
-				
+
 				body := testutil.AssertJSONBody(t, r, "grant_type", "client_id", "client_secret", "username", "password")
-				
+
 				if body["grant_type"] != "password" {
 					t.Errorf("Expected grant_type 'password', got %v", body["grant_type"])
 				}
 				if body["username"] != "test-user" {
 					t.Errorf("Expected username 'test-user', got %v", body["username"])
 				}
-				
+
 				testutil.JSONResponse(w, http.StatusOK, testutil.MockAuthResponse())
 			},
 			wantErr: false,
@@ -261,9 +261,9 @@ func TestUserAnypointClient_authenticate(t *testing.T) {
 					testutil.JSONResponse(w, http.StatusOK, testutil.MockMeResponse())
 				},
 			}
-			
+
 			server := testutil.MockHTTPServer(t, handlers)
-			
+
 			client := &UserAnypointClient{
 				BaseURL:      server.URL,
 				ClientID:     "test-client-id",
@@ -335,7 +335,7 @@ func TestUserAnypointClient_getMe(t *testing.T) {
 			server := testutil.MockHTTPServer(t, map[string]func(w http.ResponseWriter, r *http.Request){
 				"/accounts/api/me": tt.mockHandler,
 			})
-			
+
 			client := &UserAnypointClient{
 				BaseURL:    server.URL,
 				Token:      "mock-token",
@@ -486,19 +486,19 @@ func TestUserAnypointClient_ConfigDefaults(t *testing.T) {
 func TestUserAnypointClient_AuthenticationFlow(t *testing.T) {
 	authCalled := false
 	meCalled := false
-	
+
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 		"/accounts/api/v2/oauth2/token": func(w http.ResponseWriter, r *http.Request) {
 			authCalled = true
-			
+
 			// Verify it's using password grant
 			body := make(map[string]interface{})
 			json.NewDecoder(r.Body).Decode(&body)
-			
+
 			if body["grant_type"] != "password" {
 				t.Errorf("Expected password grant, got %v", body["grant_type"])
 			}
-			
+
 			testutil.JSONResponse(w, http.StatusOK, testutil.MockAuthResponse())
 		},
 		"/accounts/api/me": func(w http.ResponseWriter, r *http.Request) {
@@ -506,9 +506,9 @@ func TestUserAnypointClient_AuthenticationFlow(t *testing.T) {
 			testutil.JSONResponse(w, http.StatusOK, testutil.MockMeResponse())
 		},
 	}
-	
+
 	server := testutil.MockHTTPServer(t, handlers)
-	
+
 	config := &UserClientConfig{
 		BaseURL:      server.URL,
 		ClientID:     "test-client-id",
@@ -566,14 +566,14 @@ func TestUserAnypointClient_EnvironmentVariableHandling(t *testing.T) {
 			// Verify username from env var is used
 			body := make(map[string]interface{})
 			json.NewDecoder(r.Body).Decode(&body)
-			
+
 			if body["username"] != "env-user" {
 				t.Errorf("Expected username from env var 'env-user', got %v", body["username"])
 			}
 			if body["password"] != "env-password" {
 				t.Errorf("Expected password from env var 'env-password', got %v", body["password"])
 			}
-			
+
 			testutil.JSONResponse(w, http.StatusOK, testutil.MockAuthResponse())
 		},
 		"/accounts/api/me": func(w http.ResponseWriter, r *http.Request) {

@@ -174,11 +174,11 @@ func (r *TLSContextResource) Configure(_ context.Context, req resource.Configure
 		return
 	}
 
-	config, ok := req.ProviderData.(*client.ClientConfig)
+	config, ok := req.ProviderData.(*client.Config)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.ClientConfig, got: %T.", req.ProviderData),
+			fmt.Sprintf("Expected *client.Config, got: %T.", req.ProviderData),
 		)
 		return
 	}
@@ -320,7 +320,7 @@ func (r *TLSContextResource) ImportState(ctx context.Context, req resource.Impor
 
 // --- Helpers ---
 
-func (r *TLSContextResource) expandTLSContext(ctx context.Context, data *TLSContextResourceModel, diags *diag.Diagnostics) *secretsmanagement.TLSContext {
+func (r *TLSContextResource) expandTLSContext(ctx context.Context, data *TLSContextResourceModel, _ *diag.Diagnostics) *secretsmanagement.TLSContext {
 	tlsCtx := &secretsmanagement.TLSContext{
 		Name:   data.Name.ValueString(),
 		Target: data.Target.ValueString(),
@@ -369,7 +369,7 @@ func (r *TLSContextResource) expandTLSContext(ctx context.Context, data *TLSCont
 	return tlsCtx
 }
 
-func (r *TLSContextResource) flattenTLSContext(ctx context.Context, tls *secretsmanagement.TLSContextResponse, data *TLSContextResourceModel, orgID, envID, sgID string, diags *diag.Diagnostics) {
+func (r *TLSContextResource) flattenTLSContext(ctx context.Context, tls *secretsmanagement.TLSContextResponse, data *TLSContextResourceModel, orgID, envID, sgID string, _ *diag.Diagnostics) {
 	data.ID = types.StringValue(tls.Meta.ID)
 	data.OrganizationID = types.StringValue(orgID)
 	data.EnvironmentID = types.StringValue(envID)

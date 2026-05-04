@@ -15,7 +15,7 @@ type AlertClient struct {
 	*client.AnypointClient
 }
 
-func NewAlertClient(config *client.ClientConfig) (*AlertClient, error) {
+func NewAlertClient(config *client.Config) (*AlertClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err
@@ -39,21 +39,21 @@ const (
 // deploymentTypeMap maps shortcodes, camelCase, and uppercase names to the
 // UPPERCASE enum values the Monitoring Alerts API expects.
 var deploymentTypeMap = map[string]DeploymentType{
-	"CH":              DeploymentTypeCloudHub,
-	"CH2":             DeploymentTypeCloudHub2,
-	"HY":              DeploymentTypeHybrid,
-	"RF":              DeploymentTypeRuntimeFabric,
-	"SM":              DeploymentTypeServiceMesh,
-	"cloudHub":        DeploymentTypeCloudHub,
-	"cloudHub2":       DeploymentTypeCloudHub2,
-	"hybrid":          DeploymentTypeHybrid,
-	"runtimeFabric":   DeploymentTypeRuntimeFabric,
-	"serviceMesh":     DeploymentTypeServiceMesh,
-	"CLOUDHUB":        DeploymentTypeCloudHub,
-	"CLOUDHUB2":       DeploymentTypeCloudHub2,
-	"HYBRID":          DeploymentTypeHybrid,
-	"RUNTIMEFABRIC":   DeploymentTypeRuntimeFabric,
-	"SERVICEMESH":     DeploymentTypeServiceMesh,
+	"CH":            DeploymentTypeCloudHub,
+	"CH2":           DeploymentTypeCloudHub2,
+	"HY":            DeploymentTypeHybrid,
+	"RF":            DeploymentTypeRuntimeFabric,
+	"SM":            DeploymentTypeServiceMesh,
+	"cloudHub":      DeploymentTypeCloudHub,
+	"cloudHub2":     DeploymentTypeCloudHub2,
+	"hybrid":        DeploymentTypeHybrid,
+	"runtimeFabric": DeploymentTypeRuntimeFabric,
+	"serviceMesh":   DeploymentTypeServiceMesh,
+	"CLOUDHUB":      DeploymentTypeCloudHub,
+	"CLOUDHUB2":     DeploymentTypeCloudHub2,
+	"HYBRID":        DeploymentTypeHybrid,
+	"RUNTIMEFABRIC": DeploymentTypeRuntimeFabric,
+	"SERVICEMESH":   DeploymentTypeServiceMesh,
 }
 
 // NormalizeDeploymentType converts any recognized form of a deployment type

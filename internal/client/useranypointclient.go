@@ -40,13 +40,18 @@ func NewUserAnypointClient(config *UserClientConfig) (*UserAnypointClient, error
 	if config.ClientSecret == "" {
 		return nil, fmt.Errorf("client_secret is required")
 	}
-	// Allow username/password to be empty if they can be filled from environment variables
+	// Allow username/password to be empty if they can be filled from environment variables.
+	// The provider-level Configure already folds in ANYPOINT_USERNAME / ANYPOINT_PASSWORD
+	// before we get here, so config.Username / config.Password may be non-empty via either
+	// the provider block or those env vars. As a final safety net we also honor
+	// ANYPOINT_ADMIN_USERNAME / ANYPOINT_ADMIN_PASSWORD for call sites that bypass the
+	// provider-level resolution.
 	username := config.Username
 	if username == "" {
 		username = os.Getenv("ANYPOINT_ADMIN_USERNAME")
 	}
 	if username == "" {
-		return nil, fmt.Errorf("username is required (set via config or ANYPOINT_USERNAME environment variable)")
+		return nil, fmt.Errorf("username is required (set it on the provider configuration, or via the ANYPOINT_USERNAME or ANYPOINT_ADMIN_USERNAME environment variable)")
 	}
 
 	password := config.Password
@@ -54,7 +59,7 @@ func NewUserAnypointClient(config *UserClientConfig) (*UserAnypointClient, error
 		password = os.Getenv("ANYPOINT_ADMIN_PASSWORD")
 	}
 	if password == "" {
-		return nil, fmt.Errorf("password is required (set via config or ANYPOINT_PASSWORD environment variable)")
+		return nil, fmt.Errorf("password is required (set it on the provider configuration, or via the ANYPOINT_PASSWORD or ANYPOINT_ADMIN_PASSWORD environment variable)")
 	}
 
 	baseURL := config.BaseURL

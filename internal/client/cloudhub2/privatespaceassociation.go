@@ -17,7 +17,7 @@ type PrivateSpaceAssociationClient struct {
 }
 
 // NewPrivateSpaceAssociationClient creates a new PrivateSpaceAssociationClient
-func NewPrivateSpaceAssociationClient(config *client.ClientConfig) (*PrivateSpaceAssociationClient, error) {
+func NewPrivateSpaceAssociationClient(config *client.Config) (*PrivateSpaceAssociationClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err

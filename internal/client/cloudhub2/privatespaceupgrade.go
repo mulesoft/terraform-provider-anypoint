@@ -17,7 +17,7 @@ type PrivateSpaceUpgradeClient struct {
 }
 
 // NewPrivateSpaceUpgradeClient creates a new PrivateSpaceUpgradeClient
-func NewPrivateSpaceUpgradeClient(config *client.ClientConfig) (*PrivateSpaceUpgradeClient, error) {
+func NewPrivateSpaceUpgradeClient(config *client.Config) (*PrivateSpaceUpgradeClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err
@@ -39,16 +39,6 @@ type UpgradePrivateSpaceRequest struct {
 
 // UpgradePrivateSpace schedules an upgrade for a private space
 func (c *PrivateSpaceUpgradeClient) UpgradePrivateSpace(ctx context.Context, orgID, privateSpaceID string, request *UpgradePrivateSpaceRequest) (*PrivateSpaceUpgradeResponse, error) {
-	// // Hardcoded response for testing - skip actual API call
-	// response := &PrivateSpaceUpgradeResponse{
-	// 	ScheduledUpdateTime: "2024-02-28T17:57:36.000+00:00",
-	// 	Status:              "QUEUED",
-	// }
-
-	// return response, nil
-
-	// Original API call code (commented out for testing)
-
 	baseURL := fmt.Sprintf("%s/runtimefabric/api/organizations/%s/privatespaces/%s/upgrade", c.BaseURL, orgID, privateSpaceID)
 
 	// Add query parameters
@@ -86,16 +76,6 @@ func (c *PrivateSpaceUpgradeClient) UpgradePrivateSpace(ctx context.Context, org
 
 // GetPrivateSpaceUpgradeStatus retrieves the upgrade status for a private space
 func (c *PrivateSpaceUpgradeClient) GetPrivateSpaceUpgradeStatus(ctx context.Context, orgID, privateSpaceID string) (*PrivateSpaceUpgradeResponse, error) {
-	// // Hardcoded response for testing - skip actual API call
-	// response := &PrivateSpaceUpgradeResponse{
-	// 	ScheduledUpdateTime: "2024-02-28T17:57:36.000+00:00",
-	// 	Status:              "QUEUED",
-	// }
-
-	// return response, nil
-
-	// Original API call code (commented out for testing)
-
 	url := fmt.Sprintf("%s/runtimefabric/api/organizations/%s/privatespaces/%s/upgradestatus", c.BaseURL, orgID, privateSpaceID)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)

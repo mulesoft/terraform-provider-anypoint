@@ -235,6 +235,10 @@ func (r *EnvironmentResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
+	priorName := data.Name.ValueString()
+	priorType := data.Type.ValueString()
+	priorIsProduction := data.IsProduction.ValueBool()
+
 	// Determine organization ID from state or default to client's org
 	orgID := data.OrganizationID.ValueString()
 	if orgID == "" {
@@ -255,7 +259,19 @@ func (r *EnvironmentResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	// Map response body to schema and populate Computed attribute values
+	tflog.Debug(ctx, "anypoint_environment refreshed from API", map[string]interface{}{
+		"id":                  environment.ID,
+		"prior_state_name":    priorName,
+		"api_response_name":   environment.Name,
+		"prior_state_type":    priorType,
+		"api_response_type":   environment.Type,
+		"prior_is_production": priorIsProduction,
+		"api_is_production":   environment.IsProduction,
+	})
+
+	// Map response body to schema and populate Computed attribute values.
+	// IMPORTANT: always overwrite Required/Optional attributes from the API response
+	// so that backend (UI) changes surface as Terraform drift.
 	data.ID = types.StringValue(environment.ID)
 	data.Name = types.StringValue(environment.Name)
 	data.Type = types.StringValue(environment.Type)
@@ -277,6 +293,14 @@ func (r *EnvironmentResource) Read(ctx context.Context, req resource.ReadRequest
 		data.ArcNamespace = types.StringValue(*environment.ArcNamespace)
 	} else {
 		data.ArcNamespace = types.StringNull()
+	}
+
+	if priorName != environment.Name {
+		tflog.Info(ctx, "anypoint_environment drift detected: name changed on backend", map[string]interface{}{
+			"id":       environment.ID,
+			"old_name": priorName,
+			"new_name": environment.Name,
+		})
 	}
 
 	// Save updated data into Terraform state

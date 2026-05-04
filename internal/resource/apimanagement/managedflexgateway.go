@@ -137,12 +137,12 @@ func (r *ManagedFlexGatewayResource) Schema(_ context.Context, _ resource.Schema
 				},
 			},
 			"size": schema.StringAttribute{
-				Description: "The size of the gateway instance. Valid values: 'small', 'medium', 'large'.",
+				Description: "The size of the gateway instance. Valid values: 'small', 'large'.",
 				Optional:    true,
 				Computed:    true,
 				Default:     stringdefault.StaticString("small"),
 				Validators: []validator.String{
-					stringvalidator.OneOf("small", "medium", "large"),
+					stringvalidator.OneOf("small", "large"),
 				},
 			},
 			"status": schema.StringAttribute{
@@ -246,11 +246,11 @@ func (r *ManagedFlexGatewayResource) Configure(_ context.Context, req resource.C
 		return
 	}
 
-	config, ok := req.ProviderData.(*client.ClientConfig)
+	config, ok := req.ProviderData.(*client.Config)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.ClientConfig, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *client.Config, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}

@@ -15,7 +15,7 @@ type TLSContextClient struct {
 	*client.AnypointClient
 }
 
-func NewTLSContextClient(config *client.ClientConfig) (*TLSContextClient, error) {
+func NewTLSContextClient(config *client.Config) (*TLSContextClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err
@@ -38,31 +38,31 @@ type TLSOutboundSettings struct {
 }
 
 type TLSContext struct {
-	Name             string              `json:"name"`
-	Target           string              `json:"target"`
-	Keystore         *TLSContextPathRef  `json:"keystore,omitempty"`
-	Truststore       *TLSContextPathRef  `json:"truststore,omitempty"`
-	MinTLSVersion    string              `json:"minTlsVersion,omitempty"`
-	MaxTLSVersion    string              `json:"maxTlsVersion,omitempty"`
-	AlpnProtocols    []string            `json:"alpnProtocols,omitempty"`
-	InboundSettings  *TLSInboundSettings `json:"inboundSettings,omitempty"`
+	Name             string               `json:"name"`
+	Target           string               `json:"target"`
+	Keystore         *TLSContextPathRef   `json:"keystore,omitempty"`
+	Truststore       *TLSContextPathRef   `json:"truststore,omitempty"`
+	MinTLSVersion    string               `json:"minTlsVersion,omitempty"`
+	MaxTLSVersion    string               `json:"maxTlsVersion,omitempty"`
+	AlpnProtocols    []string             `json:"alpnProtocols,omitempty"`
+	InboundSettings  *TLSInboundSettings  `json:"inboundSettings,omitempty"`
 	OutboundSettings *TLSOutboundSettings `json:"outboundSettings,omitempty"`
-	CipherSuites     []string            `json:"cipherSuites,omitempty"`
+	CipherSuites     []string             `json:"cipherSuites,omitempty"`
 }
 
 type TLSContextResponse struct {
-	Name             string              `json:"name"`
-	Target           string              `json:"target"`
-	Meta             SecretGroupMeta     `json:"meta"`
-	Keystore         *TLSContextPathRef  `json:"keystore,omitempty"`
-	Truststore       *TLSContextPathRef  `json:"truststore,omitempty"`
-	MinTLSVersion    string              `json:"minTlsVersion,omitempty"`
-	MaxTLSVersion    string              `json:"maxTlsVersion,omitempty"`
-	AlpnProtocols    []string            `json:"alpnProtocols,omitempty"`
-	InboundSettings  *TLSInboundSettings `json:"inboundSettings,omitempty"`
+	Name             string               `json:"name"`
+	Target           string               `json:"target"`
+	Meta             SecretGroupMeta      `json:"meta"`
+	Keystore         *TLSContextPathRef   `json:"keystore,omitempty"`
+	Truststore       *TLSContextPathRef   `json:"truststore,omitempty"`
+	MinTLSVersion    string               `json:"minTlsVersion,omitempty"`
+	MaxTLSVersion    string               `json:"maxTlsVersion,omitempty"`
+	AlpnProtocols    []string             `json:"alpnProtocols,omitempty"`
+	InboundSettings  *TLSInboundSettings  `json:"inboundSettings,omitempty"`
 	OutboundSettings *TLSOutboundSettings `json:"outboundSettings,omitempty"`
-	CipherSuites     []string            `json:"cipherSuites,omitempty"`
-	ExpirationDate   string              `json:"expirationDate,omitempty"`
+	CipherSuites     []string             `json:"cipherSuites,omitempty"`
+	ExpirationDate   string               `json:"expirationDate,omitempty"`
 }
 
 // --- CRUD Operations ---

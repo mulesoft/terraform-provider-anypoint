@@ -21,6 +21,9 @@ func TestNewOrganizationResource(t *testing.T) {
 	if _, ok := r.(resource.ResourceWithConfigure); !ok {
 		t.Error("OrganizationResource should implement ResourceWithConfigure")
 	}
+	if _, ok := r.(resource.ResourceWithImportState); !ok {
+		t.Error("OrganizationResource must implement ResourceWithImportState so `terraform import` works")
+	}
 }
 
 func TestOrganizationResource_Metadata(t *testing.T) {
@@ -31,8 +34,8 @@ func TestOrganizationResource_Metadata(t *testing.T) {
 func TestOrganizationResource_Schema(t *testing.T) {
 	res := NewOrganizationResource()
 
-	requiredAttrs := []string{"name", "parent_organization_id", "owner_id", "entitlements"}
-	optionalAttrs := []string{}
+	requiredAttrs := []string{"name", "parent_organization_id", "owner_id"}
+	optionalAttrs := []string{"entitlements"}
 	computedAttrs := []string{"id"}
 
 	testutil.TestResourceSchema(t, res, requiredAttrs, optionalAttrs, computedAttrs)

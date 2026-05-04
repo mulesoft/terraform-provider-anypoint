@@ -27,13 +27,13 @@ func MockProviderData(baseURL string) interface{} {
 // TestResourceMetadata tests resource metadata implementation
 func TestResourceMetadata(t *testing.T, res resource.Resource, expectedTypeName string) {
 	t.Helper()
-	
+
 	ctx := MockResourceContext()
 	req := resource.MetadataRequest{}
 	resp := &resource.MetadataResponse{}
-	
+
 	res.Metadata(ctx, req, resp)
-	
+
 	if resp.TypeName != expectedTypeName {
 		t.Errorf("Metadata() TypeName = %v, want %v", resp.TypeName, expectedTypeName)
 	}
@@ -42,17 +42,17 @@ func TestResourceMetadata(t *testing.T, res resource.Resource, expectedTypeName 
 // TestResourceSchema tests resource schema implementation
 func TestResourceSchema(t *testing.T, res resource.Resource, requiredAttrs, optionalAttrs, computedAttrs []string) {
 	t.Helper()
-	
+
 	ctx := MockResourceContext()
 	req := resource.SchemaRequest{}
 	resp := &resource.SchemaResponse{}
-	
+
 	res.Schema(ctx, req, resp)
-	
+
 	if resp.Diagnostics.HasError() {
 		t.Errorf("Schema() has errors: %v", resp.Diagnostics.Errors())
 	}
-	
+
 	// Check required attributes
 	for _, attrName := range requiredAttrs {
 		if attr, exists := resp.Schema.Attributes[attrName]; exists {
@@ -63,7 +63,7 @@ func TestResourceSchema(t *testing.T, res resource.Resource, requiredAttrs, opti
 			t.Errorf("Schema() missing required attribute: %s", attrName)
 		}
 	}
-	
+
 	// Check optional attributes
 	for _, attrName := range optionalAttrs {
 		if attr, exists := resp.Schema.Attributes[attrName]; exists {
@@ -74,7 +74,7 @@ func TestResourceSchema(t *testing.T, res resource.Resource, requiredAttrs, opti
 			t.Errorf("Schema() missing optional attribute: %s", attrName)
 		}
 	}
-	
+
 	// Check computed attributes
 	for _, attrName := range computedAttrs {
 		if attr, exists := resp.Schema.Attributes[attrName]; exists {
@@ -96,15 +96,15 @@ type MockResourceWithConfigure interface {
 // TestResourceConfigure tests resource configure implementation
 func TestResourceConfigure(t *testing.T, res MockResourceWithConfigure, providerData interface{}) {
 	t.Helper()
-	
+
 	ctx := MockResourceContext()
 	req := resource.ConfigureRequest{
 		ProviderData: providerData,
 	}
 	resp := &resource.ConfigureResponse{}
-	
+
 	res.Configure(ctx, req, resp)
-	
+
 	if resp.Diagnostics.HasError() {
 		t.Errorf("Configure() has errors: %v", resp.Diagnostics.Errors())
 	}
@@ -116,7 +116,7 @@ type MockResourceState struct {
 	Name string
 }
 
-// MockPlanModifier creates a mock plan modifier for testing  
+// MockPlanModifier creates a mock plan modifier for testing
 func MockPlanModifier() interface{} {
 	// This would return a real plan modifier in practice
 	return nil
@@ -131,19 +131,19 @@ func MockValidator() []interface{} {
 // AssertStringAttribute validates a string attribute in schema
 func AssertStringAttribute(t *testing.T, attrs map[string]schema.Attribute, name string, required, optional, computed bool) {
 	t.Helper()
-	
+
 	attr, exists := attrs[name]
 	if !exists {
 		t.Errorf("Schema missing attribute: %s", name)
 		return
 	}
-	
+
 	stringAttr, ok := attr.(schema.StringAttribute)
 	if !ok {
 		t.Errorf("Attribute %s is not a StringAttribute", name)
 		return
 	}
-	
+
 	if required && !stringAttr.IsRequired() {
 		t.Errorf("Attribute %s should be required", name)
 	}
@@ -158,19 +158,19 @@ func AssertStringAttribute(t *testing.T, attrs map[string]schema.Attribute, name
 // AssertBoolAttribute validates a bool attribute in schema
 func AssertBoolAttribute(t *testing.T, attrs map[string]schema.Attribute, name string, required, optional, computed bool) {
 	t.Helper()
-	
+
 	attr, exists := attrs[name]
 	if !exists {
 		t.Errorf("Schema missing attribute: %s", name)
 		return
 	}
-	
+
 	boolAttr, ok := attr.(schema.BoolAttribute)
 	if !ok {
 		t.Errorf("Attribute %s is not a BoolAttribute", name)
 		return
 	}
-	
+
 	if required && !boolAttr.IsRequired() {
 		t.Errorf("Attribute %s should be required", name)
 	}
@@ -193,32 +193,32 @@ func CreateTestState(id, name string) map[string]interface{} {
 // ValidateResourceImplementsInterfaces validates that a resource implements expected interfaces
 func ValidateResourceImplementsInterfaces(t *testing.T, res interface{}) {
 	t.Helper()
-	
+
 	if _, ok := res.(resource.Resource); !ok {
 		t.Error("Resource does not implement resource.Resource interface")
 	}
 }
 
 // MockCreateRequest creates a mock create request for testing
-func MockCreateRequest(state map[string]interface{}) resource.CreateRequest {
+func MockCreateRequest(_ map[string]interface{}) resource.CreateRequest {
 	// This would create a proper request with state in practice
 	return resource.CreateRequest{}
 }
 
 // MockUpdateRequest creates a mock update request for testing
-func MockUpdateRequest(state, plan map[string]interface{}) resource.UpdateRequest {
+func MockUpdateRequest(_, _ map[string]interface{}) resource.UpdateRequest {
 	// This would create a proper request with state and plan in practice
 	return resource.UpdateRequest{}
 }
 
 // MockDeleteRequest creates a mock delete request for testing
-func MockDeleteRequest(state map[string]interface{}) resource.DeleteRequest {
+func MockDeleteRequest(_ map[string]interface{}) resource.DeleteRequest {
 	// This would create a proper request with state in practice
 	return resource.DeleteRequest{}
 }
 
 // MockReadRequest creates a mock read request for testing
-func MockReadRequest(state map[string]interface{}) resource.ReadRequest {
+func MockReadRequest(_ map[string]interface{}) resource.ReadRequest {
 	// This would create a proper request with state in practice
 	return resource.ReadRequest{}
 }

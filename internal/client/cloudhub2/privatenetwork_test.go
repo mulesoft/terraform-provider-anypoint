@@ -15,13 +15,13 @@ import (
 func TestNewPrivateNetworkClient(t *testing.T) {
 	tests := []struct {
 		name        string
-		config      *client.ClientConfig
+		config      *client.Config
 		wantErr     bool
 		errContains string
 	}{
 		{
 			name: "valid config",
-			config: &client.ClientConfig{
+			config: &client.Config{
 				ClientID:     "test-client-id",
 				ClientSecret: "test-client-secret",
 			},
@@ -29,7 +29,7 @@ func TestNewPrivateNetworkClient(t *testing.T) {
 		},
 		{
 			name: "missing client ID",
-			config: &client.ClientConfig{
+			config: &client.Config{
 				ClientSecret: "test-client-secret",
 			},
 			wantErr:     true,
@@ -37,7 +37,7 @@ func TestNewPrivateNetworkClient(t *testing.T) {
 		},
 		{
 			name: "missing client secret",
-			config: &client.ClientConfig{
+			config: &client.Config{
 				ClientID: "test-client-id",
 			},
 			wantErr:     true,
@@ -48,7 +48,7 @@ func TestNewPrivateNetworkClient(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
-			
+
 			if tt.config != nil {
 				tt.config.BaseURL = server.URL
 			}
@@ -109,22 +109,22 @@ func TestPrivateNetworkClient_CreatePrivateNetwork(t *testing.T) {
 			},
 			mockHandler: func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertHTTPRequest(t, r, "PATCH", "/runtimefabric/api/organizations/test-org-id/privatespaces/test-space-id")
-				
+
 				body := testutil.AssertJSONBody(t, r, "network")
-				
+
 				network, ok := body["network"].(map[string]interface{})
 				if !ok {
 					t.Error("Expected network object in request body")
 					return
 				}
-				
+
 				if network["region"] != "us-east-1" {
 					t.Errorf("Expected region 'us-east-1', got %v", network["region"])
 				}
 				if network["cidrBlock"] != "10.0.0.0/16" {
 					t.Errorf("Expected cidrBlock '10.0.0.0/16', got %v", network["cidrBlock"])
 				}
-				
+
 				testutil.JSONResponse(w, http.StatusOK, mockPrivateSpace)
 			},
 			wantErr:       false,
@@ -228,18 +228,18 @@ func TestPrivateNetworkClient_CreatePrivateNetwork(t *testing.T) {
 				if privateSpace == nil {
 					t.Errorf("CreatePrivateNetwork() returned nil private space")
 				}
-				
+
 				// Validate returned private space
 				if privateSpace != nil && tt.expectedSpace != nil {
 					if privateSpace.ID != tt.expectedSpace.ID {
 						t.Errorf("CreatePrivateNetwork() ID = %v, want %v", privateSpace.ID, tt.expectedSpace.ID)
 					}
 					if privateSpace.Network.CidrBlock != tt.expectedSpace.Network.CidrBlock {
-						t.Errorf("CreatePrivateNetwork() Network.CidrBlock = %v, want %v", 
+						t.Errorf("CreatePrivateNetwork() Network.CidrBlock = %v, want %v",
 							privateSpace.Network.CidrBlock, tt.expectedSpace.Network.CidrBlock)
 					}
 					if len(privateSpace.Network.ReservedCIDRs) != len(tt.expectedSpace.Network.ReservedCIDRs) {
-						t.Errorf("CreatePrivateNetwork() Network.ReservedCIDRs length = %v, want %v", 
+						t.Errorf("CreatePrivateNetwork() Network.ReservedCIDRs length = %v, want %v",
 							len(privateSpace.Network.ReservedCIDRs), len(tt.expectedSpace.Network.ReservedCIDRs))
 					}
 				}
@@ -363,11 +363,11 @@ func TestPrivateNetworkClient_GetPrivateNetwork(t *testing.T) {
 		Region: "us-east-1",
 		Status: "ACTIVE",
 		Network: NetworkConfig{
-			CidrBlock:          "10.0.0.0/16",
-			DNSTarget:          "test.dns.target",
-			ReservedCIDRs:      []string{"10.0.1.0/24"},
-			InboundStaticIPs:   []string{"10.0.0.10"},
-			OutboundStaticIPs:  []string{"10.0.0.20"},
+			CidrBlock:         "10.0.0.0/16",
+			DNSTarget:         "test.dns.target",
+			ReservedCIDRs:     []string{"10.0.1.0/24"},
+			InboundStaticIPs:  []string{"10.0.0.10"},
+			OutboundStaticIPs: []string{"10.0.0.20"},
 		},
 	}
 
@@ -443,18 +443,18 @@ func TestPrivateNetworkClient_GetPrivateNetwork(t *testing.T) {
 				if privateSpace == nil {
 					t.Errorf("GetPrivateNetwork() returned nil private space")
 				}
-				
+
 				// Validate returned private space
 				if privateSpace != nil && tt.expectedSpace != nil {
 					if privateSpace.ID != tt.expectedSpace.ID {
 						t.Errorf("GetPrivateNetwork() ID = %v, want %v", privateSpace.ID, tt.expectedSpace.ID)
 					}
 					if privateSpace.Network.CidrBlock != tt.expectedSpace.Network.CidrBlock {
-						t.Errorf("GetPrivateNetwork() Network.CidrBlock = %v, want %v", 
+						t.Errorf("GetPrivateNetwork() Network.CidrBlock = %v, want %v",
 							privateSpace.Network.CidrBlock, tt.expectedSpace.Network.CidrBlock)
 					}
 					if privateSpace.Network.DNSTarget != tt.expectedSpace.Network.DNSTarget {
-						t.Errorf("GetPrivateNetwork() Network.DNSTarget = %v, want %v", 
+						t.Errorf("GetPrivateNetwork() Network.DNSTarget = %v, want %v",
 							privateSpace.Network.DNSTarget, tt.expectedSpace.Network.DNSTarget)
 					}
 				}
@@ -578,7 +578,7 @@ func TestPrivateNetworkClient_ErrorHandling(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			client := tt.setupClient()
 			err := tt.operation(client)
-			
+
 			if tt.wantErr && err == nil {
 				t.Errorf("%s expected error, got nil", tt.name)
 			} else if !tt.wantErr && err != nil {

@@ -115,6 +115,11 @@ func (c *SLATierClient) CreateSLATier(ctx context.Context, orgID, envID string, 
 }
 
 // ListSLATiers fetches all SLA tiers for the given API instance.
+//
+// A 404 from this endpoint means the parent API instance no longer exists
+// (Anypoint deletes its tiers when the API instance is removed). We surface
+// that as a NotFoundError so callers can treat it as "no tiers" / drift and
+// the resource Read can silently drop the tier from Terraform state.
 func (c *SLATierClient) ListSLATiers(ctx context.Context, orgID, envID string, apiID int) ([]SLATier, error) {
 	url := c.basePath(orgID, envID, apiID)
 
@@ -132,6 +137,10 @@ func (c *SLATierClient) ListSLATiers(ctx context.Context, orgID, envID string, a
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, client.NewNotFoundError("SLA tier")
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

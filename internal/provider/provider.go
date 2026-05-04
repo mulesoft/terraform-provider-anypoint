@@ -204,24 +204,19 @@ func (p *AnypointProvider) Resources(_ context.Context) []func() resource.Resour
 	resources := make([]func() resource.Resource, 0, 34+len(resourceApiManagement.KnownPolicyTypes()))
 	resources = append(resources, []func() resource.Resource{
 		// CloudHub 2.0 resources
-		resourceCloudHub2.NewPrivateSpaceResource,
-		resourceCloudHub2.NewPrivateNetworkResource,
+		resourceCloudHub2.NewPrivateSpaceConfigResource,
 		resourceCloudHub2.NewTLSContextResource,
 		resourceCloudHub2.NewPrivateSpaceConnectionResource,
-		resourceCloudHub2.NewFirewallRulesResource,
 		resourceCloudHub2.NewVPNConnectionResource,
 		resourceCloudHub2.NewPrivateSpaceAssociationResource,
 		resourceCloudHub2.NewPrivateSpaceUpgradeResource,
 		resourceCloudHub2.NewPrivateSpaceAdvancedConfigResource,
 		// Access Management resources
 		resourceAccessManagement.NewEnvironmentResource,
-		resourceAccessManagement.NewUserResource,
 		resourceAccessManagement.NewOrganizationResource,
 		resourceAccessManagement.NewTeamResource,
 		resourceAccessManagement.NewConnectedAppResource,
 		resourceAccessManagement.NewConnectedAppScopesResource,
-		resourceAccessManagement.NewTeamRolesResource,
-		resourceAccessManagement.NewTeamMembersResource,
 		// API Management resources
 		resourceApiManagement.NewManagedFlexGatewayResource,
 		resourceApiManagement.NewAPIInstanceResource,
@@ -229,8 +224,6 @@ func (p *AnypointProvider) Resources(_ context.Context) []func() resource.Resour
 		resourceApiManagement.NewAPIPolicyResource,
 		resourceApiManagement.NewSLATierResource,
 		resourceApiManagement.NewAlertResource,
-		resourceApiManagement.NewAPIGroupResource,
-		resourceApiManagement.NewAPIGroupSLATierResource,
 		// Agents Tools resources
 		resourceAgentsTools.NewAgentInstanceResource,
 		resourceAgentsTools.NewMCPServerResource,
@@ -257,13 +250,9 @@ func (p *AnypointProvider) DataSources(_ context.Context) []func() datasource.Da
 		dsAccessManagement.NewEnvironmentDataSource,
 		dsAccessManagement.NewOrganizationDataSource,
 		dsAccessManagement.NewTeamDataSource,
-		dsAccessManagement.NewUserDataSource,
 		// CloudHub 2.0 data sources
-		dsCloudHub2.NewPrivateNetworkDataSource,
-		dsCloudHub2.NewPrivateSpaceDataSource,
 		dsCloudHub2.NewTLSContextDataSource,
 		dsCloudHub2.NewPrivateSpaceConnectionDataSource,
-		dsCloudHub2.NewFirewallRulesDataSource,
 		dsCloudHub2.NewPrivateSpaceAssociationDataSource,
 		dsCloudHub2.NewPrivateSpaceUpgradeDataSource,
 		// API Management data sources

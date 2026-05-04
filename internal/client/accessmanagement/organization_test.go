@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
@@ -335,6 +336,197 @@ func TestOrganizationClient_GetOrganization(t *testing.T) {
 	}
 }
 
+func TestOrganizationClient_UpdateOrganization(t *testing.T) {
+	updatedOrganization := &Organization{
+		ID:        "test-org-id",
+		Name:      "Renamed Organization",
+		CreatedAt: "2023-01-01T00:00:00Z",
+		UpdatedAt: "2023-02-02T00:00:00Z",
+		OwnerID:   "test-owner-id",
+		Entitlements: Entitlements{
+			CreateSubOrgs:      false,
+			CreateEnvironments: true,
+			GlobalDeployment:   false,
+		},
+	}
+
+	tests := []struct {
+		name        string
+		orgID       string
+		request     *UpdateOrganizationRequest
+		mockHandler func(w http.ResponseWriter, r *http.Request)
+		wantErr     bool
+		errContains string
+		expectedOrg *Organization
+	}{
+		{
+			name:  "successful update",
+			orgID: "test-org-id",
+			request: &UpdateOrganizationRequest{
+				ID:         "test-org-id",
+				Name:       "Renamed Organization",
+				OwnerID:    "test-owner-id",
+				Properties: map[string]interface{}{"flow_designer": map[string]interface{}{}},
+				Entitlements: Entitlements{
+					CreateSubOrgs:      false,
+					CreateEnvironments: true,
+					GlobalDeployment:   false,
+				},
+			},
+			mockHandler: func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertHTTPRequest(t, r, "PUT", "/accounts/api/organizations/test-org-id")
+				body := testutil.AssertJSONBody(t, r, "id", "name", "ownerId", "properties", "entitlements")
+
+				if body["name"] != "Renamed Organization" {
+					t.Errorf("Expected name 'Renamed Organization', got %v", body["name"])
+				}
+				if body["id"] != "test-org-id" {
+					t.Errorf("Expected id 'test-org-id', got %v", body["id"])
+				}
+				if body["ownerId"] != "test-owner-id" {
+					t.Errorf("Expected ownerId 'test-owner-id', got %v", body["ownerId"])
+				}
+				if _, ok := body["parentOrganizationId"]; ok {
+					t.Errorf("parentOrganizationId must not be present in update payload")
+				}
+				ent, ok := body["entitlements"].(map[string]interface{})
+				if !ok {
+					t.Fatalf("Expected entitlements to be an object, got %T", body["entitlements"])
+				}
+				if ent["createSubOrgs"] != false {
+					t.Errorf("Expected entitlements.createSubOrgs=false, got %v", ent["createSubOrgs"])
+				}
+				if ent["createEnvironments"] != true {
+					t.Errorf("Expected entitlements.createEnvironments=true, got %v", ent["createEnvironments"])
+				}
+				if ent["globalDeployment"] != false {
+					t.Errorf("Expected entitlements.globalDeployment=false, got %v", ent["globalDeployment"])
+				}
+
+				testutil.JSONResponse(w, http.StatusOK, updatedOrganization)
+			},
+			wantErr:     false,
+			expectedOrg: updatedOrganization,
+		},
+		{
+			name:  "nil properties is sent as empty object",
+			orgID: "test-org-id",
+			request: &UpdateOrganizationRequest{
+				ID:      "test-org-id",
+				Name:    "Still-a-name",
+				OwnerID: "test-owner-id",
+				// Properties intentionally nil
+				Entitlements: Entitlements{
+					CreateSubOrgs:      true,
+					CreateEnvironments: true,
+					GlobalDeployment:   false,
+				},
+			},
+			mockHandler: func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertHTTPRequest(t, r, "PUT", "/accounts/api/organizations/test-org-id")
+				body := testutil.AssertJSONBody(t, r, "properties")
+				props, ok := body["properties"].(map[string]interface{})
+				if !ok {
+					t.Fatalf("Expected properties to be an object, got %T (%v)", body["properties"], body["properties"])
+				}
+				if len(props) != 0 {
+					t.Errorf("Expected properties to be an empty object, got %v", props)
+				}
+
+				testutil.JSONResponse(w, http.StatusOK, updatedOrganization)
+			},
+			wantErr:     false,
+			expectedOrg: updatedOrganization,
+		},
+		{
+			name:  "organization not found",
+			orgID: "missing-org-id",
+			request: &UpdateOrganizationRequest{
+				ID: "missing-org-id", Name: "x", OwnerID: "o",
+			},
+			mockHandler: func(w http.ResponseWriter, r *http.Request) {
+				testutil.ErrorResponse(w, http.StatusNotFound, "Organization not found")
+			},
+			wantErr:     true,
+			errContains: "organization not found",
+		},
+		{
+			name:  "server rejects with 400",
+			orgID: "test-org-id",
+			request: &UpdateOrganizationRequest{
+				ID: "test-org-id", Name: "bad", OwnerID: "o",
+			},
+			mockHandler: func(w http.ResponseWriter, r *http.Request) {
+				testutil.ErrorResponse(w, http.StatusBadRequest, "Invalid entitlements")
+			},
+			wantErr:     true,
+			errContains: "failed to update organization with status 400",
+		},
+		{
+			name:    "empty organization ID",
+			orgID:   "",
+			request: &UpdateOrganizationRequest{Name: "x"},
+			mockHandler: func(_ http.ResponseWriter, _ *http.Request) {
+				t.Errorf("request should not be dispatched when organization ID is empty")
+			},
+			wantErr:     true,
+			errContains: "organization ID is required",
+		},
+		{
+			name:        "nil request body",
+			orgID:       "test-org-id",
+			request:     nil,
+			mockHandler: func(_ http.ResponseWriter, _ *http.Request) {},
+			wantErr:     true,
+			errContains: "update request cannot be nil",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handlers := map[string]func(w http.ResponseWriter, r *http.Request){}
+			if tt.orgID != "" {
+				handlers[fmt.Sprintf("/accounts/api/organizations/%s", tt.orgID)] = tt.mockHandler
+			}
+			server := testutil.MockHTTPServer(t, handlers)
+
+			oc := &OrganizationClient{
+				UserAnypointClient: &client.UserAnypointClient{
+					BaseURL:    server.URL,
+					Token:      "mock-token",
+					HTTPClient: &http.Client{},
+				},
+			}
+
+			org, err := oc.UpdateOrganization(context.Background(), tt.orgID, tt.request)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("UpdateOrganization() expected error, got nil")
+				} else if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("UpdateOrganization() error = %v, want error containing %v", err, tt.errContains)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("UpdateOrganization() unexpected error = %v", err)
+			}
+			if org == nil {
+				t.Fatalf("UpdateOrganization() returned nil organization")
+			}
+			if tt.expectedOrg != nil {
+				if org.ID != tt.expectedOrg.ID {
+					t.Errorf("UpdateOrganization() ID = %v, want %v", org.ID, tt.expectedOrg.ID)
+				}
+				if org.Name != tt.expectedOrg.Name {
+					t.Errorf("UpdateOrganization() Name = %v, want %v", org.Name, tt.expectedOrg.Name)
+				}
+			}
+		})
+	}
+}
+
 // Test data structures marshaling/unmarshaling
 func TestOrganization_JSONSerialization(t *testing.T) {
 	org := &Organization{
@@ -485,4 +677,108 @@ func TestOrganizationClient_ErrorHandling(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestOrganizationClient_WaitForOrganizationDeletion covers the three
+// outcomes of the post-DELETE polling loop:
+//
+//  1. Soft-delete (Anypoint's actual behaviour): GET keeps returning 200 but
+//     the `deletedAt` field becomes non-nil. The helper MUST return nil so
+//     the provider doesn't fire a misleading "Deletion Timeout" warning on
+//     every successful destroy.
+//  2. Hard-delete: GET returns 404. The helper MUST return nil.
+//  3. Neither signal arrives within `maxRetries`: the helper MUST return
+//     a timeout error so the provider can surface the warning for real.
+func TestOrganizationClient_WaitForOrganizationDeletion(t *testing.T) {
+	ctx := context.Background()
+	const orgID = "org-to-delete"
+
+	t.Run("soft delete surfaces deletedAt", func(t *testing.T) {
+		var calls int
+		handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+			"/accounts/api/organizations/" + orgID: func(w http.ResponseWriter, r *http.Request) {
+				calls++
+				if calls < 2 {
+					// First poll: not marked deleted yet.
+					testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+						"id":        orgID,
+						"name":      "org-to-delete",
+						"deletedAt": nil,
+					})
+					return
+				}
+				// Subsequent poll: deletedAt populated, hasn't 404ed yet.
+				testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+					"id":        orgID,
+					"name":      "org-to-delete",
+					"deletedAt": "2026-04-30T07:30:00.000Z",
+				})
+			},
+			"/accounts/api/v2/oauth2/token": testutil.StandardMockHandlers()["/accounts/api/v2/oauth2/token"],
+			"/accounts/api/me":              testutil.StandardMockHandlers()["/accounts/api/me"],
+		}
+		server := testutil.MockHTTPServer(t, handlers)
+
+		c := &OrganizationClient{
+			UserAnypointClient: &client.UserAnypointClient{
+				BaseURL: server.URL, Token: "mock-token", HTTPClient: &http.Client{},
+			},
+		}
+		err := c.WaitForOrganizationDeletion(ctx, orgID, 5, 1*time.Millisecond)
+		if err != nil {
+			t.Fatalf("soft-deleted org should resolve cleanly; got error: %v", err)
+		}
+		if calls < 2 {
+			t.Errorf("expected at least 2 polls before deletedAt appeared, got %d", calls)
+		}
+	})
+
+	t.Run("hard delete returns 404", func(t *testing.T) {
+		handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+			"/accounts/api/organizations/" + orgID: func(w http.ResponseWriter, r *http.Request) {
+				testutil.ErrorResponse(w, http.StatusNotFound, "organization not found")
+			},
+			"/accounts/api/v2/oauth2/token": testutil.StandardMockHandlers()["/accounts/api/v2/oauth2/token"],
+			"/accounts/api/me":              testutil.StandardMockHandlers()["/accounts/api/me"],
+		}
+		server := testutil.MockHTTPServer(t, handlers)
+
+		c := &OrganizationClient{
+			UserAnypointClient: &client.UserAnypointClient{
+				BaseURL: server.URL, Token: "mock-token", HTTPClient: &http.Client{},
+			},
+		}
+		if err := c.WaitForOrganizationDeletion(ctx, orgID, 3, 1*time.Millisecond); err != nil {
+			t.Errorf("404 should resolve cleanly; got error: %v", err)
+		}
+	})
+
+	t.Run("genuine timeout still errors", func(t *testing.T) {
+		handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+			"/accounts/api/organizations/" + orgID: func(w http.ResponseWriter, r *http.Request) {
+				// Always return a live, non-deleted org so the loop exhausts retries.
+				testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+					"id":        orgID,
+					"name":      "org-to-delete",
+					"deletedAt": nil,
+				})
+			},
+			"/accounts/api/v2/oauth2/token": testutil.StandardMockHandlers()["/accounts/api/v2/oauth2/token"],
+			"/accounts/api/me":              testutil.StandardMockHandlers()["/accounts/api/me"],
+		}
+		server := testutil.MockHTTPServer(t, handlers)
+
+		c := &OrganizationClient{
+			UserAnypointClient: &client.UserAnypointClient{
+				BaseURL: server.URL, Token: "mock-token", HTTPClient: &http.Client{},
+			},
+		}
+		err := c.WaitForOrganizationDeletion(ctx, orgID, 3, 1*time.Millisecond)
+		if err == nil {
+			t.Fatal("expected timeout error when neither 404 nor deletedAt materialise")
+		}
+		if !strings.Contains(err.Error(), "timeout") {
+			t.Errorf("expected timeout error, got: %v", err)
+		}
+	})
 }

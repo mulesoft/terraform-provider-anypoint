@@ -17,7 +17,7 @@ type FirewallRulesClient struct {
 }
 
 // NewFirewallRulesClient creates a new FirewallRulesClient
-func NewFirewallRulesClient(config *client.ClientConfig) (*FirewallRulesClient, error) {
+func NewFirewallRulesClient(config *client.Config) (*FirewallRulesClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err

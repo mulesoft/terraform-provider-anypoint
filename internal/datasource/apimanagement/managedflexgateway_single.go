@@ -134,7 +134,7 @@ func (d *ManagedFlexGatewaySingleDataSource) Schema(_ context.Context, _ datasou
 			},
 			"size": schema.StringAttribute{
 				Computed:    true,
-				Description: "The gateway size (small, medium, large).",
+				Description: "The gateway size (small, large).",
 			},
 			"status": schema.StringAttribute{
 				Computed:    true,
@@ -235,10 +235,10 @@ func (d *ManagedFlexGatewaySingleDataSource) Configure(_ context.Context, req da
 	if req.ProviderData == nil {
 		return
 	}
-	config, ok := req.ProviderData.(*client.ClientConfig)
+	config, ok := req.ProviderData.(*client.Config)
 	if !ok {
 		resp.Diagnostics.AddError("Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *client.ClientConfig, got: %T.", req.ProviderData))
+			fmt.Sprintf("Expected *client.Config, got: %T.", req.ProviderData))
 		return
 	}
 	gwClient, err := apimanagement.NewManagedFlexGatewayClient(config)
