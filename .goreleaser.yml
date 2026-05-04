@@ -36,6 +36,7 @@ signs:
   - artifacts: checksum
     args:
       - "--batch"
+      - "--no-tty"
       - "--local-user"
       - "{{ .Env.GPG_FINGERPRINT }}"
       - "--output"
