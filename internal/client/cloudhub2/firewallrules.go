@@ -51,7 +51,7 @@ func (c *FirewallRulesClient) UpdateFirewallRules(ctx context.Context, orgID, pr
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("private space")
@@ -85,7 +85,7 @@ func (c *FirewallRulesClient) GetFirewallRules(ctx context.Context, orgID, priva
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("private space")

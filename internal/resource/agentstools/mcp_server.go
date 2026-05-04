@@ -705,7 +705,8 @@ func (r *MCPServerResource) expandCreateRequest(ctx context.Context, data MCPSer
 		}
 
 		technology := data.Technology.ValueString()
-		if technology == "flexGateway" || technology == "" {
+		switch technology {
+		case "flexGateway", "":
 			if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
 				basePath := strings.TrimPrefix(ep.BasePath.ValueString(), "/")
 				proxyURI := "http://0.0.0.0:8081/" + basePath
@@ -716,7 +717,7 @@ func (r *MCPServerResource) expandCreateRequest(ctx context.Context, data MCPSer
 			}
 
 			req.Endpoint.TLSContexts = &agentstools.MCPServerTLSContexts{}
-		} else if technology == "mule4" {
+		case "mule4":
 			mule4 := true
 			req.Endpoint.MuleVersion4OrAbove = &mule4
 			req.Endpoint.ProxyURI = nil
@@ -786,7 +787,8 @@ func (r *MCPServerResource) expandUpdateRequest(ctx context.Context, data MCPSer
 		}
 
 		technology := data.Technology.ValueString()
-		if technology == "flexGateway" || technology == "" {
+		switch technology {
+		case "flexGateway", "":
 			if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
 				basePath := strings.TrimPrefix(ep.BasePath.ValueString(), "/")
 				proxyURI := "http://0.0.0.0:8081/" + basePath
@@ -797,7 +799,7 @@ func (r *MCPServerResource) expandUpdateRequest(ctx context.Context, data MCPSer
 			}
 
 			req.Endpoint.TLSContexts = &agentstools.MCPServerTLSContexts{}
-		} else if technology == "mule4" {
+		case "mule4":
 			mule4 := true
 			req.Endpoint.MuleVersion4OrAbove = &mule4
 			req.Endpoint.ProxyURI = nil
@@ -995,21 +997,22 @@ func (r *MCPServerResource) flattenInstance(_ context.Context, inst *agentstools
 		}
 
 		technology := inst.Technology
-		if technology == "flexGateway" || technology == "" {
+		switch technology {
+		case "flexGateway", "":
 			if inst.Endpoint.ProxyURI != nil && *inst.Endpoint.ProxyURI != "" {
 				ep.BasePath = types.StringValue(strings.TrimPrefix(*inst.Endpoint.ProxyURI, "http://0.0.0.0:8081/"))
 			} else {
 				ep.BasePath = types.StringNull()
 			}
 			ep.URI = types.StringNull()
-		} else if technology == "mule4" {
+		case "mule4":
 			if inst.Endpoint.ProxyURI != nil && *inst.Endpoint.ProxyURI != "" {
 				ep.URI = types.StringValue(*inst.Endpoint.ProxyURI)
 			} else {
 				ep.URI = types.StringNull()
 			}
 			ep.BasePath = types.StringNull()
-		} else {
+		default:
 			ep.BasePath = types.StringNull()
 			ep.URI = types.StringNull()
 		}

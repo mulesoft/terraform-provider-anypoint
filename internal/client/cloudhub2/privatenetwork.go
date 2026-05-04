@@ -63,7 +63,7 @@ func (c *PrivateNetworkClient) CreatePrivateNetwork(ctx context.Context, orgID, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("private space")
@@ -103,7 +103,7 @@ func (c *PrivateNetworkClient) UpdatePrivateNetwork(ctx context.Context, orgID, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("private space")
@@ -137,7 +137,7 @@ func (c *PrivateNetworkClient) GetPrivateNetwork(ctx context.Context, orgID, pri
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, client.NewNotFoundError("private space")
