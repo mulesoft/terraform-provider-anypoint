@@ -124,6 +124,12 @@ variable "gateway_runtime_version" {
   default     = "1.9.9"
 }
 
+variable "gateway_id" {
+  description = "Managed Flex Gateway target ID to deploy the API instance to"
+  type        = string
+  default     = "b123b2eb-35aa-454c-9750-dff9e2d218c9"
+}
+
 # ── API Instance ────────────────────────────────────────────────────────────
 
 variable "api_asset_id" {

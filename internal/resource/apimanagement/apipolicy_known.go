@@ -350,6 +350,17 @@ func (r *KnownPolicyResource) expandConfiguration(_ context.Context, obj types.O
 		}
 	}
 
+	// Defaults for nested bool attributes are not reliably applied by the
+	// framework when the parent object is present but the attribute is omitted.
+	// Inject any schema-defined bool defaults for fields still absent from result.
+	for camelName, field := range policySchema {
+		if field.Type == "bool" && field.Default != nil {
+			if _, set := result[camelName]; !set {
+				result[camelName] = *field.Default
+			}
+		}
+	}
+
 	return result
 }
 

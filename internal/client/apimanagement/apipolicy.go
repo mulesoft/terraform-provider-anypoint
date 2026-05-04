@@ -778,7 +778,7 @@ var KnownPolicySchemas = map[string]map[string]PolicySchemaField{
 		"clientSecret":                  {Required: true, Type: "string"},
 		"scope":                         {Required: false, Type: "array"},
 		"overwrite":                     {Required: false, Type: "bool", Default: boolPtr(false)},
-		"tokenFetchTimeout":             {Required: false, Type: "int"},
+		"tokenFetchTimeout":             {Required: true, Type: "int"},
 		"allowRequestWithoutCredential": {Required: false, Type: "bool", Default: boolPtr(false)},
 	},
 	"credential-injection-basic-auth": {
@@ -823,9 +823,9 @@ var KnownPolicySchemas = map[string]map[string]PolicySchemaField{
 	// credentials is a nested object {accessKeyId, secretAccessKey, sessionToken}; uses DynamicAttribute
 	"native-aws-lambda": {
 		"arn":                {Required: true, Type: "string"},
-		"payloadPassthrough": {Required: false, Type: "bool"},
-		"invocationMode":     {Required: false, Type: "string"},
-		"authenticationMode": {Required: false, Type: "string"},
+		"payloadPassthrough": {Required: true, Type: "bool"},
+		"invocationMode":     {Required: true, Type: "string"},
+		"authenticationMode": {Required: true, Type: "string"},
 		"credentials":        {Required: false, Type: "object"},
 	},
 	// MCP (Model Context Protocol) policies
