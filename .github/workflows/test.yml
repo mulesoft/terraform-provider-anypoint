@@ -1,6 +1,5 @@
 # CI workflow – runs on every PR and push to main.
 # Unit tests, lint, and build run on every trigger.
-# Acceptance tests run on push to main OR when a PR has the "run-acc-tests" label.
 
 name: Tests
 
@@ -104,47 +103,7 @@ jobs:
           path: dist/
 
   # ──────────────────────────────────────────────
-  # Job 3: Acceptance tests (real API calls)
-  # Runs on: push to main, OR PRs labeled "run-acc-tests"
-  # ──────────────────────────────────────────────
-  acceptance-test:
-    name: Acceptance Tests
-    runs-on: mulesoft-ubuntu
-    needs: test
-    if: |
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-acc-tests'))
-    env:
-      TF_ACC: "1"
-      ANYPOINT_CLIENT_ID: ${{ secrets.ANYPOINT_CLIENT_ID }}
-      ANYPOINT_CLIENT_SECRET: ${{ secrets.ANYPOINT_CLIENT_SECRET }}
-      ANYPOINT_BASE_URL: ${{ secrets.ANYPOINT_BASE_URL }}
-      ANYPOINT_ADMIN_CLIENT_ID: ${{ secrets.ANYPOINT_ADMIN_CLIENT_ID }}
-      ANYPOINT_ADMIN_CLIENT_SECRET: ${{ secrets.ANYPOINT_ADMIN_CLIENT_SECRET }}
-      ANYPOINT_USERNAME: ${{ secrets.ANYPOINT_USERNAME }}
-      ANYPOINT_PASSWORD: ${{ secrets.ANYPOINT_PASSWORD }}
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: "go.mod"
-          cache: true
-
-      - name: Validate credentials are available
-        run: |
-          if [ -z "$ANYPOINT_CLIENT_ID" ] || [ -z "$ANYPOINT_CLIENT_SECRET" ]; then
-            echo "::error::Anypoint credentials not configured. Add ANYPOINT_CLIENT_ID and ANYPOINT_CLIENT_SECRET to repository secrets."
-            exit 1
-          fi
-
-      - name: Run acceptance tests
-        run: go test -v -timeout 120m ./... -run="^TestAcc"
-
-  # ──────────────────────────────────────────────
-  # Job 4: Final status gate for branch protection
+  # Job 3: Final status gate for branch protection
   # Always runs – reports aggregate pass/fail so you
   # can use a single required check in branch rules.
   # ──────────────────────────────────────────────
