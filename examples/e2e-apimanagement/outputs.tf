@@ -33,25 +33,25 @@
 
 # ── Flex Gateway ────────────────────────────────────────────────────────────
 
-output "flex_gateway_id" {
-  description = "ID of the Flex Gateway"
-  value       = anypoint_managed_flexgateway.main.id
-}
+# output "flex_gateway_id" {
+#   description = "ID of the Flex Gateway"
+#   value       = anypoint_managed_flexgateway.main.id
+# }
 
-output "flex_gateway_status" {
-  description = "Status of the Flex Gateway"
-  value       = anypoint_managed_flexgateway.main.status
-}
+# output "flex_gateway_status" {
+#   description = "Status of the Flex Gateway"
+#   value       = anypoint_managed_flexgateway.main.status
+# }
 
-output "flex_gateway_public_url" {
-  description = "Public ingress URL (auto-derived from target domain, or user-provided)"
-  value       = anypoint_managed_flexgateway.main.ingress.public_url
-}
+# output "flex_gateway_public_url" {
+#   description = "Public ingress URL (auto-derived from target domain, or user-provided)"
+#   value       = anypoint_managed_flexgateway.main.ingress.public_url
+# }
 
-output "flex_gateway_internal_url" {
-  description = "Internal ingress URL (auto-derived from target domain)"
-  value       = anypoint_managed_flexgateway.main.ingress.internal_url
-}
+# output "flex_gateway_internal_url" {
+#   description = "Internal ingress URL (auto-derived from target domain)"
+#   value       = anypoint_managed_flexgateway.main.ingress.internal_url
+# }
 
 # ── API Instance ────────────────────────────────────────────────────────────
 

@@ -84,76 +84,76 @@ provider "anypoint" {
 # Step 3b – Secrets Management (Secret Group, Keystore, Truststore, TLS Context)
 ###############################################################################
 
-resource "anypoint_secret_group" "main" {
-  environment_id = var.environment_id
-  name           = "secrets-group-terraform-example-1"
-  downloadable   = false
-}
+# resource "anypoint_secret_group" "main" {
+#   environment_id = var.environment_id
+#   name           = "secrets-group-terraform-example-1"
+#   downloadable   = false
+# }
 
-resource "anypoint_secret_group_keystore" "tls" {
-  environment_id  = var.environment_id
-  secret_group_id = anypoint_secret_group.main.id
-  name            = "tls-keystore"
-  type            = "PEM"
+# resource "anypoint_secret_group_keystore" "tls" {
+#   environment_id  = var.environment_id
+#   secret_group_id = anypoint_secret_group.main.id
+#   name            = "tls-keystore"
+#   type            = "PEM"
 
-  certificate_base64 = base64encode(file("${path.module}/../certs/cert.pem"))
-  key_base64         = base64encode(file("${path.module}/../certs/key.pem"))
-}
+#   certificate_base64 = base64encode(file("${path.module}/../certs/cert.pem"))
+#   key_base64         = base64encode(file("${path.module}/../certs/key.pem"))
+# }
 
-resource "anypoint_secret_group_truststore" "ca" {
-  environment_id  = var.environment_id
-  secret_group_id = anypoint_secret_group.main.id
-  name            = "ca-truststore"
-  type            = "PEM"
+# resource "anypoint_secret_group_truststore" "ca" {
+#   environment_id  = var.environment_id
+#   secret_group_id = anypoint_secret_group.main.id
+#   name            = "ca-truststore"
+#   type            = "PEM"
 
-  truststore_base64 = base64encode(file("${path.module}/../certs/truststore.pem"))
-}
+#   truststore_base64 = base64encode(file("${path.module}/../certs/truststore.pem"))
+# }
 
-resource "anypoint_flex_tls_context" "flex" {
-  environment_id  = var.environment_id
-  secret_group_id = anypoint_secret_group.main.id
-  name            = "flex-tls-context"
+# resource "anypoint_flex_tls_context" "flex" {
+#   environment_id  = var.environment_id
+#   secret_group_id = anypoint_secret_group.main.id
+#   name            = "flex-tls-context"
 
-  keystore_id   = anypoint_secret_group_keystore.tls.id
-  truststore_id = anypoint_secret_group_truststore.ca.id
+#   keystore_id   = anypoint_secret_group_keystore.tls.id
+#   truststore_id = anypoint_secret_group_truststore.ca.id
 
-  alpn_protocols = ["h2", "http/1.1"]
-}
+#   alpn_protocols = ["h2", "http/1.1"]
+# }
 
-###############################################################################
-# Step 4 – Managed Flex Gateway
-###############################################################################
+# ###############################################################################
+# # Step 4 – Managed Flex Gateway
+# ###############################################################################
 
-resource "anypoint_managed_flexgateway" "main" {
-  name            = "managed-flexgateway-example-1"
-  environment_id  = var.environment_id
-  target_id       = "675c4efb-d44e-44cd-ac6f-d5a1128e6236"
+# resource "anypoint_managed_flexgateway" "main" {
+#   name            = "managed-flexgateway-example-1"
+#   environment_id  = var.environment_id
+#   target_id       = "675c4efb-d44e-44cd-ac6f-d5a1128e6236"
 
-  # ingress = {
-  #   forward_ssl_session = true
-  #   last_mile_security  = true
-  # }
+#   # ingress = {
+#   #   forward_ssl_session = true
+#   #   last_mile_security  = true
+#   # }
 
-  # properties = {
-  #   upstream_response_timeout = 30
-  #   connection_idle_timeout   = 120
-  # }
+#   # properties = {
+#   #   upstream_response_timeout = 30
+#   #   connection_idle_timeout   = 120
+#   # }
 
-  # logging = {
-  #   level        = "info"
-  #   forward_logs = true
-  # }
+#   # logging = {
+#   #   level        = "info"
+#   #   forward_logs = true
+#   # }
 
-  # tracing = {
-  #   enabled = false
-  # }
+#   # tracing = {
+#   #   enabled = false
+#   # }
 
-  depends_on = [anypoint_flex_tls_context.flex]
-}
+#   depends_on = [anypoint_flex_tls_context.flex]
+# }
 
-###############################################################################
-# Step 5 – API Instance on the Flex Gateway
-###############################################################################
+# ###############################################################################
+# # Step 5 – API Instance on the Flex Gateway
+# ###############################################################################
 
 resource "anypoint_api_instance" "main" {
   environment_id  = var.environment_id
@@ -171,10 +171,9 @@ resource "anypoint_api_instance" "main" {
     deployment_type = "HY"
     type            = "http"
     base_path       = var.api_base_path
-    ssl_context_id  = "${anypoint_secret_group.main.id}/${anypoint_flex_tls_context.flex.id}"
   }
 
-  gateway_id = anypoint_managed_flexgateway.main.id
+  gateway_id = var.gateway_id
 
   routing = [
     {
@@ -210,8 +209,6 @@ resource "anypoint_api_instance" "main" {
       ]
     }
   ]
-
-  depends_on = [anypoint_managed_flexgateway.main, anypoint_flex_tls_context.flex]
 }
 
 # resource "anypoint_api_instance" "main_4" {
@@ -911,24 +908,24 @@ resource "anypoint_api_policy_script_evaluation_transformation" "script_evaluati
 }
 
 # ─── 34. Schema / Spec Validation ───────────────────────────────────────────
-# resource "anypoint_api_policy_spec_validation" "spec_validation" {
-#   organization_id = local.org_id
-#   environment_id  = local.env_id
-#   api_instance_id = local.api_id
-#   label           = "spec-validate"
-#   order           = 34
+resource "anypoint_api_policy_spec_validation" "spec_validation" {
+  organization_id = local.org_id
+  environment_id  = local.env_id
+  api_instance_id = local.api_id
+  label           = "spec-validate"
+  order           = 34
 
-#   configuration = {
-#     config              = "BASIC"
-#     validation_criteria = "NONE"
-#     notification_actions = [
-#       {
-#         notification_level = "WARN"
-#         notification_type  = "LOGGER"
-#       }
-#     ]
-#   }
-# }
+  configuration = {
+    config              = "BASIC"
+    validation_criteria = "NONE"
+    notification_actions = [
+      {
+        notification_level = "WARN"
+        notification_type  = "LOGGER"
+      }
+    ]
+  }
+}
 
 ###############################################################################
 # Step 6b – Outbound Policies
@@ -938,134 +935,136 @@ resource "anypoint_api_policy_script_evaluation_transformation" "script_evaluati
 ###############################################################################
 
 # ─── 35. Message Logging Outbound ────────────────────────────────────────────
-# resource "anypoint_api_policy_message_logging_outbound" "message_logging_outbound" {
-#   organization_id = local.org_id
-#   environment_id  = local.env_id
-#   api_instance_id = local.api_id
-#   label           = "outbound-logger"
-#   order           = 1
-#   upstream_ids    = [local.upstream_id]
+resource "anypoint_api_policy_message_logging_outbound" "message_logging_outbound" {
+  organization_id = local.org_id
+  environment_id  = local.env_id
+  api_instance_id = local.api_id
+  label           = "outbound-logger"
+  order           = 1
+  upstream_ids    = [local.upstream_id]
 
-#   configuration = {
-#     logging_configuration = [
-#       {
-#         item_name = "Default configuration"
-#         item_data = {
-#           message        = "#[attributes.headers['id']]"
-#           conditional    = "#[attributes.headers['id']==1]"
-#           category       = "outbound-log1"
-#           level          = "INFO"
-#           first_section  = true
-#           second_section = true
-#         }
-#       }
-#     ]
-#   }
-# }
+  configuration = {
+    logging_configuration = [
+      {
+        item_name = "Default configuration"
+        item_data = {
+          message        = "#[attributes.headers['id']]"
+          conditional    = "#[attributes.headers['id']==1]"
+          category       = "outbound-log1"
+          level          = "INFO"
+          first_section  = true
+          second_section = true
+        }
+      }
+    ]
+  }
+}
 
-# ─── 36. In-Task Authorization Code Policy ───────────────────────────────────
-# resource "anypoint_api_policy_intask_authorization_code_policy" "intask_authz" {
-#   organization_id = local.org_id
-#   environment_id  = local.env_id
-#   api_instance_id = local.api_id
-#   label           = "intask-authz-code"
-#   order           = 2
-#   upstream_ids    = [local.upstream_id]
+# # ─── 36. In-Task Authorization Code Policy ───────────────────────────────────
+resource "anypoint_api_policy_intask_authorization_code_policy" "intask_authz" {
+  organization_id = local.org_id
+  environment_id  = local.env_id
+  api_instance_id = local.api_id
+  label           = "intask-authz-code"
+  order           = 2
+  upstream_ids    = [local.upstream_id]
 
-#   configuration = {
-#     secondary_auth_provider = "oauth2"
-#     authorization_endpoint  = "https://auth.example.com/oauth2/authorize"
-#     token_endpoint          = "https://auth.example.com/oauth2/token"
-#     redirect_uri            = "https://www.google.com"
-#     scopes                  = "read write"
-#   }
-# }
+  configuration = {
+    secondary_auth_provider = "oauth2"
+    authorization_endpoint  = "https://auth.example.com/oauth2/authorize"
+    token_endpoint          = "https://auth.example.com/oauth2/token"
+    redirect_uri            = "https://www.google.com"
+    scopes                  = "read write"
+  }
+}
 
 # ─── 37. Credential Injection – OAuth 2.0 ────────────────────────────────────
-# resource "anypoint_api_policy_credential_injection_oauth2" "cred_inject_oauth2" {
-#   organization_id = local.org_id
-#   environment_id  = local.env_id
-#   api_instance_id = local.api_id
-#   label           = "cred-inject-oauth2"
-#   order           = 3
-#   upstream_ids    = [local.upstream_id]
+resource "anypoint_api_policy_credential_injection_oauth2" "cred_inject_oauth2" {
+  organization_id = local.org_id
+  environment_id  = local.env_id
+  api_instance_id = local.api_id
+  label           = "cred-inject-oauth2"
+  order           = 3
+  upstream_ids    = [local.upstream_id]
 
-#   configuration = {
-#     oauth_service = "https://auth.example.com/oauth2/token"
-#     client_id     = "my-service-client-id"
-#     client_secret = var.oauth_client_secret
-#     scope         = ["api:read"]
-#   }
-# }
+  configuration = {
+    oauth_service       = "https://auth.example.com/oauth2/token"
+    client_id           = "my-service-client-id"
+    client_secret       = var.oauth_client_secret
+    scope               = ["api:read"]
+    token_fetch_timeout = 10000
+  }
+}
 
 # ─── 38. Credential Injection – Basic Auth ───────────────────────────────────
-# resource "anypoint_api_policy_credential_injection_basic_auth" "cred_inject_basic" {
-#   organization_id = local.org_id
-#   environment_id  = local.env_id
-#   api_instance_id = local.api_id
-#   label           = "cred-inject-basic"
-#   order           = 4
-#   upstream_ids    = [local.upstream_id]
+resource "anypoint_api_policy_credential_injection_basic_auth" "cred_inject_basic" {
+  organization_id = local.org_id
+  environment_id  = local.env_id
+  api_instance_id = local.api_id
+  label           = "cred-inject-basic"
+  order           = 4
+  upstream_ids    = [local.upstream_id]
 
-#   configuration = {
-#     username = "upstream-svc-user"
-#     password = var.upstream_basic_auth_password
-#   }
-# }
+  configuration = {
+    username = "upstream-svc-user"
+    password = var.upstream_basic_auth_password
+  }
+}
 
 # ─── 39. Idle Timeout ────────────────────────────────────────────────────────
-# resource "anypoint_api_policy_idle_timeout" "idle_timeout" {
-#   organization_id = local.org_id
-#   environment_id  = local.env_id
-#   api_instance_id = local.api_id
-#   label           = "upstream-idle-120s"
-#   order           = 5
-#   upstream_ids    = [local.upstream_id]
+resource "anypoint_api_policy_idle_timeout" "idle_timeout" {
+  organization_id = local.org_id
+  environment_id  = local.env_id
+  api_instance_id = local.api_id
+  label           = "upstream-idle-120s"
+  order           = 5
+  upstream_ids    = [local.upstream_id]
 
-#   configuration = {
-#     timeout = 120
-#   }
-# }
+  configuration = {
+    timeout = 120
+  }
+}
 
 # ─── 40. Circuit Breaker ─────────────────────────────────────────────────────
-# resource "anypoint_api_policy_circuit_breaker" "circuit_breaker" {
-#   organization_id = local.org_id
-#   environment_id  = local.env_id
-#   api_instance_id = local.api_id
-#   label           = "circuit-breaker"
-#   order           = 6
-#   upstream_ids    = [local.upstream_id]
+resource "anypoint_api_policy_circuit_breaker" "circuit_breaker" {
+  organization_id = local.org_id
+  environment_id  = local.env_id
+  api_instance_id = local.api_id
+  label           = "circuit-breaker"
+  order           = 6
+  upstream_ids    = [local.upstream_id]
 
-#   configuration = {
-#     thresholds = {
-#       count        = 5
-#       time         = 10
-#       rtime        = 5
-#       erp          = 50
-#       mstime       = 30000
-#     }
-#   }
-# }
+  configuration = {
+    thresholds = {
+      count        = 5
+      time         = 10
+      rtime        = 5
+      erp          = 50
+      mstime       = 30000
+    }
+  }
+}
 
 # ─── 41. Native AWS Lambda ───────────────────────────────────────────────────
-# resource "anypoint_api_policy_native_aws_lambda" "aws_lambda" {
-#   organization_id = local.org_id
-#   environment_id  = local.env_id
-#   api_instance_id = local.api_id
-#   label           = "aws-lambda-invoke"
-#   order           = 7
-#   upstream_ids    = [local.upstream_id]
+resource "anypoint_api_policy_native_aws_lambda" "aws_lambda" {
+  organization_id = local.org_id
+  environment_id  = local.env_id
+  api_instance_id = local.api_id
+  label           = "aws-lambda-invoke"
+  order           = 7
+  upstream_ids    = [local.upstream_id]
 
-#   configuration = {
-#     arn              = "arn:aws:lambda:us-east-1:123456789012:function:my-lambda-function"
-#     invocation_mode  = "REQUEST_RESPONSE"
-#     authentication_mode = "CREDENTIALS"
-#     credentials = {
-#       access_key_id     = var.aws_access_key_id
-#       secret_access_key = var.aws_secret_access_key
-#     }
-#   }
-# }
+  configuration = {
+    arn                 = "arn:aws:lambda:us-east-1:123456789012:function:my-lambda-function"
+    payload_passthrough = false
+    invocation_mode     = "sync"
+    authentication_mode = "static"
+    credentials = {
+      access_key_id     = var.aws_access_key_id
+      secret_access_key = var.aws_secret_access_key
+    }
+  }
+}
 
 ###############################################################################
 # Step 6c – SLA Tier
