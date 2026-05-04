@@ -39,20 +39,18 @@ resource "anypoint_api_policy_native_aws_lambda" "example" {
 - `environment_id` (String) The environment ID.
 - `api_instance_id` (String) The API instance ID.
 - `configuration` (Block) The policy configuration. See [Configuration](#nestedschema--configuration) below.
+- `upstream_ids` (List of String) List of upstream IDs this policy applies to.
 
 ### Optional
 
 - `organization_id` (String) The organization ID. If not provided, the organization ID will be inferred from the connected app credentials.
-- `order` (Number) The order of policy execution.
+- `label` (String) A human-readable label for this policy instance.
 - `asset_version` (String) The policy asset version. Defaults to `1.0.1`.
-- `disabled` (Boolean) Whether the policy is disabled. Defaults to `false`.
 
 ### Read-Only
 
 - `id` (String) The policy ID.
-- `group_id` (String) The policy group ID.
-- `asset_id` (String) The policy asset ID.
-- `upstream_ids` (List of String) The upstream IDs this policy applies to.
+- `policy_template_id` (String) The policy template ID assigned by the server.
 
 <a id="nestedschema--configuration"></a>
 ### Nested Schema for `configuration`
@@ -60,13 +58,13 @@ resource "anypoint_api_policy_native_aws_lambda" "example" {
 Required:
 
 - `arn` (String) The ARN of the AWS Lambda function.
+- `payload_passthrough` (Boolean) Whether to pass the request payload directly to Lambda.
+- `invocation_mode` (String) Lambda invocation mode (`synchronous` or `asynchronous`).
+- `authentication_mode` (String) AWS authentication mode (e.g. `static_credentials`, `iam_role`).
 
 Optional:
 
-- `authentication_mode` (String) AWS authentication mode (e.g. `static_credentials`, `iam_role`).
 - `credentials` (Dynamic) AWS credentials object with `access_key_id`, `secret_access_key`, and optional `session_token`.
-- `invocation_mode` (String) Lambda invocation mode (`synchronous` or `asynchronous`).
-- `payload_passthrough` (Boolean) Whether to pass the request payload directly to Lambda.
 
 ## Import
 
