@@ -225,10 +225,8 @@ resource "anypoint_vpn_connection" "on_prem" {
 | Resource | Description |
 |----------|-------------|
 | `anypoint_api_instance` | Deploy and manage API instances |
-| `anypoint_api_instance_promotion` | Promote APIs across environments |
 | `anypoint_api_policy` | Apply policies to API instances (rate limiting, JWT validation, etc.) |
 | `anypoint_api_instance_sla_tier` | Configure SLA tiers for API access control |
-| `anypoint_api_instance_alert` | Set up alerts for API monitoring |
 | `anypoint_managed_flexgateway` | Deploy managed Flex Gateway instances |
 
 **Example:** [API Management Examples](./examples/apimanagement)
@@ -350,7 +348,7 @@ module "eu_deployment" {
 }
 ```
 
-### 2. Environment Promotion Pipeline
+### 2. Multi-Environment Setup
 
 ```hcl
 # Development Environment
@@ -369,14 +367,6 @@ resource "anypoint_environment" "staging" {
 resource "anypoint_environment" "prod" {
   name = "Production"
   type = "production"
-  is_production = true
-}
-
-# Promote API from Dev to Staging
-resource "anypoint_api_instance_promotion" "dev_to_staging" {
-  source_api_id      = anypoint_api_instance.dev_api.id
-  source_environment = anypoint_environment.dev.id
-  target_environment = anypoint_environment.staging.id
 }
 ```
 

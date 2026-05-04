@@ -220,10 +220,8 @@ func (p *AnypointProvider) Resources(_ context.Context) []func() resource.Resour
 		// API Management resources
 		resourceApiManagement.NewManagedFlexGatewayResource,
 		resourceApiManagement.NewAPIInstanceResource,
-		resourceApiManagement.NewAPIInstancePromotionResource,
 		resourceApiManagement.NewAPIPolicyResource,
 		resourceApiManagement.NewSLATierResource,
-		resourceApiManagement.NewAlertResource,
 		// Agents Tools resources
 		resourceAgentsTools.NewAgentInstanceResource,
 		resourceAgentsTools.NewMCPServerResource,

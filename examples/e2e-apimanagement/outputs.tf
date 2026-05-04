@@ -118,21 +118,3 @@ output "sla_tier_id" {
   value       = anypoint_api_instance_sla_tier.tier1.id
 }
 
-# ── Alert ────────────────────────────────────────────────────────────────────
-
-output "alert_id" {
-  description = "ID of the created API alert"
-  value       = anypoint_api_instance_alert.request_count.id
-}
-
-# ── Promotion ─────────────────────────────────────────────────────────────────
-
-output "promoted_api_instance_id" {
-  description = "ID of the promoted API instance in the target environment"
-  value       = anypoint_api_instance_promotion.to_production.id
-}
-
-output "promoted_api_instance_status" {
-  description = "Status of the promoted API instance"
-  value       = anypoint_api_instance_promotion.to_production.status
-}

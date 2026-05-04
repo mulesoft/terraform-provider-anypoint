@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -117,11 +119,18 @@ func generateConfigurationSchema(assetID string) schema.SingleNestedAttribute {
 		snakeName := apimanagement.CamelToSnake(camelName)
 		switch field.Type {
 		case "string":
-			attrs[snakeName] = schema.StringAttribute{
+			strAttr := schema.StringAttribute{
 				Description: fmt.Sprintf("Policy field '%s'.", camelName),
 				Required:    field.Required,
 				Optional:    !field.Required,
 			}
+			if len(field.Enum) > 0 {
+				strAttr.Description = fmt.Sprintf("Policy field '%s'. Valid values: %s.", camelName, strings.Join(field.Enum, ", "))
+				strAttr.Validators = []validator.String{
+					stringvalidator.OneOf(field.Enum...),
+				}
+			}
+			attrs[snakeName] = strAttr
 		case "int":
 			var numValidators []validator.Number
 			if field.Min != nil {
@@ -148,12 +157,19 @@ func generateConfigurationSchema(assetID string) schema.SingleNestedAttribute {
 			}
 			attrs[snakeName] = boolAttr
 		case "string_array":
-			attrs[snakeName] = schema.ListAttribute{
+			listAttr := schema.ListAttribute{
 				Description: fmt.Sprintf("Policy field '%s'. Must be a list of strings.", camelName),
 				Required:    field.Required,
 				Optional:    !field.Required,
 				ElementType: types.StringType,
 			}
+			if len(field.ElemEnum) > 0 {
+				listAttr.Description = fmt.Sprintf("Policy field '%s'. Valid values: %s.", camelName, strings.Join(field.ElemEnum, ", "))
+				listAttr.Validators = []validator.List{
+					listvalidator.ValueStringsAre(stringvalidator.OneOf(field.ElemEnum...)),
+				}
+			}
+			attrs[snakeName] = listAttr
 		default:
 			attrs[snakeName] = schema.DynamicAttribute{
 				Description: fmt.Sprintf("Policy field '%s'. Accepts lists, maps, or any HCL value.", camelName),
@@ -359,6 +375,12 @@ func (r *KnownPolicyResource) expandConfiguration(_ context.Context, obj types.O
 				result[camelName] = *field.Default
 			}
 		}
+	}
+
+	// Apply any policy-specific post-expansion transformation (e.g. CORS
+	// non-public branch: methods []string → allowedMethods []object).
+	if expander, ok := apimanagement.KnownPolicyExpanders[r.policyInfo.AssetID]; ok {
+		result = expander(result)
 	}
 
 	return result

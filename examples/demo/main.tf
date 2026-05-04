@@ -403,66 +403,7 @@ resource "anypoint_api_instance_sla_tier" "trial" {
 }
 
 ###############################################################################
-# Step 6 – Operational Alerts
-# -----------------------------
-# Get notified when the API exceeds error thresholds.
-###############################################################################
-
-# resource "anypoint_api_instance_alert" "high_error_rate" {
-#   organization_id = var.parent_organization_id
-#   environment_id  = var.environment_id
-#   api_instance_id = anypoint_api_instance.orders_api.id
-
-#   name     = "High Error Rate"
-#   severity = "CRITICAL"
-#   enabled  = true
-
-#   type      = "api-request-count"
-#   condition = {
-#     aggregate     = "COUNT"
-#     operator      = "GREATER_THAN"
-#     value         = 50
-#     period_count  = 1
-#     period_unit   = "MINUTES"
-#     resource_type = "api"
-#     response_code = "5xx"
-#   }
-
-#   recipients = [var.alert_email]
-
-#   subject = "[CRITICAL] Orders API – High Error Rate"
-#   content = "API ${api} in environment ${environment} exceeded 50 errors in 1 minute. Current count: ${value}. Severity: ${severity}."
-# }
-
-###############################################################################
-# Step 7 – Promote Sandbox → Production
-# ----------------------------------------
-# One resource promotes the API instance along with all its policies,
-# SLA tiers, and alerts into the production environment.
-###############################################################################
-
-resource "anypoint_api_instance_promotion" "orders_to_prod" {
-  organization_id = var.parent_organization_id
-  environment_id = var.environment_id
-  source_api_id  = anypoint_api_instance.orders_api.id
-  instance_label = "orders-api-production"
-  
-  include_alerts   = true
-  include_policies = true
-  include_tiers    = true
-
-  depends_on = [
-    anypoint_api_policy_jwt_validation.orders_jwt,
-    anypoint_api_policy_rate_limiting.orders_rate_limit,
-    anypoint_api_policy_ip_allowlist.orders_ip_allow,
-    anypoint_api_instance_sla_tier.gold,
-    anypoint_api_instance_sla_tier.silver,
-    anypoint_api_instance_sla_tier.trial
-  ]
-}
-
-###############################################################################
-# Step 8 – API Group
+# Step 6 – API Group
 # ---------------------
 # Bundle the Orders API with a Payments API into a single group so
 # consumers can subscribe to a unified product with a single contract.

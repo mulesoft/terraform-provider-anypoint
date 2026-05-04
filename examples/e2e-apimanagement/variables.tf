@@ -38,12 +38,6 @@ variable "environment_id" {
   default     = "c0c9f7f5-57bb-4333-82d7-dbdcab912234"
 }
 
-variable "target_environment_id" {
-  description = "Environment ID to promote the API instance into (e.g. Production)"
-  type        = string
-  default     = "448ec638-4283-40e3-ba3a-d1db2b63e02d"
-}
-
 # ── Private Space ───────────────────────────────────────────────────────────
 
 variable "private_space_name" {
@@ -212,10 +206,3 @@ variable "aws_secret_access_key" {
   default     = "asdasdadas"
 }
 
-# ── Alerts ───────────────────────────────────────────────────────────────────
-
-variable "alert_email" {
-  description = "Email address to receive API alerts"
-  type        = string
-  default     = "admin@example.com"
-}

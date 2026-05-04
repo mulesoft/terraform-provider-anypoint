@@ -3,6 +3,7 @@ package cloudhub2
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -701,6 +702,26 @@ func mapFirewallRulesFromAPI(rules []cloudhub2.FirewallRule) []FirewallRuleModel
 			Type:      types.StringValue(r.Type),
 		}
 	}
+	// Sort into a canonical order so Platform's internal ordering never causes
+	// perpetual plan drift. State always reflects this sorted order; users must
+	// write their HCL rules in the same order (type → protocol → from_port →
+	// to_port → cidr_block) to keep plans clean.
+	sort.Slice(out, func(i, j int) bool {
+		a, b := out[i], out[j]
+		if a.Type != b.Type {
+			return a.Type.ValueString() < b.Type.ValueString()
+		}
+		if a.Protocol != b.Protocol {
+			return a.Protocol.ValueString() < b.Protocol.ValueString()
+		}
+		if a.FromPort != b.FromPort {
+			return a.FromPort.ValueInt64() < b.FromPort.ValueInt64()
+		}
+		if a.ToPort != b.ToPort {
+			return a.ToPort.ValueInt64() < b.ToPort.ValueInt64()
+		}
+		return a.CidrBlock.ValueString() < b.CidrBlock.ValueString()
+	})
 	return out
 }
 

@@ -37,8 +37,3 @@ output "flex_gateway_id" {
 #   value       = anypoint_api_instance.payments_api.id
 # }
 
-# output "promoted_api_id" {
-#   description = "Orders API instance ID in Production (after promotion)"
-#   value       = anypoint_api_instance_promotion.orders_to_prod.id
-# }
-

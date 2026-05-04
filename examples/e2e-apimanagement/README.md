@@ -6,7 +6,7 @@ This directory contains comprehensive end-to-end examples that provision a compl
 
 | File | Description |
 |------|-------------|
-| `api_instance_flexgateway_secretsmanager_example.tf` | Full FlexGateway stack: Secrets Management → Flex Gateway → API Instance → 33+ inbound policies → SLA Tier → Alert → Promotion |
+| `api_instance_flexgateway_secretsmanager_example.tf` | Full FlexGateway stack: Secrets Management → Flex Gateway → API Instance → 33+ inbound policies → SLA Tier |
 | `api_instance_mule4_example.tf` | Mule4 runtime stack: API Instance + 17 inbound policies (including Mule4-exclusive ones) |
 | `variables.tf` | All input variables shared across both examples |
 | `outputs.tf` | Outputs for the FlexGateway example (gateway URLs, API instance ID, policy IDs, etc.) |
@@ -17,7 +17,7 @@ This directory contains comprehensive end-to-end examples that provision a compl
 
 ## Example 1: FlexGateway + Secrets Manager (`api_instance_flexgateway_secretsmanager_example.tf`)
 
-A complete provisioning flow across 8 steps.
+A complete provisioning flow across 7 steps.
 
 ### Provisioning Steps
 
@@ -31,8 +31,6 @@ Step 5  (active)      anypoint_api_instance  (technology = "flexGateway", weight
 Step 6  (active)      33 inbound API policies
 Step 6b (commented)   7 outbound API policies (require upstream_id)
 Step 6c (active)      anypoint_api_instance_sla_tier
-Step 7  (active)      anypoint_api_instance_alert
-Step 8  (active)      anypoint_api_instance_promotion  (promotes to target environment)
 ```
 
 Steps 1–3 (private space, network, VPN) are commented out so you can run the example against an existing environment without creating infrastructure. Uncomment them for a fully greenfield deployment.
@@ -109,8 +107,6 @@ To enable outbound policies, set `var.upstream_id` to the routing upstream UUID 
 | Resource | Description |
 |----------|-------------|
 | `anypoint_api_instance_sla_tier` | `Tier1` — 10 req/min + 5 req/s, manual approval |
-| `anypoint_api_instance_alert` | Email alert when request count exceeds 99 in 5 min |
-| `anypoint_api_instance_promotion` | Promotes API instance (with policies, tiers, alerts) to `target_environment_id` |
 
 ---
 
@@ -186,7 +182,6 @@ terraform apply
 | `anypoint_base_url` | Anypoint control-plane URL | Yes |
 | `organization_id` | Anypoint organization ID | Yes |
 | `environment_id` | Source environment ID | Yes |
-| `target_environment_id` | Target environment for API promotion | Yes (FlexGateway example) |
 | `api_asset_id` | Exchange asset ID for the API spec | Yes |
 | `api_asset_version` | Exchange asset version | Yes |
 | `api_base_path` | API base path (FlexGateway) | Yes (FlexGateway) |
@@ -263,8 +258,6 @@ After `terraform apply`, the following outputs are available:
           ▼
 [Lifecycle]
   anypoint_api_instance_sla_tier    (Tier1: 10 req/min, manual approval)
-  anypoint_api_instance_alert       (email on high request count)
-  anypoint_api_instance_promotion   (promote to production environment)
 ```
 
 ## See Also

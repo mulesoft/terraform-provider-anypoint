@@ -8,7 +8,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -25,6 +24,7 @@ var (
 	_ resource.Resource                = &EnvironmentResource{}
 	_ resource.ResourceWithConfigure   = &EnvironmentResource{}
 	_ resource.ResourceWithImportState = &EnvironmentResource{}
+	_ resource.ResourceWithModifyPlan  = &EnvironmentResource{}
 )
 
 // EnvironmentResource is the resource implementation.
@@ -81,10 +81,11 @@ func (r *EnvironmentResource) Schema(_ context.Context, _ resource.SchemaRequest
 				},
 			},
 			"is_production": schema.BoolAttribute{
-				Description: "Whether this is a production environment.",
-				Optional:    true,
-				Computed:    true,
-				Default:     booldefault.StaticBool(false),
+				Description: "Whether this is a production environment. " +
+					"Derived automatically from type: true when type='production', false otherwise. " +
+					"Set explicitly only when type is not specified.",
+				Optional: true,
+				Computed: true,
 			},
 			"organization_id": schema.StringAttribute{
 				Description: "The organization ID where the environment will be created. If not specified, uses the organization from provider credentials.",
@@ -150,6 +151,37 @@ func (r *EnvironmentResource) Configure(_ context.Context, req resource.Configur
 	}
 
 	r.client = environmentClient
+}
+
+// ModifyPlan derives is_production from type so the planned value always matches
+// what Platform will return — preventing plan/apply inconsistency and tainting.
+// Platform sets isProduction=true for type="production" and false for all others,
+// regardless of what the caller sends.
+func (r *EnvironmentResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	// Nothing to do on destroy.
+	if req.Plan.Raw.IsNull() {
+		return
+	}
+
+	var plan EnvironmentResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Only derive when type is known. If type is still unknown (e.g. references
+	// another resource not yet created) leave is_production unknown too.
+	if plan.Type.IsUnknown() {
+		return
+	}
+
+	// If the user set is_production explicitly and type is not set, honour their
+	// value. When type IS known, Platform's rule always wins so we override.
+	if !plan.Type.IsNull() {
+		derived := plan.Type.ValueString() == "production"
+		plan.IsProduction = types.BoolValue(derived)
+		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+	}
 }
 
 // Create creates the resource and sets the initial Terraform state.
