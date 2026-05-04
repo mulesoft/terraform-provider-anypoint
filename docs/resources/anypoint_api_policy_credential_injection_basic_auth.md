@@ -34,20 +34,18 @@ resource "anypoint_api_policy_credential_injection_basic_auth" "example" {
 - `environment_id` (String) The environment ID.
 - `api_instance_id` (String) The API instance ID.
 - `configuration` (Block) The policy configuration. See [Configuration](#nestedschema--configuration) below.
+- `upstream_ids` (List of String) List of upstream IDs this policy applies to.
 
 ### Optional
 
 - `organization_id` (String) The organization ID. If not provided, the organization ID will be inferred from the connected app credentials.
-- `order` (Number) The order of policy execution.
+- `label` (String) A human-readable label for this policy instance.
 - `asset_version` (String) The policy asset version. Defaults to `1.0.1`.
-- `disabled` (Boolean) Whether the policy is disabled. Defaults to `false`.
 
 ### Read-Only
 
 - `id` (String) The policy ID.
-- `group_id` (String) The policy group ID.
-- `asset_id` (String) The policy asset ID.
-- `upstream_ids` (List of String) The upstream IDs this policy applies to.
+- `policy_template_id` (String) The policy template ID assigned by the server.
 
 <a id="nestedschema--configuration"></a>
 ### Nested Schema for `configuration`

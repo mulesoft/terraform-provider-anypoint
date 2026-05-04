@@ -41,31 +41,31 @@ resource "anypoint_api_policy_spike_control" "example" {
 ### Optional
 
 - `organization_id` (String) The organization ID. If not provided, the organization ID will be inferred from the connected app credentials.
+- `label` (String) A human-readable label for this policy instance.
 - `order` (Number) The order of policy execution.
 - `asset_version` (String) The policy asset version. Defaults to `1.2.2`.
 - `disabled` (Boolean) Whether the policy is disabled. Defaults to `false`.
+- `upstream_ids` (List of String) List of upstream IDs this policy applies to.
 
 ### Read-Only
 
 - `id` (String) The policy ID.
-- `group_id` (String) The policy group ID.
-- `asset_id` (String) The policy asset ID.
-- `upstream_ids` (List of String) The upstream IDs this policy applies to.
+- `policy_template_id` (String) The policy template ID assigned by the server.
 
 <a id="nestedschema--configuration"></a>
 ### Nested Schema for `configuration`
 
 Required:
 
-- `delay_attempts` (Number) The number of attempts to retry before rejecting.
-- `delay_time_in_millis` (Number) The delay time in milliseconds before retrying queued requests.
 - `maximum_requests` (Number) Maximum number of requests allowed in the time period.
-- `time_period_in_milliseconds` (Number) The time period in milliseconds for the spike control window. Must be <= 5000.
+- `time_period_in_milliseconds` (Number) The time period in milliseconds for the spike control window.
+- `delay_time_in_millis` (Number) The delay time in milliseconds before retrying queued requests.
+- `delay_attempts` (Number) The number of attempts to retry before rejecting.
 
 Optional:
 
-- `expose_headers` (Boolean) Whether to expose rate-limit headers in the response.
 - `queuing_limit` (Number) Maximum number of requests that can be queued.
+- `expose_headers` (Boolean) Whether to expose rate-limit headers in the response.
 
 ## Import
 
