@@ -1,6 +1,6 @@
 .PHONY: help build clean test testacc fmt docs build-all package-all
 
-GO ?= /Users/ankit.sarda/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.25.5.darwin-arm64/bin/go
+GO ?= go
 
 # Default target
 help: ## Show this help message
