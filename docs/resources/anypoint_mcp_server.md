@@ -9,6 +9,12 @@ description: |-
 
 Manages an MCP server in Anypoint API Manager. An MCP server represents an MCP server specification deployed to a Flex Gateway target with routing rules and upstream backends.
 
+-> **Status after create:** After a successful `terraform apply` the `status` field is populated from a GET request made immediately after the POST. The Platform typically returns `status = "active"` right away.
+
+-> **upstream_uri vs routing:** `upstream_uri` and `routing` are mutually exclusive. Use `upstream_uri` for a single upstream. Only **one upstream per route** is supported for MCP servers — multi-upstream weighted routing is not available.
+
+-> **upstream_id:** The computed `upstream_id` attribute is the server-assigned ID for the first upstream. Reference it in outbound policy `upstream_ids` to bind policies to this MCP server's upstream.
+
 ## Example Usage
 
 ### Basic MCP Server with upstream_uri

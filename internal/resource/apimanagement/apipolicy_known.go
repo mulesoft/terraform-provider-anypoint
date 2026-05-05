@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/numberdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -28,9 +29,10 @@ import (
 )
 
 var (
-	_ resource.Resource                = &KnownPolicyResource{}
-	_ resource.ResourceWithConfigure   = &KnownPolicyResource{}
-	_ resource.ResourceWithImportState = &KnownPolicyResource{}
+	_ resource.Resource                   = &KnownPolicyResource{}
+	_ resource.ResourceWithConfigure      = &KnownPolicyResource{}
+	_ resource.ResourceWithImportState    = &KnownPolicyResource{}
+	_ resource.ResourceWithValidateConfig = &KnownPolicyResource{}
 )
 
 type KnownPolicyResource struct {
@@ -139,12 +141,17 @@ func generateConfigurationSchema(assetID string) schema.SingleNestedAttribute {
 			if field.Max != nil {
 				numValidators = append(numValidators, numberAtMostValidator{max: big.NewFloat(*field.Max)})
 			}
-			attrs[snakeName] = schema.NumberAttribute{
+			numAttr := schema.NumberAttribute{
 				Description: fmt.Sprintf("Policy field '%s'.", camelName),
 				Required:    field.Required,
 				Optional:    !field.Required,
 				Validators:  numValidators,
 			}
+			if field.DefaultInt != nil {
+				numAttr.Computed = true
+				numAttr.Default = numberdefault.StaticBigFloat(big.NewFloat(float64(*field.DefaultInt)))
+			}
+			attrs[snakeName] = numAttr
 		case "bool":
 			boolAttr := schema.BoolAttribute{
 				Description: fmt.Sprintf("Policy field '%s'.", camelName),
@@ -272,6 +279,83 @@ func (r *KnownPolicyResource) Schema(_ context.Context, _ resource.SchemaRequest
 				ElementType: types.StringType,
 			},
 		},
+	}
+}
+
+// ValidateConfig enforces structural rules for policies whose Dynamic fields
+// have constraints that cannot be expressed in the static schema.
+func (r *KnownPolicyResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	switch r.policyInfo.AssetID {
+	case "message-logging", "message-logging-outbound":
+		validateMessageLoggingConfig(ctx, req, resp)
+	}
+}
+
+// validateMessageLoggingConfig checks that logging_configuration is an array
+// whose elements each contain item_name (string) and item_data (object).
+// Catches flat-field configs at plan time instead of failing at apply with HTTP 400.
+func validateMessageLoggingConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var data KnownPolicyResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if data.Configuration.IsNull() || data.Configuration.IsUnknown() {
+		return
+	}
+
+	attrs := data.Configuration.Attributes()
+	lcVal, ok := attrs["logging_configuration"]
+	if !ok || lcVal.IsNull() || lcVal.IsUnknown() {
+		return
+	}
+
+	dv, ok := lcVal.(types.Dynamic)
+	if !ok || dv.IsNull() || dv.IsUnknown() {
+		return
+	}
+
+	var elems []attr.Value
+	switch v := dv.UnderlyingValue().(type) {
+	case types.List:
+		elems = v.Elements()
+	case types.Tuple:
+		elems = v.Elements()
+	default:
+		resp.Diagnostics.AddAttributeError(
+			path.Root("configuration").AtName("logging_configuration"),
+			"Invalid logging_configuration",
+			"logging_configuration must be a list of objects, each with item_name (string) and item_data (object).",
+		)
+		return
+	}
+
+	for i, elem := range elems {
+		obj, ok := elem.(types.Object)
+		if !ok {
+			resp.Diagnostics.AddAttributeError(
+				path.Root("configuration").AtName("logging_configuration"),
+				fmt.Sprintf("Invalid element at index %d", i),
+				"Each logging_configuration element must be an object with item_name and item_data.",
+			)
+			continue
+		}
+		objAttrs := obj.Attributes()
+		if _, hasName := objAttrs["item_name"]; !hasName {
+			resp.Diagnostics.AddAttributeError(
+				path.Root("configuration").AtName("logging_configuration"),
+				fmt.Sprintf("Missing item_name at index %d", i),
+				"Each logging_configuration element must have item_name (string). Flat fields like message, level, category are not valid at this level.",
+			)
+		}
+		if _, hasData := objAttrs["item_data"]; !hasData {
+			resp.Diagnostics.AddAttributeError(
+				path.Root("configuration").AtName("logging_configuration"),
+				fmt.Sprintf("Missing item_data at index %d", i),
+				"Each logging_configuration element must have item_data containing message, level, conditional, category, first_section, second_section.",
+			)
+		}
 	}
 }
 
@@ -597,6 +681,7 @@ func (r *KnownPolicyResource) Create(ctx context.Context, req resource.CreateReq
 
 	assetVersion := r.resolveVersion(&data)
 	configData := r.expandConfiguration(ctx, data.Configuration)
+	apimanagement.ApplyPolicyDefaults(r.policyInfo.AssetID, configData)
 
 	if errs := apimanagement.ValidatePolicyConfiguration(r.policyInfo.AssetID, configData); len(errs) > 0 {
 		resp.Diagnostics.AddError(
@@ -621,6 +706,7 @@ func (r *KnownPolicyResource) Create(ctx context.Context, req resource.CreateReq
 			GroupID:           r.policyInfo.GroupID,
 			AssetID:           r.policyInfo.AssetID,
 			AssetVersion:      assetVersion,
+			UpstreamIDs:       []string{},
 		}
 		if !data.Label.IsNull() && !data.Label.IsUnknown() {
 			outboundReq.Label = data.Label.ValueString()
@@ -757,6 +843,7 @@ func (r *KnownPolicyResource) Update(ctx context.Context, req resource.UpdateReq
 
 	assetVersion := r.resolveVersion(&plan)
 	configData := r.expandConfiguration(ctx, plan.Configuration)
+	apimanagement.ApplyPolicyDefaults(r.policyInfo.AssetID, configData)
 
 	if errs := apimanagement.ValidatePolicyConfiguration(r.policyInfo.AssetID, configData); len(errs) > 0 {
 		resp.Diagnostics.AddError(

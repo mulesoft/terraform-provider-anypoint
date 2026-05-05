@@ -9,6 +9,8 @@ description: |-
 
 Manages a shared secret within a secret group in Anypoint Secrets Manager. Supports four types: UsernamePassword, S3Credential, SymmetricKey, and Blob. Provide the type-specific fields based on the chosen type.
 
+~> **Delete behaviour:** The Anypoint Secrets Manager API does not expose individual DELETE endpoints for sub-resources. `terraform destroy` removes this resource from Terraform state only — the shared secret is deleted on the Platform when the parent `anypoint_secret_group` is destroyed.
+
 ## Example Usage
 
 ### UsernamePassword

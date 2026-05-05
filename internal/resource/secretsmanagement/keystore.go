@@ -41,7 +41,8 @@ type KeystoreResourceModel struct {
 	CertificateB64  types.String `tfsdk:"certificate_base64"`
 	KeyB64          types.String `tfsdk:"key_base64"`
 	KeystoreFileB64 types.String `tfsdk:"keystore_file_base64"`
-	Passphrase      types.String `tfsdk:"passphrase"`
+	StorePassphrase types.String `tfsdk:"store_passphrase"`
+	KeyPassphrase   types.String `tfsdk:"key_passphrase"`
 	Alias           types.String `tfsdk:"alias"`
 	CaPathB64       types.String `tfsdk:"ca_path_base64"`
 	ExpirationDate  types.String `tfsdk:"expiration_date"`
@@ -129,8 +130,13 @@ func (r *KeystoreResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				Optional:  true,
 				Sensitive: true,
 			},
-			"passphrase": schema.StringAttribute{
-				Description: "Passphrase for the keystore or encrypted PEM key.",
+			"store_passphrase": schema.StringAttribute{
+				Description: "Store passphrase for JKS, PKCS12, or JCEKS keystores (maps to storePassphrase in the API). Required for those types.",
+				Optional:    true,
+				Sensitive:   true,
+			},
+			"key_passphrase": schema.StringAttribute{
+				Description: "Private key entry passphrase (maps to keyPassphrase in the API). Required for JKS/PKCS12/JCEKS; optional for PEM encrypted keys.",
 				Optional:    true,
 				Sensitive:   true,
 			},
@@ -243,7 +249,8 @@ func (r *KeystoreResource) Read(ctx context.Context, req resource.ReadRequest, r
 	savedCert := data.CertificateB64
 	savedKey := data.KeyB64
 	savedKsFile := data.KeystoreFileB64
-	savedPassphrase := data.Passphrase
+	savedStorePassphrase := data.StorePassphrase
+	savedKeyPassphrase := data.KeyPassphrase
 	savedCaPath := data.CaPathB64
 
 	r.flattenKeystore(ks, &data, orgID, envID, sgID)
@@ -251,7 +258,8 @@ func (r *KeystoreResource) Read(ctx context.Context, req resource.ReadRequest, r
 	data.CertificateB64 = savedCert
 	data.KeyB64 = savedKey
 	data.KeystoreFileB64 = savedKsFile
-	data.Passphrase = savedPassphrase
+	data.StorePassphrase = savedStorePassphrase
+	data.KeyPassphrase = savedKeyPassphrase
 	data.CaPathB64 = savedCaPath
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -291,24 +299,12 @@ func (r *KeystoreResource) Update(ctx context.Context, req resource.UpdateReques
 }
 
 func (r *KeystoreResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	// The SM API has no individual sub-resource DELETE endpoint (returns 405).
+	// Sub-resources are removed by deleting the parent secret group.
+	// Removing from Terraform state only; platform cleanup is the secret group's responsibility.
 	var data KeystoreResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	orgID := data.OrganizationID.ValueString()
-	if orgID == "" {
-		orgID = r.client.OrgID
-	}
-	envID := data.EnvironmentID.ValueString()
-	sgID := data.SecretGroupID.ValueString()
-
-	if err := r.client.DeleteKeystore(ctx, orgID, envID, sgID, data.ID.ValueString()); err != nil {
-		resp.Diagnostics.AddError("Error deleting keystore", "Could not delete keystore: "+err.Error())
-		return
-	}
-	tflog.Trace(ctx, "deleted keystore", map[string]interface{}{"id": data.ID.ValueString()})
+	tflog.Trace(ctx, "removed keystore from state (no-op delete)", map[string]interface{}{"id": data.ID.ValueString()})
 }
 
 func (r *KeystoreResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
@@ -332,10 +328,11 @@ func (r *KeystoreResource) expandRequest(data *KeystoreResourceModel) (*secretsm
 	ksType := data.Type.ValueString()
 
 	createReq := &secretsmanagement.CreateKeystoreRequest{
-		Name:       data.Name.ValueString(),
-		Type:       ksType,
-		Passphrase: data.Passphrase.ValueString(),
-		Alias:      data.Alias.ValueString(),
+		Name:            data.Name.ValueString(),
+		Type:            ksType,
+		StorePassphrase: data.StorePassphrase.ValueString(),
+		KeyPassphrase:   data.KeyPassphrase.ValueString(),
+		Alias:           data.Alias.ValueString(),
 	}
 
 	switch ksType {

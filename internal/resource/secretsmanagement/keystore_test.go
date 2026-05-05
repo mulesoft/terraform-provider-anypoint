@@ -34,7 +34,7 @@ func TestKeystoreResource_Schema(t *testing.T) {
 	res := NewKeystoreResource()
 
 	requiredAttrs := []string{"name", "environment_id", "secret_group_id"}
-	optionalAttrs := []string{"type", "organization_id", "certificate_base64", "key_base64", "keystore_file_base64", "passphrase", "alias", "ca_path_base64"}
+	optionalAttrs := []string{"type", "organization_id", "certificate_base64", "key_base64", "keystore_file_base64", "store_passphrase", "key_passphrase", "alias", "ca_path_base64"}
 	computedAttrs := []string{"id", "expiration_date", "algorithm", "type", "organization_id"}
 
 	testutil.TestResourceSchema(t, res, requiredAttrs, optionalAttrs, computedAttrs)
@@ -95,7 +95,8 @@ func TestKeystoreResourceModel_Validation(t *testing.T) {
 	_ = model.CertificateB64
 	_ = model.KeyB64
 	_ = model.KeystoreFileB64
-	_ = model.Passphrase
+	_ = model.StorePassphrase
+	_ = model.KeyPassphrase
 	_ = model.Alias
 	_ = model.CaPathB64
 	_ = model.ExpirationDate

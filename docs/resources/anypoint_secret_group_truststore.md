@@ -9,6 +9,8 @@ description: |-
 
 Manages a truststore within a secret group in Anypoint Secrets Manager. Supports PEM, JKS, PKCS12, and JCEKS formats. Use `base64encode(file(...))` for PEM text files or `filebase64(...)` for binary JKS/PKCS12 files.
 
+~> **Delete behaviour:** The Anypoint Secrets Manager API does not expose individual DELETE endpoints for sub-resources. `terraform destroy` removes this resource from Terraform state only — the truststore is deleted on the Platform when the parent `anypoint_secret_group` is destroyed.
+
 ## Example Usage
 
 ### PEM Truststore

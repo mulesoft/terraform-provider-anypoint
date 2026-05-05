@@ -69,37 +69,85 @@ This example demonstrates how to configure organization entitlements including:
    terraform apply
    ```
 
+## Entitlement State Behaviour
+
+The provider honours the entitlement values you declare in Terraform and does **not** reset fields you omit to platform defaults.
+
+- **Omitted fields are unmanaged**: If you do not declare `vcores_production` in your HCL, the provider will not touch that field on create or update. Whatever value the Platform has will persist.
+- **Declared fields are managed**: Any entitlement you include in the resource block will be sent to the API on every create and update. This lets you adopt minimal configurations without forcing all entitlements to zero.
+- **Master-org-only entitlements**: Fields such as `trial_entitlements` and `base_entitlements` apply only to the root/master organization. They are silently stripped from API requests for sub-organizations to avoid HTTP 400 errors.
+
+### Minimal vs Full Configuration
+
+Minimal — only manage what you care about:
+```hcl
+resource "anypoint_organization" "child" {
+  name                   = "My Team Org"
+  parent_organization_id = var.parent_org_id
+  owner_id               = var.owner_id
+
+  entitlements = {
+    create_environments = true
+    vcores_production   = { assigned = 1.0 }
+  }
+}
+```
+
+Full — explicitly control all entitlements:
+```hcl
+resource "anypoint_organization" "child" {
+  name                   = "My Team Org"
+  parent_organization_id = var.parent_org_id
+  owner_id               = var.owner_id
+
+  entitlements = {
+    create_sub_orgs      = false
+    create_environments  = true
+    global_deployment    = false
+    vcores_production    = { assigned = 2.0 }
+    vcores_sandbox       = { assigned = 1.0 }
+    vcores_design        = { assigned = 0.2 }
+    vpcs                 = { assigned = 1 }
+    network_connections  = { assigned = 1 }
+    static_ips           = { assigned = 0 }
+  }
+}
+```
+
 ## API Request Structure
 
-The organization will be created with the following request payload:
+The organization will be created with the following request payload (only fields you declare in HCL are included):
 ```json
 {
   "name": "Your Organization Name",
   "parentOrganizationId": "parent-org-uuid",
   "ownerId": "owner-user-uuid",
   "entitlements": {
-    "create_sub_orgs": false,
-    "create_environments": false,
-    "global_deployment": false,
-    "vcores_production": {
+    "createSubOrgs": false,
+    "createEnvironments": false,
+    "globalDeployment": false,
+    "vCoresProduction": {
       "assigned": 0
     },
-    "vcores_sandbox": {
+    "vCoresSandbox": {
       "assigned": 0
     },
-    "vcores_design": {
+    "vCoresDesign": {
+      "assigned": 0
+    },
+    "staticIps": {
       "assigned": 0
     },
     "vpcs": {
       "assigned": 0
     },
-    "network_connections": {
+    "networkConnections": {
       "assigned": 0
     },
-    "managed_gateway_small": {
+    "managedGatewaySmall": {
       "assigned": 0
     },
-    "managed_gateway_large": {
+    "managedGatewayLarge": {
       "assigned": 0
     }
   }

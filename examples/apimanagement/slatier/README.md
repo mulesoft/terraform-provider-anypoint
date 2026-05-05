@@ -346,18 +346,17 @@ resource "anypoint_api_instance_sla_tier" "gold" {
 }
 
 # Apply SLA-based rate limiting policy
-resource "anypoint_api_policy" "sla_rate_limit" {
+resource "anypoint_api_policy_rate_limiting_sla_based" "sla_rate_limit" {
+  organization_id = var.organization_id
+  environment_id  = var.environment_id
   api_instance_id = var.api_instance_id
 
-  asset_id      = "rate-limiting-sla-based"
-  asset_version = "1.3.1"
-
-  configuration_data = jsonencode({
-    clientIdExpression     = "#[attributes.headers['client_id']]"
-    clientSecretExpression = "#[attributes.headers['client_secret']]"
-    exposeHeaders          = true
-    clusterizable          = true
-  })
+  configuration = {
+    client_id_expression     = "#[attributes.headers['client_id']]"
+    client_secret_expression = "#[attributes.headers['client_secret']]"
+    expose_headers           = true
+    clusterizable            = true
+  }
 }
 ```
 
@@ -396,13 +395,9 @@ Error: SLA tier with name 'Gold' already exists
 2. Use a different name
 3. Delete the existing tier in the UI first
 
-### Error: Invalid Time Unit
+### Update Returns HTTP 201
 
-```
-Error: time_unit must be one of: SECOND, MINUTE, HOUR, DAY
-```
-
-**Solution:** Use uppercase values: `SECOND`, `MINUTE`, `HOUR`, or `DAY`
+The Anypoint Platform returns HTTP 201 (not 200) on a successful SLA tier update. The provider handles this correctly — if you see a provider error claiming "unexpected status 201", ensure you are on the latest provider version.
 
 ## Additional Resources
 

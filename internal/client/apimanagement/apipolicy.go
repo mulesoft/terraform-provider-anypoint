@@ -86,13 +86,14 @@ type UpdateAPIPolicyRequest struct {
 
 // CreateOutboundAPIPolicyRequest is the payload for creating an outbound policy.
 // The xapi/v1 outbound endpoint does NOT accept pointcutData, order, or disabled.
+// upstreamIds must always be present (even as []) — the Platform returns 400 if omitted.
 type CreateOutboundAPIPolicyRequest struct {
 	ConfigurationData map[string]interface{} `json:"configurationData"`
 	GroupID           string                 `json:"groupId"`
 	AssetID           string                 `json:"assetId"`
 	AssetVersion      string                 `json:"assetVersion"`
 	Label             string                 `json:"label,omitempty"`
-	UpstreamIDs       []string               `json:"upstreamIds,omitempty"`
+	UpstreamIDs       []string               `json:"upstreamIds"`
 }
 
 // UpdateOutboundAPIPolicyRequest is the payload for updating an outbound policy.
@@ -517,13 +518,14 @@ func SnakeToCamel(s string) string {
 
 // PolicySchemaField describes one field in a policy's configuration
 type PolicySchemaField struct {
-	Required bool
-	Type     string   // "string", "int", "bool", "array", "object"
-	Min      *float64 // optional inclusive lower bound (for "int" fields)
-	Max      *float64 // optional inclusive upper bound (for "int" fields)
-	Default  *bool    // optional default for bool fields omitted by the user
-	Enum     []string // optional allowed values for "string" fields
-	ElemEnum []string // optional allowed values for each element of "string_array" fields
+	Required   bool
+	Type       string   // "string", "int", "bool", "array", "object"
+	Min        *float64 // optional inclusive lower bound (for "int" fields)
+	Max        *float64 // optional inclusive upper bound (for "int" fields)
+	Default    *bool    // optional default for bool fields omitted by the user
+	DefaultInt *int     // optional default for int fields omitted by the user
+	Enum       []string // optional allowed values for "string" fields
+	ElemEnum   []string // optional allowed values for each element of "string_array" fields
 }
 
 // KnownPolicySchemas maps assetId → field definitions for built-in validation.
@@ -781,7 +783,7 @@ var KnownPolicySchemas = map[string]map[string]PolicySchemaField{
 		"clientSecret":                  {Required: true, Type: "string"},
 		"scope":                         {Required: false, Type: "array"},
 		"overwrite":                     {Required: false, Type: "bool", Default: boolPtr(false)},
-		"tokenFetchTimeout":             {Required: true, Type: "int"},
+		"tokenFetchTimeout":             {Required: false, Type: "int", DefaultInt: intPtr(10000)},
 		"allowRequestWithoutCredential": {Required: false, Type: "bool", Default: boolPtr(false)},
 	},
 	"credential-injection-basic-auth": {
@@ -955,6 +957,27 @@ func ValidatePolicyConfiguration(assetID string, configData map[string]interface
 	return errs
 }
 
+// ApplyPolicyDefaults fills in Default/DefaultInt values for any fields that are
+// absent from configData. Called before sending the payload to the Platform API
+// so that optional fields with Platform-required defaults are always present.
+func ApplyPolicyDefaults(assetID string, configData map[string]interface{}) {
+	schema, ok := KnownPolicySchemas[assetID]
+	if !ok {
+		return
+	}
+	for field, spec := range schema {
+		if _, exists := configData[field]; exists {
+			continue
+		}
+		switch {
+		case spec.Default != nil:
+			configData[field] = *spec.Default
+		case spec.DefaultInt != nil:
+			configData[field] = *spec.DefaultInt
+		}
+	}
+}
+
 // KnownPolicyExpanders maps assetId → a post-expand transformation function.
 // The function receives the already-expanded configurationData map (camelCase keys)
 // and returns the final map to send to the Platform API. Use this for policies
@@ -967,17 +990,32 @@ var KnownPolicyExpanders = map[string]func(map[string]interface{}) map[string]in
 // expandCORSConfiguration handles the Platform CORS policy's if/else schema:
 //
 //	if   publicResource == true  → originGroups items use methods ([]string)
-//	else publicResource == false → originGroups items need name (string) +
-//	                               allowedMethods ([]{methodName:string})
-//	                               plus top-level accessControlMaxAge (int)
+//	else publicResource == false → originGroups items need:
+//	                               - name (string)
+//	                               - allowedMethods ([]{methodName:string, isAllowed:bool})
+//	                               - accessControlMaxAge (int, per-group, defaults to 30)
 //
-// Users always write methods as []string in HCL. This function converts them to
-// allowedMethods objects when publicResource is false, so the Platform receives
-// the correct shape for the else-branch.
+// Users write methods as []string in HCL for both branches. For the non-public
+// branch this function also:
+//   - converts methods → allowedMethods objects with isAllowed: true
+//   - ensures each group has a "name" field (falls back to "group-<index>")
+//   - ensures each group has accessControlMaxAge (defaults to 30)
 func expandCORSConfiguration(cfg map[string]interface{}) map[string]interface{} {
 	isPublic, _ := cfg["publicResource"].(bool)
 	if isPublic {
 		return cfg
+	}
+
+	// Remove any top-level accessControlMaxAge — it belongs inside each group.
+	topLevelMaxAge := 30
+	if v, ok := cfg["accessControlMaxAge"]; ok {
+		switch n := v.(type) {
+		case int:
+			topLevelMaxAge = n
+		case float64:
+			topLevelMaxAge = int(n)
+		}
+		delete(cfg, "accessControlMaxAge")
 	}
 
 	groups, ok := cfg["originGroups"].([]interface{})
@@ -991,19 +1029,29 @@ func expandCORSConfiguration(cfg map[string]interface{}) map[string]interface{} 
 			continue
 		}
 
-		// Map methods []string → allowedMethods []{methodName: string}
+		// Non-public branch requires a "name" per origin group.
+		if _, hasName := group["name"]; !hasName {
+			group["name"] = fmt.Sprintf("group-%d", i)
+		}
+
+		// accessControlMaxAge belongs inside each group; default to 30.
+		if _, hasAge := group["accessControlMaxAge"]; !hasAge {
+			group["accessControlMaxAge"] = topLevelMaxAge
+		}
+
+		// Map methods []string → allowedMethods []{methodName: string, isAllowed: true}
 		if methods, ok := group["methods"]; ok {
 			var allowed []interface{}
 			switch mv := methods.(type) {
 			case []interface{}:
 				for _, m := range mv {
 					if s, ok := m.(string); ok {
-						allowed = append(allowed, map[string]interface{}{"methodName": s})
+						allowed = append(allowed, map[string]interface{}{"methodName": s, "isAllowed": true})
 					}
 				}
 			case []string:
 				for _, s := range mv {
-					allowed = append(allowed, map[string]interface{}{"methodName": s})
+					allowed = append(allowed, map[string]interface{}{"methodName": s, "isAllowed": true})
 				}
 			}
 			group["allowedMethods"] = allowed
@@ -1019,3 +1067,4 @@ func expandCORSConfiguration(cfg map[string]interface{}) map[string]interface{} 
 
 func float64Ptr(v float64) *float64 { return &v }
 func boolPtr(v bool) *bool          { return &v }
+func intPtr(v int) *int             { return &v }

@@ -331,32 +331,53 @@ func (r *OrganizationResource) Schema(_ context.Context, _ resource.SchemaReques
 						Attributes:  getVCoreEntitlementSchema(),
 						Default:     objectdefault.StaticValue(zeroVCore()),
 					},
+					// hybrid / runtime_fabric / flex_gateway / service_mesh /
+					// worker_logging_override / design_center are
+					// MASTER-ORG-ONLY entitlements: on a sub-org their values
+					// are inherited from the master and the Anypoint API
+					// rewrites whatever the provider sends. Giving these a
+					// schema-level Default would pin the plan to a concrete
+					// `false` value while the API responds with the inherited
+					// `true`, producing the "Provider produced inconsistent
+					// result after apply" diagnostic on Create. Instead we
+					// leave them as plain Optional+Computed and rely on
+					// UseStateForUnknown so that once Read populates the
+					// field from the API, subsequent plans don't show
+					// perpetual `(known after apply)`.
 					"hybrid": schema.SingleNestedAttribute{
-						Description: "Hybrid entitlement.",
+						Description: "Hybrid entitlement. Inherited from the master organization on sub-orgs; declaring it explicitly on a business group has no effect.",
 						Optional:    true,
 						Computed:    true,
 						Attributes:  getEnabledEntitlementSchema(),
-						Default:     objectdefault.StaticValue(zeroEnabled()),
+						PlanModifiers: []planmodifier.Object{
+							objectplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"runtime_fabric": schema.BoolAttribute{
-						Description: "Whether Runtime Fabric is enabled.",
+						Description: "Whether Runtime Fabric is enabled. Inherited from the master organization on sub-orgs.",
 						Optional:    true,
 						Computed:    true,
-						Default:     booldefault.StaticBool(false),
+						PlanModifiers: []planmodifier.Bool{
+							boolplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"flex_gateway": schema.SingleNestedAttribute{
-						Description: "Flex Gateway entitlement.",
+						Description: "Flex Gateway entitlement. Inherited from the master organization on sub-orgs.",
 						Optional:    true,
 						Computed:    true,
 						Attributes:  getEnabledEntitlementSchema(),
-						Default:     objectdefault.StaticValue(zeroEnabled()),
+						PlanModifiers: []planmodifier.Object{
+							objectplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"worker_logging_override": schema.SingleNestedAttribute{
-						Description: "Worker logging override entitlement.",
+						Description: "Worker logging override entitlement. Inherited from the master organization on sub-orgs.",
 						Optional:    true,
 						Computed:    true,
 						Attributes:  getEnabledEntitlementSchema(),
-						Default:     objectdefault.StaticValue(zeroEnabled()),
+						PlanModifiers: []planmodifier.Object{
+							objectplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"mq_messages": schema.SingleNestedAttribute{
 						Description: "MQ messages entitlement.",
@@ -380,11 +401,13 @@ func (r *OrganizationResource) Schema(_ context.Context, _ resource.SchemaReques
 						Default:     objectdefault.StaticValue(zeroAssigned()),
 					},
 					"design_center": schema.SingleNestedAttribute{
-						Description: "Design Center entitlement.",
+						Description: "Design Center entitlement. Inherited from the master organization on sub-orgs.",
 						Optional:    true,
 						Computed:    true,
 						Attributes:  getDesignCenterEntitlementSchema(),
-						Default:     objectdefault.StaticValue(zeroDesignCenter()),
+						PlanModifiers: []planmodifier.Object{
+							objectplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"load_balancer": schema.SingleNestedAttribute{
 						Description: "Load balancer entitlement.",
@@ -394,11 +417,13 @@ func (r *OrganizationResource) Schema(_ context.Context, _ resource.SchemaReques
 						Default:     objectdefault.StaticValue(zeroAssigned()),
 					},
 					"service_mesh": schema.SingleNestedAttribute{
-						Description: "Service Mesh entitlement.",
+						Description: "Service Mesh entitlement. Inherited from the master organization on sub-orgs.",
 						Optional:    true,
 						Computed:    true,
 						Attributes:  getEnabledEntitlementSchema(),
-						Default:     objectdefault.StaticValue(zeroEnabled()),
+						PlanModifiers: []planmodifier.Object{
+							objectplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"managed_gateway_small": schema.SingleNestedAttribute{
 						Description: "Managed Gateway (small) entitlement.",
@@ -427,11 +452,18 @@ func (r *OrganizationResource) Schema(_ context.Context, _ resource.SchemaReques
 			"updated_at": schema.StringAttribute{
 				Description: "The last update timestamp of the organization.",
 				Computed:    true,
-				// Deliberately NO UseStateForUnknown: the server rewrites this
-				// on every successful PUT, so keeping the prior state value in
-				// the plan would guarantee an "inconsistent result after
-				// apply" diagnostic on every update. Leaving it unknown lets
-				// Terraform accept whatever timestamp the API returns.
+				PlanModifiers: []planmodifier.String{
+					// Carry the prior state value through into the plan so a
+					// no-op refresh doesn't flag the resource for in-place
+					// update with a single `updated_at -> (known after apply)`
+					// diff. The Update handler must NOT write the fresh
+					// server-side timestamp back into state; doing so would
+					// produce "inconsistent result after apply" because the
+					// plan inherited the previous (older) value via this
+					// modifier. The next refresh's Read() picks up the new
+					// timestamp from the API.
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"client_id": schema.StringAttribute{
 				Description: "The client ID associated with the organization.",
@@ -676,6 +708,31 @@ func getEnvironmentsAttributeTypes() map[string]attr.Type {
 	}
 }
 
+// stripMasterOrgOnlyEntitlements zeroes out the Entitlements fields that the
+// Anypoint Access Management API only accepts for master organizations.
+//
+// Background: when the body of a POST or PUT for a business group mentions any
+// of these fields — even with value `false`/`nil`/zero — the server responds
+// with `403 Can not enable entitlement on a business group. It can only be
+// set for a master organization`. The values for these entitlements on a
+// sub-org are entirely server-managed (inherited from the master), so dropping
+// them from the wire payload is always safe.
+//
+// This helper is called on Create (every Create through this resource is a
+// sub-org because parent_organization_id is Required) and on Update for
+// non-master orgs.
+func stripMasterOrgOnlyEntitlements(e *accessmanagement.Entitlements) {
+	if e == nil {
+		return
+	}
+	e.Hybrid = nil
+	e.FlexGateway = nil
+	e.ServiceMesh = nil
+	e.WorkerLoggingOverride = nil
+	e.RuntimeFabric = nil
+	e.DesignCenter = nil
+}
+
 // expandEntitlements converts a Terraform types.Object into the client Entitlements struct.
 //
 // A null/unknown input is treated as "user omitted the entitlements block" —
@@ -770,21 +827,6 @@ func zeroVCore() types.Object {
 	)
 }
 
-// zeroDesignCenter returns a concrete {api = false, mozart = false} Object.
-//
-// Same caveat as zeroEnabled: flatten no longer synthesises this when the
-// server omits `design_center` from the response. The booleans may be
-// inherited from a master org and a hardcoded false would desync with the
-// PUT response. Kept here for tests and to document the zero-value shape.
-func zeroDesignCenter() types.Object {
-	return types.ObjectValueMust(
-		map[string]attr.Type{"api": types.BoolType, "mozart": types.BoolType},
-		map[string]attr.Value{
-			"api":    types.BoolValue(false),
-			"mozart": types.BoolValue(false),
-		},
-	)
-}
 
 // zeroMq returns a concrete {base = 0, add_on = 0} Object.
 func zeroMq() types.Object {
@@ -1180,6 +1222,12 @@ func environmentToModel(env *accessmanagement.OrgEnvironment) types.Object {
 	if env == nil {
 		return types.ObjectNull(getEnvironmentsAttributeTypes())
 	}
+	var arcNamespace types.String
+	if env.ArcNamespace != nil {
+		arcNamespace = types.StringValue(*env.ArcNamespace)
+	} else {
+		arcNamespace = types.StringNull()
+	}
 	obj, diags := types.ObjectValue(getEnvironmentsAttributeTypes(), map[string]attr.Value{
 		"id":              types.StringValue(env.ID),
 		"name":            types.StringValue(env.Name),
@@ -1187,6 +1235,7 @@ func environmentToModel(env *accessmanagement.OrgEnvironment) types.Object {
 		"is_production":   types.BoolValue(env.IsProduction),
 		"type":            types.StringValue(env.Type),
 		"client_id":       types.StringValue(env.ClientID),
+		"arc_namespace":   arcNamespace,
 	})
 	if diags.HasError() {
 		return types.ObjectNull(getEnvironmentsAttributeTypes())
@@ -1220,6 +1269,16 @@ func (r *OrganizationResource) Create(ctx context.Context, req resource.CreateRe
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	// parent_organization_id is Required, so every Create through this
+	// provider produces a sub-org / business group. Master-org-only
+	// entitlements (hybrid, flexGateway, serviceMesh, workerLoggingOverride,
+	// runtimeFabric, designCenter) are inherited from the master and the
+	// API 403s on a POST/PUT body that even mentions them. If the user
+	// declared one of these in HCL we drop it here so the create succeeds;
+	// the post-create flatten/merge step will surface the inherited value
+	// the server returned.
+	stripMasterOrgOnlyEntitlements(&entitlements)
 
 	createReq := accessmanagement.CreateOrganizationRequest{
 		Name:                 data.Name.ValueString(),
@@ -1322,7 +1381,7 @@ func (r *OrganizationResource) Create(ctx context.Context, req resource.CreateRe
 	entObj, entDiags := flattenEntitlements(ctx, organization.Entitlements)
 	resp.Diagnostics.Append(entDiags...)
 	if !resp.Diagnostics.HasError() {
-		data.Entitlements = mergeEntitlementsPreservingPlan(ctx, data.Entitlements, entObj, &resp.Diagnostics)
+		data.Entitlements = mergeEntitlementsPreservingPlan(ctx, data.Entitlements, entObj, false, &resp.Diagnostics)
 	}
 
 	tflog.Trace(ctx, "created an organization")
@@ -1549,6 +1608,18 @@ func (r *OrganizationResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 
+	// The Anypoint API 403s when a PUT for a business group includes any
+	// master-org-only entitlements (hybrid, flexGateway, serviceMesh,
+	// workerLoggingOverride, runtimeFabric, designCenter) even when set to
+	// false/nil/zero. After `terraform import`, generated.tf often captures
+	// these as concrete values from state (e.g. design_center.api = true
+	// inherited from the master), so they end up in expandEntitlements
+	// output and cause the 403 on the next apply. Strip them unconditionally
+	// for non-master orgs.
+	if !current.IsMaster {
+		stripMasterOrgOnlyEntitlements(&entitlements)
+	}
+
 	// owner_id is RequiresReplace, so state and plan always agree; we prefer state
 	// (it is the authoritative server value).
 	ownerID := state.OwnerID.ValueString()
@@ -1592,7 +1663,14 @@ func (r *OrganizationResource) Update(ctx context.Context, req resource.UpdateRe
 	plan.Name = types.StringValue(organization.Name)
 	plan.OwnerID = types.StringValue(organization.OwnerID)
 	plan.CreatedAt = types.StringValue(organization.CreatedAt)
-	plan.UpdatedAt = types.StringValue(organization.UpdatedAt)
+	// NOTE: deliberately do NOT overwrite plan.UpdatedAt with the server's
+	// fresh timestamp. The schema marks updated_at as Computed with
+	// UseStateForUnknown, meaning Terraform planned this field as the prior
+	// state value (so a no-op refresh doesn't show a noisy
+	// `updated_at -> (known after apply)` diff). Writing the API value
+	// here would violate the post-apply state == plan contract and produce
+	// "inconsistent result after apply". The next refresh's Read() reads
+	// the fresh timestamp from the API and brings state up to date.
 	plan.ClientID = types.StringValue(organization.ClientID)
 	plan.IDProviderID = types.StringValue(organization.IDProviderID)
 	plan.IsFederated = types.BoolValue(organization.IsFederated)
@@ -1682,19 +1760,16 @@ func (r *OrganizationResource) Update(ctx context.Context, req resource.UpdateRe
 		plan.Subscription = types.ObjectNull(getSubscriptionAttributeTypes())
 	}
 
-	// Merge the PUT response's entitlements view with the prior plan so that
-	// fields the server omitted (typical for inherited entitlements on a
-	// sub-org) don't get clobbered to null and produce
-	// "inconsistent result after apply" errors. Any entitlement the server
-	// DID return overrides the plan value; anything absent keeps whatever the
-	// plan already had (which, via UseStateForUnknown on the inner attrs,
-	// equals the prior state or an unknown marker).
+	// Merge the PUT response's entitlements with the plan. planIsAuthoritative=true
+	// ensures state == plan for all user-declared fields, even when the API echoes
+	// a stale/zero value for fields it accepted but didn't reflect (e.g.
+	// managedGatewayLarge.assigned = 1 written but response still shows 0).
 	entObj, entFlattenDiags := flattenEntitlements(ctx, organization.Entitlements)
 	resp.Diagnostics.Append(entFlattenDiags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	plan.Entitlements = mergeEntitlementsPreservingPlan(ctx, plan.Entitlements, entObj, &resp.Diagnostics)
+	plan.Entitlements = mergeEntitlementsPreservingPlan(ctx, plan.Entitlements, entObj, true, &resp.Diagnostics)
 
 	tflog.Trace(ctx, "updated organization")
 
@@ -1706,30 +1781,26 @@ func (r *OrganizationResource) Update(ctx context.Context, req resource.UpdateRe
 // state respects Terraform's contract: post-apply MUST equal plan, otherwise
 // the framework emits "Provider produced inconsistent result after apply".
 //
+// planIsAuthoritative should be true on Update and false on Create:
+//   - Update: the plan is what we sent to the API; Terraform requires post-apply
+//     state == plan, so user-declared concrete values always win over whatever
+//     the server echoed back (the API often returns stale/zero values for fields
+//     it accepted but didn't echo, e.g. managedGatewayLarge.assigned).
+//   - Create: we haven't written the value yet from the user's perspective, so
+//     the API response is the canonical initial state for unknown plan fields.
+//
 // Per-attribute precedence (highest to lowest):
 //
-//  1. Plan unknown          → API value wins. Any post-apply value is legal
-//     because the plan was explicitly "will be known after apply".
-//  2. Plan null             → preserve null. The user did not declare an
-//     opinion; Terraform treats null as a concrete plan value that must round-
-//     trip exactly. Even if the server returned a concrete value for this
-//     attribute (typical for master-org-inherited flags like
-//     `service_mesh:{enabled:true}` showing up on a sub-org PUT response),
-//     we MUST keep null in state. The next refresh cycle will reconcile state
-//     to the server's actual value, where it will then flow through
-//     UseStateForUnknown as the plan value on the following apply.
-//  3. Plan concrete, API null → preserve plan. Server omitted the field
-//     (e.g. partial PUT response); user's declared value should remain.
-//  4. Plan concrete, API concrete → API wins. This is real drift detection.
-func mergeEntitlementsPreservingPlan(ctx context.Context, planEnt types.Object, apiEnt types.Object, diagsOut *diag.Diagnostics) types.Object {
-	// Whole-object short-circuits: if either side is null/unknown, defer to
-	// the other rather than try to merge attribute-by-attribute.
+//  1. Plan unknown          → API value wins.
+//  2. Plan null             → preserve null.
+//  3. Plan concrete, API null → preserve plan.
+//  4. Plan concrete, API concrete, planIsAuthoritative=true  → plan wins.
+//  5. Plan concrete, API concrete, planIsAuthoritative=false → API wins.
+func mergeEntitlementsPreservingPlan(ctx context.Context, planEnt types.Object, apiEnt types.Object, planIsAuthoritative bool, diagsOut *diag.Diagnostics) types.Object {
 	if planEnt.IsUnknown() {
-		// Plan is entirely unknown — anything the API returns is legal.
 		return apiEnt
 	}
 	if planEnt.IsNull() {
-		// Plan is entirely null — post-apply must also be null.
 		return planEnt
 	}
 	if apiEnt.IsNull() || apiEnt.IsUnknown() {
@@ -1743,22 +1814,21 @@ func mergeEntitlementsPreservingPlan(ctx context.Context, planEnt types.Object, 
 		planVal, hasPlan := planAttrs[name]
 		switch {
 		case !hasPlan:
-			// Shouldn't happen given identical schemas, but be defensive.
 			merged[name] = apiVal
 		case planVal.IsUnknown():
 			// Rule 1 — API wins; plan said "known after apply".
 			merged[name] = apiVal
 		case planVal.IsNull():
-			// Rule 2 — preserve plan null. Letting the API's concrete value
-			// through here is what produced the
-			// "was null, but now cty.ObjectVal(...)" regression on
-			// flex_gateway / service_mesh for business-group orgs.
+			// Rule 2 — preserve plan null.
 			merged[name] = planVal
 		case apiVal.IsNull():
 			// Rule 3 — server omitted; keep the user-declared value.
 			merged[name] = planVal
+		case planIsAuthoritative:
+			// Rule 4 — Update: plan is what we sent; state must equal plan.
+			merged[name] = planVal
 		default:
-			// Rule 4 — both sides concrete; API is authoritative.
+			// Rule 5 — Create: API is the canonical initial state.
 			merged[name] = apiVal
 		}
 	}

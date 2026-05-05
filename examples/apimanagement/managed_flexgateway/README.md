@@ -28,7 +28,7 @@ This example creates **2 Managed Flex Gateway instances**:
 - Name: `my-production-gateway`
 - Runtime version: `1.9.9` (explicit)
 - Release channel: LTS
-- Size: Medium
+- Size: small
 - **Ingress Configuration**:
   - Forward SSL session: Enabled
   - Last mile security: Enabled

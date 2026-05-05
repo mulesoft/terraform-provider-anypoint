@@ -202,7 +202,7 @@ func (c *SLATierClient) UpdateSLATier(ctx context.Context, orgID, envID string, 
 		return nil, client.NewNotFoundError("SLA tier")
 	}
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("failed to update SLA tier with status %d: %s", resp.StatusCode, string(body))
 	}

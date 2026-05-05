@@ -7,7 +7,9 @@ description: |-
 
 # anypoint_secret_group_keystore (Resource)
 
-Manages a keystore within a secret group in Anypoint Secrets Manager. Supports PEM, JKS, PKCS12, and JCEKS formats. Use `filebase64()` to read binary files (JKS/PKCS12) or `file()` for PEM text files.
+Manages a keystore within a secret group in Anypoint Secrets Manager. Supports PEM, JKS, PKCS12, and JCEKS formats. Use `filebase64()` to read binary files (JKS/PKCS12) or `base64encode(file(...))` for PEM text files.
+
+~> **Delete behaviour:** The Anypoint Secrets Manager API does not expose individual DELETE endpoints for sub-resources. `terraform destroy` removes this resource from Terraform state only — the keystore is deleted on the Platform when the parent `anypoint_secret_group` is destroyed.
 
 ## Example Usage
 
@@ -50,7 +52,8 @@ resource "anypoint_secret_group_keystore" "jks" {
   type            = "JKS"
 
   keystore_file_base64 = filebase64("${path.module}/certs/keystore.jks")
-  passphrase           = var.jks_passphrase
+  store_passphrase     = var.jks_store_passphrase
+  key_passphrase       = var.jks_key_passphrase
   alias                = "myalias"
 }
 ```
@@ -59,20 +62,21 @@ resource "anypoint_secret_group_keystore" "jks" {
 
 ### Required
 
-- `environment_id` (String) Environment ID.
-- `secret_group_id` (String) Secret group ID that this keystore belongs to.
+- `environment_id` (String) Environment ID. Changing this forces a new resource.
+- `secret_group_id` (String) Secret group ID that this keystore belongs to. Changing this forces a new resource.
 - `name` (String) Name of the keystore.
 
 ### Optional
 
-- `organization_id` (String) The organization ID. If not provided, the organization ID will be inferred from the connected app credentials.
-- `type` (String) Keystore format: `PEM`, `JKS`, `PKCS12`, or `JCEKS`. Defaults to `PEM`.
-- `certificate_base64` (String, Sensitive) Base64-encoded certificate content. For PEM files use `base64encode(file("cert.pem"))`, or for binary formats use `filebase64("cert.der")`.
-- `key_base64` (String, Sensitive) Base64-encoded private key content. For PEM keys use `base64encode(file("key.pem"))`, or for binary keys use `filebase64("key.der")`. Required for PEM type.
-- `keystore_file_base64` (String, Sensitive) Base64-encoded keystore file content. Use `filebase64("keystore.jks")` or `filebase64("keystore.p12")`. Required for JKS, PKCS12, and JCEKS types.
-- `passphrase` (String, Sensitive) Passphrase for the keystore or encrypted PEM key.
-- `alias` (String) Alias of the entry within the keystore. Used for JKS, PKCS12, and JCEKS types.
-- `ca_path_base64` (String, Sensitive) Base64-encoded CA certificate chain (truststore). Optional for all types.
+- `organization_id` (String) The organization ID. If not provided, inferred from the connected app credentials.
+- `type` (String) Keystore format: `PEM`, `JKS`, `PKCS12`, or `JCEKS`. Defaults to `PEM`. Changing this forces a new resource.
+- `certificate_base64` (String, Sensitive) Base64-encoded certificate content. For PEM: `base64encode(file("cert.pem"))`. For binary DER: `filebase64("cert.der")`. Used for PEM type.
+- `key_base64` (String, Sensitive) Base64-encoded private key content. For PEM: `base64encode(file("key.pem"))`. Required for PEM type.
+- `keystore_file_base64` (String, Sensitive) Base64-encoded keystore file. Use `filebase64("keystore.jks")` or `filebase64("keystore.p12")`. Required for JKS, PKCS12, and JCEKS types.
+- `store_passphrase` (String, Sensitive) Store-level passphrase (`storePassphrase`). Required for JKS, PKCS12, and JCEKS types.
+- `key_passphrase` (String, Sensitive) Private-key entry passphrase (`keyPassphrase`). Required for JKS, PKCS12, and JCEKS types. Optional for PEM encrypted keys.
+- `alias` (String) Entry alias within the keystore. Used for JKS, PKCS12, and JCEKS types.
+- `ca_path_base64` (String, Sensitive) Base64-encoded CA certificate chain (appended as truststore). Optional for all types.
 
 ### Read-Only
 
@@ -81,8 +85,6 @@ resource "anypoint_secret_group_keystore" "jks" {
 - `algorithm` (String) Signature algorithm of the certificate.
 
 ## Import
-
-Import is supported using the following syntax:
 
 ```shell
 terraform import anypoint_secret_group_keystore.example organization_id/environment_id/secret_group_id/keystore_id

@@ -23,37 +23,52 @@ provider "anypoint" {
 #   # runtime_version is auto-resolved to the latest for the default channel (lts)
 # }
 
-# --------------------------------------------------------------------------
-# Fully configured Managed Flex Gateway with explicit version
-# --------------------------------------------------------------------------
-resource "anypoint_managed_flexgateway" "complete" {
-  name            = "my-production-gateway"
-  environment_id  = var.environment_id
-  target_id       = var.target_id  
+resource "anypoint_managed_flexgateway" "gw" {
+  environment_id = var.environment_id # local.sandbox_env_id  # from remote state — not hardcoded
+  target_id    = var.target_id
+  name      = "test-gw"
+  size      = "small"
   release_channel = "lts"
-  size            = "small"
-
-  # public_url and internal_url are auto-computed from the target's domain when omitted.
-  # Set public_url to override with your own domain (e.g. when using a custom TLS context).
-  ingress = {
-    forward_ssl_session = true
-    last_mile_security  = true
-  }
-
-  properties = {
-    upstream_response_timeout = 30
-    connection_idle_timeout   = 120
-  }
-
   logging = {
-    level        = "info"
+    level    = "info"
     forward_logs = true
   }
-
   tracing = {
-    enabled = false
+    enabled = true
   }
 }
+
+# # --------------------------------------------------------------------------
+# # Fully configured Managed Flex Gateway with explicit version
+# # --------------------------------------------------------------------------
+# resource "anypoint_managed_flexgateway" "complete" {
+#   name            = "my-production-gateway"
+#   environment_id  = var.environment_id
+#   target_id       = var.target_id  
+#   release_channel = "lts"
+#   size            = "small"
+
+#   # public_url and internal_url are auto-computed from the target's domain when omitted.
+#   # Set public_url to override with your own domain (e.g. when using a custom TLS context).
+#   ingress = {
+#     forward_ssl_session = true
+#     last_mile_security  = true
+#   }
+
+#   properties = {
+#     upstream_response_timeout = 30
+#     connection_idle_timeout   = 120
+#   }
+
+#   logging = {
+#     level        = "info"
+#     forward_logs = true
+#   }
+
+#   tracing = {
+#     enabled = false
+#   }
+# }
 
 # --------------------------------------------------------------------------
 # Variables
@@ -89,79 +104,79 @@ variable "target_id" {
   default     = "675c4efb-d44e-44cd-ac6f-d5a1128e6236"
 }
 
-# --------------------------------------------------------------------------
-# Outputs
-# --------------------------------------------------------------------------
-# output "basic_gateway_id" {
-#   description = "The ID of the basic managed Flex Gateway"
-#   value       = anypoint_managed_flexgateway.basic.id
+# # --------------------------------------------------------------------------
+# # Outputs
+# # --------------------------------------------------------------------------
+# # output "basic_gateway_id" {
+# #   description = "The ID of the basic managed Flex Gateway"
+# #   value       = anypoint_managed_flexgateway.basic.id
+# # }
+
+# # output "basic_gateway_status" {
+# #   description = "The status of the basic managed Flex Gateway"
+# #   value       = anypoint_managed_flexgateway.basic.status
+# # }
+
+# output "complete_gateway_id" {
+#   description = "The ID of the fully configured managed Flex Gateway"
+#   value       = anypoint_managed_flexgateway.complete.id
 # }
 
-# output "basic_gateway_status" {
-#   description = "The status of the basic managed Flex Gateway"
-#   value       = anypoint_managed_flexgateway.basic.status
+# output "complete_gateway_public_url" {
+#   description = "The public URL of the fully configured gateway"
+#   value       = anypoint_managed_flexgateway.complete.ingress.public_url
 # }
 
-output "complete_gateway_id" {
-  description = "The ID of the fully configured managed Flex Gateway"
-  value       = anypoint_managed_flexgateway.complete.id
-}
+# output "complete_gateway_internal_url" {
+#   description = "The internal URL of the fully configured gateway"
+#   value       = anypoint_managed_flexgateway.complete.ingress.internal_url
+# }
 
-output "complete_gateway_public_url" {
-  description = "The public URL of the fully configured gateway"
-  value       = anypoint_managed_flexgateway.complete.ingress.public_url
-}
+# output "complete_gateway_status" {
+#   description = "The current status of the fully configured gateway"
+#   value       = anypoint_managed_flexgateway.complete.status
+# }
 
-output "complete_gateway_internal_url" {
-  description = "The internal URL of the fully configured gateway"
-  value       = anypoint_managed_flexgateway.complete.ingress.internal_url
-}
+# # --------------------------------------------------------------------------
+# # Datasource — look up an existing gateway by ID
+# # --------------------------------------------------------------------------
+# variable "gateway_id" {
+#   description = "The ID of an existing managed Flex Gateway to look up"
+#   type        = string
+#   default     = ""
+# }
 
-output "complete_gateway_status" {
-  description = "The current status of the fully configured gateway"
-  value       = anypoint_managed_flexgateway.complete.status
-}
+# data "anypoint_managed_flexgateway" "existing" {
+#   id             = var.gateway_id
+#   environment_id = var.environment_id
+# }
 
-# --------------------------------------------------------------------------
-# Datasource — look up an existing gateway by ID
-# --------------------------------------------------------------------------
-variable "gateway_id" {
-  description = "The ID of an existing managed Flex Gateway to look up"
-  type        = string
-  default     = ""
-}
+# output "existing_gateway_name" {
+#   description = "Name of the looked-up gateway"
+#   value       = data.anypoint_managed_flexgateway.existing.name
+# }
 
-data "anypoint_managed_flexgateway" "existing" {
-  id             = var.gateway_id
-  environment_id = var.environment_id
-}
+# output "existing_gateway_status" {
+#   description = "Current status of the looked-up gateway"
+#   value       = data.anypoint_managed_flexgateway.existing.status
+# }
 
-output "existing_gateway_name" {
-  description = "Name of the looked-up gateway"
-  value       = data.anypoint_managed_flexgateway.existing.name
-}
+# output "existing_gateway_public_url" {
+#   description = "Primary public URL of the looked-up gateway"
+#   value       = data.anypoint_managed_flexgateway.existing.ingress.public_url
+# }
 
-output "existing_gateway_status" {
-  description = "Current status of the looked-up gateway"
-  value       = data.anypoint_managed_flexgateway.existing.status
-}
+# output "existing_gateway_internal_urls" {
+#   description = "All internal URLs of the looked-up gateway"
+#   value       = data.anypoint_managed_flexgateway.existing.ingress.internal_urls
+# }
 
-output "existing_gateway_public_url" {
-  description = "Primary public URL of the looked-up gateway"
-  value       = data.anypoint_managed_flexgateway.existing.ingress.public_url
-}
+# output "existing_gateway_port_config" {
+#   description = "Ingress/egress port configuration of the looked-up gateway"
+#   value       = data.anypoint_managed_flexgateway.existing.port_configuration
+# }
 
-output "existing_gateway_internal_urls" {
-  description = "All internal URLs of the looked-up gateway"
-  value       = data.anypoint_managed_flexgateway.existing.ingress.internal_urls
-}
-
-output "existing_gateway_port_config" {
-  description = "Ingress/egress port configuration of the looked-up gateway"
-  value       = data.anypoint_managed_flexgateway.existing.port_configuration
-}
-
-output "existing_gateway_runtime_version" {
-  description = "Runtime version of the looked-up gateway"
-  value       = data.anypoint_managed_flexgateway.existing.runtime_version
-}
+# output "existing_gateway_runtime_version" {
+#   description = "Runtime version of the looked-up gateway"
+#   value       = data.anypoint_managed_flexgateway.existing.runtime_version
+# }

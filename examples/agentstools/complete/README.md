@@ -40,8 +40,8 @@ This example demonstrates a complete AI agents infrastructure setup with MCP (Mo
 
 ### Features Demonstrated
 - MCP server deployment with custom proxy URIs
-- Agent instance deployment with routing configuration
-- A/B testing with weighted traffic distribution (80/20 split)
+- Agent instance deployment with `upstream_uri` shorthand and explicit `routing`
+- Multiple routing rules (read/write separation per route)
 - Resource dependencies between agents and MCP servers
 - Data sources for querying deployed instances
 
@@ -116,11 +116,8 @@ Agent instances are AI models deployed behind API Manager that:
 - Support advanced routing (A/B testing, canary deployments)
 - Are managed as API instances with policies and SLA tiers
 
-### Weighted Routing
-The Sales Agent demonstrates A/B testing:
-- 80% of traffic → Stable model
-- 20% of traffic → New model
-- Useful for gradual rollouts and performance comparison
+### Routing
+Each agent instance and MCP server supports one upstream per route. The `upstream_uri` shorthand expands to `[{upstreams: [{weight: 100, uri: <value>}]}]`. For read/write separation use multiple route entries — multi-upstream weighted routing is not supported for these resource types.
 
 ## Outputs
 

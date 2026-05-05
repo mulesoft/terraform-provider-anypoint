@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -148,6 +149,9 @@ func (r *ManagedFlexGatewayResource) Schema(_ context.Context, _ resource.Schema
 			"status": schema.StringAttribute{
 				Description: "The current status of the managed Flex Gateway.",
 				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"ingress": schema.SingleNestedAttribute{
 				Description: "Ingress configuration for the gateway.\n\n" +
@@ -156,6 +160,9 @@ func (r *ManagedFlexGatewayResource) Schema(_ context.Context, _ resource.Schema
 					"  - To reset back to auto-derived after having set a custom value, set `public_url = \"\"`.",
 				Optional: true,
 				Computed: true,
+				PlanModifiers: []planmodifier.Object{
+					objectplanmodifier.UseStateForUnknown(),
+				},
 				Attributes: map[string]schema.Attribute{
 					"public_url": schema.StringAttribute{
 						Description: "The public URL for the gateway ingress. " +
@@ -187,6 +194,9 @@ func (r *ManagedFlexGatewayResource) Schema(_ context.Context, _ resource.Schema
 				Description: "Runtime properties for the gateway.",
 				Optional:    true,
 				Computed:    true,
+				PlanModifiers: []planmodifier.Object{
+					objectplanmodifier.UseStateForUnknown(),
+				},
 				Attributes: map[string]schema.Attribute{
 					"upstream_response_timeout": schema.Int64Attribute{
 						Description: "Timeout in seconds for upstream service responses.",
@@ -206,6 +216,9 @@ func (r *ManagedFlexGatewayResource) Schema(_ context.Context, _ resource.Schema
 				Description: "Logging configuration for the gateway.",
 				Optional:    true,
 				Computed:    true,
+				PlanModifiers: []planmodifier.Object{
+					objectplanmodifier.UseStateForUnknown(),
+				},
 				Attributes: map[string]schema.Attribute{
 					"level": schema.StringAttribute{
 						Description: "The log level. Valid values: 'debug', 'info', 'warn', 'error'.",
@@ -228,6 +241,9 @@ func (r *ManagedFlexGatewayResource) Schema(_ context.Context, _ resource.Schema
 				Description: "Distributed tracing configuration for the gateway.",
 				Optional:    true,
 				Computed:    true,
+				PlanModifiers: []planmodifier.Object{
+					objectplanmodifier.UseStateForUnknown(),
+				},
 				Attributes: map[string]schema.Attribute{
 					"enabled": schema.BoolAttribute{
 						Description: "Whether distributed tracing is enabled.",
@@ -356,6 +372,11 @@ func (r *ManagedFlexGatewayResource) Create(ctx context.Context, req resource.Cr
 		Configuration:  cfg,
 	}
 
+	// Save plan tracing before the API call — the Create response may not
+	// echo configuration.tracing back, which would leave Enabled=false and
+	// trigger a "provider produced an unexpected new value" framework error.
+	planTracing := data.Tracing
+
 	gw, err := r.client.CreateManagedFlexGateway(ctx, orgID, envID, createReq)
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating managed Flex Gateway", "Could not create managed Flex Gateway, unexpected error: "+err.Error())
@@ -363,6 +384,7 @@ func (r *ManagedFlexGatewayResource) Create(ctx context.Context, req resource.Cr
 	}
 
 	r.flattenGateway(gw, &data, orgID, envID)
+	data.Tracing = reconcileTracing(planTracing, data.Tracing)
 	tflog.Trace(ctx, "created managed flex gateway", map[string]interface{}{"id": gw.ID})
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -440,6 +462,10 @@ func (r *ManagedFlexGatewayResource) Update(ctx context.Context, req resource.Up
 		Configuration:  cfg,
 	}
 
+	// Save plan tracing before the API call — the Update response may not
+	// echo configuration.tracing back (same issue as Create).
+	planTracing := plan.Tracing
+
 	gw, err := r.client.UpdateManagedFlexGateway(ctx, orgID, envID, state.ID.ValueString(), updateReq)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating managed Flex Gateway", "Could not update managed Flex Gateway, unexpected error: "+err.Error())
@@ -447,6 +473,7 @@ func (r *ManagedFlexGatewayResource) Update(ctx context.Context, req resource.Up
 	}
 
 	r.flattenGateway(gw, &plan, orgID, envID)
+	plan.Tracing = reconcileTracing(planTracing, plan.Tracing)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -594,4 +621,33 @@ func (r *ManagedFlexGatewayResource) flattenGateway(gw *apimanagement.ManagedFle
 	} else {
 		data.Tracing = tracingObj
 	}
+}
+
+// reconcileTracing returns the API-returned tracing value when it matches the
+// plan, or falls back to the plan value when the API response dropped the field
+// (returns enabled=false after we sent enabled=true). This prevents the
+// "provider produced an unexpected new value: .tracing.enabled" framework error
+// that occurs when the Gateway Manager POST/PUT response omits tracing.
+// Read() is unaffected — it always uses the live API value for drift detection.
+func reconcileTracing(plan, fromAPI types.Object) types.Object {
+	if fromAPI.IsNull() || fromAPI.IsUnknown() {
+		return plan
+	}
+	apiAttrs := fromAPI.Attributes()
+	planAttrs := plan.Attributes()
+	if apiAttrs == nil || planAttrs == nil {
+		return plan
+	}
+	apiEnabled, ok1 := apiAttrs["enabled"].(types.Bool)
+	planEnabled, ok2 := planAttrs["enabled"].(types.Bool)
+	if !ok1 || !ok2 {
+		return plan
+	}
+	// If the API echoed false but the plan requested true, the API silently
+	// dropped the field — keep the plan value in state so Terraform doesn't
+	// detect a spurious diff on the next refresh.
+	if !apiEnabled.ValueBool() && planEnabled.ValueBool() {
+		return plan
+	}
+	return fromAPI
 }

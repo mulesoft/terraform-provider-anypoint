@@ -15,15 +15,16 @@ The Agents Tools category provides two main resources:
 
 Creates and manages an AI agent instance in API Manager. Agent instances can:
 - Access MCP servers for tool use
-- Support advanced routing (A/B testing, canary deployments)
 - Be managed with policies and SLA tiers like regular APIs
-- Route to one or more backend agent implementations
+- Route to a backend agent implementation
 
 **Key Features:**
-- Weighted traffic distribution for A/B testing
 - Integration with Flex Gateway
 - Support for Exchange asset specifications
-- Deployment configuration management
+- `upstream_uri` shorthand or explicit `routing` block (one upstream per route)
+- `status` is populated automatically after creation via a POST + GET
+
+> **Note:** Only one upstream per route is supported. Multi-upstream weighted routing is not available for agent instances.
 
 ### `anypoint_mcp_server`
 
@@ -31,13 +32,14 @@ Creates and manages an MCP (Model Context Protocol) server instance. MCP servers
 - Expose tools and resources that agents can use
 - Follow the Model Context Protocol standard
 - Deploy to Flex Gateway with custom proxy URIs
-- Support load balancing across multiple backends
 
 **Key Features:**
-- MCP-specific endpoint type
-- Custom proxy URI configuration (e.g., `/mcp/atlassian`)
-- High availability with weighted routing
-- Integration with enterprise systems
+- MCP-specific endpoint type (`type = "mcp"`)
+- Custom proxy URI via `base_path` (e.g., `base_path = "mcp/atlassian"` → `http://0.0.0.0:8081/mcp/atlassian`)
+- `upstream_uri` shorthand or explicit `routing` block (one upstream per route)
+- `upstream_id` computed attribute for referencing in outbound policies
+
+> **Note:** Only one upstream per route is supported. Multi-upstream weighted routing is not available for MCP servers.
 
 ## Data Sources
 
@@ -157,21 +159,33 @@ Think of it like:
 - Agent Instance = The brain (AI model)
 - MCP Server = The hands (tools to interact with systems)
 
-### Routing and Load Balancing
+### Routing
 
-Both resource types support:
-- **Weighted routing**: Distribute traffic across multiple backends
-- **A/B testing**: Compare different versions
-- **Canary deployments**: Gradually roll out changes
+Both resource types support the `routing` block with a list of routes, each containing a single upstream. Multi-upstream weighted routing is **not** supported — each route must have exactly one upstream (weight defaults to 100).
 
-Example:
+Example with a single upstream route:
 ```hcl
 routing = [
   {
     upstreams = [
-      { weight = 80, uri = "http://stable-model.internal:8080" }
-      { weight = 20, uri = "http://new-model.internal:8080" }
+      { weight = 100, uri = "http://agent-backend.internal:8080" }
     ]
+  }
+]
+```
+
+For multiple routes (e.g. read vs write separation), use multiple route entries:
+```hcl
+routing = [
+  {
+    label = "reads"
+    rules = { methods = "GET" }
+    upstreams = [{ uri = "http://read-backend.internal:8080" }]
+  },
+  {
+    label = "writes"
+    rules = { methods = "POST|PUT|DELETE" }
+    upstreams = [{ uri = "http://write-backend.internal:8080" }]
   }
 ]
 ```
@@ -223,17 +237,34 @@ resource "anypoint_mcp_server" "enterprise_tools" {
 }
 ```
 
-### A/B Testing Setup
+### Multiple Route Setup (Read/Write Separation)
 
 ```hcl
-resource "anypoint_agent_instance" "experimental" {
-  instance_label = "sales-agent-ab"
-  routing = [{
-    upstreams = [
-      { weight = 70, uri = "http://gpt4.internal:8080", label = "GPT-4" }
-      { weight = 30, uri = "http://claude.internal:8080", label = "Claude" }
-    ]
-  }]
+resource "anypoint_agent_instance" "separated" {
+  organization_id = var.organization_id
+  environment_id  = var.environment_id
+  instance_label  = "sales-agent"
+  spec = {
+    asset_id = "sales-agent-spec"
+    group_id = var.organization_id
+    version  = "1.0.0"
+  }
+  endpoint = {
+    base_path = "agent/sales"
+  }
+  gateway_id = var.gateway_id
+  routing = [
+    {
+      label     = "reads"
+      rules     = { methods = "GET" }
+      upstreams = [{ uri = "http://sales-agent-read.internal:8080" }]
+    },
+    {
+      label     = "writes"
+      rules     = { methods = "POST|PUT|DELETE" }
+      upstreams = [{ uri = "http://sales-agent-write.internal:8080" }]
+    }
+  ]
 }
 ```
 

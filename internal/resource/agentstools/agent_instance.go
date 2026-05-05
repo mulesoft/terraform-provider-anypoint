@@ -455,6 +455,16 @@ func (r *AgentInstanceResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 
+	// The xapi/v1 POST response omits computed fields such as status.
+	// Fetch the full resource via the api/v1 GET so all computed fields are
+	// populated before writing state; without this Terraform taints the resource.
+	fetched, err := r.client.GetAgentInstance(ctx, orgID, envID, instance.ID)
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading Agent instance after create", "Could not read Agent instance "+strconv.Itoa(instance.ID)+": "+err.Error())
+		return
+	}
+	instance = fetched
+
 	gatewayID := data.GatewayID
 	plannedRouting := data.Routing
 	plannedEndpoint := data.Endpoint

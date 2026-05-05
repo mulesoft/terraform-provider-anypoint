@@ -225,20 +225,12 @@ func (r *CertificateResource) Update(ctx context.Context, req resource.UpdateReq
 }
 
 func (r *CertificateResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	// The SM API has no individual sub-resource DELETE endpoint (returns 405).
+	// Sub-resources are removed by deleting the parent secret group.
+	// Removing from Terraform state only; platform cleanup is the secret group's responsibility.
 	var data CertificateResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	orgID := data.OrganizationID.ValueString()
-	if orgID == "" {
-		orgID = r.client.OrgID
-	}
-
-	if err := r.client.DeleteCertificate(ctx, orgID, data.EnvironmentID.ValueString(), data.SecretGroupID.ValueString(), data.ID.ValueString()); err != nil {
-		resp.Diagnostics.AddError("Error deleting certificate", err.Error())
-	}
+	tflog.Trace(ctx, "removed certificate from state (no-op delete)", map[string]interface{}{"id": data.ID.ValueString()})
 }
 
 func (r *CertificateResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

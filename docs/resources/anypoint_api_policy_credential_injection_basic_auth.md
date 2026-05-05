@@ -57,8 +57,8 @@ Required:
 
 Optional:
 
-- `custom_header` (String) Custom header name for injecting credentials.
-- `overwrite` (Boolean) Whether to overwrite existing credentials.
+- `custom_header` (String) Custom header name to use for injecting credentials instead of the standard `Authorization` header.
+- `overwrite` (Boolean) Whether to overwrite an existing credential header on the request. Defaults to `false`. The provider always sends this field — omitting it does not cause HTTP 400.
 
 ## Import
 

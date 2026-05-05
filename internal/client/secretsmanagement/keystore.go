@@ -44,14 +44,15 @@ type CreateResponse struct {
 // --- Request Models ---
 
 type CreateKeystoreRequest struct {
-	Name        string
-	Type        string // PEM, JKS, PKCS12, JCEKS
-	Certificate []byte // raw cert bytes (PEM text or binary)
-	Key         []byte // raw key bytes (PEM text or binary, for PEM type)
-	Keystore    []byte // raw keystore bytes (for JKS/PKCS12/JCEKS)
-	Passphrase  string // keystore/key passphrase
-	Alias       string // entry alias within keystore
-	CaPath      []byte // optional CA certificate chain
+	Name           string
+	Type           string // PEM, JKS, PKCS12, JCEKS
+	Certificate    []byte // raw cert bytes (PEM text or binary)
+	Key            []byte // raw key bytes (PEM text or binary, for PEM type)
+	Keystore       []byte // raw keystore bytes (for JKS/PKCS12/JCEKS)
+	StorePassphrase string // keystore store passphrase (JKS/PKCS12/JCEKS → storePassphrase)
+	KeyPassphrase   string // private key entry passphrase (JKS/PKCS12/JCEKS → keyPassphrase; PEM → keyPassphrase)
+	Alias          string // entry alias within keystore
+	CaPath         []byte // optional CA certificate chain
 }
 
 // --- CRUD Operations ---
@@ -253,8 +254,8 @@ func buildMultipartBody(request *CreateKeystoreRequest) (*bytes.Buffer, string, 
 				return nil, "", err
 			}
 		}
-		if request.Passphrase != "" {
-			if err := writer.WriteField("keyPassphrase", request.Passphrase); err != nil {
+		if request.KeyPassphrase != "" {
+			if err := writer.WriteField("keyPassphrase", request.KeyPassphrase); err != nil {
 				return nil, "", err
 			}
 		}
@@ -273,8 +274,13 @@ func buildMultipartBody(request *CreateKeystoreRequest) (*bytes.Buffer, string, 
 				return nil, "", err
 			}
 		}
-		if request.Passphrase != "" {
-			if err := writer.WriteField("keyPassphrase", request.Passphrase); err != nil {
+		if request.StorePassphrase != "" {
+			if err := writer.WriteField("storePassphrase", request.StorePassphrase); err != nil {
+				return nil, "", err
+			}
+		}
+		if request.KeyPassphrase != "" {
+			if err := writer.WriteField("keyPassphrase", request.KeyPassphrase); err != nil {
 				return nil, "", err
 			}
 		}
