@@ -2,10 +2,15 @@ package secretsmanagement
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
+	anypointclient "github.com/mulesoft/terraform-provider-anypoint/internal/client"
+	secretsmgmt "github.com/mulesoft/terraform-provider-anypoint/internal/client/secretsmanagement"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
 )
@@ -96,6 +101,182 @@ func TestTruststoreResourceModel_Validation(t *testing.T) {
 	_ = model.Passphrase
 	_ = model.ExpirationDate
 	_ = model.Algorithm
+}
+
+func TestTruststoreResource_Read(t *testing.T) {
+	mockTS := &secretsmgmt.TruststoreResponse{
+		Name: "test-truststore",
+		Type: "PEM",
+		Meta: secretsmgmt.SecretGroupMeta{ID: "ts-id-1"},
+	}
+
+	basePath := "/secrets-manager/api/v1/organizations/test-org-id/environments/test-env-id/secretGroups/test-sg-id/truststores/ts-id-1"
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		basePath: func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == "GET" {
+				testutil.JSONResponse(w, http.StatusOK, mockTS)
+			}
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	res := NewTruststoreResource().(*TruststoreResource)
+	res.client = &secretsmgmt.TruststoreClient{
+		AnypointClient: &anypointclient.AnypointClient{
+			BaseURL:    server.URL,
+			Token:      "mock-token",
+			HTTPClient: &http.Client{},
+			OrgID:      "test-org-id",
+		},
+	}
+
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+
+	priorStateRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"id":                 tftypes.NewValue(tftypes.String, "ts-id-1"),
+		"organization_id":    tftypes.NewValue(tftypes.String, "test-org-id"),
+		"environment_id":     tftypes.NewValue(tftypes.String, "test-env-id"),
+		"secret_group_id":    tftypes.NewValue(tftypes.String, "test-sg-id"),
+		"name":               tftypes.NewValue(tftypes.String, "old-name"),
+		"type":               tftypes.NewValue(tftypes.String, "PEM"),
+		"truststore_base64":  tftypes.NewValue(tftypes.String, nil),
+		"passphrase":         tftypes.NewValue(tftypes.String, nil),
+		"expiration_date":    tftypes.NewValue(tftypes.String, ""),
+		"algorithm":          tftypes.NewValue(tftypes.String, ""),
+	})
+
+	req := resource.ReadRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
+	resp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
+	res.Read(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("Read() reported errors: %v", resp.Diagnostics.Errors())
+	}
+	var got TruststoreResourceModel
+	if diags := resp.State.Get(ctx, &got); diags.HasError() {
+		t.Fatalf("State.Get errors: %v", diags.Errors())
+	}
+	if got.Name.ValueString() != "test-truststore" {
+		t.Errorf("Expected Name test-truststore, got %s", got.Name.ValueString())
+	}
+}
+
+func TestTruststoreResource_Read_NotFound(t *testing.T) {
+	basePath := "/secrets-manager/api/v1/organizations/test-org-id/environments/test-env-id/secretGroups/test-sg-id/truststores/missing-id"
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		basePath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.ErrorResponse(w, http.StatusNotFound, "not found")
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	res := NewTruststoreResource().(*TruststoreResource)
+	res.client = &secretsmgmt.TruststoreClient{
+		AnypointClient: &anypointclient.AnypointClient{
+			BaseURL:    server.URL,
+			Token:      "mock-token",
+			HTTPClient: &http.Client{},
+			OrgID:      "test-org-id",
+		},
+	}
+
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+
+	priorStateRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"id":                tftypes.NewValue(tftypes.String, "missing-id"),
+		"organization_id":   tftypes.NewValue(tftypes.String, "test-org-id"),
+		"environment_id":    tftypes.NewValue(tftypes.String, "test-env-id"),
+		"secret_group_id":   tftypes.NewValue(tftypes.String, "test-sg-id"),
+		"name":              tftypes.NewValue(tftypes.String, "ts"),
+		"type":              tftypes.NewValue(tftypes.String, "PEM"),
+		"truststore_base64": tftypes.NewValue(tftypes.String, nil),
+		"passphrase":        tftypes.NewValue(tftypes.String, nil),
+		"expiration_date":   tftypes.NewValue(tftypes.String, ""),
+		"algorithm":         tftypes.NewValue(tftypes.String, ""),
+	})
+
+	req := resource.ReadRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
+	resp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
+	res.Read(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("Read() on not-found should remove resource: %v", resp.Diagnostics.Errors())
+	}
+	if !resp.State.Raw.IsNull() {
+		t.Error("Read() on not-found should remove resource from state")
+	}
+}
+
+func TestTruststoreResource_ImportState_Valid(t *testing.T) {
+	res := NewTruststoreResource().(*TruststoreResource)
+	ctx := context.Background()
+
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+
+	emptyStateRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"id":                tftypes.NewValue(tftypes.String, nil),
+		"organization_id":   tftypes.NewValue(tftypes.String, nil),
+		"environment_id":    tftypes.NewValue(tftypes.String, nil),
+		"secret_group_id":   tftypes.NewValue(tftypes.String, nil),
+		"name":              tftypes.NewValue(tftypes.String, nil),
+		"type":              tftypes.NewValue(tftypes.String, nil),
+		"truststore_base64": tftypes.NewValue(tftypes.String, nil),
+		"passphrase":        tftypes.NewValue(tftypes.String, nil),
+		"expiration_date":   tftypes.NewValue(tftypes.String, nil),
+		"algorithm":         tftypes.NewValue(tftypes.String, nil),
+	})
+
+	req := resource.ImportStateRequest{ID: "org-id/env-id/sg-id/ts-id"}
+	resp := &resource.ImportStateResponse{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: emptyStateRaw},
+	}
+	res.ImportState(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("ImportState() reported errors: %v", resp.Diagnostics.Errors())
+	}
+}
+
+func TestTruststoreResource_ImportState_Invalid(t *testing.T) {
+	res := NewTruststoreResource().(*TruststoreResource)
+	ctx := context.Background()
+
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+
+	emptyStateRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"id":                tftypes.NewValue(tftypes.String, nil),
+		"organization_id":   tftypes.NewValue(tftypes.String, nil),
+		"environment_id":    tftypes.NewValue(tftypes.String, nil),
+		"secret_group_id":   tftypes.NewValue(tftypes.String, nil),
+		"name":              tftypes.NewValue(tftypes.String, nil),
+		"type":              tftypes.NewValue(tftypes.String, nil),
+		"truststore_base64": tftypes.NewValue(tftypes.String, nil),
+		"passphrase":        tftypes.NewValue(tftypes.String, nil),
+		"expiration_date":   tftypes.NewValue(tftypes.String, nil),
+		"algorithm":         tftypes.NewValue(tftypes.String, nil),
+	})
+
+	req := resource.ImportStateRequest{ID: "invalid/short"}
+	resp := &resource.ImportStateResponse{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: emptyStateRaw},
+	}
+	res.ImportState(ctx, req, resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Error("ImportState() with invalid ID should produce errors")
+	}
 }
 
 func BenchmarkTruststoreResource_Schema(b *testing.B) {

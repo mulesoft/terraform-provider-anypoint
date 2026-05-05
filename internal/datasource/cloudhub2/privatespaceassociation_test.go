@@ -2,10 +2,15 @@ package cloudhub2
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
+	anypointclient "github.com/mulesoft/terraform-provider-anypoint/internal/client"
+	ch2client "github.com/mulesoft/terraform-provider-anypoint/internal/client/cloudhub2"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
 )
@@ -104,6 +109,96 @@ func TestPrivateSpaceAssociationDataSource_Configure(t *testing.T) {
 func TestPrivateSpaceAssociationDataSourceModel_Validation(t *testing.T) {
 	model := PrivateSpaceAssociationDataSourceModel{}
 	_ = model.ID
+}
+
+func TestPrivateSpaceAssociationDataSource_Read(t *testing.T) {
+	basePath := "/runtimefabric/api/organizations/test-org-id/privatespaces/test-ps-id/associations"
+
+	mockItems := []ch2client.PrivateSpaceAssociation{
+		{ID: "assoc-id-1", OrganizationID: "test-org-id", EnvironmentID: "test-env-id"},
+	}
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		basePath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, mockItems)
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	ds := NewPrivateSpaceAssociationDataSource().(*PrivateSpaceAssociationDataSource)
+	ds.client = &ch2client.PrivateSpaceAssociationClient{
+		AnypointClient: &anypointclient.AnypointClient{
+			BaseURL:    server.URL,
+			Token:      "mock-token",
+			HTTPClient: &http.Client{},
+			OrgID:      "test-org-id",
+		},
+	}
+
+	ctx := context.Background()
+	schemaResp := &datasource.SchemaResponse{}
+	ds.Schema(ctx, datasource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+	objType := stateType.(tftypes.Object)
+	elemType := objType.AttributeTypes["associations"].(tftypes.List).ElementType
+
+	configRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"id":              tftypes.NewValue(tftypes.String, nil),
+		"private_space_id": tftypes.NewValue(tftypes.String, "test-ps-id"),
+		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
+		"associations":    tftypes.NewValue(tftypes.List{ElementType: elemType}, nil),
+	})
+
+	req := datasource.ReadRequest{Config: tfsdk.Config{Schema: schemaResp.Schema, Raw: configRaw}}
+	resp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: configRaw}}
+	ds.Read(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("Read() reported errors: %v", resp.Diagnostics.Errors())
+	}
+}
+
+func TestPrivateSpaceAssociationDataSource_Read_Error(t *testing.T) {
+	basePath := "/runtimefabric/api/organizations/test-org-id/privatespaces/test-ps-id/associations"
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		basePath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.ErrorResponse(w, http.StatusInternalServerError, "internal error")
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	ds := NewPrivateSpaceAssociationDataSource().(*PrivateSpaceAssociationDataSource)
+	ds.client = &ch2client.PrivateSpaceAssociationClient{
+		AnypointClient: &anypointclient.AnypointClient{
+			BaseURL:    server.URL,
+			Token:      "mock-token",
+			HTTPClient: &http.Client{},
+			OrgID:      "test-org-id",
+		},
+	}
+
+	ctx := context.Background()
+	schemaResp := &datasource.SchemaResponse{}
+	ds.Schema(ctx, datasource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+	objType := stateType.(tftypes.Object)
+	elemType := objType.AttributeTypes["associations"].(tftypes.List).ElementType
+
+	configRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"id":               tftypes.NewValue(tftypes.String, nil),
+		"private_space_id": tftypes.NewValue(tftypes.String, "test-ps-id"),
+		"organization_id":  tftypes.NewValue(tftypes.String, "test-org-id"),
+		"associations":     tftypes.NewValue(tftypes.List{ElementType: elemType}, nil),
+	})
+
+	req := datasource.ReadRequest{Config: tfsdk.Config{Schema: schemaResp.Schema, Raw: configRaw}}
+	resp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: configRaw}}
+	ds.Read(ctx, req, resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Error("Read() should have errors on server error")
+	}
 }
 
 func BenchmarkPrivateSpaceAssociationDataSource_Schema(b *testing.B) {
