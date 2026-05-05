@@ -37,6 +37,7 @@ signs:
     stdin: '{{ .Env.GPG_PASSPHRASE }}'
     args:
       - "--batch"
+      - "--no-tty"
       - "--pinentry-mode"
       - "loopback"
       - "--passphrase-fd"
