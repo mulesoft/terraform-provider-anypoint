@@ -501,7 +501,7 @@ func TestMergeEntitlements_PreservesPlanWhenApiOmitsMasterOrgFields(t *testing.T
 
 	// Merge API response into plan. Plan values win when API is null; API wins
 	// when concrete.
-	merged := mergeEntitlementsPreservingPlan(ctx, planObj, apiObj, &diags)
+	merged := mergeEntitlementsPreservingPlan(ctx, planObj, apiObj, false, &diags)
 	if diags.HasError() {
 		t.Fatalf("merge: %s", diags)
 	}
@@ -606,7 +606,7 @@ func TestMergeEntitlements_PreservesPlanNullAgainstConcreteApi(t *testing.T) {
 		t.Fatalf("flatten: %s", diags)
 	}
 
-	merged := mergeEntitlementsPreservingPlan(ctx, planObj, apiObj, &diags)
+	merged := mergeEntitlementsPreservingPlan(ctx, planObj, apiObj, false, &diags)
 	if diags.HasError() {
 		t.Fatalf("merge: %s", diags)
 	}
@@ -1112,5 +1112,507 @@ func TestOrganizationResource_Read_PreservesExistingParentOrgID(t *testing.T) {
 	if got.ParentOrganizationID.ValueString() != userParent {
 		t.Errorf("state.parent_organization_id: Read must NOT overwrite a value the user set via Create; want %q, got %q",
 			userParent, got.ParentOrganizationID.ValueString())
+	}
+}
+
+// TestOrganizationResource_UpdatedAtSchema_UsesStateForUnknown pins the schema
+// contract for `updated_at`: it must carry the prior state value into the
+// plan via UseStateForUnknown. Without this, every refresh diffs as
+// `~ updated_at = "<old>" -> (known after apply)` and triggers an unwanted
+// in-place update on the resource even when nothing else changed.
+//
+// Pairs with the Update-handler change that deliberately does NOT write the
+// API's fresh updated_at back into state — together they guarantee:
+//
+//   - No-op refresh: plan == state for updated_at, no diff.
+//   - Real update: plan inherits state value, post-apply state matches plan
+//     (we keep the prior timestamp), and the next refresh's Read pulls the
+//     actual server timestamp into state.
+func TestOrganizationResource_UpdatedAtSchema_UsesStateForUnknown(t *testing.T) {
+	ctx := context.Background()
+	res := NewOrganizationResource().(*OrganizationResource)
+
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	if schemaResp.Diagnostics.HasError() {
+		t.Fatalf("schema: %s", schemaResp.Diagnostics)
+	}
+
+	updatedAtAttr, ok := schemaResp.Schema.Attributes["updated_at"].(schema.StringAttribute)
+	if !ok {
+		t.Fatalf("updated_at: expected StringAttribute, got %T", schemaResp.Schema.Attributes["updated_at"])
+	}
+	if !updatedAtAttr.IsComputed() {
+		t.Errorf("updated_at: must be Computed (server-managed)")
+	}
+	if updatedAtAttr.IsRequired() || updatedAtAttr.IsOptional() {
+		t.Errorf("updated_at: must NOT be Required/Optional, got Required=%t Optional=%t",
+			updatedAtAttr.IsRequired(), updatedAtAttr.IsOptional())
+	}
+	if len(updatedAtAttr.PlanModifiers) == 0 {
+		t.Fatal("updated_at: missing plan modifier — UseStateForUnknown is required to suppress noisy `(known after apply)` diffs on no-op refresh")
+	}
+
+	// Confirm the attached modifier is the `useStateForUnknown` shape — its
+	// description is stable across framework versions.
+	gotDesc := updatedAtAttr.PlanModifiers[0].Description(ctx)
+	const wantDescPrefix = "Once set, the value of this attribute in state will not change"
+	if !strings.HasPrefix(gotDesc, wantDescPrefix) {
+		t.Errorf("updated_at plan modifier: expected UseStateForUnknown (description prefix %q), got %q",
+			wantDescPrefix, gotDesc)
+	}
+}
+
+// TestOrganizationResource_Update_DoesNotWriteApiUpdatedAtIntoState exercises
+// the runtime half of the updated_at fix: even though the PUT response
+// carries a fresh `updatedAt` from the server, the Update handler must NOT
+// write it into state. Doing so would violate Terraform's
+// "post-apply state == plan" contract because the plan inherited the prior
+// state value via UseStateForUnknown — yielding the dreaded
+// `Provider produced inconsistent result after apply` diagnostic on every
+// real Update.
+//
+// State is brought up to date on the next refresh by the Read handler, which
+// is allowed to overwrite updated_at because Read runs outside the
+// plan→apply consistency window.
+func TestOrganizationResource_Update_DoesNotWriteApiUpdatedAtIntoState(t *testing.T) {
+	const (
+		orgID         = "9d156999-be80-43f5-aea5-666779c7e1a3"
+		ownerID       = "f7f43384-b33e-470c-ad4c-285aa0c01212"
+		parentID      = "542cc7e3-2143-40ce-90e9-cf69da9b4da6"
+		priorUpdated  = "2026-05-05T11:30:23.342Z" // what state already has
+		serverUpdated = "2026-05-05T12:00:00.000Z" // what the PUT response returns
+	)
+
+	respondOrg := func(w http.ResponseWriter, name string) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":                    orgID,
+			"name":                  name,
+			"createdAt":             "2026-04-29T08:22:57.966Z",
+			"updatedAt":             serverUpdated,
+			"ownerId":               ownerID,
+			"clientId":              "client-uuid",
+			"idprovider_id":         "mulesoft",
+			"isFederated":           false,
+			"parentOrganizationIds": []string{parentID},
+			"subOrganizationIDs":    []string{},
+			"tenantOrganizationIds": []string{},
+			"mfaRequired":           "",
+			"orgType":               "anypoint",
+			"gdotId":                nil,
+			"deletedAt":             nil,
+			"domain":                nil,
+			"isRoot":                false,
+			"isMaster":              false,
+			"properties":            map[string]interface{}{},
+			"entitlements":          map[string]interface{}{"createEnvironments": true},
+			"subscription":          map[string]interface{}{},
+		})
+	}
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		"/accounts/api/organizations/" + orgID: func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodGet:
+				respondOrg(w, "old-name")
+			case http.MethodPut:
+				respondOrg(w, "new-name")
+			default:
+				testutil.ErrorResponse(w, http.StatusMethodNotAllowed, "unexpected method "+r.Method)
+			}
+		},
+		"/accounts/api/v2/oauth2/token": testutil.StandardMockHandlers()["/accounts/api/v2/oauth2/token"],
+		"/accounts/api/me":              testutil.StandardMockHandlers()["/accounts/api/me"],
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	orgClient := &am.OrganizationClient{
+		UserAnypointClient: &anypointclient.UserAnypointClient{
+			BaseURL:    server.URL,
+			Token:      "mock-token",
+			HTTPClient: &http.Client{},
+			OrgID:      parentID,
+		},
+	}
+	orgResource := &OrganizationResource{client: orgClient}
+
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	orgResource.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+
+	// Build prior state: existing org with updated_at = priorUpdated.
+	priorState := tfsdk.State{Schema: schemaResp.Schema, Raw: tftypes.NewValue(stateType, nil)}
+	for p, v := range map[string]interface{}{
+		"id":                     orgID,
+		"name":                   "old-name",
+		"parent_organization_id": parentID,
+		"owner_id":               ownerID,
+		"updated_at":             priorUpdated,
+	} {
+		if d := priorState.SetAttribute(ctx, path.Root(p), v); d.HasError() {
+			t.Fatalf("seed state.%s: %s", p, d)
+		}
+	}
+
+	// Build the plan: name flipped to "new-name", updated_at carried over
+	// from prior state via UseStateForUnknown (= priorUpdated).
+	plan := tfsdk.Plan{Schema: schemaResp.Schema, Raw: tftypes.NewValue(stateType, nil)}
+	for p, v := range map[string]interface{}{
+		"id":                     orgID,
+		"name":                   "new-name",
+		"parent_organization_id": parentID,
+		"owner_id":               ownerID,
+		"updated_at":             priorUpdated,
+	} {
+		if d := plan.SetAttribute(ctx, path.Root(p), v); d.HasError() {
+			t.Fatalf("seed plan.%s: %s", p, d)
+		}
+	}
+
+	// Config matches the user's HCL — `tfsdk.Config` exposes no per-attribute
+	// setter, so we copy the Plan's Raw value into Config (the entitlements
+	// blob is identical between Plan and Config in this scenario; the
+	// strip-master-only step in Update zeros out any inheritable fields
+	// before they hit the wire).
+	config := tfsdk.Config{Schema: schemaResp.Schema, Raw: plan.Raw.Copy()}
+
+	req := resource.UpdateRequest{Plan: plan, State: priorState, Config: config}
+	resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: plan.Raw.Copy()}}
+
+	orgResource.Update(ctx, req, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("Update diagnostics: %s", resp.Diagnostics)
+	}
+
+	var got OrganizationResourceModel
+	if d := resp.State.Get(ctx, &got); d.HasError() {
+		t.Fatalf("resp.State.Get: %s", d)
+	}
+
+	if got.UpdatedAt.ValueString() == serverUpdated {
+		t.Errorf("state.updated_at: must NOT be overwritten with the API's fresh timestamp %q — that would break the post-apply == plan contract", serverUpdated)
+	}
+	if got.UpdatedAt.ValueString() != priorUpdated {
+		t.Errorf("state.updated_at: want prior value %q (preserved from plan via UseStateForUnknown), got %q",
+			priorUpdated, got.UpdatedAt.ValueString())
+	}
+	if got.Name.ValueString() != "new-name" {
+		t.Errorf("state.name: real Update field must be written through; want %q, got %q",
+			"new-name", got.Name.ValueString())
+	}
+}
+
+// TestOrganizationResource_EntitlementsSchema_InheritableFieldsHaveNoDefault
+// pins the Bug 1 fix: master-org-only / inheritable entitlements MUST NOT have
+// a schema-level Default. Setting one would force the plan to a concrete
+// `false` value while the API responds with the master-inherited `true`,
+// reproducing the "Provider produced inconsistent result after apply"
+// diagnostic on Create:
+//
+//	.entitlements.hybrid.enabled: was cty.False, but now cty.True.
+//	.entitlements.design_center.api: was cty.False, but now cty.True.
+//	.entitlements.runtime_fabric: was cty.False, but now cty.True.
+//
+// The fix is to leave these fields as plain Optional+Computed (no Default).
+// On Create, the plan therefore carries `unknown` for any field the user
+// didn't declare, and the merge step lets the API's authoritative value win
+// without violating Terraform's "post-apply state == plan" contract.
+func TestOrganizationResource_EntitlementsSchema_InheritableFieldsHaveNoDefault(t *testing.T) {
+	ctx := context.Background()
+	res := NewOrganizationResource().(*OrganizationResource)
+
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	if schemaResp.Diagnostics.HasError() {
+		t.Fatalf("schema: %s", schemaResp.Diagnostics)
+	}
+
+	entAttr, ok := schemaResp.Schema.Attributes["entitlements"].(schema.SingleNestedAttribute)
+	if !ok {
+		t.Fatalf("entitlements: expected SingleNestedAttribute, got %T", schemaResp.Schema.Attributes["entitlements"])
+	}
+
+	// runtime_fabric (top-level bool): no Default.
+	if a, ok := entAttr.Attributes["runtime_fabric"].(schema.BoolAttribute); !ok {
+		t.Fatalf("entitlements.runtime_fabric: expected BoolAttribute, got %T", entAttr.Attributes["runtime_fabric"])
+	} else {
+		if a.Default != nil {
+			t.Errorf("entitlements.runtime_fabric: must NOT have a Default — value is inherited from the master org for sub-orgs (regression of Bug 1)")
+		}
+		if !a.IsOptional() || !a.IsComputed() || a.IsRequired() {
+			t.Errorf("entitlements.runtime_fabric: want Optional+Computed, got Optional=%t Computed=%t Required=%t",
+				a.IsOptional(), a.IsComputed(), a.IsRequired())
+		}
+	}
+
+	// Object-shaped inheritable entitlements: no Default.
+	for _, name := range []string{"hybrid", "flex_gateway", "service_mesh", "worker_logging_override", "design_center"} {
+		nested, ok := entAttr.Attributes[name].(schema.SingleNestedAttribute)
+		if !ok {
+			t.Errorf("entitlements.%s: expected SingleNestedAttribute, got %T", name, entAttr.Attributes[name])
+			continue
+		}
+		if nested.Default != nil {
+			t.Errorf("entitlements.%s: must NOT have a Default — value is inherited from the master org for sub-orgs (regression of Bug 1)", name)
+		}
+		if !nested.IsOptional() || !nested.IsComputed() || nested.IsRequired() {
+			t.Errorf("entitlements.%s: want Optional+Computed, got Optional=%t Computed=%t Required=%t",
+				name, nested.IsOptional(), nested.IsComputed(), nested.IsRequired())
+		}
+	}
+}
+
+// TestStripMasterOrgOnlyEntitlements_DropsAllInheritedFields pins the Bug 2
+// fix: when the Update handler strips master-only fields for a non-master
+// org's PUT body, design_center MUST also be cleared. The original strip
+// block missed it, and `terraform plan -generate-config-out` after import
+// captured `design_center.api = true` (inherited from the master). The
+// next apply for any unrelated change (e.g. a `name` rename) included
+// `designCenter:{api:true,mozart:false}` in the PUT body and the API
+// returned 403 "Can not enable entitlement on a business group. It can
+// only be set for a master organization".
+func TestStripMasterOrgOnlyEntitlements_DropsAllInheritedFields(t *testing.T) {
+	tr := true
+	ent := am.Entitlements{
+		CreateSubOrgs:         false,
+		CreateEnvironments:    true,
+		GlobalDeployment:      false,
+		Hybrid:                &am.HybridEntitlement{Enabled: true},
+		FlexGateway:           &am.EnabledEntitlement{Enabled: true},
+		ServiceMesh:           &am.EnabledEntitlement{Enabled: true},
+		WorkerLoggingOverride: &am.WorkerLoggingOverrideEntitlement{Enabled: true},
+		RuntimeFabric:         &tr,
+		DesignCenter:          &am.DesignCenterEntitlement{API: true, Mozart: false},
+		// Quotas are NOT master-only and must be preserved.
+		ManagedGatewaySmall: &am.AssignedEntitlement{Assigned: 2},
+		VCoresProduction:    &am.VCoreEntitlement{Assigned: 1},
+	}
+
+	stripMasterOrgOnlyEntitlements(&ent)
+
+	if ent.Hybrid != nil {
+		t.Errorf("Hybrid: must be nil after strip, got %+v", ent.Hybrid)
+	}
+	if ent.FlexGateway != nil {
+		t.Errorf("FlexGateway: must be nil after strip, got %+v", ent.FlexGateway)
+	}
+	if ent.ServiceMesh != nil {
+		t.Errorf("ServiceMesh: must be nil after strip, got %+v", ent.ServiceMesh)
+	}
+	if ent.WorkerLoggingOverride != nil {
+		t.Errorf("WorkerLoggingOverride: must be nil after strip, got %+v", ent.WorkerLoggingOverride)
+	}
+	if ent.RuntimeFabric != nil {
+		t.Errorf("RuntimeFabric: must be nil after strip, got %v", *ent.RuntimeFabric)
+	}
+	if ent.DesignCenter != nil {
+		t.Errorf("DesignCenter: must be nil after strip — this is the Bug 2 regression guard; got %+v", ent.DesignCenter)
+	}
+
+	// Non-inheritable / quota entitlements MUST be left intact.
+	if ent.ManagedGatewaySmall == nil || ent.ManagedGatewaySmall.Assigned != 2 {
+		t.Errorf("ManagedGatewaySmall: must be preserved at 2 (not master-only), got %+v", ent.ManagedGatewaySmall)
+	}
+	if ent.VCoresProduction == nil || ent.VCoresProduction.Assigned != 1 {
+		t.Errorf("VCoresProduction: must be preserved at 1 (not master-only), got %+v", ent.VCoresProduction)
+	}
+	if !ent.CreateEnvironments {
+		t.Errorf("CreateEnvironments: must be preserved (not master-only)")
+	}
+
+	// Idempotent and nil-safe.
+	stripMasterOrgOnlyEntitlements(nil)
+	stripMasterOrgOnlyEntitlements(&ent)
+}
+
+// TestUpdatePayload_BusinessGroupOmitsDesignCenter pins the Bug 2 wire-format
+// fix: for a non-master org, the PUT body must NOT mention `designCenter`
+// even when the Config (e.g. from `terraform plan -generate-config-out`
+// after import) declares it as a concrete `{api:true, mozart:false}`. The
+// strip block in Update() runs after expandEntitlements and is responsible
+// for dropping it.
+func TestUpdatePayload_BusinessGroupOmitsDesignCenter(t *testing.T) {
+	ctx := context.Background()
+
+	// Config mirrors what `generated.tf` carries for the imported sub-org
+	// in the bug report — design_center is declared with the master's
+	// inherited value.
+	enabledType := map[string]attr.Type{"enabled": types.BoolType}
+	configEntitlements := map[string]attr.Value{
+		"create_sub_orgs":     types.BoolValue(false),
+		"create_environments": types.BoolValue(true),
+		"global_deployment":   types.BoolValue(false),
+		"runtime_fabric":      types.BoolValue(true),
+		"vcores_production":   types.ObjectNull(getVCoreEntitlementAttributeTypes()),
+		"vcores_sandbox":      types.ObjectNull(getVCoreEntitlementAttributeTypes()),
+		"vcores_design":       types.ObjectNull(getVCoreEntitlementAttributeTypes()),
+		"vpcs":                types.ObjectNull(getVCoreEntitlementAttributeTypes()),
+		"network_connections": types.ObjectNull(getVCoreEntitlementAttributeTypes()),
+		"hybrid": types.ObjectValueMust(
+			enabledType,
+			map[string]attr.Value{"enabled": types.BoolValue(true)},
+		),
+		"flex_gateway":            types.ObjectNull(enabledType),
+		"worker_logging_override": types.ObjectNull(enabledType),
+		"service_mesh":            types.ObjectNull(enabledType),
+		"mq_messages":             types.ObjectNull(map[string]attr.Type{"base": types.Int64Type, "add_on": types.Int64Type}),
+		"mq_requests":             types.ObjectNull(map[string]attr.Type{"base": types.Int64Type, "add_on": types.Int64Type}),
+		"gateways":                types.ObjectNull(map[string]attr.Type{"assigned": types.Int64Type}),
+		"load_balancer":           types.ObjectNull(map[string]attr.Type{"assigned": types.Int64Type}),
+		"design_center": types.ObjectValueMust(
+			map[string]attr.Type{"api": types.BoolType, "mozart": types.BoolType},
+			map[string]attr.Value{"api": types.BoolValue(true), "mozart": types.BoolValue(false)},
+		),
+		"managed_gateway_small": types.ObjectNull(map[string]attr.Type{"assigned": types.Int64Type}),
+		"managed_gateway_large": types.ObjectNull(map[string]attr.Type{"assigned": types.Int64Type}),
+	}
+	configObj, diags := types.ObjectValue(getEntitlementsAttributeTypes(), configEntitlements)
+	if diags.HasError() {
+		t.Fatalf("config entitlements: %s", diags)
+	}
+
+	expanded, diags := expandEntitlements(ctx, configObj)
+	if diags.HasError() {
+		t.Fatalf("expand: %s", diags)
+	}
+
+	// Mirror the Update() handler: strip master-only fields for non-master
+	// orgs.
+	stripMasterOrgOnlyEntitlements(&expanded)
+
+	body, err := json.Marshal(am.UpdateOrganizationRequest{
+		ID:           "a02fab4f-4695-4325-882e-f326d1cef704",
+		Name:         "renamed-sub-org",
+		OwnerID:      "f7f43384-b33e-470c-ad4c-285aa0c01212",
+		Properties:   map[string]interface{}{"flow_designer": map[string]interface{}{}},
+		Entitlements: expanded,
+	})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	got := string(body)
+	t.Logf("provider PUT body (post-strip):\n%s", got)
+
+	// All master-only / inheritable fields MUST be absent from the wire.
+	for _, forbidden := range []string{
+		`"hybrid"`,
+		`"flexGateway"`,
+		`"serviceMesh"`,
+		`"workerLoggingOverride"`,
+		`"runtimeFabric"`,
+		`"designCenter"`,
+	} {
+		if strings.Contains(got, forbidden) {
+			t.Errorf("PUT body must not include master-only entitlement %s — server returns 403; got: %s",
+				forbidden, got)
+		}
+	}
+
+	// Top-level booleans must still be present.
+	for _, want := range []string{`"createSubOrgs":false`, `"createEnvironments":true`, `"globalDeployment":false`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("PUT body missing %q\n  got: %s", want, got)
+		}
+	}
+}
+
+// TestMergeEntitlements_PlanUnknownLetsApiValueThrough exercises the Bug 1
+// fix on the merge layer. Once the schema no longer pins `hybrid`,
+// `runtime_fabric`, `design_center` to `false` via a Default, the plan
+// carries `unknown` for these fields when the user doesn't declare them.
+// The merge helper must let the API response populate the post-apply state
+// in that case — otherwise Terraform errors with "Provider produced
+// inconsistent result after apply: was cty.False, but now cty.True".
+func TestMergeEntitlements_PlanUnknownLetsApiValueThrough(t *testing.T) {
+	ctx := context.Background()
+
+	// Plan: user declared only `create_environments = true`; the rest of
+	// the inheritable fields are unknown (no schema Default).
+	enabledType := map[string]attr.Type{"enabled": types.BoolType}
+	planAttrs := map[string]attr.Value{
+		"create_sub_orgs":         types.BoolValue(false),
+		"create_environments":     types.BoolValue(true),
+		"global_deployment":       types.BoolValue(false),
+		"runtime_fabric":          types.BoolUnknown(),
+		"hybrid":                  types.ObjectUnknown(enabledType),
+		"flex_gateway":            types.ObjectUnknown(enabledType),
+		"service_mesh":            types.ObjectUnknown(enabledType),
+		"worker_logging_override": types.ObjectUnknown(enabledType),
+		"design_center":           types.ObjectUnknown(map[string]attr.Type{"api": types.BoolType, "mozart": types.BoolType}),
+		"vcores_production":       zeroVCore(),
+		"vcores_sandbox":          zeroVCore(),
+		"vcores_design":           zeroVCore(),
+		"vpcs":                    zeroVCore(),
+		"network_connections":     zeroVCore(),
+		"mq_messages":             zeroMq(),
+		"mq_requests":             zeroMq(),
+		"gateways":                zeroAssigned(),
+		"load_balancer":           zeroAssigned(),
+		"managed_gateway_small":   zeroAssigned(),
+		"managed_gateway_large":   zeroAssigned(),
+	}
+	planObj, diags := types.ObjectValue(getEntitlementsAttributeTypes(), planAttrs)
+	if diags.HasError() {
+		t.Fatalf("plan obj: %s", diags)
+	}
+
+	// Server returned the master-inherited values for the new sub-org.
+	tr := true
+	apiResponse := am.Entitlements{
+		CreateSubOrgs:         false,
+		CreateEnvironments:    true,
+		GlobalDeployment:      false,
+		Hybrid:                &am.HybridEntitlement{Enabled: true},
+		FlexGateway:           &am.EnabledEntitlement{Enabled: true},
+		ServiceMesh:           &am.EnabledEntitlement{Enabled: true},
+		WorkerLoggingOverride: &am.WorkerLoggingOverrideEntitlement{Enabled: true},
+		RuntimeFabric:         &tr,
+		DesignCenter:          &am.DesignCenterEntitlement{API: true, Mozart: false},
+	}
+	apiObj, diags := flattenEntitlements(ctx, apiResponse)
+	if diags.HasError() {
+		t.Fatalf("flatten: %s", diags)
+	}
+
+	// Create-side merge: planIsAuthoritative=false. Plan unknown → API wins.
+	merged := mergeEntitlementsPreservingPlan(ctx, planObj, apiObj, false, &diags)
+	if diags.HasError() {
+		t.Fatalf("merge: %s", diags)
+	}
+
+	// Top-level bool: API value flows through.
+	if got := merged.Attributes()["runtime_fabric"].(types.Bool); got.IsUnknown() || got.IsNull() || got.ValueBool() != true {
+		t.Errorf("runtime_fabric: want true from API, got %v", got)
+	}
+
+	// Object-shaped inheritable fields: API concrete value wins.
+	for _, name := range []string{"hybrid", "flex_gateway", "service_mesh", "worker_logging_override"} {
+		obj, ok := merged.Attributes()[name].(types.Object)
+		if !ok {
+			t.Errorf("%s: not an Object", name)
+			continue
+		}
+		if obj.IsNull() || obj.IsUnknown() {
+			t.Errorf("%s: plan was unknown, API returned concrete; merge must surface API value, got %v", name, obj)
+			continue
+		}
+		if got := obj.Attributes()["enabled"].(types.Bool).ValueBool(); !got {
+			t.Errorf("%s.enabled: want true from API, got %v", name, got)
+		}
+	}
+
+	// design_center: API concrete value wins (api=true, mozart=false).
+	dc, ok := merged.Attributes()["design_center"].(types.Object)
+	if !ok || dc.IsNull() || dc.IsUnknown() {
+		t.Fatalf("design_center: must surface API value, got %v", merged.Attributes()["design_center"])
+	}
+	if got := dc.Attributes()["api"].(types.Bool).ValueBool(); !got {
+		t.Errorf("design_center.api: want true from API, got %v", got)
+	}
+	if got := dc.Attributes()["mozart"].(types.Bool).ValueBool(); got {
+		t.Errorf("design_center.mozart: want false from API, got %v", got)
 	}
 }

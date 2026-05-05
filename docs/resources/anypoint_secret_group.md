@@ -9,6 +9,8 @@ description: |-
 
 Manages a secret group in Anypoint Secrets Manager.
 
+-> **Lifecycle note:** Deleting this resource also cascade-deletes all sub-resources on the Platform (keystores, truststores, certificates, shared secrets, TLS contexts, certificate pinsets). Sub-resource Terraform resources (`anypoint_secret_group_keystore`, etc.) must be declared as dependents — destroy them first in your config or Terraform will remove them from state automatically when the secret group is destroyed.
+
 ## Example Usage
 
 ```terraform

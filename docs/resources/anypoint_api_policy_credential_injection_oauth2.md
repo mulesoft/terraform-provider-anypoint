@@ -59,13 +59,13 @@ Required:
 - `oauth_service` (String) URL of the OAuth 2.0 token service.
 - `client_id` (String) The OAuth 2.0 client ID.
 - `client_secret` (String) The OAuth 2.0 client secret.
-- `token_fetch_timeout` (Number) Timeout in milliseconds for fetching tokens.
 
 Optional:
 
 - `scope` (Dynamic) Array of OAuth 2.0 scopes.
-- `overwrite` (Boolean) Whether to overwrite existing credentials. Defaults to `false`.
-- `allow_request_without_credential` (Boolean) Whether to allow requests without credentials. Defaults to `false`.
+- `token_fetch_timeout` (Number) Timeout in milliseconds for fetching the OAuth token. Defaults to `10000`. The provider always sends this field (defaulting to `10000`) — omitting it does not cause HTTP 400.
+- `overwrite` (Boolean) Whether to overwrite an existing credential header on the request. Defaults to `false`. The provider always sends this field.
+- `allow_request_without_credential` (Boolean) Whether to allow requests to pass through without injected credentials. Defaults to `false`. The provider always sends this field.
 
 ## Import
 

@@ -38,7 +38,9 @@ resource "anypoint_organization" "example_org" {
 
   entitlements = {
     create_environments = true
-
+    managed_gateway_small = {
+      assigned = 0
+    }
     # Example: request 2 production vCores. All other quotas default to 0.
     # vcores_production = {
     #   assigned = 2

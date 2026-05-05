@@ -251,24 +251,12 @@ func (r *TruststoreResource) Update(ctx context.Context, req resource.UpdateRequ
 }
 
 func (r *TruststoreResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	// The SM API has no individual sub-resource DELETE endpoint (returns 405).
+	// Sub-resources are removed by deleting the parent secret group.
+	// Removing from Terraform state only; platform cleanup is the secret group's responsibility.
 	var data TruststoreResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	orgID := data.OrganizationID.ValueString()
-	if orgID == "" {
-		orgID = r.client.OrgID
-	}
-	envID := data.EnvironmentID.ValueString()
-	sgID := data.SecretGroupID.ValueString()
-
-	if err := r.client.DeleteTruststore(ctx, orgID, envID, sgID, data.ID.ValueString()); err != nil {
-		resp.Diagnostics.AddError("Error deleting truststore", "Could not delete truststore: "+err.Error())
-		return
-	}
-	tflog.Trace(ctx, "deleted truststore", map[string]interface{}{"id": data.ID.ValueString()})
+	tflog.Trace(ctx, "removed truststore from state (no-op delete)", map[string]interface{}{"id": data.ID.ValueString()})
 }
 
 func (r *TruststoreResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

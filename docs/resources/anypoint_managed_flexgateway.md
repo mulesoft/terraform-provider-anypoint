@@ -9,6 +9,8 @@ description: |-
 
 Manages a CloudHub 2.0 Managed Flex Gateway instance in Anypoint Platform.
 
+-> **Tracing note:** The Gateway Manager API does not echo back `configuration.tracing` in POST/PUT responses. The provider retains the plan-requested value in state after create/update so that `tracing.enabled = true` works correctly. On the next `terraform refresh` or `plan`, the provider reads the live value from the API for accurate drift detection.
+
 ## Example Usage
 
 ```terraform

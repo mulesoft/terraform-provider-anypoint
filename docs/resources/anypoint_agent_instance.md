@@ -9,6 +9,10 @@ description: |-
 
 Manages an Agent instance in Anypoint API Manager. An Agent instance represents an Agent specification deployed to a Flex Gateway target with routing rules and upstream backends.
 
+-> **Status after create:** After a successful `terraform apply` the `status` field is populated from a GET request made immediately after the POST. The Platform typically returns `status = "active"` right away. If your Gateway is not yet ready the provider retries the POST up to 5 times with a 20-second backoff before failing.
+
+-> **upstream_uri vs routing:** `upstream_uri` and `routing` are mutually exclusive. Use `upstream_uri` for a single upstream — the provider expands it to `[{upstreams: [{weight: 100, uri: <value>}]}]` automatically. Only one upstream per route is supported; multi-upstream weighted routing is not available for Agent instances.
+
 ## Example Usage
 
 ### Basic Agent Instance with upstream_uri

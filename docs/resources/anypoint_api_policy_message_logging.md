@@ -62,7 +62,27 @@ resource "anypoint_api_policy_message_logging" "example" {
 
 Required:
 
-- `logging_configuration` (Dynamic) Array of logging rule configurations.
+- `logging_configuration` (Dynamic) Array of logging rule objects. Each element **must** use the `item_name` + `item_data` wrapper — the Platform rejects any flat field structure with HTTP 400.
+
+**Required structure per element:**
+
+```hcl
+logging_configuration = [
+  {
+    item_name = "<string>"   # unique label for this logging rule
+    item_data = {
+      message        = "<string>"  # DataWeave expression or literal, e.g. "#[payload]"
+      level          = "<string>"  # Log level: DEBUG, INFO, WARN, ERROR (default: INFO)
+      conditional    = "<string>"  # Optional DataWeave boolean expression, e.g. "#[true]"
+      category       = "<string>"  # Optional logger category name
+      first_section  = <bool>      # Log on request phase (default: true)
+      second_section = <bool>      # Log on response phase (default: false)
+    }
+  }
+]
+```
+
+> **Note:** Do **not** use flat fields (`message`, `level`, etc.) directly inside `configuration` — those are not valid for this policy and will cause an HTTP 400 at apply time.
 
 ## Import
 

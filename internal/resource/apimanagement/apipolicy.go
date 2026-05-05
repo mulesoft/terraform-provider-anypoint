@@ -265,6 +265,7 @@ func (r *APIPolicyResource) Create(ctx context.Context, req resource.CreateReque
 		resp.Diagnostics.AddError("Invalid configuration_data", "Could not parse JSON: "+unmarshalErr.Error())
 		return
 	}
+	apimanagement.ApplyPolicyDefaults(assetID, configData)
 
 	orgID := data.OrganizationID.ValueString()
 	if orgID == "" {
@@ -374,6 +375,7 @@ func (r *APIPolicyResource) Update(ctx context.Context, req resource.UpdateReque
 		resp.Diagnostics.AddError("Invalid configuration_data", "Could not parse JSON: "+unmarshalErr.Error())
 		return
 	}
+	apimanagement.ApplyPolicyDefaults(assetID, configData)
 
 	orgID := state.OrganizationID.ValueString()
 	if orgID == "" {

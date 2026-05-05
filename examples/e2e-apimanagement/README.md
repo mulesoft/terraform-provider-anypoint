@@ -101,7 +101,7 @@ Steps 1–3 (private space, network, VPN) are commented out so you can run the e
 | 39 | `anypoint_api_policy_circuit_breaker` | Count-based circuit breaker |
 | 40 | `anypoint_api_policy_native_aws_lambda` | Invoke AWS Lambda per request |
 
-To enable outbound policies, set `var.upstream_id` to the routing upstream UUID for the API instance (retrievable from API Manager UI or via `GET /xapi/v1/organizations/{orgId}/environments/{envId}/apis/{apiId}/upstreams`), then uncomment the relevant blocks.
+To enable outbound policies, set `var.upstream_id` to the routing upstream UUID for the API instance. Retrieve it from the API Manager UI or via `GET /xapi/v1/organizations/{orgId}/environments/{envId}/apis/{apiId}/upstreams`. For `anypoint_mcp_server`, the `upstream_id` computed attribute gives the server-assigned upstream ID directly — reference it as `anypoint_mcp_server.example.upstream_id`.
 
 #### Other Resources
 | Resource | Description |

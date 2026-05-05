@@ -9,6 +9,8 @@ description: |-
 
 Manages a Flex Gateway TLS context within a secret group in Anypoint Secrets Manager. The target is automatically set to `FlexGateway`. References keystore and truststore resources by their IDs — the provider automatically builds the internal path references (`keystores/{id}`, `truststores/{id}`).
 
+~> **Delete behaviour:** The Anypoint Secrets Manager API does not expose individual DELETE endpoints for sub-resources. `terraform destroy` removes this resource from Terraform state only — the TLS context is deleted on the Platform when the parent `anypoint_secret_group` is destroyed.
+
 ## Example Usage
 
 ### Basic TLS Context

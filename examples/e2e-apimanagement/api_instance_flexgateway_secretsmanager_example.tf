@@ -158,7 +158,7 @@ provider "anypoint" {
 resource "anypoint_api_instance" "main" {
   environment_id  = var.environment_id
   technology      = "flexGateway"
-  instance_label  = "main-api-1"
+  instance_label  = "main-api-4"
   approval_method = "manual"
 
   spec = {
@@ -170,7 +170,7 @@ resource "anypoint_api_instance" "main" {
   endpoint = {
     deployment_type = "HY"
     type            = "http"
-    base_path       = var.api_base_path
+    base_path       = "/basePath4"
   }
 
   gateway_id = var.gateway_id
@@ -209,6 +209,24 @@ resource "anypoint_api_instance" "main" {
       ]
     }
   ]
+}
+
+resource "anypoint_api_policy_credential_injection_oauth2" "oauth2" {
+  organization_id = var.organization_id
+  environment_id  = var.environment_id
+  api_instance_id = anypoint_api_instance.main.id
+
+  configuration = {
+    oauth_service = "https://auth.example.com/oauth2/token"
+    client_id     = "my-client-id"
+    client_secret = "my-client-secret"
+    scope         = ["read", "write"]
+    overwrite     = true
+    token_fetch_timeout = 5000
+    allow_request_without_credential = false
+  }
+  upstream_ids = [anypoint_api_instance.main.id]
+  depends_on = [anypoint_api_instance.main]
 }
 
 # resource "anypoint_api_instance" "main_4" {
@@ -523,6 +541,24 @@ resource "anypoint_api_policy_cors" "cors" {
     public_resource     = true
     support_credentials = false
     origin_groups       = []
+  }
+}
+
+resource "anypoint_api_policy_cors" "cors_1" {
+  environment_id  = local.env_id
+  api_instance_id = local.api_id
+  label           = "cors-1"
+  order           = 13
+  configuration = {
+    public_resource     = false
+    support_credentials = false
+    origin_groups = [{
+      name                   = "Default group"
+      origins                = ["https://example.com"]
+      methods                = ["GET", "POST"]
+      headers                = []
+      access_control_max_age = 30
+    }]
   }
 }
 
@@ -996,6 +1032,8 @@ resource "anypoint_api_policy_credential_injection_oauth2" "cred_inject_oauth2" 
   }
 }
 
+
+
 # ─── 38. Credential Injection – Basic Auth ───────────────────────────────────
 resource "anypoint_api_policy_credential_injection_basic_auth" "cred_inject_basic" {
   organization_id = local.org_id
@@ -1008,7 +1046,8 @@ resource "anypoint_api_policy_credential_injection_basic_auth" "cred_inject_basi
   configuration = {
     username = "upstream-svc-user"
     password = var.upstream_basic_auth_password
-  }
+  }  
+  depends_on = [anypoint_api_instance.main]
 }
 
 # ─── 39. Idle Timeout ────────────────────────────────────────────────────────

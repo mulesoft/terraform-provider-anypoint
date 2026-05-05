@@ -131,12 +131,30 @@ configuration = {
 ### Traffic Management Policies
 
 #### 9. CORS
-Enable Cross-Origin Resource Sharing:
+Enable Cross-Origin Resource Sharing.
+
+Public resource (open CORS — no origin restriction):
 ```hcl
 configuration = {
   public_resource     = true
   support_credentials = false
-  origin_groups       = []
+}
+```
+
+Non-public resource (explicit allowed origins — requires `name` and `methods` per group; `access_control_max_age` is optional, defaults to `30`):
+```hcl
+configuration = {
+  public_resource     = false
+  support_credentials = true
+  origin_groups = [
+    {
+      name                   = "trusted-origins"
+      origins                = ["https://app.example.com"]
+      methods                = ["GET", "POST", "PUT"]
+      headers                = ["Authorization", "Content-Type"]
+      access_control_max_age = 300
+    }
+  ]
 }
 ```
 
@@ -194,7 +212,8 @@ configuration = {
 ### Monitoring Policies
 
 #### 14. Message Logging
-Log request/response details:
+Log request/response details. Each element of `logging_configuration` **must** be an object with `item_name` (string) and `item_data` (object). Flat fields at the top level are not accepted and will be rejected at plan time.
+
 ```hcl
 configuration = {
   logging_configuration = [
@@ -355,18 +374,12 @@ resource "anypoint_api_policy_ip_allowlist" "allowed_ips" {
   # ... configuration
 }
 
-# 2. CORS
+# 2. CORS (public — open to all origins)
 resource "anypoint_api_policy_cors" "cors" {
   order = 2
   configuration = {
     public_resource     = true
-    support_credentials = true
-    origin_groups = [
-      {
-        name    = "Trusted Origins"
-        origins = ["https://app.example.com", "https://www.example.com"]
-      }
-    ]
+    support_credentials = false
   }
 }
 

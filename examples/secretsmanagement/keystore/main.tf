@@ -79,6 +79,19 @@ resource "anypoint_secret_group_keystore" "pem_with_ca" {
   ca_path_base64     = base64encode(file("${path.module}/../../certs/truststore.pem"))
 }
 
+resource "anypoint_secret_group_keystore" "ks_jks" {
+  organization_id      = var.organization_id
+  environment_id       = var.environment_id
+  secret_group_id      = anypoint_secret_group.main.id
+  name                 = "sparq-ks-jks"
+  type                 = "JKS"
+  keystore_file_base64 = filebase64("${path.module}/../../certs/keystore.jks")
+  alias                = "sparq"
+  key_passphrase           = "Ankit123"
+  store_passphrase           = "Ankit123"
+}
+
+
 # ─── JKS Keystore ───────────────────────────────────────────────
 # For binary JKS files, use filebase64() which reads and base64-encodes in one step.
 

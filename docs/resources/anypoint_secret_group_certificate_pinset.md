@@ -9,6 +9,8 @@ description: |-
 
 Manages a certificate pinset within a secret group in Anypoint Secrets Manager. A certificate pinset is used for certificate pinning validation.
 
+~> **Delete behaviour:** The Anypoint Secrets Manager API does not expose individual DELETE endpoints for sub-resources. `terraform destroy` removes this resource from Terraform state only — the certificate pinset is deleted on the Platform when the parent `anypoint_secret_group` is destroyed.
+
 ## Example Usage
 
 ```terraform
