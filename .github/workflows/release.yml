@@ -43,4 +43,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GPG_FINGERPRINT: ${{ env.GPG_FINGERPRINT }}
-          GPG_PASSPHRASE: ""
+          GPG_PASSPHRASE: ${{ secrets.PASSPHRASE }}
