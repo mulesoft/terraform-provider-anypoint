@@ -109,7 +109,7 @@ provider "anypoint" {
 | Community resource | Official resource | Status | Notes |
 |---|---|---|---|
 | `anypoint_apim_mule4` | `anypoint_api_instance` | **Renamed + Schema change** | Official `anypoint_api_instance` is the unified resource for any API-instance type (Mule 3, Mule 4, Flex, proxy, etc.) — no separate `_mule4` or `_flexgateway` resources. Type is selected via attributes on the single resource. |
-| `anypoint_apim_flexgateway` | `anypoint_managed_flexgateway` (plus `anypoint_api_instance` for the API side) | **Renamed + Schema change** | Managed Flex Gateway infrastructure is a first-class resource now; API-instance attachment goes through `anypoint_api_instance`. |
+| `anypoint_apim_flexgateway` | `anypoint_managed_omnigateway` (plus `anypoint_api_instance` for the API side) | **Renamed + Schema change** | Managed Omni Gateway infrastructure is a first-class resource now; API-instance attachment goes through `anypoint_api_instance`. |
 | `anypoint_apim_policy_client_id_enforcement` | `anypoint_api_policy_client_id_enforcement` | **Renamed (`apim_` → `api_`)** | |
 | `anypoint_apim_policy_jwt_validation` | `anypoint_api_policy_jwt_validation` | **Renamed** | |
 | `anypoint_apim_policy_rate_limiting` | `anypoint_api_policy_rate_limiting` | **Renamed** | |
@@ -191,7 +191,7 @@ Data sources unique to the official provider:
 `anypoint_firewallrules`, `anypoint_private_space_connection`,
 `anypoint_private_space_associations`, `anypoint_private_space_upgrade`,
 `anypoint_tls_context`, `anypoint_private_network`,
-`anypoint_secret_group_*` (plural variants), `anypoint_managed_flexgateway[s]`,
+`anypoint_secret_group_*` (plural variants), `anypoint_managed_omnigateway`,
 `anypoint_api_instances`, `anypoint_agent_instances`, `anypoint_mcp_servers`.
 
 ## Migration runbook

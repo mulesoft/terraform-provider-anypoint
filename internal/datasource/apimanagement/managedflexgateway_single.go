@@ -19,7 +19,7 @@ var (
 	_ datasource.DataSourceWithConfigure = &ManagedFlexGatewaySingleDataSource{}
 )
 
-// ManagedFlexGatewaySingleDataSource fetches a single managed Flex Gateway by ID.
+// ManagedFlexGatewaySingleDataSource fetches a single managed Omni Gateway by ID.
 type ManagedFlexGatewaySingleDataSource struct {
 	client *apimanagement.ManagedFlexGatewayClient
 }
@@ -77,7 +77,7 @@ func NewManagedFlexGatewaySingleDataSource() datasource.DataSource {
 }
 
 func (d *ManagedFlexGatewaySingleDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_managed_flexgateway"
+	resp.TypeName = req.ProviderTypeName + "_managed_omnigateway"
 }
 
 func (d *ManagedFlexGatewaySingleDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
@@ -93,11 +93,11 @@ func (d *ManagedFlexGatewaySingleDataSource) Schema(_ context.Context, _ datasou
 	}
 
 	resp.Schema = schema.Schema{
-		Description: "Fetches the full details of a single managed Flex Gateway by ID.",
+		Description: "Fetches the full details of a single managed Omni Gateway by ID.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Required:    true,
-				Description: "The managed Flex Gateway ID.",
+				Description: "The managed Omni Gateway ID.",
 			},
 			"organization_id": schema.StringAttribute{
 				Optional:    true,
@@ -243,7 +243,7 @@ func (d *ManagedFlexGatewaySingleDataSource) Configure(_ context.Context, req da
 	}
 	gwClient, err := apimanagement.NewManagedFlexGatewayClient(config)
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to Create Managed Flex Gateway Client", err.Error())
+		resp.Diagnostics.AddError("Unable to Create Managed Omni Gateway Client", err.Error())
 		return
 	}
 	d.client = gwClient
@@ -265,7 +265,7 @@ func (d *ManagedFlexGatewaySingleDataSource) Read(ctx context.Context, req datas
 
 	gw, err := d.client.GetManagedFlexGateway(ctx, orgID, envID, gatewayID)
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading managed Flex Gateway", err.Error())
+		resp.Diagnostics.AddError("Error reading managed Omni Gateway", err.Error())
 		return
 	}
 

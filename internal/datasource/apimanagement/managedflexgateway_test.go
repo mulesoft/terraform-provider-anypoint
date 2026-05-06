@@ -30,8 +30,8 @@ func TestManagedFlexGatewayDataSource_Metadata(t *testing.T) {
 	req := datasource.MetadataRequest{ProviderTypeName: "test"}
 	resp := &datasource.MetadataResponse{}
 	ds.Metadata(ctx, req, resp)
-	if resp.TypeName != "test_managed_flexgateways" {
-		t.Errorf("Metadata() TypeName = %q, want %q", resp.TypeName, "test_managed_flexgateways")
+	if resp.TypeName != "test_managed_omnigateway" {
+		t.Errorf("Metadata() TypeName = %q, want %q", resp.TypeName, "test_managed_omnigateway")
 	}
 }
 
@@ -239,8 +239,8 @@ func TestManagedFlexGatewaySingleDataSource_Metadata(t *testing.T) {
 	req := datasource.MetadataRequest{ProviderTypeName: "test"}
 	resp := &datasource.MetadataResponse{}
 	ds.Metadata(ctx, req, resp)
-	if resp.TypeName != "test_managed_flexgateway" {
-		t.Errorf("Metadata() TypeName = %q, want %q", resp.TypeName, "test_managed_flexgateway")
+	if resp.TypeName != "test_managed_omnigateway" {
+		t.Errorf("Metadata() TypeName = %q, want %q", resp.TypeName, "test_managed_omnigateway")
 	}
 }
 

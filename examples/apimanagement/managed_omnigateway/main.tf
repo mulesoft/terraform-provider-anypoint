@@ -16,14 +16,14 @@ provider "anypoint" {
 # --------------------------------------------------------------------------
 # Basic Managed Flex Gateway with minimal configuration
 # --------------------------------------------------------------------------
-# resource "anypoint_managed_flexgateway" "basic" {
+# resource "anypoint_managed_omnigateway" "basic" {
 #   name           = "my-basic-gateway"
 #   environment_id = var.environment_id
 #   target_id      = var.target_id
 #   # runtime_version is auto-resolved to the latest for the default channel (lts)
 # }
 
-resource "anypoint_managed_flexgateway" "gw" {
+resource "anypoint_managed_omnigateway" "gw" {
   environment_id = var.environment_id # local.sandbox_env_id  # from remote state — not hardcoded
   target_id    = var.target_id
   name      = "test-gw"
@@ -41,7 +41,7 @@ resource "anypoint_managed_flexgateway" "gw" {
 # # --------------------------------------------------------------------------
 # # Fully configured Managed Flex Gateway with explicit version
 # # --------------------------------------------------------------------------
-# resource "anypoint_managed_flexgateway" "complete" {
+# resource "anypoint_managed_omnigateway" "complete" {
 #   name            = "my-production-gateway"
 #   environment_id  = var.environment_id
 #   target_id       = var.target_id  
@@ -109,32 +109,32 @@ variable "target_id" {
 # # --------------------------------------------------------------------------
 # # output "basic_gateway_id" {
 # #   description = "The ID of the basic managed Flex Gateway"
-# #   value       = anypoint_managed_flexgateway.basic.id
+# #   value       = anypoint_managed_omnigateway.basic.id
 # # }
 
 # # output "basic_gateway_status" {
 # #   description = "The status of the basic managed Flex Gateway"
-# #   value       = anypoint_managed_flexgateway.basic.status
+# #   value       = anypoint_managed_omnigateway.basic.status
 # # }
 
 # output "complete_gateway_id" {
 #   description = "The ID of the fully configured managed Flex Gateway"
-#   value       = anypoint_managed_flexgateway.complete.id
+#   value       = anypoint_managed_omnigateway.complete.id
 # }
 
 # output "complete_gateway_public_url" {
 #   description = "The public URL of the fully configured gateway"
-#   value       = anypoint_managed_flexgateway.complete.ingress.public_url
+#   value       = anypoint_managed_omnigateway.complete.ingress.public_url
 # }
 
 # output "complete_gateway_internal_url" {
 #   description = "The internal URL of the fully configured gateway"
-#   value       = anypoint_managed_flexgateway.complete.ingress.internal_url
+#   value       = anypoint_managed_omnigateway.complete.ingress.internal_url
 # }
 
 # output "complete_gateway_status" {
 #   description = "The current status of the fully configured gateway"
-#   value       = anypoint_managed_flexgateway.complete.status
+#   value       = anypoint_managed_omnigateway.complete.status
 # }
 
 # # --------------------------------------------------------------------------
@@ -146,37 +146,37 @@ variable "target_id" {
 #   default     = ""
 # }
 
-# data "anypoint_managed_flexgateway" "existing" {
+# data "anypoint_managed_omnigateway" "existing" {
 #   id             = var.gateway_id
 #   environment_id = var.environment_id
 # }
 
 # output "existing_gateway_name" {
 #   description = "Name of the looked-up gateway"
-#   value       = data.anypoint_managed_flexgateway.existing.name
+#   value       = data.anypoint_managed_omnigateway.existing.name
 # }
 
 # output "existing_gateway_status" {
 #   description = "Current status of the looked-up gateway"
-#   value       = data.anypoint_managed_flexgateway.existing.status
+#   value       = data.anypoint_managed_omnigateway.existing.status
 # }
 
 # output "existing_gateway_public_url" {
 #   description = "Primary public URL of the looked-up gateway"
-#   value       = data.anypoint_managed_flexgateway.existing.ingress.public_url
+#   value       = data.anypoint_managed_omnigateway.existing.ingress.public_url
 # }
 
 # output "existing_gateway_internal_urls" {
 #   description = "All internal URLs of the looked-up gateway"
-#   value       = data.anypoint_managed_flexgateway.existing.ingress.internal_urls
+#   value       = data.anypoint_managed_omnigateway.existing.ingress.internal_urls
 # }
 
 # output "existing_gateway_port_config" {
 #   description = "Ingress/egress port configuration of the looked-up gateway"
-#   value       = data.anypoint_managed_flexgateway.existing.port_configuration
+#   value       = data.anypoint_managed_omnigateway.existing.port_configuration
 # }
 
 # output "existing_gateway_runtime_version" {
 #   description = "Runtime version of the looked-up gateway"
-#   value       = data.anypoint_managed_flexgateway.existing.runtime_version
+#   value       = data.anypoint_managed_omnigateway.existing.runtime_version
 # }

@@ -79,22 +79,22 @@ func NewManagedFlexGatewayResource() resource.Resource {
 }
 
 func (r *ManagedFlexGatewayResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_managed_flexgateway"
+	resp.TypeName = req.ProviderTypeName + "_managed_omnigateway"
 }
 
 func (r *ManagedFlexGatewayResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Manages a CloudHub 2.0 Managed Flex Gateway instance in Anypoint Platform.",
+		Description: "Manages a CloudHub 2.0 Managed Omni Gateway instance in Anypoint Platform.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Description: "The unique identifier of the managed Flex Gateway.",
+				Description: "The unique identifier of the managed Omni Gateway.",
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"name": schema.StringAttribute{
-				Description: "The name of the managed Flex Gateway.",
+				Description: "The name of the managed Omni Gateway.",
 				Required:    true,
 			},
 			"organization_id": schema.StringAttribute{
@@ -120,7 +120,7 @@ func (r *ManagedFlexGatewayResource) Schema(_ context.Context, _ resource.Schema
 				},
 			},
 			"runtime_version": schema.StringAttribute{
-				Description: "The Flex Gateway runtime version (e.g., '1.9.9'). " +
+				Description: "The Omni Gateway runtime version (e.g., '1.9.9'). " +
 					"If omitted, the provider auto-selects the latest version for the chosen release_channel.",
 				Optional: true,
 				Computed: true,
@@ -147,7 +147,7 @@ func (r *ManagedFlexGatewayResource) Schema(_ context.Context, _ resource.Schema
 				},
 			},
 			"status": schema.StringAttribute{
-				Description: "The current status of the managed Flex Gateway.",
+				Description: "The current status of the managed Omni Gateway.",
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -274,8 +274,8 @@ func (r *ManagedFlexGatewayResource) Configure(_ context.Context, req resource.C
 	gwClient, err := apimanagement.NewManagedFlexGatewayClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to Create Managed Flex Gateway API Client",
-			"An unexpected error occurred when creating the Managed Flex Gateway API client. "+
+			"Unable to Create Managed Omni Gateway API Client",
+			"An unexpected error occurred when creating the Managed Omni Gateway API client. "+
 				"If the error is not clear, please contact the provider developers.\n\n"+
 				"Anypoint Client Error: "+err.Error(),
 		)
@@ -379,7 +379,7 @@ func (r *ManagedFlexGatewayResource) Create(ctx context.Context, req resource.Cr
 
 	gw, err := r.client.CreateManagedFlexGateway(ctx, orgID, envID, createReq)
 	if err != nil {
-		resp.Diagnostics.AddError("Error creating managed Flex Gateway", "Could not create managed Flex Gateway, unexpected error: "+err.Error())
+		resp.Diagnostics.AddError("Error creating managed Omni Gateway", "Could not create managed Omni Gateway, unexpected error: "+err.Error())
 		return
 	}
 
@@ -408,7 +408,7 @@ func (r *ManagedFlexGatewayResource) Read(ctx context.Context, req resource.Read
 			resp.State.RemoveResource(ctx)
 			return
 		}
-		resp.Diagnostics.AddError("Error reading managed Flex Gateway", "Could not read managed Flex Gateway ID "+data.ID.ValueString()+": "+err.Error())
+		resp.Diagnostics.AddError("Error reading managed Omni Gateway", "Could not read managed Omni Gateway ID "+data.ID.ValueString()+": "+err.Error())
 		return
 	}
 
@@ -468,7 +468,7 @@ func (r *ManagedFlexGatewayResource) Update(ctx context.Context, req resource.Up
 
 	gw, err := r.client.UpdateManagedFlexGateway(ctx, orgID, envID, state.ID.ValueString(), updateReq)
 	if err != nil {
-		resp.Diagnostics.AddError("Error updating managed Flex Gateway", "Could not update managed Flex Gateway, unexpected error: "+err.Error())
+		resp.Diagnostics.AddError("Error updating managed Omni Gateway", "Could not update managed Omni Gateway, unexpected error: "+err.Error())
 		return
 	}
 
@@ -492,7 +492,7 @@ func (r *ManagedFlexGatewayResource) Delete(ctx context.Context, req resource.De
 
 	err := r.client.DeleteManagedFlexGateway(ctx, orgID, envID, data.ID.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddError("Error deleting managed Flex Gateway", "Could not delete managed Flex Gateway, unexpected error: "+err.Error())
+		resp.Diagnostics.AddError("Error deleting managed Omni Gateway", "Could not delete managed Omni Gateway, unexpected error: "+err.Error())
 		return
 	}
 }

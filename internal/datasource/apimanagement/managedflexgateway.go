@@ -17,7 +17,7 @@ var (
 	_ datasource.DataSourceWithConfigure = &ManagedFlexGatewayDataSource{}
 )
 
-// ManagedFlexGatewayDataSource lists all managed Flex Gateways in an environment.
+// ManagedFlexGatewayDataSource lists all managed Omni Gateways in an environment.
 type ManagedFlexGatewayDataSource struct {
 	client *apimanagement.ManagedFlexGatewayClient
 }
@@ -44,12 +44,12 @@ func NewManagedFlexGatewayDataSource() datasource.DataSource {
 }
 
 func (d *ManagedFlexGatewayDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_managed_flexgateways"
+	resp.TypeName = req.ProviderTypeName + "_managed_omnigateway"
 }
 
 func (d *ManagedFlexGatewayDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Lists all managed Flex Gateway instances in the given environment.",
+		Description: "Lists all managed Omni Gateway instances in the given environment.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Description: "Composite identifier: <organization_id>/<environment_id>.",
@@ -65,7 +65,7 @@ func (d *ManagedFlexGatewayDataSource) Schema(_ context.Context, _ datasource.Sc
 				Required:    true,
 			},
 			"gateways": schema.ListNestedAttribute{
-				Description: "List of managed Flex Gateway instances.",
+				Description: "List of managed Omni Gateway instances.",
 				Computed:    true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
@@ -117,8 +117,8 @@ func (d *ManagedFlexGatewayDataSource) Configure(_ context.Context, req datasour
 	gwClient, err := apimanagement.NewManagedFlexGatewayClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to Create Managed Flex Gateway Client",
-			"An unexpected error occurred when creating the Managed Flex Gateway client.\n\n"+
+			"Unable to Create Managed Omni Gateway Client",
+			"An unexpected error occurred when creating the Managed Omni Gateway client.\n\n"+
 				"Client Error: "+err.Error(),
 		)
 		return
@@ -144,8 +144,8 @@ func (d *ManagedFlexGatewayDataSource) Read(ctx context.Context, req datasource.
 	gateways, err := d.client.ListManagedFlexGateways(ctx, orgID, envID)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error listing managed Flex Gateways",
-			"Could not list managed Flex Gateways for environment "+envID+": "+err.Error(),
+			"Error listing managed Omni Gateways",
+			"Could not list managed Omni Gateways for environment "+envID+": "+err.Error(),
 		)
 		return
 	}

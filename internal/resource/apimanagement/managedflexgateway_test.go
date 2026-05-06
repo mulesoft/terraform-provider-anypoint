@@ -29,7 +29,7 @@ func TestNewManagedFlexGatewayResource(t *testing.T) {
 
 func TestManagedFlexGatewayResource_Metadata(t *testing.T) {
 	r := NewManagedFlexGatewayResource()
-	testutil.TestResourceMetadata(t, r, "_managed_flexgateway")
+	testutil.TestResourceMetadata(t, r, "_managed_omnigateway")
 }
 
 func TestManagedFlexGatewayResource_Schema(t *testing.T) {

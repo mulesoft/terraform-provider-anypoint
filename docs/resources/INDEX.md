@@ -18,7 +18,7 @@ All resources provided by `terraform-provider-anypoint`.
 | [anypoint_api_instance](anypoint_api_instance.md) | Manages an API instance in Anypoint API Manager. |
 | [anypoint_api_instance_sla_tier](anypoint_api_instance_sla_tier.md) | Manages an SLA tier for an API instance in Anypoint API Manager. |
 | [anypoint_api_policy](anypoint_api_policy.md) | Manages a policy applied to an API instance. Supports both known policies (via `policy_type`) and custom policies (via `group_id` + `asset_id`). |
-| [anypoint_managed_flexgateway](anypoint_managed_flexgateway.md) | Manages a CloudHub 2.0 Managed Flex Gateway instance in Anypoint Platform. |
+| [anypoint_managed_omnigateway](anypoint_managed_omnigateway.md) | Manages a CloudHub 2.0 Managed Omni Gateway instance in Anypoint Platform. |
 
 ## Agents & Tools
 

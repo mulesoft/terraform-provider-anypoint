@@ -146,8 +146,8 @@ func TestIntegrationManagedFlexGatewayResource_InterfaceCompliance(t *testing.T)
 	metaResp := &resource.MetadataResponse{}
 	gwResource.Metadata(ctx, metaReq, metaResp)
 
-	if metaResp.TypeName != "anypoint_managed_flexgateway" {
-		t.Errorf("Expected TypeName anypoint_managed_flexgateway, got %s", metaResp.TypeName)
+	if metaResp.TypeName != "anypoint_managed_omnigateway" {
+		t.Errorf("Expected TypeName anypoint_managed_omnigateway, got %s", metaResp.TypeName)
 	}
 
 	schemaReq := resource.SchemaRequest{}
