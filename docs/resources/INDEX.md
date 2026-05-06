@@ -6,7 +6,6 @@ All resources provided by `terraform-provider-anypoint`.
 
 | Resource | Description |
 |----------|-------------|
-| [anypoint_connected_app](anypoint_connected_app.md) | Manage Connected Applications in Anypoint Platform. |
 | [anypoint_connected_app_scopes](anypoint_connected_app_scopes.md) | Manages scopes for an Anypoint Connected Application using user authentication. |
 | [anypoint_environment](anypoint_environment.md) | Manages an Anypoint Platform environment. |
 | [anypoint_organization](anypoint_organization.md) | Creates and manages an Anypoint Platform organization. |
@@ -141,13 +140,12 @@ All resources provided by `terraform-provider-anypoint`.
 | [anypoint_api_policy_a2a_schema_validation](anypoint_api_policy_a2a_schema_validation.md) | Manages an A2A Schema Validation policy on an Anypoint API instance. |
 | [anypoint_api_policy_a2a_token_rate_limit](anypoint_api_policy_a2a_token_rate_limit.md) | Manages an A2A Token Rate Limit policy on an Anypoint API instance. |
 
-## CloudHub 2.0 / Private Spaces
+## CloudHub 2.0
 
 | Resource | Description |
 |----------|-------------|
 | [anypoint_private_space_config](anypoint_private_space_config.md) | Manages an Anypoint Private Space together with its network configuration and firewall rules as a single resource. |
 | [anypoint_private_space_association](anypoint_private_space_association.md) | Creates and manages associations between a CloudHub 2.0 private space and environments. |
-| [anypoint_private_space_connection](anypoint_private_space_connection.md) | Manages an Anypoint Private Space Connection. |
 | [anypoint_private_space_upgrade](anypoint_private_space_upgrade.md) | Schedules an upgrade for a CloudHub 2.0 private space. |
 | [anypoint_privatespace_advanced_config](anypoint_privatespace_advanced_config.md) | Manages advanced configuration for an Anypoint Private Space. |
 | [anypoint_tls_context](anypoint_tls_context.md) | Manages a CloudHub 2.0 TLS Context with support for both PEM and JKS keystores. |
