@@ -56,10 +56,16 @@ func TestIntegrationManagedFlexGatewayResource_CRUD(t *testing.T) {
 				testutil.ErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
 			}
 		},
-		"/gatewaymanager/api/v1/organizations/test-org-id/environments/test-env-id/gateways/gw-integration-123": func(w http.ResponseWriter, r *http.Request) {
+		"/gatewaymanager/xapi/v1/organizations/test-org-id/environments/test-env-id/gateways/gw-integration-123": func(w http.ResponseWriter, r *http.Request) {
 			switch r.Method {
 			case "GET":
 				testutil.JSONResponse(w, http.StatusOK, mockGateway)
+			default:
+				testutil.ErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+			}
+		},
+		"/gatewaymanager/api/v1/organizations/test-org-id/environments/test-env-id/gateways/gw-integration-123": func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
 			case "PUT":
 				testutil.JSONResponse(w, http.StatusOK, &updatedGateway)
 			case "DELETE":

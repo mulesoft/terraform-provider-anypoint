@@ -55,20 +55,20 @@
 
 # ── API Instance ────────────────────────────────────────────────────────────
 
-output "api_instance_id" {
-  description = "Numeric ID of the API instance in API Manager"
-  value       = anypoint_api_instance.main.id
-}
+# output "api_instance_id" {
+#   description = "Numeric ID of the API instance in API Manager"
+#   value       = anypoint_api_instance.main.id
+# }
 
-output "api_instance_status" {
-  description = "Status of the API instance"
-  value       = anypoint_api_instance.main.status
-}
+# output "api_instance_status" {
+#   description = "Status of the API instance"
+#   value       = anypoint_api_instance.main.status
+# }
 
-output "api_base_path" {
-  description = "Base path of the API instance"
-  value       = var.api_base_path
-}
+# output "api_base_path" {
+#   description = "Base path of the API instance"
+#   value       = var.api_base_path
+# }
 
 # ── Policy IDs ──────────────────────────────────────────────────────────────
 

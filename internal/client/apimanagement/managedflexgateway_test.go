@@ -118,11 +118,17 @@ func TestManagedFlexGatewayClient_CRUD(t *testing.T) {
 				testutil.ErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
 			}
 		},
-		"/gatewaymanager/api/v1/organizations/test-org-id/environments/test-env-id/gateways/gw-123": func(w http.ResponseWriter, r *http.Request) {
+		"/gatewaymanager/xapi/v1/organizations/test-org-id/environments/test-env-id/gateways/gw-123": func(w http.ResponseWriter, r *http.Request) {
 			switch r.Method {
 			case "GET":
-				testutil.AssertHTTPRequest(t, r, "GET", "/gatewaymanager/api/v1/organizations/test-org-id/environments/test-env-id/gateways/gw-123")
+				testutil.AssertHTTPRequest(t, r, "GET", "/gatewaymanager/xapi/v1/organizations/test-org-id/environments/test-env-id/gateways/gw-123")
 				testutil.JSONResponse(w, http.StatusOK, mockGateway)
+			default:
+				testutil.ErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+			}
+		},
+		"/gatewaymanager/api/v1/organizations/test-org-id/environments/test-env-id/gateways/gw-123": func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
 			case "PUT":
 				testutil.AssertHTTPRequest(t, r, "PUT", "/gatewaymanager/api/v1/organizations/test-org-id/environments/test-env-id/gateways/gw-123")
 				testutil.JSONResponse(w, http.StatusOK, &updatedGateway)
@@ -324,7 +330,7 @@ func TestBuildIngressURLs(t *testing.T) {
 
 func TestManagedFlexGatewayClient_ErrorHandling(t *testing.T) {
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
-		"/gatewaymanager/api/v1/organizations/test-org-id/environments/test-env-id/gateways/nonexistent": func(w http.ResponseWriter, r *http.Request) {
+		"/gatewaymanager/xapi/v1/organizations/test-org-id/environments/test-env-id/gateways/nonexistent": func(w http.ResponseWriter, r *http.Request) {
 			testutil.ErrorResponse(w, http.StatusNotFound, "Gateway not found")
 		},
 		"/gatewaymanager/api/v1/organizations/test-org-id/environments/test-env-id/gateways": func(w http.ResponseWriter, r *http.Request) {

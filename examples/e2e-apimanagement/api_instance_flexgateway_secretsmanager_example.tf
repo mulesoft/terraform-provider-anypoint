@@ -155,66 +155,66 @@ provider "anypoint" {
 # # Step 5 – API Instance on the Flex Gateway
 # ###############################################################################
 
-resource "anypoint_api_instance" "main" {
-  environment_id  = var.environment_id
-  technology      = "flexGateway"
-  instance_label  = "main-api-6"
-  approval_method = "manual"
+# resource "anypoint_api_instance" "main" {
+#   environment_id  = var.environment_id
+#   technology      = "flexGateway"
+#   instance_label  = "main-api-10"
+#   approval_method = "manual"
 
-  spec = {
-    asset_id = var.api_asset_id
-    group_id = var.organization_id
-    version  = var.api_asset_version
-  }
+#   spec = {
+#     asset_id = var.api_asset_id
+#     group_id = var.organization_id
+#     version  = var.api_asset_version
+#   }
 
-  endpoint = {
-    deployment_type = "HY"
-    type            = "http"
-    base_path       = "/basePath6"
-  }
+#   endpoint = {
+#     deployment_type = "HY"
+#     type            = "http"
+#     base_path       = "/basePath10"
+#   }
 
-  gateway_id = var.gateway_id
+#   gateway_id = var.gateway_id
 
-  routing = [
-    {
-      label = "read-traffic"
-      rules = {
-        methods = "GET"
-      }
-      upstreams = [
-        {
-          weight = var.upstream_primary_weight
-          uri    = var.upstream_primary_uri
-          label  = "primary"
-        },
-        {
-          weight = 100 - var.upstream_primary_weight
-          uri    = var.upstream_secondary_uri
-          label  = "secondary"
-        }
-      ]
-    },
-    {
-      label = "write-traffic"
-      rules = {
-        methods = "POST|PUT|PATCH|DELETE"
-        path    = "/api/*"
-      }
-      upstreams = [
-        {
-          weight = 100
-          uri    = var.upstream_primary_uri
-          label  = "primary"
-        }
-      ]
-    }
-  ]
-}
+#   routing = [
+#     {
+#       label = "read-traffic"
+#       rules = {
+#         methods = "GET"
+#       }
+#       upstreams = [
+#         {
+#           weight = var.upstream_primary_weight
+#           uri    = var.upstream_primary_uri
+#           label  = "primary"
+#         },
+#         {
+#           weight = 100 - var.upstream_primary_weight
+#           uri    = var.upstream_secondary_uri
+#           label  = "secondary"
+#         }
+#       ]
+#     },
+#     {
+#       label = "write-traffic"
+#       rules = {
+#         methods = "POST|PUT|PATCH|DELETE"
+#         path    = "/api/*"
+#       }
+#       upstreams = [
+#         {
+#           weight = 100
+#           uri    = var.upstream_primary_uri
+#           label  = "primary"
+#         }
+#       ]
+#     }
+#   ]
+# }
 
 resource "anypoint_api_policy_credential_injection_oauth2" "oauth2" {
   organization_id = var.organization_id
   environment_id  = var.environment_id
-  api_instance_id = anypoint_api_instance.main.id
+  api_instance_id = var.api_instance_id
 
   configuration = {
     oauth_service = "https://auth.example.com/oauth2/token"
@@ -225,8 +225,8 @@ resource "anypoint_api_policy_credential_injection_oauth2" "oauth2" {
     token_fetch_timeout = 5000
     allow_request_without_credential = false
   }
-  upstream_ids = [anypoint_api_instance.main.id]
-  depends_on = [anypoint_api_instance.main]
+  upstream_ids = [local.upstream_id]
+  
 }
 
 # resource "anypoint_api_instance" "main_4" {
@@ -298,6 +298,28 @@ resource "anypoint_api_policy_credential_injection_oauth2" "oauth2" {
 # }
 
 ###############################################################################
+# Step 5b – Fetch upstream IDs from API Manager
+# The upstream UUID is assigned by the platform after the API instance is
+# created. Use the anypoint_api_upstreams datasource to look it up by label
+# so outbound policies can reference it without hardcoding.
+###############################################################################
+
+data "anypoint_api_upstreams" "main" {
+  organization_id = var.organization_id
+  environment_id  = var.environment_id
+  api_instance_id = var.api_instance_id
+
+  
+}
+
+locals {
+  # Build a label → upstream ID map from the datasource results.
+  upstream_by_label = {
+    for u in data.anypoint_api_upstreams.main.upstreams : u.label => u.id
+  }
+}
+
+###############################################################################
 # Step 6 – API Policies (applied to the API instance)
 ###############################################################################
 
@@ -305,12 +327,12 @@ resource "anypoint_api_policy_credential_injection_oauth2" "oauth2" {
 locals {
   org_id      = var.organization_id
   env_id      = var.environment_id
-  api_id      = anypoint_api_instance.main.id
+  api_id      = var.api_instance_id
 
-  # upstream_id is the routing-upstream UUID for outbound policies.
-  # Retrieve it from the Anypoint API Manager UI or via the REST API after
-  # the API instance has been created. It is NOT the same as the api_id.
-  upstream_id = var.upstream_id
+  # upstream_id resolves the "primary" upstream from the datasource lookup.
+  # Change "primary" to match the label used in the routing configuration above.
+  # upstream_id = local.upstream_by_label["primary"]
+  upstream_id = "66f635fd-bfc5-4382-8536-6a7f66063ffc"
 }
 
 # ─── 1. Rate Limiting ───────────────────────────────────────────────────────
@@ -976,7 +998,6 @@ resource "anypoint_api_policy_message_logging_outbound" "message_logging_outboun
   environment_id  = local.env_id
   api_instance_id = local.api_id
   label           = "outbound-logger"
-  order           = 1
   upstream_ids    = [local.upstream_id]
 
   configuration = {
@@ -1002,7 +1023,6 @@ resource "anypoint_api_policy_intask_authorization_code_policy" "intask_authz" {
   environment_id  = local.env_id
   api_instance_id = local.api_id
   label           = "intask-authz-code"
-  order           = 2
   upstream_ids    = [local.upstream_id]
 
   configuration = {
@@ -1020,7 +1040,6 @@ resource "anypoint_api_policy_credential_injection_oauth2" "cred_inject_oauth2" 
   environment_id  = local.env_id
   api_instance_id = local.api_id
   label           = "cred-inject-oauth2"
-  order           = 3
   upstream_ids    = [local.upstream_id]
 
   configuration = {
@@ -1040,14 +1059,13 @@ resource "anypoint_api_policy_credential_injection_basic_auth" "cred_inject_basi
   environment_id  = local.env_id
   api_instance_id = local.api_id
   label           = "cred-inject-basic"
-  order           = 4
   upstream_ids    = [local.upstream_id]
 
   configuration = {
     username = "upstream-svc-user"
     password = var.upstream_basic_auth_password
   }  
-  depends_on = [anypoint_api_instance.main]
+  
 }
 
 # ─── 39. Idle Timeout ────────────────────────────────────────────────────────
@@ -1056,7 +1074,6 @@ resource "anypoint_api_policy_idle_timeout" "idle_timeout" {
   environment_id  = local.env_id
   api_instance_id = local.api_id
   label           = "upstream-idle-120s"
-  order           = 5
   upstream_ids    = [local.upstream_id]
 
   configuration = {
@@ -1070,7 +1087,6 @@ resource "anypoint_api_policy_circuit_breaker" "circuit_breaker" {
   environment_id  = local.env_id
   api_instance_id = local.api_id
   label           = "circuit-breaker"
-  order           = 6
   upstream_ids    = [local.upstream_id]
 
   configuration = {
@@ -1090,7 +1106,6 @@ resource "anypoint_api_policy_native_aws_lambda" "aws_lambda" {
   environment_id  = local.env_id
   api_instance_id = local.api_id
   label           = "aws-lambda-invoke"
-  order           = 7
   upstream_ids    = [local.upstream_id]
 
   configuration = {
@@ -1111,7 +1126,7 @@ resource "anypoint_api_policy_native_aws_lambda" "aws_lambda" {
 resource "anypoint_api_instance_sla_tier" "tier1" {
   organization_id = var.organization_id
   environment_id  = var.environment_id
-  api_instance_id = anypoint_api_instance.main.id
+  api_instance_id = var.api_instance_id
 
   name         = "Tier1"
   description  = "SLA Tier1"
@@ -1130,5 +1145,25 @@ resource "anypoint_api_instance_sla_tier" "tier1" {
       visible                     = true
     }
   ]
+}
+
+resource "anypoint_api_instance_sla_tier" "gold" {
+  organization_id = local.org_id
+  environment_id  = local.env_id
+  api_instance_id = local.api_id
+  name        = "Gold"
+  description = "Gold tier with unlimited API access for premium customers"
+
+  # Unlimited access - effectively no rate limits
+  limits = [
+    {
+      time_period_in_milliseconds = 60000      # 1 minute
+      maximum_requests            = 999999  # Effectively unlimited
+      visible                     = true
+    }
+  ]
+
+  auto_approve = true
+  status       = "ACTIVE"
 }
 

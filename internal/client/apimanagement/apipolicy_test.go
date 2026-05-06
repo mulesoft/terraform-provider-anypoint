@@ -280,6 +280,190 @@ func TestValidatePolicyConfiguration(t *testing.T) {
 	})
 }
 
+// TestListAPIPolicies_ReturnsBothInboundAndOutbound is a regression test for
+// the outbound 409-conflict recovery path. When the user re-applies a plan
+// whose state was lost, Create returns 409 because the policy exists on the
+// server. The old recovery used GET on /policies/outbound-policies which the
+// Anypoint Platform rejects with 405 Method Not Allowed. The new recovery
+// uses the universal listing endpoint at /policies (this function), which
+// returns BOTH inbound and outbound policies — outbound policies are simply
+// inbound-listed entries that carry a non-empty upstreamIds.
+func TestListAPIPolicies_ReturnsBothInboundAndOutbound(t *testing.T) {
+	orgID := "org-123"
+	envID := "env-456"
+	apiID := 100
+
+	inbound := APIPolicy{
+		ID:           1001,
+		AssetID:      "rate-limiting",
+		GroupID:      "68ef9520-24e9-4cf2-b2f5-620025690913",
+		AssetVersion: "1.4.0",
+		Label:        "inbound-rl",
+		Order:        1,
+		APIID:        apiID,
+	}
+	outbound := APIPolicy{
+		ID:           1002,
+		AssetID:      "message-logging-outbound",
+		GroupID:      "68ef9520-24e9-4cf2-b2f5-620025690913",
+		AssetVersion: "1.0.0",
+		Label:        "outbound-logger",
+		Order:        2,
+		APIID:        apiID,
+		UpstreamIDs:  []string{"upstream-uuid-1"},
+	}
+
+	handlers := testutil.StandardMockHandlers()
+	handlers["GET /apimanager/api/v1/organizations/org-123/environments/env-456/apis/100/policies"] = func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode([]APIPolicy{inbound, outbound})
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	c := &APIPolicyClient{
+		AnypointClient: &client.AnypointClient{
+			BaseURL:    server.URL,
+			Token:      "test-token",
+			HTTPClient: server.Client(),
+		},
+	}
+
+	policies, err := c.ListAPIPolicies(context.Background(), orgID, envID, apiID)
+	if err != nil {
+		t.Fatalf("ListAPIPolicies failed: %v", err)
+	}
+	if len(policies) != 2 {
+		t.Fatalf("expected 2 policies, got %d", len(policies))
+	}
+
+	var sawInbound, sawOutbound bool
+	for _, p := range policies {
+		if p.ID == 1001 && p.Label == "inbound-rl" {
+			sawInbound = true
+		}
+		if p.ID == 1002 && p.Label == "outbound-logger" && len(p.UpstreamIDs) == 1 {
+			sawOutbound = true
+		}
+	}
+	if !sawInbound {
+		t.Error("expected to find the inbound policy in the list")
+	}
+	if !sawOutbound {
+		t.Error("expected to find the outbound policy (with upstreamIds) in the list")
+	}
+}
+
+// TestListAPIPolicies_AcceptsCompactListShape covers the JSON shape the
+// production Anypoint Platform actually returns from the policies LIST
+// endpoint: items use `policyId` (not `id`), nest asset coordinates under
+// `template`/`implementationAsset`, and use `configuration` (not
+// `configurationData`). Outbound policies appear in this list with their
+// `upstreamIds` echoed at the top level. If the provider's listing parser
+// silently mis-decodes these fields, 409-conflict recovery prints "no
+// matching policy found" even when the orphan is sitting right there.
+func TestListAPIPolicies_AcceptsCompactListShape(t *testing.T) {
+	const body = `[
+		{
+			"policyId": 6086880,
+			"order": 11,
+			"label": "sse-logs",
+			"template": {"groupId":"68ef9520-24e9-4cf2-b2f5-620025690913","assetId":"sse-logging","assetVersion":"1.0.1"},
+			"implementationAsset": {"assetId":"sse-logging-policy-flex","groupId":"68ef9520-24e9-4cf2-b2f5-620025690913","version":"1.0.3"},
+			"configuration": {"logs":[]},
+			"policyTemplateId": "1185"
+		},
+		{
+			"policyId": 6086912,
+			"order": 33,
+			"label": "outbound-logger",
+			"template": {"groupId":"68ef9520-24e9-4cf2-b2f5-620025690913","assetId":"message-logging-outbound","assetVersion":"1.0.0"},
+			"upstreamIds": ["upstream-uuid-1"],
+			"policyTemplateId": "1950"
+		}
+	]`
+	handlers := testutil.StandardMockHandlers()
+	handlers["GET /apimanager/api/v1/organizations/org-123/environments/env-456/apis/100/policies"] = func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	c := &APIPolicyClient{
+		AnypointClient: &client.AnypointClient{
+			BaseURL:    server.URL,
+			Token:      "test-token",
+			HTTPClient: server.Client(),
+		},
+	}
+
+	policies, err := c.ListAPIPolicies(context.Background(), "org-123", "env-456", 100)
+	if err != nil {
+		t.Fatalf("ListAPIPolicies failed: %v", err)
+	}
+	if len(policies) != 2 {
+		t.Fatalf("expected 2 policies, got %d", len(policies))
+	}
+
+	var inbound, outbound *APIPolicy
+	for i := range policies {
+		switch policies[i].ID {
+		case 6086880:
+			inbound = &policies[i]
+		case 6086912:
+			outbound = &policies[i]
+		}
+	}
+	if inbound == nil {
+		t.Fatal("expected to find inbound id=6086880 (parsed from policyId)")
+	}
+	if inbound.AssetID != "sse-logging" || inbound.GroupID != "68ef9520-24e9-4cf2-b2f5-620025690913" || inbound.AssetVersion != "1.0.1" {
+		t.Errorf("expected asset coords from `template`, got %+v", inbound)
+	}
+	if inbound.Label != "sse-logs" {
+		t.Errorf("expected label=sse-logs, got %q", inbound.Label)
+	}
+	if outbound == nil {
+		t.Fatal("expected to find outbound id=6086912 (parsed from policyId)")
+	}
+	if outbound.AssetID != "message-logging-outbound" {
+		t.Errorf("expected outbound assetId=message-logging-outbound, got %q", outbound.AssetID)
+	}
+	if outbound.Label != "outbound-logger" {
+		t.Errorf("expected outbound label=outbound-logger, got %q", outbound.Label)
+	}
+	if len(outbound.UpstreamIDs) != 1 || outbound.UpstreamIDs[0] != "upstream-uuid-1" {
+		t.Errorf("expected outbound to carry upstreamIds=[upstream-uuid-1], got %v", outbound.UpstreamIDs)
+	}
+}
+
+// TestListAPIPolicies_AcceptsEnvelopeShape verifies that the universal listing
+// endpoint is parsed correctly when it returns the {"policies":[...]} envelope
+// instead of a top-level array — the Platform has historically returned both.
+func TestListAPIPolicies_AcceptsEnvelopeShape(t *testing.T) {
+	handlers := testutil.StandardMockHandlers()
+	handlers["GET /apimanager/api/v1/organizations/org-123/environments/env-456/apis/100/policies"] = func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"policies":[{"id":7,"assetId":"rate-limiting","label":"only"}]}`))
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	c := &APIPolicyClient{
+		AnypointClient: &client.AnypointClient{
+			BaseURL:    server.URL,
+			Token:      "test-token",
+			HTTPClient: server.Client(),
+		},
+	}
+
+	policies, err := c.ListAPIPolicies(context.Background(), "org-123", "env-456", 100)
+	if err != nil {
+		t.Fatalf("ListAPIPolicies failed: %v", err)
+	}
+	if len(policies) != 1 || policies[0].ID != 7 || policies[0].Label != "only" {
+		t.Fatalf("unexpected policies parsed from envelope: %#v", policies)
+	}
+}
+
 func TestAPIPolicy_JSONSerialization(t *testing.T) {
 	order := 1
 	req := &CreateAPIPolicyRequest{

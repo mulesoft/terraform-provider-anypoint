@@ -30,7 +30,7 @@ resource "anypoint_environment" "my_env" {
 resource "anypoint_environment" "my_env_1" {
   provider = anypoint.admin
   organization_id = var.organization_id
-  name            = "${var.environment_name}-1"
+  name            = "${var.environment_name}-4"
   type            = "production"
   is_production   = true
 }

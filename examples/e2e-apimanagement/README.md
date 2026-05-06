@@ -260,6 +260,49 @@ After `terraform apply`, the following outputs are available:
   anypoint_api_instance_sla_tier    (Tier1: 10 req/min, manual approval)
 ```
 
+## Troubleshooting
+
+### `Error creating policy: 409 conflict (label=...)` on a re-apply
+
+This used to happen because the Anypoint Platform's outbound endpoints are
+asymmetric:
+
+| Method | `xapi/v1/.../policies/outbound-policies/{id}` | `api/v1/.../policies/{id}` |
+|--------|------------------------------------------------|------------------------------|
+| POST   | creates (this is the only place outbound POST works) | n/a    |
+| GET    | **404 Not Found** even for policies that exist | 200 OK              |
+| PATCH  | **404 Not Found**                              | 200 OK                      |
+| DELETE | **404 Not Found**                              | 204 No Content              |
+| LIST (no id) | **405 Method Not Allowed** (`Allow: POST`) | 200 OK (returns inbound + outbound) |
+
+The provider previously routed Read/Update/Delete for outbound policies
+through the xapi/v1 path, so on every `terraform refresh` (which runs
+before `apply`), Read got a 404 and silently called
+`resp.State.RemoveResource()`. The next apply then tried to recreate the
+policy → 409, because the policy was very much still on the server.
+
+The fix: only `CREATE` for outbound policies uses the dedicated
+`xapi/v1/.../outbound-policies` endpoint. Every other CRUD operation goes
+through the universal `api/v1/.../policies/{id}` path, which the platform
+serves correctly for both inbound and outbound entries.
+
+If you still see a 409 (e.g. you ran an older provider build and ended up
+with an orphaned policy), the provider now lists policies via
+`api/v1/.../policies`, finds the orphan by asset coordinates + label, and
+adopts it into state automatically. If multiple policies match the same
+asset+label, recovery refuses to guess; resolve with `terraform import`:
+
+```bash
+terraform import anypoint_api_policy_message_logging_outbound.message_logging_outbound \
+  ORG_ID/ENV_ID/API_ID/POLICY_ID
+```
+
+### `(known after apply)` shown for `order` on every plan
+
+The `order` attribute is computed for outbound policies (the server assigns
+it; clients cannot send it). The provider uses `UseStateForUnknown` so
+re-plans don't show spurious diffs for `order` when nothing else changed.
+
 ## See Also
 
 - [API Management Examples](../apimanagement/README.md) — individual resource examples

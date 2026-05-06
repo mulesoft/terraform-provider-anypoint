@@ -254,6 +254,7 @@ func (p *AnypointProvider) DataSources(_ context.Context) []func() datasource.Da
 		dsApiManagement.NewManagedFlexGatewayDataSource,
 		dsApiManagement.NewManagedFlexGatewaySingleDataSource,
 		dsApiManagement.NewAPIInstanceDataSource,
+		dsApiManagement.NewAPIUpstreamsDataSource,
 		// Agents Tools data sources
 		dsAgentsTools.NewAgentInstanceDataSource,
 		dsAgentsTools.NewMCPServerDataSource,

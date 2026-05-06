@@ -115,13 +115,13 @@ variable "gateway_size" {
 variable "gateway_runtime_version" {
   description = "Gateway version for API instance deployment"
   type        = string
-  default     = "1.9.9"
+  default     = "1.12.5"
 }
 
 variable "gateway_id" {
   description = "Managed Flex Gateway target ID to deploy the API instance to"
   type        = string
-  default     = "b123b2eb-35aa-454c-9750-dff9e2d218c9"
+  default     = "731e6f7f-2b9e-495a-b3fc-5ac5121d07ea"
 }
 
 # ── API Instance ────────────────────────────────────────────────────────────
@@ -204,5 +204,11 @@ variable "aws_secret_access_key" {
   type        = string
   sensitive   = true
   default     = "asdasdadas"
+}
+
+variable "api_instance_id" {
+  description = "API instance ID"
+  type        = string
+  default     = "4714224"
 }
 

@@ -32,17 +32,17 @@ resource "anypoint_connected_app_scopes" "example" {
       }
     },
     {
-      scope = "manage:runtime_fabrics"
+      scope = "manage:cloudhub_networking"
       context_params = {
         org = var.target_organization_id
       }
-    },  
+    },
     {
       scope = "create:environment"
       context_params = {
         org = var.target_organization_id
       }
-    },  
+    },
   ]
 }
 

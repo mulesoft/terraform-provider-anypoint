@@ -93,7 +93,7 @@ func TestManagedFlexGatewayResourceModel_Validation(t *testing.T) {
 }
 
 func TestManagedFlexGatewayResource_Read(t *testing.T) {
-	basePath := "/gatewaymanager/api/v1/organizations/test-org-id/environments/test-env-id/gateways/test-gw-id"
+	basePath := "/gatewaymanager/xapi/v1/organizations/test-org-id/environments/test-env-id/gateways/test-gw-id"
 
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 		basePath: func(w http.ResponseWriter, r *http.Request) {
@@ -169,7 +169,7 @@ func TestManagedFlexGatewayResource_Read(t *testing.T) {
 }
 
 func TestManagedFlexGatewayResource_Read_NotFound(t *testing.T) {
-	basePath := "/gatewaymanager/api/v1/organizations/test-org-id/environments/test-env-id/gateways/test-gw-id"
+	basePath := "/gatewaymanager/xapi/v1/organizations/test-org-id/environments/test-env-id/gateways/test-gw-id"
 
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 		basePath: func(w http.ResponseWriter, r *http.Request) {
