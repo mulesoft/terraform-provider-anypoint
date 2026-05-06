@@ -11,7 +11,6 @@ import (
 
 	anypointclient "github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	ch2client "github.com/mulesoft/terraform-provider-anypoint/internal/client/cloudhub2"
-	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
 )
 
@@ -83,7 +82,7 @@ func TestPrivateSpaceUpgradeDataSource_Configure(t *testing.T) {
 	dataSource := NewPrivateSpaceUpgradeDataSource().(*PrivateSpaceUpgradeDataSource)
 
 	server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
-	providerData := &client.Config{
+	providerData := &anypointclient.Config{
 		BaseURL:      server.URL,
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",

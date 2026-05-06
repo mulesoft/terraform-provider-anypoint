@@ -11,7 +11,6 @@ import (
 
 	anypointclient "github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	agentsclient "github.com/mulesoft/terraform-provider-anypoint/internal/client/agentstools"
-	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
 )
 
@@ -44,7 +43,7 @@ func TestAgentInstanceResource_Schema(t *testing.T) {
 func TestAgentInstanceResource_Configure(t *testing.T) {
 	res := NewAgentInstanceResource().(*AgentInstanceResource)
 	server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
-	providerData := &client.Config{
+	providerData := &anypointclient.Config{
 		BaseURL:      server.URL,
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",

@@ -11,7 +11,6 @@ import (
 
 	anypointclient "github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	apimgmtclient "github.com/mulesoft/terraform-provider-anypoint/internal/client/apimanagement"
-	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
 )
 
@@ -44,7 +43,7 @@ func TestSLATierResource_Schema(t *testing.T) {
 func TestSLATierResource_Configure(t *testing.T) {
 	res := NewSLATierResource().(*SLATierResource)
 	server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
-	providerData := &client.Config{
+	providerData := &anypointclient.Config{
 		BaseURL:      server.URL,
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
