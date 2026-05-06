@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client/accessmanagement"
@@ -263,6 +265,114 @@ func TestTeamDataSource_Read(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestTeamDataSource_Read_Direct(t *testing.T) {
+	basePath := "/accounts/api/organizations/test-org-id/teams/test-team-id"
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		basePath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"team_id":    "test-team-id",
+				"team_name":  "Test Team",
+				"team_type":  "internal",
+				"org_id":     "test-org-id",
+				"created_at": "2024-01-01T00:00:00Z",
+				"updated_at": "2024-01-01T00:00:00Z",
+			})
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	ds := NewTeamDataSource().(*TeamDataSource)
+	ds.client = &accessmanagement.TeamClient{
+		AnypointClient: &client.AnypointClient{
+			BaseURL:    server.URL,
+			Token:      "mock-token",
+			HTTPClient: &http.Client{},
+			OrgID:      "test-org-id",
+		},
+	}
+
+	ctx := context.Background()
+	schemaResp := &datasource.SchemaResponse{}
+	ds.Schema(ctx, datasource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+
+	configRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"id":             tftypes.NewValue(tftypes.String, "test-team-id"),
+		"name":           tftypes.NewValue(tftypes.String, nil),
+		"parent_team_id": tftypes.NewValue(tftypes.String, nil),
+		"team_type":      tftypes.NewValue(tftypes.String, nil),
+		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
+		"created_date":   tftypes.NewValue(tftypes.String, nil),
+		"updated_date":   tftypes.NewValue(tftypes.String, nil),
+		"member_count":   tftypes.NewValue(tftypes.Number, nil),
+		"created_at":     tftypes.NewValue(tftypes.String, nil),
+		"updated_at":     tftypes.NewValue(tftypes.String, nil),
+	})
+
+	req := datasource.ReadRequest{Config: tfsdk.Config{Schema: schemaResp.Schema, Raw: configRaw}}
+	resp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: configRaw}}
+	ds.Read(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("Read() reported errors: %v", resp.Diagnostics.Errors())
+	}
+	var got TeamDataSourceModel
+	if diags := resp.State.Get(ctx, &got); diags.HasError() {
+		t.Fatalf("State.Get errors: %v", diags.Errors())
+	}
+	if got.Name.ValueString() != "Test Team" {
+		t.Errorf("Expected Name 'Test Team', got %s", got.Name.ValueString())
+	}
+}
+
+func TestTeamDataSource_Read_Direct_Error(t *testing.T) {
+	basePath := "/accounts/api/organizations/test-org-id/teams/test-team-id"
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		basePath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.ErrorResponse(w, http.StatusInternalServerError, "internal error")
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	ds := NewTeamDataSource().(*TeamDataSource)
+	ds.client = &accessmanagement.TeamClient{
+		AnypointClient: &client.AnypointClient{
+			BaseURL:    server.URL,
+			Token:      "mock-token",
+			HTTPClient: &http.Client{},
+			OrgID:      "test-org-id",
+		},
+	}
+
+	ctx := context.Background()
+	schemaResp := &datasource.SchemaResponse{}
+	ds.Schema(ctx, datasource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+
+	configRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"id":             tftypes.NewValue(tftypes.String, "test-team-id"),
+		"name":           tftypes.NewValue(tftypes.String, nil),
+		"parent_team_id": tftypes.NewValue(tftypes.String, nil),
+		"team_type":      tftypes.NewValue(tftypes.String, nil),
+		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
+		"created_date":   tftypes.NewValue(tftypes.String, nil),
+		"updated_date":   tftypes.NewValue(tftypes.String, nil),
+		"member_count":   tftypes.NewValue(tftypes.Number, nil),
+		"created_at":     tftypes.NewValue(tftypes.String, nil),
+		"updated_at":     tftypes.NewValue(tftypes.String, nil),
+	})
+
+	req := datasource.ReadRequest{Config: tfsdk.Config{Schema: schemaResp.Schema, Raw: configRaw}}
+	resp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: configRaw}}
+	ds.Read(ctx, req, resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Error("Read() should have errors on server error")
 	}
 }
 
