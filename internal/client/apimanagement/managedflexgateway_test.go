@@ -422,3 +422,171 @@ func TestManagedFlexGateway_JSONSerialization(t *testing.T) {
 		t.Error("Expected Tracing.Enabled false after round-trip")
 	}
 }
+
+func TestManagedFlexGatewayClient_GetGatewayVersions(t *testing.T) {
+	mockVersions := &GatewayVersionsResponse{
+		Default: "lts",
+		Channels: map[string]GatewayChannel{
+			"lts": {
+				Name: "lts",
+				Versions: []GatewayVersion{
+					{DisplayName: "1.9.9"},
+					{DisplayName: "1.9.8"},
+				},
+			},
+			"edge": {
+				Name:     "edge",
+				Versions: []GatewayVersion{{DisplayName: "2.0.0"}},
+			},
+		},
+	}
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		"/gatewaymanager/xapi/v1/gateway/versions": func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, mockVersions)
+		},
+		"/accounts/api/v2/oauth2/token": testutil.StandardMockHandlers()["/accounts/api/v2/oauth2/token"],
+		"/accounts/api/me":              testutil.StandardMockHandlers()["/accounts/api/me"],
+	}
+
+	server := testutil.MockHTTPServer(t, handlers)
+
+	anypointClient, err := client.NewAnypointClient(&client.Config{
+		ClientID:     "test-client-id",
+		ClientSecret: "test-client-secret",
+		BaseURL:      server.URL,
+		Timeout:      30,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+	gwClient := &ManagedFlexGatewayClient{AnypointClient: anypointClient}
+
+	versions, err := gwClient.GetGatewayVersions(context.Background())
+	if err != nil {
+		t.Fatalf("GetGatewayVersions() unexpected error: %v", err)
+	}
+	if versions.Default != "lts" {
+		t.Errorf("Expected Default lts, got %s", versions.Default)
+	}
+	if len(versions.Channels) != 2 {
+		t.Fatalf("Expected 2 channels, got %d", len(versions.Channels))
+	}
+	ltsLatest := versions.LatestVersionForChannel("lts")
+	if ltsLatest != "1.9.9" {
+		t.Errorf("Expected lts latest 1.9.9, got %s", ltsLatest)
+	}
+	edgeLatest := versions.LatestVersionForChannel("edge")
+	if edgeLatest != "2.0.0" {
+		t.Errorf("Expected edge latest 2.0.0, got %s", edgeLatest)
+	}
+	missing := versions.LatestVersionForChannel("nonexistent")
+	if missing != "" {
+		t.Errorf("Expected empty for nonexistent channel, got %q", missing)
+	}
+}
+
+func TestManagedFlexGatewayClient_GetGatewayVersions_Error(t *testing.T) {
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		"/gatewaymanager/xapi/v1/gateway/versions": func(w http.ResponseWriter, r *http.Request) {
+			testutil.ErrorResponse(w, http.StatusInternalServerError, "internal error")
+		},
+		"/accounts/api/v2/oauth2/token": testutil.StandardMockHandlers()["/accounts/api/v2/oauth2/token"],
+		"/accounts/api/me":              testutil.StandardMockHandlers()["/accounts/api/me"],
+	}
+
+	server := testutil.MockHTTPServer(t, handlers)
+	anypointClient, err := client.NewAnypointClient(&client.Config{
+		ClientID:     "test-client-id",
+		ClientSecret: "test-client-secret",
+		BaseURL:      server.URL,
+		Timeout:      30,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+	gwClient := &ManagedFlexGatewayClient{AnypointClient: anypointClient}
+
+	_, err = gwClient.GetGatewayVersions(context.Background())
+	if err == nil {
+		t.Fatal("Expected error, got nil")
+	}
+}
+
+func TestManagedFlexGatewayClient_ListManagedFlexGateways(t *testing.T) {
+	mockItems := []ManagedFlexGatewayListItem{
+		{ID: "gw-1", Name: "Gateway 1", TargetID: "target-1", Status: "running"},
+		{ID: "gw-2", Name: "Gateway 2", TargetID: "target-2", Status: "stopped"},
+	}
+	mockResp := ManagedFlexGatewayListResponse{
+		Content:       mockItems,
+		PageSize:      10,
+		PageNumber:    0,
+		TotalElements: 2,
+	}
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		"/gatewaymanager/api/v1/organizations/test-org-id/environments/test-env-id/gateways": func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != "GET" {
+				testutil.ErrorResponse(w, http.StatusMethodNotAllowed, "method not allowed")
+				return
+			}
+			testutil.JSONResponse(w, http.StatusOK, mockResp)
+		},
+		"/accounts/api/v2/oauth2/token": testutil.StandardMockHandlers()["/accounts/api/v2/oauth2/token"],
+		"/accounts/api/me":              testutil.StandardMockHandlers()["/accounts/api/me"],
+	}
+
+	server := testutil.MockHTTPServer(t, handlers)
+	anypointClient, err := client.NewAnypointClient(&client.Config{
+		ClientID:     "test-client-id",
+		ClientSecret: "test-client-secret",
+		BaseURL:      server.URL,
+		Timeout:      30,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+	gwClient := &ManagedFlexGatewayClient{AnypointClient: anypointClient}
+
+	items, err := gwClient.ListManagedFlexGateways(context.Background(), "test-org-id", "test-env-id")
+	if err != nil {
+		t.Fatalf("ListManagedFlexGateways() unexpected error: %v", err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("Expected 2 items, got %d", len(items))
+	}
+	if items[0].ID != "gw-1" {
+		t.Errorf("Expected first ID gw-1, got %s", items[0].ID)
+	}
+	if items[1].Status != "stopped" {
+		t.Errorf("Expected second status stopped, got %s", items[1].Status)
+	}
+}
+
+func TestManagedFlexGatewayClient_ListManagedFlexGateways_Error(t *testing.T) {
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		"/gatewaymanager/api/v1/organizations/test-org-id/environments/test-env-id/gateways": func(w http.ResponseWriter, r *http.Request) {
+			testutil.ErrorResponse(w, http.StatusInternalServerError, "internal error")
+		},
+		"/accounts/api/v2/oauth2/token": testutil.StandardMockHandlers()["/accounts/api/v2/oauth2/token"],
+		"/accounts/api/me":              testutil.StandardMockHandlers()["/accounts/api/me"],
+	}
+
+	server := testutil.MockHTTPServer(t, handlers)
+	anypointClient, err := client.NewAnypointClient(&client.Config{
+		ClientID:     "test-client-id",
+		ClientSecret: "test-client-secret",
+		BaseURL:      server.URL,
+		Timeout:      30,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+	gwClient := &ManagedFlexGatewayClient{AnypointClient: anypointClient}
+
+	_, err = gwClient.ListManagedFlexGateways(context.Background(), "test-org-id", "test-env-id")
+	if err == nil {
+		t.Fatal("Expected error, got nil")
+	}
+}

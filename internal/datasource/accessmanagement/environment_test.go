@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client/accessmanagement"
@@ -267,6 +269,113 @@ func TestEnvironmentDataSource_ReadClientTests(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestEnvironmentDataSource_Read(t *testing.T) {
+	basePath := "/accounts/api/organizations/test-org-id/environments/test-env-id"
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		basePath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"id":             "test-env-id",
+				"name":           "Test Environment",
+				"type":           "sandbox",
+				"isProduction":   false,
+				"organizationId": "test-org-id",
+				"clientId":       "test-client-id",
+				"arcNamespace":   nil,
+			})
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	ds := NewEnvironmentDataSource().(*EnvironmentDataSource)
+	ds.client = &accessmanagement.EnvironmentClient{
+		UserAnypointClient: &client.UserAnypointClient{
+			BaseURL:    server.URL,
+			Token:      "mock-token",
+			HTTPClient: &http.Client{},
+			OrgID:      "test-org-id",
+		},
+	}
+
+	ctx := context.Background()
+	schemaResp := &datasource.SchemaResponse{}
+	ds.Schema(ctx, datasource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+
+	configRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"id":              tftypes.NewValue(tftypes.String, "test-env-id"),
+		"name":            tftypes.NewValue(tftypes.String, nil),
+		"type":            tftypes.NewValue(tftypes.String, nil),
+		"is_production":   tftypes.NewValue(tftypes.Bool, nil),
+		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
+		"client_id":       tftypes.NewValue(tftypes.String, nil),
+		"arc_namespace":   tftypes.NewValue(tftypes.String, nil),
+		"created_at":      tftypes.NewValue(tftypes.String, nil),
+		"updated_at":      tftypes.NewValue(tftypes.String, nil),
+	})
+
+	req := datasource.ReadRequest{Config: tfsdk.Config{Schema: schemaResp.Schema, Raw: configRaw}}
+	resp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: configRaw}}
+	ds.Read(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("Read() reported errors: %v", resp.Diagnostics.Errors())
+	}
+	var got EnvironmentDataSourceModel
+	if diags := resp.State.Get(ctx, &got); diags.HasError() {
+		t.Fatalf("State.Get errors: %v", diags.Errors())
+	}
+	if got.Name.ValueString() != "Test Environment" {
+		t.Errorf("Expected Name 'Test Environment', got %s", got.Name.ValueString())
+	}
+}
+
+func TestEnvironmentDataSource_Read_Error(t *testing.T) {
+	basePath := "/accounts/api/organizations/test-org-id/environments/test-env-id"
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		basePath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.ErrorResponse(w, http.StatusInternalServerError, "internal error")
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	ds := NewEnvironmentDataSource().(*EnvironmentDataSource)
+	ds.client = &accessmanagement.EnvironmentClient{
+		UserAnypointClient: &client.UserAnypointClient{
+			BaseURL:    server.URL,
+			Token:      "mock-token",
+			HTTPClient: &http.Client{},
+			OrgID:      "test-org-id",
+		},
+	}
+
+	ctx := context.Background()
+	schemaResp := &datasource.SchemaResponse{}
+	ds.Schema(ctx, datasource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+
+	configRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"id":              tftypes.NewValue(tftypes.String, "test-env-id"),
+		"name":            tftypes.NewValue(tftypes.String, nil),
+		"type":            tftypes.NewValue(tftypes.String, nil),
+		"is_production":   tftypes.NewValue(tftypes.Bool, nil),
+		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
+		"client_id":       tftypes.NewValue(tftypes.String, nil),
+		"arc_namespace":   tftypes.NewValue(tftypes.String, nil),
+		"created_at":      tftypes.NewValue(tftypes.String, nil),
+		"updated_at":      tftypes.NewValue(tftypes.String, nil),
+	})
+
+	req := datasource.ReadRequest{Config: tfsdk.Config{Schema: schemaResp.Schema, Raw: configRaw}}
+	resp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: configRaw}}
+	ds.Read(ctx, req, resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Error("Read() should have errors on server error")
 	}
 }
 

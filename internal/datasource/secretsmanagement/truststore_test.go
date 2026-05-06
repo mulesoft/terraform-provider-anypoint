@@ -2,11 +2,15 @@ package secretsmanagement
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
-	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
+	anypointclient "github.com/mulesoft/terraform-provider-anypoint/internal/client"
+	secretsmgmt "github.com/mulesoft/terraform-provider-anypoint/internal/client/secretsmanagement"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
 )
 
@@ -78,7 +82,7 @@ func TestTruststoreDataSource_Configure(t *testing.T) {
 	dataSource := NewTruststoreDataSource().(*TruststoreDataSource)
 
 	server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
-	providerData := &client.Config{
+	providerData := &anypointclient.Config{
 		BaseURL:      server.URL,
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
@@ -104,6 +108,105 @@ func TestTruststoreDataSource_Configure(t *testing.T) {
 func TestTruststoreDataSourceModel_Validation(t *testing.T) {
 	model := TruststoreDataSourceModel{}
 	_ = model.OrganizationID
+}
+
+func TestTruststoreDataSource_Read(t *testing.T) {
+	basePath := "/secrets-manager/api/v1/organizations/test-org-id/environments/test-env-id/secretGroups/test-sg-id/truststores"
+
+	mockItems := []secretsmgmt.TruststoreResponse{
+		{Name: "truststore-one", Type: "PEM", Meta: secretsmgmt.SecretGroupMeta{ID: "ts-id-1"}},
+	}
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		basePath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, mockItems)
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	ds := NewTruststoreDataSource().(*TruststoreDataSource)
+	ds.client = &secretsmgmt.TruststoreClient{
+		AnypointClient: &anypointclient.AnypointClient{
+			BaseURL:    server.URL,
+			Token:      "mock-token",
+			HTTPClient: &http.Client{},
+			OrgID:      "test-org-id",
+		},
+	}
+
+	ctx := context.Background()
+	schemaResp := &datasource.SchemaResponse{}
+	ds.Schema(ctx, datasource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+	objType := stateType.(tftypes.Object)
+	elemType := objType.AttributeTypes["truststores"].(tftypes.List).ElementType
+
+	configRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
+		"environment_id":  tftypes.NewValue(tftypes.String, "test-env-id"),
+		"secret_group_id": tftypes.NewValue(tftypes.String, "test-sg-id"),
+		"truststores":     tftypes.NewValue(tftypes.List{ElementType: elemType}, nil),
+	})
+
+	req := datasource.ReadRequest{Config: tfsdk.Config{Schema: schemaResp.Schema, Raw: configRaw}}
+	resp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: configRaw}}
+	ds.Read(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("Read() reported errors: %v", resp.Diagnostics.Errors())
+	}
+	var got TruststoreDataSourceModel
+	if diags := resp.State.Get(ctx, &got); diags.HasError() {
+		t.Fatalf("State.Get errors: %v", diags.Errors())
+	}
+	if len(got.Truststores) != 1 {
+		t.Fatalf("Expected 1 truststore, got %d", len(got.Truststores))
+	}
+	if got.Truststores[0].ID.ValueString() != "ts-id-1" {
+		t.Errorf("Expected ID ts-id-1, got %s", got.Truststores[0].ID.ValueString())
+	}
+}
+
+func TestTruststoreDataSource_Read_Error(t *testing.T) {
+	basePath := "/secrets-manager/api/v1/organizations/test-org-id/environments/test-env-id/secretGroups/test-sg-id/truststores"
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		basePath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.ErrorResponse(w, http.StatusInternalServerError, "internal error")
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	ds := NewTruststoreDataSource().(*TruststoreDataSource)
+	ds.client = &secretsmgmt.TruststoreClient{
+		AnypointClient: &anypointclient.AnypointClient{
+			BaseURL:    server.URL,
+			Token:      "mock-token",
+			HTTPClient: &http.Client{},
+			OrgID:      "test-org-id",
+		},
+	}
+
+	ctx := context.Background()
+	schemaResp := &datasource.SchemaResponse{}
+	ds.Schema(ctx, datasource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+	objType := stateType.(tftypes.Object)
+	elemType := objType.AttributeTypes["truststores"].(tftypes.List).ElementType
+
+	configRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
+		"environment_id":  tftypes.NewValue(tftypes.String, "test-env-id"),
+		"secret_group_id": tftypes.NewValue(tftypes.String, "test-sg-id"),
+		"truststores":     tftypes.NewValue(tftypes.List{ElementType: elemType}, nil),
+	})
+
+	req := datasource.ReadRequest{Config: tfsdk.Config{Schema: schemaResp.Schema, Raw: configRaw}}
+	resp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: configRaw}}
+	ds.Read(ctx, req, resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Error("Read() should have errors on server error")
+	}
 }
 
 func BenchmarkTruststoreDataSource_Schema(b *testing.B) {

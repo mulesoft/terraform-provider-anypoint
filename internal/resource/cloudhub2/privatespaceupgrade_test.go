@@ -116,6 +116,40 @@ func TestPrivateSpaceUpgradeResourceModel_Validation(t *testing.T) {
 	_ = model.ID
 }
 
+func TestPrivateSpaceUpgradeResource_Read(t *testing.T) {
+	res := NewPrivateSpaceUpgradeResource().(*PrivateSpaceUpgradeResource)
+
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+
+	priorStateRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"id":                    tftypes.NewValue(tftypes.String, "test-ps-id"),
+		"private_space_id":      tftypes.NewValue(tftypes.String, "test-ps-id"),
+		"organization_id":       tftypes.NewValue(tftypes.String, "test-org-id"),
+		"date":                  tftypes.NewValue(tftypes.String, "2025-08-12"),
+		"opt_in":                tftypes.NewValue(tftypes.Bool, true),
+		"scheduled_update_time": tftypes.NewValue(tftypes.String, ""),
+		"status":                tftypes.NewValue(tftypes.String, ""),
+	})
+
+	req := resource.ReadRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
+	resp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
+	res.Read(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("Read() reported errors: %v", resp.Diagnostics.Errors())
+	}
+	var got PrivateSpaceUpgradeResourceModel
+	if diags := resp.State.Get(ctx, &got); diags.HasError() {
+		t.Fatalf("State.Get errors: %v", diags.Errors())
+	}
+	if got.PrivateSpaceID.ValueString() != "test-ps-id" {
+		t.Errorf("Expected PrivateSpaceID test-ps-id, got %s", got.PrivateSpaceID.ValueString())
+	}
+}
+
 func BenchmarkPrivateSpaceUpgradeResource_Schema(b *testing.B) {
 	res := NewPrivateSpaceUpgradeResource()
 	ctx := context.Background()

@@ -116,6 +116,41 @@ func TestPrivateSpaceAssociationResourceModel_Validation(t *testing.T) {
 	_ = model.ID
 }
 
+func TestPrivateSpaceAssociationResource_Read(t *testing.T) {
+	res := NewPrivateSpaceAssociationResource().(*PrivateSpaceAssociationResource)
+
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+	objType := stateType.(tftypes.Object)
+	assocElemType := objType.AttributeTypes["associations"].(tftypes.List).ElementType
+	createdElemType := objType.AttributeTypes["created_associations"].(tftypes.List).ElementType
+
+	priorStateRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"id":                   tftypes.NewValue(tftypes.String, "test-ps-id"),
+		"private_space_id":     tftypes.NewValue(tftypes.String, "test-ps-id"),
+		"organization_id":      tftypes.NewValue(tftypes.String, "test-org-id"),
+		"associations":         tftypes.NewValue(tftypes.List{ElementType: assocElemType}, nil),
+		"created_associations": tftypes.NewValue(tftypes.List{ElementType: createdElemType}, nil),
+	})
+
+	req := resource.ReadRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
+	resp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
+	res.Read(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("Read() reported errors: %v", resp.Diagnostics.Errors())
+	}
+	var got PrivateSpaceAssociationResourceModel
+	if diags := resp.State.Get(ctx, &got); diags.HasError() {
+		t.Fatalf("State.Get errors: %v", diags.Errors())
+	}
+	if got.PrivateSpaceID.ValueString() != "test-ps-id" {
+		t.Errorf("Expected PrivateSpaceID test-ps-id, got %s", got.PrivateSpaceID.ValueString())
+	}
+}
+
 func BenchmarkPrivateSpaceAssociationResource_Schema(b *testing.B) {
 	res := NewPrivateSpaceAssociationResource()
 	ctx := context.Background()

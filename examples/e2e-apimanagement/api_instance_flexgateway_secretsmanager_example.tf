@@ -158,7 +158,7 @@ provider "anypoint" {
 resource "anypoint_api_instance" "main" {
   environment_id  = var.environment_id
   technology      = "flexGateway"
-  instance_label  = "main-api-4"
+  instance_label  = "main-api-6"
   approval_method = "manual"
 
   spec = {
@@ -170,7 +170,7 @@ resource "anypoint_api_instance" "main" {
   endpoint = {
     deployment_type = "HY"
     type            = "http"
-    base_path       = "/basePath4"
+    base_path       = "/basePath6"
   }
 
   gateway_id = var.gateway_id

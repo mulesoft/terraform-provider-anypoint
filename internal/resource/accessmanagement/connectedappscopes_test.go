@@ -2,13 +2,17 @@ package accessmanagement
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
+	"github.com/mulesoft/terraform-provider-anypoint/internal/client/accessmanagement"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/constants"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
 )
@@ -92,6 +96,92 @@ func TestConnectedAppScopesResource_ImportState(t *testing.T) {
 func TestConnectedAppScopesResourceModel_Validation(t *testing.T) {
 	model := ConnectedAppScopesResourceModel{}
 	_ = model.ID
+}
+
+func TestConnectedAppScopesResource_Read(t *testing.T) {
+	basePath := "/accounts/api/connectedApplications/test-app-id/scopes"
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		basePath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"scopes": []interface{}{},
+			})
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	res := NewConnectedAppScopesResource().(*ConnectedAppScopesResource)
+	res.client = &accessmanagement.ConnectedAppScopesClient{
+		UserAnypointClient: &client.UserAnypointClient{
+			BaseURL:    server.URL,
+			Token:      "mock-token",
+			HTTPClient: &http.Client{},
+			OrgID:      "test-org-id",
+		},
+	}
+
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+	objType := stateType.(tftypes.Object)
+	scopesElemType := objType.AttributeTypes["scopes"].(tftypes.Set).ElementType
+
+	priorStateRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"id":               tftypes.NewValue(tftypes.String, "test-app-id"),
+		"connected_app_id": tftypes.NewValue(tftypes.String, "test-app-id"),
+		"scopes":           tftypes.NewValue(tftypes.Set{ElementType: scopesElemType}, nil),
+	})
+
+	req := resource.ReadRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
+	resp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
+	res.Read(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("Read() reported errors: %v", resp.Diagnostics.Errors())
+	}
+}
+
+func TestConnectedAppScopesResource_Read_Error(t *testing.T) {
+	basePath := "/accounts/api/connectedApplications/test-app-id/scopes"
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		basePath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.ErrorResponse(w, http.StatusInternalServerError, "internal error")
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	res := NewConnectedAppScopesResource().(*ConnectedAppScopesResource)
+	res.client = &accessmanagement.ConnectedAppScopesClient{
+		UserAnypointClient: &client.UserAnypointClient{
+			BaseURL:    server.URL,
+			Token:      "mock-token",
+			HTTPClient: &http.Client{},
+			OrgID:      "test-org-id",
+		},
+	}
+
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+	objType := stateType.(tftypes.Object)
+	scopesElemType := objType.AttributeTypes["scopes"].(tftypes.Set).ElementType
+
+	priorStateRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"id":               tftypes.NewValue(tftypes.String, "test-app-id"),
+		"connected_app_id": tftypes.NewValue(tftypes.String, "test-app-id"),
+		"scopes":           tftypes.NewValue(tftypes.Set{ElementType: scopesElemType}, nil),
+	})
+
+	req := resource.ReadRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
+	resp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
+	res.Read(ctx, req, resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Error("Read() should have errors on server error")
+	}
 }
 
 func BenchmarkConnectedAppScopesResource_Schema(b *testing.B) {

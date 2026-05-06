@@ -48,7 +48,7 @@ variable "environment_id" {
 variable "api_instance_id" {
   type        = string
   description = "Numeric ID of the API instance to apply policies to"
-  default     = "4696122"
+  default     = "4696123"
 }
 
 # ─────────────────────────────────────────────────────────────

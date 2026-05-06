@@ -341,3 +341,153 @@ func TestAPIInstance_JSONSerialization(t *testing.T) {
 		t.Errorf("Expected methods GET,POST, got %s", decoded.Routing[0].Rules.Methods)
 	}
 }
+
+func TestAPIInstanceClient_GetGatewayInfo(t *testing.T) {
+	mockGW := &GatewayInfo{
+		Name:           "my-gateway",
+		RuntimeVersion: "1.9.9",
+	}
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		"/gatewaymanager/xapi/v1/organizations/test-org-id/environments/test-env-id/gateways/gw-abc": func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == "GET" {
+				testutil.JSONResponse(w, http.StatusOK, mockGW)
+			} else {
+				testutil.ErrorResponse(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+		},
+		"/gatewaymanager/xapi/v1/organizations/test-org-id/environments/test-env-id/gateways/missing": func(w http.ResponseWriter, r *http.Request) {
+			testutil.ErrorResponse(w, http.StatusNotFound, "not found")
+		},
+		"/gatewaymanager/xapi/v1/organizations/test-org-id/environments/test-env-id/gateways/error": func(w http.ResponseWriter, r *http.Request) {
+			testutil.ErrorResponse(w, http.StatusInternalServerError, "server error")
+		},
+		"/accounts/api/v2/oauth2/token": testutil.StandardMockHandlers()["/accounts/api/v2/oauth2/token"],
+		"/accounts/api/me":              testutil.StandardMockHandlers()["/accounts/api/me"],
+	}
+
+	server := testutil.MockHTTPServer(t, handlers)
+	anypointClient, err := client.NewAnypointClient(&client.Config{
+		ClientID:     "test-client-id",
+		ClientSecret: "test-client-secret",
+		BaseURL:      server.URL,
+		Timeout:      30,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+	apiClient := &APIInstanceClient{AnypointClient: anypointClient}
+	ctx := context.Background()
+
+	t.Run("Success", func(t *testing.T) {
+		gw, err := apiClient.GetGatewayInfo(ctx, "test-org-id", "test-env-id", "gw-abc")
+		if err != nil {
+			t.Fatalf("GetGatewayInfo() unexpected error: %v", err)
+		}
+		if gw.Name != "my-gateway" {
+			t.Errorf("Expected Name my-gateway, got %s", gw.Name)
+		}
+		if gw.RuntimeVersion != "1.9.9" {
+			t.Errorf("Expected RuntimeVersion 1.9.9, got %s", gw.RuntimeVersion)
+		}
+	})
+
+	t.Run("NotFound", func(t *testing.T) {
+		_, err := apiClient.GetGatewayInfo(ctx, "test-org-id", "test-env-id", "missing")
+		if err == nil {
+			t.Fatal("Expected error for missing gateway")
+		}
+		if !client.IsNotFound(err) {
+			t.Errorf("Expected NotFound error, got %v", err)
+		}
+	})
+
+	t.Run("ServerError", func(t *testing.T) {
+		_, err := apiClient.GetGatewayInfo(ctx, "test-org-id", "test-env-id", "error")
+		if err == nil {
+			t.Fatal("Expected error on server error")
+		}
+	})
+}
+
+func TestAPIInstanceClient_ListAPIInstances(t *testing.T) {
+	mockInstances := []APIInstance{
+		{ID: 100, AssetID: "api-1", Technology: "flexGateway", Status: "active"},
+		{ID: 200, AssetID: "api-2", Technology: "mule4", Status: "inactive"},
+	}
+	mockResp := APIInstanceListResponse{
+		Instances: mockInstances,
+		Total:     2,
+	}
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		"/apimanager/xapi/v1/organizations/test-org-id/environments/test-env-id/apis": func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case "GET":
+				testutil.JSONResponse(w, http.StatusOK, mockResp)
+			case "POST":
+				testutil.ErrorResponse(w, http.StatusBadRequest, "bad request")
+			default:
+				testutil.ErrorResponse(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+		},
+		"/accounts/api/v2/oauth2/token": testutil.StandardMockHandlers()["/accounts/api/v2/oauth2/token"],
+		"/accounts/api/me":              testutil.StandardMockHandlers()["/accounts/api/me"],
+	}
+
+	server := testutil.MockHTTPServer(t, handlers)
+	anypointClient, err := client.NewAnypointClient(&client.Config{
+		ClientID:     "test-client-id",
+		ClientSecret: "test-client-secret",
+		BaseURL:      server.URL,
+		Timeout:      30,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+	apiClient := &APIInstanceClient{AnypointClient: anypointClient}
+	ctx := context.Background()
+
+	instances, err := apiClient.ListAPIInstances(ctx, "test-org-id", "test-env-id")
+	if err != nil {
+		t.Fatalf("ListAPIInstances() unexpected error: %v", err)
+	}
+	if len(instances) != 2 {
+		t.Fatalf("Expected 2 instances, got %d", len(instances))
+	}
+	if instances[0].ID != 100 {
+		t.Errorf("Expected first ID 100, got %d", instances[0].ID)
+	}
+	if instances[1].Technology != "mule4" {
+		t.Errorf("Expected second Technology mule4, got %s", instances[1].Technology)
+	}
+}
+
+func TestAPIInstanceClient_ListAPIInstances_Error(t *testing.T) {
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		"/apimanager/xapi/v1/organizations/test-org-id/environments/test-env-id/apis": func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == "GET" {
+				testutil.ErrorResponse(w, http.StatusInternalServerError, "server error")
+			}
+		},
+		"/accounts/api/v2/oauth2/token": testutil.StandardMockHandlers()["/accounts/api/v2/oauth2/token"],
+		"/accounts/api/me":              testutil.StandardMockHandlers()["/accounts/api/me"],
+	}
+
+	server := testutil.MockHTTPServer(t, handlers)
+	anypointClient, err := client.NewAnypointClient(&client.Config{
+		ClientID:     "test-client-id",
+		ClientSecret: "test-client-secret",
+		BaseURL:      server.URL,
+		Timeout:      30,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+	apiClient := &APIInstanceClient{AnypointClient: anypointClient}
+
+	_, err = apiClient.ListAPIInstances(context.Background(), "test-org-id", "test-env-id")
+	if err == nil {
+		t.Fatal("Expected error, got nil")
+	}
+}

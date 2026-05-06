@@ -2,11 +2,15 @@ package secretsmanagement
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
-	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
+	anypointclient "github.com/mulesoft/terraform-provider-anypoint/internal/client"
+	secretsmgmt "github.com/mulesoft/terraform-provider-anypoint/internal/client/secretsmanagement"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
 )
 
@@ -78,7 +82,7 @@ func TestCertificatePinsetDataSource_Configure(t *testing.T) {
 	dataSource := NewCertificatePinsetDataSource().(*CertificatePinsetDataSource)
 
 	server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
-	providerData := &client.Config{
+	providerData := &anypointclient.Config{
 		BaseURL:      server.URL,
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
@@ -104,6 +108,105 @@ func TestCertificatePinsetDataSource_Configure(t *testing.T) {
 func TestCertificatePinsetDataSourceModel_Validation(t *testing.T) {
 	model := CertificatePinsetDataSourceModel{}
 	_ = model.OrganizationID
+}
+
+func TestCertificatePinsetDataSource_Read(t *testing.T) {
+	basePath := "/secrets-manager/api/v1/organizations/test-org-id/environments/test-env-id/secretGroups/test-sg-id/certificatePinsets"
+
+	mockPinsets := []secretsmgmt.CertificatePinsetResponse{
+		{Name: "pinset-one", Meta: secretsmgmt.SecretGroupMeta{ID: "ps-id-1"}},
+	}
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		basePath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, mockPinsets)
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	ds := NewCertificatePinsetDataSource().(*CertificatePinsetDataSource)
+	ds.client = &secretsmgmt.CertificatePinsetClient{
+		AnypointClient: &anypointclient.AnypointClient{
+			BaseURL:    server.URL,
+			Token:      "mock-token",
+			HTTPClient: &http.Client{},
+			OrgID:      "test-org-id",
+		},
+	}
+
+	ctx := context.Background()
+	schemaResp := &datasource.SchemaResponse{}
+	ds.Schema(ctx, datasource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+	objType := stateType.(tftypes.Object)
+	elemType := objType.AttributeTypes["certificate_pinsets"].(tftypes.List).ElementType
+
+	configRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"organization_id":     tftypes.NewValue(tftypes.String, "test-org-id"),
+		"environment_id":      tftypes.NewValue(tftypes.String, "test-env-id"),
+		"secret_group_id":     tftypes.NewValue(tftypes.String, "test-sg-id"),
+		"certificate_pinsets": tftypes.NewValue(tftypes.List{ElementType: elemType}, nil),
+	})
+
+	req := datasource.ReadRequest{Config: tfsdk.Config{Schema: schemaResp.Schema, Raw: configRaw}}
+	resp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: configRaw}}
+	ds.Read(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("Read() reported errors: %v", resp.Diagnostics.Errors())
+	}
+	var got CertificatePinsetDataSourceModel
+	if diags := resp.State.Get(ctx, &got); diags.HasError() {
+		t.Fatalf("State.Get errors: %v", diags.Errors())
+	}
+	if len(got.CertificatePinsets) != 1 {
+		t.Fatalf("Expected 1 pinset, got %d", len(got.CertificatePinsets))
+	}
+	if got.CertificatePinsets[0].ID.ValueString() != "ps-id-1" {
+		t.Errorf("Expected ID ps-id-1, got %s", got.CertificatePinsets[0].ID.ValueString())
+	}
+}
+
+func TestCertificatePinsetDataSource_Read_Error(t *testing.T) {
+	basePath := "/secrets-manager/api/v1/organizations/test-org-id/environments/test-env-id/secretGroups/test-sg-id/certificatePinsets"
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		basePath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.ErrorResponse(w, http.StatusInternalServerError, "internal error")
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	ds := NewCertificatePinsetDataSource().(*CertificatePinsetDataSource)
+	ds.client = &secretsmgmt.CertificatePinsetClient{
+		AnypointClient: &anypointclient.AnypointClient{
+			BaseURL:    server.URL,
+			Token:      "mock-token",
+			HTTPClient: &http.Client{},
+			OrgID:      "test-org-id",
+		},
+	}
+
+	ctx := context.Background()
+	schemaResp := &datasource.SchemaResponse{}
+	ds.Schema(ctx, datasource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+	objType := stateType.(tftypes.Object)
+	elemType := objType.AttributeTypes["certificate_pinsets"].(tftypes.List).ElementType
+
+	configRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"organization_id":     tftypes.NewValue(tftypes.String, "test-org-id"),
+		"environment_id":      tftypes.NewValue(tftypes.String, "test-env-id"),
+		"secret_group_id":     tftypes.NewValue(tftypes.String, "test-sg-id"),
+		"certificate_pinsets": tftypes.NewValue(tftypes.List{ElementType: elemType}, nil),
+	})
+
+	req := datasource.ReadRequest{Config: tfsdk.Config{Schema: schemaResp.Schema, Raw: configRaw}}
+	resp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: configRaw}}
+	ds.Read(ctx, req, resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Error("Read() should have errors on server error")
+	}
 }
 
 func BenchmarkCertificatePinsetDataSource_Schema(b *testing.B) {
