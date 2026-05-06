@@ -206,7 +206,6 @@ func (p *AnypointProvider) Resources(_ context.Context) []func() resource.Resour
 		// CloudHub 2.0 resources
 		resourceCloudHub2.NewPrivateSpaceConfigResource,
 		resourceCloudHub2.NewTLSContextResource,
-		resourceCloudHub2.NewPrivateSpaceConnectionResource,
 		resourceCloudHub2.NewVPNConnectionResource,
 		resourceCloudHub2.NewPrivateSpaceAssociationResource,
 		resourceCloudHub2.NewPrivateSpaceUpgradeResource,
@@ -215,7 +214,6 @@ func (p *AnypointProvider) Resources(_ context.Context) []func() resource.Resour
 		resourceAccessManagement.NewEnvironmentResource,
 		resourceAccessManagement.NewOrganizationResource,
 		resourceAccessManagement.NewTeamResource,
-		resourceAccessManagement.NewConnectedAppResource,
 		resourceAccessManagement.NewConnectedAppScopesResource,
 		// API Management resources
 		resourceApiManagement.NewManagedFlexGatewayResource,
@@ -250,7 +248,6 @@ func (p *AnypointProvider) DataSources(_ context.Context) []func() datasource.Da
 		dsAccessManagement.NewTeamDataSource,
 		// CloudHub 2.0 data sources
 		dsCloudHub2.NewTLSContextDataSource,
-		dsCloudHub2.NewPrivateSpaceConnectionDataSource,
 		dsCloudHub2.NewPrivateSpaceAssociationDataSource,
 		dsCloudHub2.NewPrivateSpaceUpgradeDataSource,
 		// API Management data sources

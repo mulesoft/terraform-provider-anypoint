@@ -1,0 +1,72 @@
+name: terraform-apply
+
+# Runs `terraform plan` on every push to feature branches and
+# `terraform apply` when a PR merges to main. Anypoint credentials are
+# injected from repository / organization Actions Secrets and never appear
+# in logs (Actions auto-redacts them).
+#
+# Drop this file into .github/workflows/ in your Terraform repo.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write   # required for OIDC federation to AWS/GCP/Azure backends
+  pull-requests: write
+
+jobs:
+  terraform:
+    name: Plan / Apply
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      # -------------------------------------------------------------------
+      # Anypoint credentials. Defined as repository or organization-level
+      # Actions Secrets; NEVER hard-coded here and NEVER in .tf files.
+      # -------------------------------------------------------------------
+      ANYPOINT_CLIENT_ID:       ${{ secrets.ANYPOINT_CLIENT_ID }}
+      ANYPOINT_CLIENT_SECRET:   ${{ secrets.ANYPOINT_CLIENT_SECRET }}
+      ANYPOINT_ADMIN_USERNAME:  ${{ secrets.ANYPOINT_ADMIN_USERNAME }}
+      ANYPOINT_ADMIN_PASSWORD:  ${{ secrets.ANYPOINT_ADMIN_PASSWORD }}
+      ANYPOINT_BASE_URL:        ${{ vars.ANYPOINT_BASE_URL }}
+
+      # -------------------------------------------------------------------
+      # Backend credentials. Example uses AWS OIDC federation — the runner
+      # presents a GitHub-issued OIDC token, AWS trades it for short-lived
+      # STS credentials, and there is no long-lived AWS key anywhere.
+      # -------------------------------------------------------------------
+      AWS_REGION: us-east-1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.x
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        id: plan
+        run: terraform plan -no-color -out=tfplan
+
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: terraform apply -auto-approve tfplan
