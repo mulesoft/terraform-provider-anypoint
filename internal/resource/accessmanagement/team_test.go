@@ -2,11 +2,15 @@ package accessmanagement
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
+	"github.com/mulesoft/terraform-provider-anypoint/internal/client/accessmanagement"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
 )
 
@@ -87,6 +91,108 @@ func TestTeamResource_ImportState(t *testing.T) {
 func TestTeamResourceModel_Validation(t *testing.T) {
 	model := TeamResourceModel{}
 	_ = model.ID
+}
+
+func TestTeamResource_Read(t *testing.T) {
+	basePath := "/accounts/api/organizations/test-org-id/teams/test-team-id"
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		basePath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"team_id":    "test-team-id",
+				"team_name":  "My Team",
+				"team_type":  "internal",
+				"org_id":     "test-org-id",
+				"created_at": "2024-01-01T00:00:00Z",
+				"updated_at": "2024-01-01T00:00:00Z",
+			})
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	res := NewTeamResource().(*TeamResource)
+	res.client = &accessmanagement.TeamClient{
+		AnypointClient: &client.AnypointClient{
+			BaseURL:    server.URL,
+			Token:      "mock-token",
+			HTTPClient: &http.Client{},
+			OrgID:      "test-org-id",
+		},
+	}
+
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+
+	priorStateRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"id":              tftypes.NewValue(tftypes.String, "test-team-id"),
+		"team_name":       tftypes.NewValue(tftypes.String, "My Team"),
+		"parent_team_id":  tftypes.NewValue(tftypes.String, ""),
+		"team_type":       tftypes.NewValue(tftypes.String, "internal"),
+		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
+		"created_at":      tftypes.NewValue(tftypes.String, ""),
+		"updated_at":      tftypes.NewValue(tftypes.String, ""),
+	})
+
+	req := resource.ReadRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
+	resp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
+	res.Read(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("Read() reported errors: %v", resp.Diagnostics.Errors())
+	}
+	var got TeamResourceModel
+	if diags := resp.State.Get(ctx, &got); diags.HasError() {
+		t.Fatalf("State.Get errors: %v", diags.Errors())
+	}
+	if got.TeamName.ValueString() != "My Team" {
+		t.Errorf("Expected TeamName 'My Team', got %s", got.TeamName.ValueString())
+	}
+}
+
+func TestTeamResource_Read_NotFound(t *testing.T) {
+	basePath := "/accounts/api/organizations/test-org-id/teams/test-team-id"
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		basePath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.ErrorResponse(w, http.StatusNotFound, "not found")
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	res := NewTeamResource().(*TeamResource)
+	res.client = &accessmanagement.TeamClient{
+		AnypointClient: &client.AnypointClient{
+			BaseURL:    server.URL,
+			Token:      "mock-token",
+			HTTPClient: &http.Client{},
+			OrgID:      "test-org-id",
+		},
+	}
+
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+
+	priorStateRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"id":              tftypes.NewValue(tftypes.String, "test-team-id"),
+		"team_name":       tftypes.NewValue(tftypes.String, "My Team"),
+		"parent_team_id":  tftypes.NewValue(tftypes.String, ""),
+		"team_type":       tftypes.NewValue(tftypes.String, "internal"),
+		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
+		"created_at":      tftypes.NewValue(tftypes.String, ""),
+		"updated_at":      tftypes.NewValue(tftypes.String, ""),
+	})
+
+	req := resource.ReadRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
+	resp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
+	res.Read(ctx, req, resp)
+
+	if !resp.State.Raw.IsNull() {
+		t.Error("Read() for 404 should remove resource (state should be null)")
+	}
 }
 
 func BenchmarkTeamResource_Schema(b *testing.B) {

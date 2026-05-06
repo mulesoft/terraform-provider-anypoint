@@ -2,11 +2,15 @@ package accessmanagement
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
+	"github.com/mulesoft/terraform-provider-anypoint/internal/client/accessmanagement"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
 )
 
@@ -87,6 +91,131 @@ func TestConnectedAppResource_ImportState(t *testing.T) {
 func TestConnectedAppResourceModel_Validation(t *testing.T) {
 	model := ConnectedAppResourceModel{}
 	_ = model.ClientID
+}
+
+func TestConnectedAppResource_Read(t *testing.T) {
+	basePath := "/accounts/api/connectedApplications/test-client-id"
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		basePath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"client_id":                       "test-client-id",
+				"owner_org_id":                    "test-org-id",
+				"client_name":                     "Test App",
+				"client_secret":                   "test-secret",
+				"public_keys":                     []string{},
+				"redirect_uris":                   []string{},
+				"grant_types":                     []string{"client_credentials"},
+				"scopes":                          []string{},
+				"enabled":                         true,
+				"audience":                        "internal",
+				"generate_iss_claim_without_token": false,
+			})
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	res := NewConnectedAppResource().(*ConnectedAppResource)
+	res.client = &accessmanagement.ConnectedAppClient{
+		AnypointClient: &client.AnypointClient{
+			BaseURL:    server.URL,
+			Token:      "mock-token",
+			HTTPClient: &http.Client{},
+			OrgID:      "test-org-id",
+		},
+	}
+
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+	objType := stateType.(tftypes.Object)
+	publicKeysElemType := objType.AttributeTypes["public_keys"].(tftypes.List).ElementType
+	redirectURIsElemType := objType.AttributeTypes["redirect_uris"].(tftypes.List).ElementType
+	grantTypesElemType := objType.AttributeTypes["grant_types"].(tftypes.List).ElementType
+	scopesElemType := objType.AttributeTypes["scopes"].(tftypes.List).ElementType
+
+	priorStateRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"client_id":                        tftypes.NewValue(tftypes.String, "test-client-id"),
+		"owner_org_id":                     tftypes.NewValue(tftypes.String, "test-org-id"),
+		"client_name":                      tftypes.NewValue(tftypes.String, "Test App"),
+		"client_secret":                    tftypes.NewValue(tftypes.String, "test-secret"),
+		"public_keys":                      tftypes.NewValue(tftypes.List{ElementType: publicKeysElemType}, nil),
+		"redirect_uris":                    tftypes.NewValue(tftypes.List{ElementType: redirectURIsElemType}, nil),
+		"grant_types":                      tftypes.NewValue(tftypes.List{ElementType: grantTypesElemType}, nil),
+		"scopes":                           tftypes.NewValue(tftypes.List{ElementType: scopesElemType}, nil),
+		"enabled":                          tftypes.NewValue(tftypes.Bool, true),
+		"audience":                         tftypes.NewValue(tftypes.String, "internal"),
+		"generate_iss_claim_without_token": tftypes.NewValue(tftypes.Bool, false),
+	})
+
+	req := resource.ReadRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
+	resp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
+	res.Read(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("Read() reported errors: %v", resp.Diagnostics.Errors())
+	}
+	var got ConnectedAppResourceModel
+	if diags := resp.State.Get(ctx, &got); diags.HasError() {
+		t.Fatalf("State.Get errors: %v", diags.Errors())
+	}
+	if got.ClientName.ValueString() != "Test App" {
+		t.Errorf("Expected ClientName 'Test App', got %s", got.ClientName.ValueString())
+	}
+}
+
+func TestConnectedAppResource_Read_NotFound(t *testing.T) {
+	basePath := "/accounts/api/connectedApplications/test-client-id"
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		basePath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.ErrorResponse(w, http.StatusNotFound, "not found")
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	res := NewConnectedAppResource().(*ConnectedAppResource)
+	res.client = &accessmanagement.ConnectedAppClient{
+		AnypointClient: &client.AnypointClient{
+			BaseURL:    server.URL,
+			Token:      "mock-token",
+			HTTPClient: &http.Client{},
+			OrgID:      "test-org-id",
+		},
+	}
+
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+	objType := stateType.(tftypes.Object)
+	publicKeysElemType := objType.AttributeTypes["public_keys"].(tftypes.List).ElementType
+	redirectURIsElemType := objType.AttributeTypes["redirect_uris"].(tftypes.List).ElementType
+	grantTypesElemType := objType.AttributeTypes["grant_types"].(tftypes.List).ElementType
+	scopesElemType := objType.AttributeTypes["scopes"].(tftypes.List).ElementType
+
+	priorStateRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"client_id":                        tftypes.NewValue(tftypes.String, "test-client-id"),
+		"owner_org_id":                     tftypes.NewValue(tftypes.String, "test-org-id"),
+		"client_name":                      tftypes.NewValue(tftypes.String, "Test App"),
+		"client_secret":                    tftypes.NewValue(tftypes.String, "test-secret"),
+		"public_keys":                      tftypes.NewValue(tftypes.List{ElementType: publicKeysElemType}, nil),
+		"redirect_uris":                    tftypes.NewValue(tftypes.List{ElementType: redirectURIsElemType}, nil),
+		"grant_types":                      tftypes.NewValue(tftypes.List{ElementType: grantTypesElemType}, nil),
+		"scopes":                           tftypes.NewValue(tftypes.List{ElementType: scopesElemType}, nil),
+		"enabled":                          tftypes.NewValue(tftypes.Bool, true),
+		"audience":                         tftypes.NewValue(tftypes.String, "internal"),
+		"generate_iss_claim_without_token": tftypes.NewValue(tftypes.Bool, false),
+	})
+
+	req := resource.ReadRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
+	resp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
+	res.Read(ctx, req, resp)
+
+	if !resp.State.Raw.IsNull() {
+		t.Error("Read() for 404 should remove resource (state should be null)")
+	}
 }
 
 func BenchmarkConnectedAppResource_Schema(b *testing.B) {
