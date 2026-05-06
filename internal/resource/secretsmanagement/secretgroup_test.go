@@ -2,10 +2,15 @@ package secretsmanagement
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
+	anypointclient "github.com/mulesoft/terraform-provider-anypoint/internal/client"
+	secretsmgmt "github.com/mulesoft/terraform-provider-anypoint/internal/client/secretsmanagement"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
 )
@@ -81,6 +86,177 @@ func TestSecretGroupResource_ImportState(t *testing.T) {
 	r := NewSecretGroupResource()
 	if _, ok := r.(resource.ResourceWithImportState); !ok {
 		t.Error("resource does not implement ImportState")
+	}
+}
+
+func TestSecretGroupResource_ImportState_Valid(t *testing.T) {
+	res := NewSecretGroupResource().(*SecretGroupResource)
+	ctx := context.Background()
+
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+
+	emptyStateRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"id":              tftypes.NewValue(tftypes.String, nil),
+		"organization_id": tftypes.NewValue(tftypes.String, nil),
+		"environment_id":  tftypes.NewValue(tftypes.String, nil),
+		"name":            tftypes.NewValue(tftypes.String, nil),
+		"downloadable":    tftypes.NewValue(tftypes.Bool, nil),
+		"current_state":   tftypes.NewValue(tftypes.String, nil),
+	})
+
+	req := resource.ImportStateRequest{ID: "test-org/test-env/test-sg-id"}
+	resp := &resource.ImportStateResponse{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: emptyStateRaw},
+	}
+
+	res.ImportState(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("ImportState() reported errors: %v", resp.Diagnostics.Errors())
+	}
+}
+
+func TestSecretGroupResource_ImportState_Invalid(t *testing.T) {
+	res := NewSecretGroupResource().(*SecretGroupResource)
+	ctx := context.Background()
+
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+
+	req := resource.ImportStateRequest{ID: "invalid-id"}
+	resp := &resource.ImportStateResponse{
+		State: tfsdk.State{Schema: schemaResp.Schema},
+	}
+
+	res.ImportState(ctx, req, resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Error("ImportState() with invalid ID should produce errors")
+	}
+}
+
+func TestSecretGroupResource_Read(t *testing.T) {
+	mockSG := &secretsmgmt.SecretGroupResponse{
+		Name:         "test-group",
+		Downloadable: true,
+		Meta:         secretsmgmt.SecretGroupMeta{ID: "test-sg-id"},
+		CurrentState: "ACTIVE",
+	}
+
+	basePath := "/secrets-manager/api/v1/organizations/test-org-id/environments/test-env-id/secretGroups/test-sg-id"
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		basePath: func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == "GET" {
+				testutil.JSONResponse(w, http.StatusOK, mockSG)
+			}
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	res := NewSecretGroupResource().(*SecretGroupResource)
+	res.client = &secretsmgmt.SecretGroupClient{
+		AnypointClient: &anypointclient.AnypointClient{
+			BaseURL:    server.URL,
+			Token:      "mock-token",
+			HTTPClient: &http.Client{},
+			OrgID:      "test-org-id",
+		},
+	}
+
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+
+	priorStateRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"id":              tftypes.NewValue(tftypes.String, "test-sg-id"),
+		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
+		"environment_id":  tftypes.NewValue(tftypes.String, "test-env-id"),
+		"name":            tftypes.NewValue(tftypes.String, "old-name"),
+		"downloadable":    tftypes.NewValue(tftypes.Bool, false),
+		"current_state":   tftypes.NewValue(tftypes.String, "CLEAR"),
+	})
+
+	req := resource.ReadRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw},
+	}
+	resp := &resource.ReadResponse{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw},
+	}
+
+	res.Read(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("Read() reported errors: %v", resp.Diagnostics.Errors())
+	}
+
+	var got SecretGroupResourceModel
+	if diags := resp.State.Get(ctx, &got); diags.HasError() {
+		t.Fatalf("State.Get errors: %v", diags.Errors())
+	}
+
+	if got.ID.ValueString() != "test-sg-id" {
+		t.Errorf("Expected ID test-sg-id, got %s", got.ID.ValueString())
+	}
+	if got.Name.ValueString() != "test-group" {
+		t.Errorf("Expected Name test-group, got %s", got.Name.ValueString())
+	}
+	if got.CurrentState.ValueString() != "ACTIVE" {
+		t.Errorf("Expected CurrentState ACTIVE, got %s", got.CurrentState.ValueString())
+	}
+}
+
+func TestSecretGroupResource_Read_NotFound(t *testing.T) {
+	basePath := "/secrets-manager/api/v1/organizations/test-org-id/environments/test-env-id/secretGroups/missing-id"
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		basePath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.ErrorResponse(w, http.StatusNotFound, "not found")
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	res := NewSecretGroupResource().(*SecretGroupResource)
+	res.client = &secretsmgmt.SecretGroupClient{
+		AnypointClient: &anypointclient.AnypointClient{
+			BaseURL:    server.URL,
+			Token:      "mock-token",
+			HTTPClient: &http.Client{},
+			OrgID:      "test-org-id",
+		},
+	}
+
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+
+	priorStateRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"id":              tftypes.NewValue(tftypes.String, "missing-id"),
+		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
+		"environment_id":  tftypes.NewValue(tftypes.String, "test-env-id"),
+		"name":            tftypes.NewValue(tftypes.String, "group"),
+		"downloadable":    tftypes.NewValue(tftypes.Bool, false),
+		"current_state":   tftypes.NewValue(tftypes.String, ""),
+	})
+
+	req := resource.ReadRequest{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw},
+	}
+	resp := &resource.ReadResponse{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw},
+	}
+
+	res.Read(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("Read() on not-found should remove resource, not error: %v", resp.Diagnostics.Errors())
+	}
+	if !resp.State.Raw.IsNull() {
+		t.Error("Read() on not-found should set state to null (removed)")
 	}
 }
 
