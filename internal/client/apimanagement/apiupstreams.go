@@ -51,7 +51,7 @@ func (c *APIUpstreamsClient) ListUpstreams(ctx context.Context, orgID, envID, ap
 	if err != nil {
 		return nil, fmt.Errorf("execute request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status %d from upstreams API", resp.StatusCode)
