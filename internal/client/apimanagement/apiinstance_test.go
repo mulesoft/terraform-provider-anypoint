@@ -422,11 +422,12 @@ func TestAPIInstanceClient_ListAPIInstances(t *testing.T) {
 
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 		"/apimanager/xapi/v1/organizations/test-org-id/environments/test-env-id/apis": func(w http.ResponseWriter, r *http.Request) {
-			if r.Method == "GET" {
+			switch r.Method {
+			case "GET":
 				testutil.JSONResponse(w, http.StatusOK, mockResp)
-			} else if r.Method == "POST" {
+			case "POST":
 				testutil.ErrorResponse(w, http.StatusBadRequest, "bad request")
-			} else {
+			default:
 				testutil.ErrorResponse(w, http.StatusMethodNotAllowed, "method not allowed")
 			}
 		},
