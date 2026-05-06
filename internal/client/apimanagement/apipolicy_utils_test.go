@@ -89,9 +89,7 @@ func TestApplyPolicyDefaults_RateLimiting(t *testing.T) {
 	}
 	ApplyPolicyDefaults("rate-limiting", config)
 	// exposeHeaders should be injected as default false if missing
-	if _, ok := config["exposeHeaders"]; !ok {
-		// not required, just check no panic
-	}
+	_ = config["exposeHeaders"] // verify no panic on access
 }
 
 func TestApplyPolicyDefaults_UnknownPolicy(t *testing.T) {
