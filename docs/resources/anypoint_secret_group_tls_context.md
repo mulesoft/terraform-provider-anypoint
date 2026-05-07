@@ -76,7 +76,7 @@ resource "anypoint_secret_group_tls_context" "mtls" {
 ### Read-Only
 
 - `id` (String) Unique identifier of the TLS context.
-- `target` (String) Target runtime for the TLS context. Always `FlexGateway` for this resource.
+- `target` (String) Target runtime for the TLS context. Always `OmniGateway` for this resource.
 - `expiration_date` (String) Expiration date of the TLS context.
 
 ## Import

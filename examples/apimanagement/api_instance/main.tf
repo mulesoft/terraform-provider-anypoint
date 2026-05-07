@@ -30,7 +30,7 @@ provider "anypoint" {
 resource "anypoint_api_instance" "minimal" {
   environment_id = var.environment_id
   gateway_id     = var.gateway_id
-  instance_label = "minimal-demo"
+  instance_label = "minimal-demo-123"
   upstream_uri   = "http://backend.internal:8080"
 
   spec = {
@@ -54,7 +54,7 @@ resource "anypoint_api_instance" "minimal" {
 resource "anypoint_api_instance" "simple_with_options" {
   environment_id    = var.environment_id
   gateway_id        = var.gateway_id
-  instance_label    = "orders-api-demo"
+  instance_label    = "orders-api-demo-123"
   approval_method   = "manual"
   consumer_endpoint = "https://api.example.com/orders"
   upstream_uri      = "http://backend.internal:8080"
@@ -249,7 +249,7 @@ variable "environment_id" {
 variable "gateway_id" {
   description = "Base name for the Managed Omni Gateway (will have '-gw' appended)"
   type        = string
-  default     = "b123b2eb-35aa-454c-9750-dff9e2d218c9"
+  default     = "731e6f7f-2b9e-495a-b3fc-5ac5121d07ea"
 }
 
 variable "api_asset_id" {

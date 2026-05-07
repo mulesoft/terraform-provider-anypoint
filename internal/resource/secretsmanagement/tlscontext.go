@@ -61,8 +61,8 @@ func (r *TLSContextResource) Metadata(_ context.Context, req resource.MetadataRe
 
 func (r *TLSContextResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Manages a Omni Gateway TLS context within a secret group in Anypoint Secrets Manager. " +
-			"The target is automatically set to 'FlexGateway'. " +
+		Description: "Manages an Omni Gateway TLS context within a secret group in Anypoint Secrets Manager. " +
+			"The target is automatically set to 'OmniGateway'. " +
 			"References keystore and truststore resources by their IDs — the provider " +
 			"automatically builds the internal path references (keystores/{id}, truststores/{id}).",
 		Attributes: map[string]schema.Attribute{
@@ -100,9 +100,9 @@ func (r *TLSContextResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Required:    true,
 			},
 			"target": schema.StringAttribute{
-				Description: "Target runtime for the TLS context. Always 'FlexGateway' for this resource.",
+				Description: "Target runtime for the TLS context. Always 'OmniGateway' for this resource.",
 				Computed:    true,
-				Default:     stringdefault.StaticString("FlexGateway"),
+				Default:     stringdefault.StaticString("OmniGateway"),
 			},
 			"keystore_id": schema.StringAttribute{
 				Description: "ID of the keystore in the same secret group. " +
@@ -309,9 +309,13 @@ func (r *TLSContextResource) ImportState(ctx context.Context, req resource.Impor
 // --- Helpers ---
 
 func (r *TLSContextResource) expandTLSContext(ctx context.Context, data *TLSContextResourceModel, _ *diag.Diagnostics) *secretsmanagement.TLSContext {
+	target := data.Target.ValueString()
+	if target == "OmniGateway" {
+		target = "FlexGateway"
+	}
 	tlsCtx := &secretsmanagement.TLSContext{
 		Name:   data.Name.ValueString(),
-		Target: data.Target.ValueString(),
+		Target: target,
 	}
 
 	// Build keystore path reference from ID
@@ -363,7 +367,11 @@ func (r *TLSContextResource) flattenTLSContext(ctx context.Context, tls *secrets
 	data.EnvironmentID = types.StringValue(envID)
 	data.SecretGroupID = types.StringValue(sgID)
 	data.Name = types.StringValue(tls.Name)
-	data.Target = types.StringValue(tls.Target)
+	target := tls.Target
+	if target == "FlexGateway" {
+		target = "OmniGateway"
+	}
+	data.Target = types.StringValue(target)
 
 	// Extract keystore ID from path "keystores/{id}"
 	if tls.Keystore != nil && tls.Keystore.Path != "" {
