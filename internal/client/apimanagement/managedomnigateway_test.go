@@ -10,7 +10,7 @@ import (
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
 )
 
-func TestNewManagedFlexGatewayClient(t *testing.T) {
+func TestNewManagedOmniGatewayClient(t *testing.T) {
 	tests := []struct {
 		name        string
 		config      *client.Config
@@ -57,26 +57,26 @@ func TestNewManagedFlexGatewayClient(t *testing.T) {
 				tt.config.BaseURL = server.URL
 			}
 
-			_, err := NewManagedFlexGatewayClient(tt.config)
+			_, err := NewManagedOmniGatewayClient(tt.config)
 
 			if tt.wantErr {
 				if err == nil {
-					t.Errorf("NewManagedFlexGatewayClient() expected error, got nil")
+					t.Errorf("NewManagedOmniGatewayClient() expected error, got nil")
 				}
 			} else {
 				if err != nil {
-					t.Errorf("NewManagedFlexGatewayClient() unexpected error = %v", err)
+					t.Errorf("NewManagedOmniGatewayClient() unexpected error = %v", err)
 				}
 			}
 		})
 	}
 }
 
-func TestManagedFlexGatewayClient_CRUD(t *testing.T) {
+func TestManagedOmniGatewayClient_CRUD(t *testing.T) {
 	gwName := "test-gateway"
 	gwNameUpdated := "test-gateway-updated"
 
-	mockGateway := &ManagedFlexGateway{
+	mockGateway := &ManagedOmniGateway{
 		ID:             "gw-123",
 		Name:           gwName,
 		TargetID:       "target-abc",
@@ -84,7 +84,7 @@ func TestManagedFlexGatewayClient_CRUD(t *testing.T) {
 		ReleaseChannel: "lts",
 		Size:           "small",
 		Status:         "running",
-		Configuration: ManagedFlexGatewayConfig{
+		Configuration: ManagedOmniGatewayConfig{
 			Ingress: IngressConfig{
 				PublicURL:         "https://test-gateway-hey4z8.usa-e2.stgx.cloudhub.io",
 				InternalURL:       "https://test-gateway-.internal-hey4z8.usa-e2.stgx.cloudhub.io",
@@ -155,16 +155,16 @@ func TestManagedFlexGatewayClient_CRUD(t *testing.T) {
 		t.Fatalf("Failed to create anypoint client: %v", err)
 	}
 
-	gwClient := &ManagedFlexGatewayClient{AnypointClient: anypointClient}
+	gwClient := &ManagedOmniGatewayClient{AnypointClient: anypointClient}
 
 	t.Run("Create", func(t *testing.T) {
-		createReq := &CreateManagedFlexGatewayRequest{
+		createReq := &CreateManagedOmniGatewayRequest{
 			Name:           gwName,
 			TargetID:       "target-abc",
 			RuntimeVersion: "1.9.9",
 			ReleaseChannel: "lts",
 			Size:           "small",
-			Configuration: ManagedFlexGatewayConfig{
+			Configuration: ManagedOmniGatewayConfig{
 				Ingress: IngressConfig{
 					PublicURL:         "https://test-gateway-hey4z8.usa-e2.stgx.cloudhub.io",
 					InternalURL:       "https://test-gateway-.internal-hey4z8.usa-e2.stgx.cloudhub.io",
@@ -177,9 +177,9 @@ func TestManagedFlexGatewayClient_CRUD(t *testing.T) {
 			},
 		}
 
-		gw, err := gwClient.CreateManagedFlexGateway(context.Background(), "test-org-id", "test-env-id", createReq)
+		gw, err := gwClient.CreateManagedOmniGateway(context.Background(), "test-org-id", "test-env-id", createReq)
 		if err != nil {
-			t.Fatalf("CreateManagedFlexGateway() unexpected error: %v", err)
+			t.Fatalf("CreateManagedOmniGateway() unexpected error: %v", err)
 		}
 		if gw.ID != "gw-123" {
 			t.Errorf("Expected ID gw-123, got %s", gw.ID)
@@ -196,9 +196,9 @@ func TestManagedFlexGatewayClient_CRUD(t *testing.T) {
 	})
 
 	t.Run("Read", func(t *testing.T) {
-		gw, err := gwClient.GetManagedFlexGateway(context.Background(), "test-org-id", "test-env-id", "gw-123")
+		gw, err := gwClient.GetManagedOmniGateway(context.Background(), "test-org-id", "test-env-id", "gw-123")
 		if err != nil {
-			t.Fatalf("GetManagedFlexGateway() unexpected error: %v", err)
+			t.Fatalf("GetManagedOmniGateway() unexpected error: %v", err)
 		}
 		if gw.ID != "gw-123" {
 			t.Errorf("Expected ID gw-123, got %s", gw.ID)
@@ -209,13 +209,13 @@ func TestManagedFlexGatewayClient_CRUD(t *testing.T) {
 	})
 
 	t.Run("Update", func(t *testing.T) {
-		updateReq := &UpdateManagedFlexGatewayRequest{
+		updateReq := &UpdateManagedOmniGatewayRequest{
 			Name: gwNameUpdated,
 		}
 
-		gw, err := gwClient.UpdateManagedFlexGateway(context.Background(), "test-org-id", "test-env-id", "gw-123", updateReq)
+		gw, err := gwClient.UpdateManagedOmniGateway(context.Background(), "test-org-id", "test-env-id", "gw-123", updateReq)
 		if err != nil {
-			t.Fatalf("UpdateManagedFlexGateway() unexpected error: %v", err)
+			t.Fatalf("UpdateManagedOmniGateway() unexpected error: %v", err)
 		}
 		if gw.Name != gwNameUpdated {
 			t.Errorf("Expected Name %s, got %s", gwNameUpdated, gw.Name)
@@ -223,14 +223,14 @@ func TestManagedFlexGatewayClient_CRUD(t *testing.T) {
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		err := gwClient.DeleteManagedFlexGateway(context.Background(), "test-org-id", "test-env-id", "gw-123")
+		err := gwClient.DeleteManagedOmniGateway(context.Background(), "test-org-id", "test-env-id", "gw-123")
 		if err != nil {
-			t.Fatalf("DeleteManagedFlexGateway() unexpected error: %v", err)
+			t.Fatalf("DeleteManagedOmniGateway() unexpected error: %v", err)
 		}
 	})
 }
 
-func TestManagedFlexGatewayClient_GetDomains(t *testing.T) {
+func TestManagedOmniGatewayClient_GetDomains(t *testing.T) {
 	mockDomains := &DomainsResponse{
 		Domains:     []string{"*.hey4z8.usa-e2.stgx.cloudhub.io"},
 		AppUniqueID: "60fef",
@@ -255,7 +255,7 @@ func TestManagedFlexGatewayClient_GetDomains(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
-	gwClient := &ManagedFlexGatewayClient{AnypointClient: anypointClient}
+	gwClient := &ManagedOmniGatewayClient{AnypointClient: anypointClient}
 
 	resp, err := gwClient.GetDomains(context.Background(), "test-org-id", "target-abc", "test-env-id")
 	if err != nil {
@@ -328,7 +328,7 @@ func TestBuildIngressURLs(t *testing.T) {
 	}
 }
 
-func TestManagedFlexGatewayClient_ErrorHandling(t *testing.T) {
+func TestManagedOmniGatewayClient_ErrorHandling(t *testing.T) {
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 		"/gatewaymanager/xapi/v1/organizations/test-org-id/environments/test-env-id/gateways/nonexistent": func(w http.ResponseWriter, r *http.Request) {
 			testutil.ErrorResponse(w, http.StatusNotFound, "Gateway not found")
@@ -354,28 +354,28 @@ func TestManagedFlexGatewayClient_ErrorHandling(t *testing.T) {
 		t.Fatalf("Failed to create client: %v", err)
 	}
 
-	gwClient := &ManagedFlexGatewayClient{AnypointClient: anypointClient}
+	gwClient := &ManagedOmniGatewayClient{AnypointClient: anypointClient}
 
 	t.Run("NotFound", func(t *testing.T) {
-		_, err := gwClient.GetManagedFlexGateway(context.Background(), "test-org-id", "test-env-id", "nonexistent")
+		_, err := gwClient.GetManagedOmniGateway(context.Background(), "test-org-id", "test-env-id", "nonexistent")
 		if err == nil {
 			t.Error("Expected error for nonexistent gateway")
 		}
 	})
 
 	t.Run("BadRequest", func(t *testing.T) {
-		createReq := &CreateManagedFlexGatewayRequest{
+		createReq := &CreateManagedOmniGatewayRequest{
 			Name: "",
 		}
-		_, err := gwClient.CreateManagedFlexGateway(context.Background(), "test-org-id", "test-env-id", createReq)
+		_, err := gwClient.CreateManagedOmniGateway(context.Background(), "test-org-id", "test-env-id", createReq)
 		if err == nil {
 			t.Error("Expected error for invalid request")
 		}
 	})
 }
 
-func TestManagedFlexGateway_JSONSerialization(t *testing.T) {
-	gw := &ManagedFlexGateway{
+func TestManagedOmniGateway_JSONSerialization(t *testing.T) {
+	gw := &ManagedOmniGateway{
 		ID:             "gw-123",
 		Name:           "test-gw",
 		TargetID:       "target-abc",
@@ -383,7 +383,7 @@ func TestManagedFlexGateway_JSONSerialization(t *testing.T) {
 		ReleaseChannel: "lts",
 		Size:           "small",
 		Status:         "running",
-		Configuration: ManagedFlexGatewayConfig{
+		Configuration: ManagedOmniGatewayConfig{
 			Ingress: IngressConfig{
 				PublicURL:         "https://test-gw-hey4z8.usa-e2.stgx.cloudhub.io",
 				InternalURL:       "https://test-gw-.internal-hey4z8.usa-e2.stgx.cloudhub.io",
@@ -404,7 +404,7 @@ func TestManagedFlexGateway_JSONSerialization(t *testing.T) {
 		t.Fatalf("Failed to marshal: %v", err)
 	}
 
-	var decoded ManagedFlexGateway
+	var decoded ManagedOmniGateway
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("Failed to unmarshal: %v", err)
 	}
@@ -429,7 +429,7 @@ func TestManagedFlexGateway_JSONSerialization(t *testing.T) {
 	}
 }
 
-func TestManagedFlexGatewayClient_GetGatewayVersions(t *testing.T) {
+func TestManagedOmniGatewayClient_GetGatewayVersions(t *testing.T) {
 	mockVersions := &GatewayVersionsResponse{
 		Default: "lts",
 		Channels: map[string]GatewayChannel{
@@ -466,7 +466,7 @@ func TestManagedFlexGatewayClient_GetGatewayVersions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
-	gwClient := &ManagedFlexGatewayClient{AnypointClient: anypointClient}
+	gwClient := &ManagedOmniGatewayClient{AnypointClient: anypointClient}
 
 	versions, err := gwClient.GetGatewayVersions(context.Background())
 	if err != nil {
@@ -492,7 +492,7 @@ func TestManagedFlexGatewayClient_GetGatewayVersions(t *testing.T) {
 	}
 }
 
-func TestManagedFlexGatewayClient_GetGatewayVersions_Error(t *testing.T) {
+func TestManagedOmniGatewayClient_GetGatewayVersions_Error(t *testing.T) {
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 		"/gatewaymanager/xapi/v1/gateway/versions": func(w http.ResponseWriter, r *http.Request) {
 			testutil.ErrorResponse(w, http.StatusInternalServerError, "internal error")
@@ -511,7 +511,7 @@ func TestManagedFlexGatewayClient_GetGatewayVersions_Error(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
-	gwClient := &ManagedFlexGatewayClient{AnypointClient: anypointClient}
+	gwClient := &ManagedOmniGatewayClient{AnypointClient: anypointClient}
 
 	_, err = gwClient.GetGatewayVersions(context.Background())
 	if err == nil {
@@ -519,12 +519,12 @@ func TestManagedFlexGatewayClient_GetGatewayVersions_Error(t *testing.T) {
 	}
 }
 
-func TestManagedFlexGatewayClient_ListManagedFlexGateways(t *testing.T) {
-	mockItems := []ManagedFlexGatewayListItem{
+func TestManagedOmniGatewayClient_ListManagedOmniGateways(t *testing.T) {
+	mockItems := []ManagedOmniGatewayListItem{
 		{ID: "gw-1", Name: "Gateway 1", TargetID: "target-1", Status: "running"},
 		{ID: "gw-2", Name: "Gateway 2", TargetID: "target-2", Status: "stopped"},
 	}
-	mockResp := ManagedFlexGatewayListResponse{
+	mockResp := ManagedOmniGatewayListResponse{
 		Content:       mockItems,
 		PageSize:      10,
 		PageNumber:    0,
@@ -553,11 +553,11 @@ func TestManagedFlexGatewayClient_ListManagedFlexGateways(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
-	gwClient := &ManagedFlexGatewayClient{AnypointClient: anypointClient}
+	gwClient := &ManagedOmniGatewayClient{AnypointClient: anypointClient}
 
-	items, err := gwClient.ListManagedFlexGateways(context.Background(), "test-org-id", "test-env-id")
+	items, err := gwClient.ListManagedOmniGateways(context.Background(), "test-org-id", "test-env-id")
 	if err != nil {
-		t.Fatalf("ListManagedFlexGateways() unexpected error: %v", err)
+		t.Fatalf("ListManagedOmniGateways() unexpected error: %v", err)
 	}
 	if len(items) != 2 {
 		t.Fatalf("Expected 2 items, got %d", len(items))
@@ -570,7 +570,7 @@ func TestManagedFlexGatewayClient_ListManagedFlexGateways(t *testing.T) {
 	}
 }
 
-func TestManagedFlexGatewayClient_ListManagedFlexGateways_Error(t *testing.T) {
+func TestManagedOmniGatewayClient_ListManagedOmniGateways_Error(t *testing.T) {
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 		"/gatewaymanager/api/v1/organizations/test-org-id/environments/test-env-id/gateways": func(w http.ResponseWriter, r *http.Request) {
 			testutil.ErrorResponse(w, http.StatusInternalServerError, "internal error")
@@ -589,9 +589,9 @@ func TestManagedFlexGatewayClient_ListManagedFlexGateways_Error(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
-	gwClient := &ManagedFlexGatewayClient{AnypointClient: anypointClient}
+	gwClient := &ManagedOmniGatewayClient{AnypointClient: anypointClient}
 
-	_, err = gwClient.ListManagedFlexGateways(context.Background(), "test-org-id", "test-env-id")
+	_, err = gwClient.ListManagedOmniGateways(context.Background(), "test-org-id", "test-env-id")
 	if err == nil {
 		t.Fatal("Expected error, got nil")
 	}

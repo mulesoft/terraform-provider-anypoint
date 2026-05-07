@@ -13,8 +13,8 @@ This directory contains comprehensive end-to-end examples for Anypoint Platform 
 
 **What it demonstrates**:
 - Creating API instances with `technology = "mule4"`
-- Direct URI endpoint configuration (vs FlexGateway base_path)
-- Differences between Mule4 and FlexGateway patterns
+- Direct URI endpoint configuration (vs OmniGateway base_path)
+- Differences between Mule4 and OmniGateway patterns
 - Using autodiscovery instance name in Mule applications
 
 **Use when**: You need to manage API instances for Mule4 applications
@@ -22,7 +22,7 @@ This directory contains comprehensive end-to-end examples for Anypoint Platform 
 **Key changes**:
 - ✅ Enhanced `endpoint` block with `uri` field
 - ✅ Technology-aware endpoint handling
-- ✅ Backward compatible with existing FlexGateway configs
+- ✅ Backward compatible with existing OmniGateway configs
 
 ---
 
@@ -59,28 +59,28 @@ Parent Org (Salesforce)
 
 ---
 
-### 3. FlexGateway with Full Policy Suite
+### 3. OmniGateway with Full Policy Suite
 
 **Files**:
-- `main.tf` - Complete FlexGateway deployment
+- `main.tf` - Complete OmniGateway deployment
 - `variables.tf` - Variable definitions
 - `terraform.tfvars.example` - Example values
 
 **What it demonstrates**:
 - Creating private space and network
 - Setting up VPN connections
-- Deploying managed Flex Gateway
+- Deploying managed Omni Gateway
 - Creating API instance with routing
 - Applying 33 different API policies
 - Configuring SLA tiers
 - Setting up alerts
 - Promoting API instances between environments
 
-**Use when**: You need a complete API management setup with FlexGateway
+**Use when**: You need a complete API management setup with OmniGateway
 
 **Resources created**:
 1. Secret management (keystore, truststore, TLS context)
-2. Managed FlexGateway
+2. Managed OmniGateway
 3. API instance with weighted routing
 4. 33 API policies (rate limiting, JWT, CORS, etc.)
 5. SLA tiers
@@ -119,7 +119,7 @@ terraform init
 terraform apply -var-file=terraform.tfvars
 ```
 
-### For FlexGateway Deployment
+### For OmniGateway Deployment
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars
@@ -133,9 +133,9 @@ terraform apply
 
 ## Comparison Matrix
 
-| Feature | FlexGateway Example | Mule4 Example | Sub-Org Example |
+| Feature | OmniGateway Example | Mule4 Example | Sub-Org Example |
 |---------|-------------------|---------------|-----------------|
-| **API Gateway** | Flex Gateway | Mule Runtime | N/A |
+| **API Gateway** | Omni Gateway | Mule Runtime | N/A |
 | **Endpoint Config** | `base_path` | `uri` | N/A |
 | **Routing** | ✅ Weighted | ❌ App-managed | N/A |
 | **TLS Context** | ✅ Required | ❌ Runtime config | N/A |
@@ -150,11 +150,11 @@ terraform apply
 
 ## Resource Dependencies
 
-### FlexGateway Example
+### OmniGateway Example
 ```
 Secret Group → TLS Context
                     ↓
-Private Space → Private Network → VPN → Flex Gateway → API Instance → Policies
+Private Space → Private Network → VPN → Omni Gateway → API Instance → Policies
                                                                          ↓
                                                                SLA Tiers + Alerts
                                                                          ↓
@@ -183,7 +183,7 @@ Parent Org → Sub-Org → User
 
 ## Authentication Requirements
 
-### FlexGateway & Mule4 Examples
+### OmniGateway & Mule4 Examples
 ```bash
 # Connected App (Client Credentials)
 export ANYPOINT_CLIENT_ID="your-client-id"
@@ -206,7 +206,7 @@ export ANYPOINT_ADMIN_PASSWORD="your-password"
 All examples use these variables:
 
 ```hcl
-# Provider (FlexGateway & Mule4 examples)
+# Provider (OmniGateway & Mule4 examples)
 anypoint_client_id     = "your-client-id"
 anypoint_client_secret = "your-secret"
 anypoint_base_url      = "https://stgx.anypoint.mulesoft.com"
@@ -247,7 +247,7 @@ api_asset_version = "1.0.0"
 2. **MULE4_SUPPORT.md** - Detailed Mule4 documentation
    - Architecture decisions
    - API request/response formats
-   - FlexGateway vs Mule4 comparison
+   - OmniGateway vs Mule4 comparison
    - Migration guide
 
 ### Reference
@@ -263,7 +263,7 @@ examples/comprehensive-e2e/
 ├── README.md (original)
 ├── COMPLETE_EXAMPLES_INDEX.md (this file)
 │
-├── FlexGateway Example (original)
+├── OmniGateway Example (original)
 │   ├── main.tf
 │   ├── variables.tf
 │   └── terraform.tfvars.example
@@ -311,7 +311,7 @@ terraform apply
 terraform apply -target=anypoint_api_instance.mule4_api
 ```
 
-### Pattern 3: Full FlexGateway Stack (Existing Org)
+### Pattern 3: Full OmniGateway Stack (Existing Org)
 ```bash
 # Create everything at once
 terraform apply
@@ -361,9 +361,9 @@ Create isolated sub-orgs for each customer:
 - Scoped access via connected apps
 
 ### Use Case 2: Microservices API Gateway
-**Example**: FlexGateway Setup
+**Example**: OmniGateway Setup
 
-Deploy Flex Gateway with:
+Deploy Omni Gateway with:
 - Weighted routing to multiple backends
 - Comprehensive policy enforcement
 - TLS termination
@@ -392,7 +392,7 @@ Manage APIs for Mule applications:
 | CIDR overlap | Sub-Org | Choose different range |
 | Owner not found | Sub-Org | Use existing user ID |
 | Base path vs URI | Mule4 | Check technology field |
-| TLS context error | FlexGateway | Verify composite ID format |
+| TLS context error | OmniGateway | Verify composite ID format |
 
 ### Debug Commands
 
@@ -423,7 +423,7 @@ terraform fmt -check
 
 ### Tips for Each Example
 
-**FlexGateway**:
+**OmniGateway**:
 - Start with small gateway size
 - Use shared TLS contexts
 - Combine policies where possible
@@ -505,10 +505,10 @@ Found an issue or have an improvement?
 - ✨ Added Sub-Organization with Private Space example
 - ✨ Created comprehensive documentation
 - ✨ Added automated setup script
-- 🐛 Fixed ssl_context_id format in FlexGateway example
+- 🐛 Fixed ssl_context_id format in OmniGateway example
 
 ### Original
-- Initial FlexGateway example with 33 policies
+- Initial OmniGateway example with 33 policies
 
 ---
 

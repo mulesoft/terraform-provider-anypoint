@@ -115,7 +115,7 @@ func TestMCPServerDataSource_Read(t *testing.T) {
 
 	mockItems := agentsclient.MCPServerListResponse{
 		Instances: []agentsclient.MCPServer{
-			{ID: 1, AssetID: "mcp-asset-1", Technology: "flexGateway", Status: "Active"},
+			{ID: 1, AssetID: "mcp-asset-1", Technology: "omniGateway", Status: "Active"},
 		},
 	}
 

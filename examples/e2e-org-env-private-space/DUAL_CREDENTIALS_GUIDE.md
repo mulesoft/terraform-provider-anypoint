@@ -132,5 +132,5 @@ If you see "provider not found" errors for `anypoint.normal_user`:
 ✅ **Clear separation** - Each provider instance has distinct credentials
 ✅ **Explicit control** - Each resource declares which provider to use
 ✅ **Standard pattern** - Follows Terraform best practices
-✅ **Flexible** - Easy to add more provider instances if needed
+✅ **Omniible** - Easy to add more provider instances if needed
 ✅ **Testable** - Perfect for e2e tests validating different permission levels

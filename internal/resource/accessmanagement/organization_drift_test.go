@@ -422,7 +422,7 @@ func TestUpdatePayload_BusinessGroupOmitsMasterOrgOnlyEntitlements(t *testing.T)
 //     fields the user declared, so the server is happy (no 403).
 //  2. The PUT response contains the server's current view of the org.
 //     For a business group that view typically OMITS `service_mesh` /
-//     `flex_gateway` / `hybrid` / `worker_logging_override` because those are
+//     `flexGateway` / `hybrid` / `worker_logging_override` because those are
 //     master-org-only flags inherited from the parent.
 //  3. If we overwrite state with just the PUT response's entitlements blob,
 //     every previously-known value becomes null — but the plan (via

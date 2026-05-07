@@ -39,10 +39,10 @@ resource "anypoint_secret_group_truststore" "ca" {
   truststore_base64 = base64encode(file("${path.module}/../certs/truststore.pem"))
 }
 
-resource "anypoint_flex_tls_context" "flex" {
+resource "anypoint_omni_tls_context" "omni" {
   environment_id  = var.environment_id
   secret_group_id = anypoint_secret_group.main.id
-  name            = "flex-tls-context"
+  name            = "omni-tls-context"
 
   keystore_id   = anypoint_secret_group_keystore.tls.id
   truststore_id = anypoint_secret_group_truststore.ca.id
@@ -51,9 +51,9 @@ resource "anypoint_flex_tls_context" "flex" {
 }
 
 # --------------------------------------------------------------------------
-# Fully configured Managed Flex Gateway with explicit version
+# Fully configured Managed Omni Gateway with explicit version
 # --------------------------------------------------------------------------
-resource "anypoint_managed_flexgateway" "complete" {
+resource "anypoint_managed_omni_gateway" "complete" {
   name            = "real-world-example-gateway"  
   environment_id  = var.environment_id
   target_id       = var.target_id
@@ -103,21 +103,21 @@ variable "target_id" {
 # --------------------------------------------------------------------------
 
 output "complete_gateway_id" {
-  description = "The ID of the fully configured managed Flex Gateway"
-  value       = anypoint_managed_flexgateway.complete.id
+  description = "The ID of the fully configured managed Omni Gateway"
+  value       = anypoint_managed_omni_gateway.complete.id
 }
 
 output "complete_gateway_public_url" {
   description = "The public URL of the fully configured gateway"
-  value       = anypoint_managed_flexgateway.complete.ingress.public_url
+  value       = anypoint_managed_omni_gateway.complete.ingress.public_url
 }
 
 output "complete_gateway_internal_url" {
   description = "The internal URL of the fully configured gateway"
-  value       = anypoint_managed_flexgateway.complete.ingress.internal_url
+  value       = anypoint_managed_omni_gateway.complete.ingress.internal_url
 }
 
 output "complete_gateway_status" {
   description = "The current status of the fully configured gateway"
-  value       = anypoint_managed_flexgateway.complete.status
+  value       = anypoint_managed_omni_gateway.complete.status
 }

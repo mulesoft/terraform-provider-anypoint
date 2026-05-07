@@ -22,9 +22,9 @@ output "private_space_id" {
   value       = anypoint_private_space_config.private_space.id
 }
 
-output "flex_gateway_id" {
-  description = "Managed Flex Gateway ID"
-  value       = anypoint_managed_flexgateway.commerce-gateway.id
+output "omni_gateway_id" {
+  description = "Managed Omni Gateway ID"
+  value       = anypoint_managed_omni_gateway.commerce-gateway.id
 }
 
 # output "orders_api_id" {

@@ -207,7 +207,7 @@ func TestMCPServerResource_Read_NotFound(t *testing.T) {
 		"id":                tftypes.NewValue(tftypes.String, "200"),
 		"organization_id":   tftypes.NewValue(tftypes.String, "test-org-id"),
 		"environment_id":    tftypes.NewValue(tftypes.String, "test-env-id"),
-		"technology":        tftypes.NewValue(tftypes.String, "flexGateway"),
+		"technology":        tftypes.NewValue(tftypes.String, "omniGateway"),
 		"provider_id":       tftypes.NewValue(tftypes.String, nil),
 		"instance_label":    tftypes.NewValue(tftypes.String, "test-label"),
 		"approval_method":   tftypes.NewValue(tftypes.String, "AUTO"),

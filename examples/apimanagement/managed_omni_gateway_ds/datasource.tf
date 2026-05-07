@@ -13,23 +13,23 @@ provider "anypoint" {
   base_url      = var.anypoint_base_url
 }
 
-# List all managed Flex Gateways in the environment
-data "anypoint_managed_flexgateways" "all" {
+# List all managed Omni Gateways in the environment
+data "anypoint_managed_omnigateways" "all" {
   organization_id = var.organization_id
   environment_id  = var.environment_id
 }
 
 # Output the full list
 output "all_gateways" {
-  description = "All managed Flex Gateways in the environment"
-  value       = data.anypoint_managed_flexgateways.all.gateways
+  description = "All managed Omni Gateways in the environment"
+  value       = data.anypoint_managed_omnigateways.all.gateways
 }
 
 # Output just names and IDs
 output "gateway_summary" {
-  description = "Names, IDs and status of all managed Flex Gateways"
+  description = "Names, IDs and status of all managed Omni Gateways"
   value = [
-    for gw in data.anypoint_managed_flexgateways.all.gateways : {
+    for gw in data.anypoint_managed_omnigateways.all.gateways : {
       id           = gw.id
       name         = gw.name
       status       = gw.status
@@ -42,7 +42,7 @@ output "gateway_summary" {
 # Look up a specific gateway by name using a local
 locals {
   gateway = one([
-    for gw in data.anypoint_managed_flexgateways.all.gateways :
+    for gw in data.anypoint_managed_omnigateways.all.gateways :
     gw if gw.name == var.gateway_name
   ])
 }

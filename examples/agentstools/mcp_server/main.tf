@@ -50,7 +50,7 @@ resource "anypoint_mcp_server" "atlassian_mcp" {
     base_path       = "mcp1"
   }
 
-  # Flex Gateway deployment
+  # Omni Gateway deployment
   gateway_id = var.gateway_id
 
   # Backend MCP server implementation

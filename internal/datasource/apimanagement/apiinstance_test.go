@@ -115,7 +115,7 @@ func TestAPIInstanceDataSource_Read(t *testing.T) {
 
 	mockItems := apimgmtclient.APIInstanceListResponse{
 		Instances: []apimgmtclient.APIInstance{
-			{ID: 1, AssetID: "api-asset-1", Technology: "flexGateway", Status: "Active"},
+			{ID: 1, AssetID: "api-asset-1", Technology: "omniGateway", Status: "Active"},
 		},
 	}
 

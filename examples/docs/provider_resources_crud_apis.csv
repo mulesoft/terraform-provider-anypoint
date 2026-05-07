@@ -13,7 +13,7 @@ User,Access Management,anypoint_user,CreateUser(),GetUser(),UpdateUser(),DeleteU
 API Instance,API Management,anypoint_api_instance,CreateAPIInstance() + GetGatewayInfo(),GetAPIInstance(),UpdateAPIInstance(),DeleteAPIInstance(),
 API Policy,API Management,anypoint_api_policy,CreateAPIPolicy(),GetAPIPolicy(),UpdateAPIPolicy(),DeleteAPIPolicy(),Uses LookupPolicy() and ValidatePolicyConfiguration()
 SLA Tier,API Management,anypoint_api_instance_sla_tier,CreateSLATier(),GetSLATier(),UpdateSLATier(),DeleteSLATier(),
-Managed Flex Gateway,API Management,anypoint_managed_flexgateway,CreateManagedFlexGateway() + GetGatewayVersions() + GetDomains(),GetManagedFlexGateway() + GetDomains(),UpdateManagedFlexGateway(),DeleteManagedFlexGateway(),Auto-selects runtime version and builds ingress URLs
+Managed Omni Gateway,API Management,anypoint_managed_omni_gateway,CreateManagedOmniGateway() + GetGatewayVersions() + GetDomains(),GetManagedOmniGateway() + GetDomains(),UpdateManagedOmniGateway(),DeleteManagedOmniGateway(),Auto-selects runtime version and builds ingress URLs
 Firewall Rules,CloudHub 2.0,anypoint_firewall_rules,UpdateFirewallRules(),GetFirewallRules(),UpdateFirewallRules(),UpdateFirewallRules() with empty rules,
 Private Network,CloudHub 2.0,anypoint_private_network,CreatePrivateNetwork(),GetPrivateNetwork(),UpdatePrivateNetwork(),No-op,Deleted as part of private space deletion
 Private Space,CloudHub 2.0,anypoint_private_space,CreatePrivateSpace(),GetPrivateSpace(),UpdatePrivateSpace(),DeletePrivateSpace(),
@@ -30,5 +30,5 @@ Certificate Pin Set,Secrets Management,anypoint_secret_group_certificate_pinset,
 Keystore,Secrets Management,anypoint_secret_group_keystore,CreateKeystore(),GetKeystore(),UpdateKeystore(),DeleteKeystore(),Supports PEM/JKS/PKCS12/JCEKS formats
 Secret Group,Secrets Management,anypoint_secret_group,CreateSecretGroup(),GetSecretGroup(),UpdateSecretGroup(),DeleteSecretGroup(),
 Shared Secret,Secrets Management,anypoint_secret_group_shared_secret,CreateSharedSecret(),GetSharedSecret(),UpdateSharedSecret(),DeleteSharedSecret(),
-TLS Context (Flex),Secrets Management,anypoint_flex_tls_context,CreateTLSContext(),GetTLSContext(),UpdateTLSContext(),DeleteTLSContext(),Target always set to FlexGateway
+TLS Context (Omni),Secrets Management,anypoint_omni_tls_context,CreateTLSContext(),GetTLSContext(),UpdateTLSContext(),DeleteTLSContext(),Target always set to OmniGateway
 Truststore,Secrets Management,anypoint_secret_group_truststore,CreateTruststore(),GetTruststore(),UpdateTruststore(),DeleteTruststore(),Supports PEM/JKS/PKCS12/JCEKS formats

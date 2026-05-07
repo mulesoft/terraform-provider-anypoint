@@ -28,7 +28,7 @@ This document provides a comprehensive summary of all resources supported by the
 - API Instance Promotion
 - API Policy
 - SLA Tier
-- Managed Flex Gateway
+- Managed Omni Gateway
 
 ### CloudHub 2.0 (11 Resources)
 - Firewall Rules
@@ -51,7 +51,7 @@ This document provides a comprehensive summary of all resources supported by the
 - Keystore
 - Secret Group
 - Shared Secret
-- TLS Context (Flex Gateway)
+- TLS Context (Omni Gateway)
 - Truststore
 
 ## CRUD Operation Statistics
@@ -81,7 +81,7 @@ This document provides a comprehensive summary of all resources supported by the
 ### Composite Create Operations
 Resources that call multiple APIs during creation:
 - **API Instance**: `CreateAPIInstance() + GetGatewayInfo()`
-- **Managed Flex Gateway**: `CreateManagedFlexGateway() + GetGatewayVersions() + GetDomains()`
+- **Managed Omni Gateway**: `CreateManagedOmniGateway() + GetGatewayVersions() + GetDomains()`
 - **TLS Context (CloudHub2)**: `CreateTLSContext() + ListTLSContexts()` (Create returns 201 with no body)
 
 ### Composite Update Operations
@@ -121,7 +121,7 @@ Resources requiring additional API calls:
 - PromoteAPIInstance()
 - CreateAPIPolicy(), GetAPIPolicy(), UpdateAPIPolicy(), DeleteAPIPolicy(), LookupPolicy(), ValidatePolicyConfiguration()
 - CreateSLATier(), GetSLATier(), UpdateSLATier(), DeleteSLATier()
-- CreateManagedFlexGateway(), GetManagedFlexGateway(), UpdateManagedFlexGateway(), DeleteManagedFlexGateway(), GetGatewayVersions(), GetDomains()
+- CreateManagedOmniGateway(), GetManagedOmniGateway(), UpdateManagedOmniGateway(), DeleteManagedOmniGateway(), GetGatewayVersions(), GetDomains()
 
 ### CloudHub 2.0 Client Methods
 - UpdateFirewallRules(), GetFirewallRules()
@@ -158,7 +158,7 @@ Resources requiring additional API calls:
 - **API Instance**: Auto-resolves gateway information during creation
 - **API Instance Promotion**: Only instance_label field can be updated
 - **API Policy**: Validates policy configuration before applying
-- **Managed Flex Gateway**: Auto-selects runtime version and builds ingress URLs from target domain
+- **Managed Omni Gateway**: Auto-selects runtime version and builds ingress URLs from target domain
 
 ### CloudHub 2.0
 - **Firewall Rules**: Create and Update both use UpdateFirewallRules(); Delete sends empty rules list
@@ -173,7 +173,7 @@ Resources requiring additional API calls:
 ### Secrets Management
 - **Keystore**: Supports PEM, JKS, PKCS12, and JCEKS formats
 - **Truststore**: Supports PEM, JKS, PKCS12, and JCEKS formats
-- **TLS Context (Flex)**: Target automatically set to FlexGateway
+- **TLS Context (Omni)**: Target automatically set to OmniGateway
 - **Certificate Pin Set**: Used for certificate pinning validation
 
 ## File Locations

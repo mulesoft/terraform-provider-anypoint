@@ -6,8 +6,8 @@
 #   1. Private Space          – isolated compute environment
 #   2. Private Network        – VPC-like network inside the private space
 #   3. VPN Connection         – site-to-site VPN tunnel to on-prem
-#   4. Managed Flex Gateway   – Flex Gateway runtime in the private space
-#   5. API Instance           – API proxy deployed to the Flex Gateway
+#   4. Managed Omni Gateway   – Omni Gateway runtime in the private space
+#   5. API Instance           – API proxy deployed to the Omni Gateway
 #   6. API Policies (43)      – full inbound + outbound policy suite
 #
 # Usage:
@@ -109,10 +109,10 @@ provider "anypoint" {
 #   truststore_base64 = base64encode(file("${path.module}/../certs/truststore.pem"))
 # }
 
-# resource "anypoint_flex_tls_context" "flex" {
+# resource "anypoint_secret_group_tls_context" "omni" {
 #   environment_id  = var.environment_id
 #   secret_group_id = anypoint_secret_group.main.id
-#   name            = "flex-tls-context"
+#   name            = "omni-tls-context"
 
 #   keystore_id   = anypoint_secret_group_keystore.tls.id
 #   truststore_id = anypoint_secret_group_truststore.ca.id
@@ -121,11 +121,11 @@ provider "anypoint" {
 # }
 
 # ###############################################################################
-# # Step 4 – Managed Flex Gateway
+# # Step 4 – Managed Omni Gateway
 # ###############################################################################
 
-# resource "anypoint_managed_flexgateway" "main" {
-#   name            = "managed-flexgateway-example-1"
+# resource "anypoint_managed_omni_gateway" "main" {
+#   name            = "managed-omnigateway-example-1"
 #   environment_id  = var.environment_id
 #   target_id       = "675c4efb-d44e-44cd-ac6f-d5a1128e6236"
 
@@ -148,68 +148,67 @@ provider "anypoint" {
 #   #   enabled = false
 #   # }
 
-#   depends_on = [anypoint_flex_tls_context.flex]
+#   depends_on = [anypoint_secret_group_tls_context.omni]
 # }
 
 # ###############################################################################
-# # Step 5 – API Instance on the Flex Gateway
+# # Step 5 – API Instance on the Omni Gateway
 # ###############################################################################
 
-# resource "anypoint_api_instance" "main" {
-#   environment_id  = var.environment_id
-#   technology      = "flexGateway"
-#   instance_label  = "main-api-10"
-#   approval_method = "manual"
+resource "anypoint_api_instance" "main" {
+  environment_id  = var.environment_id
+  technology      = "flexGateway"
+  instance_label  = "main-api-6"
+  approval_method = "manual"
+  spec = {
+    asset_id = var.api_asset_id
+    group_id = var.organization_id
+    version  = var.api_asset_version
+  }
 
-#   spec = {
-#     asset_id = var.api_asset_id
-#     group_id = var.organization_id
-#     version  = var.api_asset_version
-#   }
+  endpoint = {
+    deployment_type = "HY"
+    type            = "http"
+    base_path       = "/basePath10"
+  }
 
-#   endpoint = {
-#     deployment_type = "HY"
-#     type            = "http"
-#     base_path       = "/basePath10"
-#   }
+  gateway_id = var.gateway_id
 
-#   gateway_id = var.gateway_id
-
-#   routing = [
-#     {
-#       label = "read-traffic"
-#       rules = {
-#         methods = "GET"
-#       }
-#       upstreams = [
-#         {
-#           weight = var.upstream_primary_weight
-#           uri    = var.upstream_primary_uri
-#           label  = "primary"
-#         },
-#         {
-#           weight = 100 - var.upstream_primary_weight
-#           uri    = var.upstream_secondary_uri
-#           label  = "secondary"
-#         }
-#       ]
-#     },
-#     {
-#       label = "write-traffic"
-#       rules = {
-#         methods = "POST|PUT|PATCH|DELETE"
-#         path    = "/api/*"
-#       }
-#       upstreams = [
-#         {
-#           weight = 100
-#           uri    = var.upstream_primary_uri
-#           label  = "primary"
-#         }
-#       ]
-#     }
-#   ]
-# }
+  routing = [
+    {
+      label = "read-traffic"
+      rules = {
+        methods = "GET"
+      }
+      upstreams = [
+        {
+          weight = var.upstream_primary_weight
+          uri    = var.upstream_primary_uri
+          label  = "primary"
+        },
+        {
+          weight = 100 - var.upstream_primary_weight
+          uri    = var.upstream_secondary_uri
+          label  = "secondary"
+        }
+      ]
+    },
+    {
+      label = "write-traffic"
+      rules = {
+        methods = "POST|PUT|PATCH|DELETE"
+        path    = "/api/*"
+      }
+      upstreams = [
+        {
+          weight = 100
+          uri    = var.upstream_primary_uri
+          label  = "primary"
+        }
+      ]
+    }
+  ]
+}
 
 resource "anypoint_api_policy_credential_injection_oauth2" "oauth2" {
   organization_id = var.organization_id
@@ -248,16 +247,16 @@ resource "anypoint_api_policy_credential_injection_oauth2" "oauth2" {
 #     // Expose port
 #     // Rename this to tls_***
 #     // Export host
-#     ssl_context_id  = "${anypoint_secret_group.main.id}/${anypoint_flex_tls_context.flex.id}"
+#     ssl_context_id  = "${anypoint_secret_group.main.id}/${anypoint_omni_tls_context.omni.id}"
 #   }
 
 #     # upstream = {
 #     #  uri = "http://echo.com"
 #     #  label = "echo1"
-#     #  tls_context_id = "${anypoint_secret_group.main.id}/${anypoint_flex_tls_context.flex.id}"
+#     #  tls_context_id = "${anypoint_secret_group.main.id}/${anypoint_omni_tls_context.omni.id}"
 #     # }
 
-#   gateway_id = anypoint_managed_flexgateway.main.id
+#   gateway_id = anypoint_managed_omni_gateway.main.id
 
 #   routing = [
 #     {
@@ -294,7 +293,7 @@ resource "anypoint_api_policy_credential_injection_oauth2" "oauth2" {
 #     }
 #   ]
 
-#   depends_on = [anypoint_managed_flexgateway.main, anypoint_flex_tls_context.flex]
+#   depends_on = [anypoint_managed_omni_gateway.main, anypoint_omni_tls_context.omni]
 # }
 
 ###############################################################################

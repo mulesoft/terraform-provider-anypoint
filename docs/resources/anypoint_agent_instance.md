@@ -2,12 +2,12 @@
 page_title: "anypoint_agent_instance Resource - terraform-provider-anypoint"
 subcategory: "Agents Tools"
 description: |-
-  Manages an Agent instance in Anypoint API Manager. An Agent instance represents an Agent specification deployed to a Flex Gateway target with routing rules and upstream backends.
+  Manages an Agent instance in Anypoint API Manager. An Agent instance represents an Agent specification deployed to a Omni Gateway target with routing rules and upstream backends.
 ---
 
 # anypoint_agent_instance (Resource)
 
-Manages an Agent instance in Anypoint API Manager. An Agent instance represents an Agent specification deployed to a Flex Gateway target with routing rules and upstream backends.
+Manages an Agent instance in Anypoint API Manager. An Agent instance represents an Agent specification deployed to a Omni Gateway target with routing rules and upstream backends.
 
 -> **Status after create:** After a successful `terraform apply` the `status` field is populated from a GET request made immediately after the POST. The Platform typically returns `status = "active"` right away. If your Gateway is not yet ready the provider retries the POST up to 5 times with a 20-second backoff before failing.
 
@@ -92,7 +92,7 @@ resource "anypoint_agent_instance" "advanced" {
 - `endpoint` (Block) Endpoint / proxy configuration for the Agent instance. See [`endpoint`](#nestedschema--endpoint) below.
 - `consumer_endpoint` (String) Consumer-facing endpoint URI (the public URL clients use to reach the Agent). Maps to top-level endpointUri in the Agent.
 - `upstream_uri` (String) Shorthand for a single-upstream routing configuration. When set, the provider constructs routing as `[{upstreams: [{weight: 100, uri: <value>}]}]`. Mutually exclusive with the `routing` block.
-- `gateway_id` (String) The Flex Gateway UUID. When provided, the deployment block is auto-populated by fetching gateway details (target_id, target_name, gateway_version) from the Gateway Manager Agent. Mutually exclusive with specifying a full deployment block.
+- `gateway_id` (String) The Omni Gateway UUID. When provided, the deployment block is auto-populated by fetching gateway details (target_id, target_name, gateway_version) from the Gateway Manager Agent. Mutually exclusive with specifying a full deployment block.
 - `deployment` (Block) Deployment target configuration. Auto-populated when gateway_id is set. See [`deployment`](#nestedschema--deployment) below.
 - `routing` (Block List) Routing rules with weighted upstream backends. See [`routing`](#nestedschema--routing) below.
 
@@ -120,7 +120,7 @@ Optional:
 
 - `deployment_type` (String) Deployment type. Valid values: `HY` (hybrid), `CH` (CloudHub), `RF` (Runtime Fabric). Defaults to `HY`.
 - `type` (String) Endpoint protocol type. For agent instances, this is `a2a` (Agent-to-Agent). Defaults to `a2a`.
-- `base_path` (String) Agent base path for FlexGateway (e.g. `my-agent`). The provider constructs the full proxy URI as `http://0.0.0.0:8081/<base_path>`. Required when technology=`flexGateway`. Mutually exclusive with `uri`.
+- `base_path` (String) Agent base path for OmniGateway (e.g. `my-agent`). The provider constructs the full proxy URI as `http://0.0.0.0:8081/<base_path>`. Required when technology=`flexGateway`. Mutually exclusive with `uri`.
 - `uri` (String) Direct implementation URI for Mule4 or other technologies (e.g. `http://www.google.com`). Required when technology=`mule4`. Mutually exclusive with `base_path`.
 - `response_timeout` (Number) Response timeout in milliseconds.
 
@@ -135,7 +135,7 @@ Optional:
 - `overwrite` (Boolean) Whether to overwrite an existing deployment.
 - `target_id` (String) The target gateway ID to deploy to.
 - `target_name` (String) The target gateway name.
-- `gateway_version` (String) The Flex Gateway runtime version.
+- `gateway_version` (String) The Omni Gateway runtime version.
 
 <a id="nestedschema--routing"></a>
 ### Nested Schema for `routing`

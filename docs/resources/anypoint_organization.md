@@ -124,7 +124,7 @@ Optional:
 - `create_sub_orgs` (Boolean) Whether sub-organizations can be created. Defaults to `false`.
 - `global_deployment` (Boolean) Whether global deployment is enabled. Defaults to `false`.
 - `design_center` (Block) Design Center entitlement. **Master-org-only** — ignored on business groups. See [below for nested schema](#nestedschema--entitlements--design_center).
-- `flex_gateway` (Block) Flex Gateway entitlement. **Master-org-only** — ignored on business groups. See [below for nested schema](#nestedschema--entitlements--enabled_entitlement).
+- `flex_gateway` (Block) Omni Gateway entitlement. **Master-org-only** — ignored on business groups. See [below for nested schema](#nestedschema--entitlements--enabled_entitlement).
 - `gateways` (Block) Gateways entitlement. See [below for nested schema](#nestedschema--entitlements--assigned_entitlement).
 - `hybrid` (Block) Hybrid entitlement. **Master-org-only** — ignored on business groups. See [below for nested schema](#nestedschema--entitlements--enabled_entitlement).
 - `load_balancer` (Block) Load balancer entitlement. See [below for nested schema](#nestedschema--entitlements--assigned_entitlement).

@@ -104,10 +104,10 @@ variable "vpn_tunnel_2_ptp_cidr" {
   default     = ""
 }
 
-# ── Flex Gateway ────────────────────────────────────────────────────────────
+# ── Omni Gateway ────────────────────────────────────────────────────────────
 
 variable "gateway_size" {
-  description = "Flex Gateway replica size (small, large)"
+  description = "Omni Gateway replica size (small, large)"
   type        = string
   default     = "small"
 }
@@ -119,7 +119,7 @@ variable "gateway_runtime_version" {
 }
 
 variable "gateway_id" {
-  description = "Managed Flex Gateway target ID to deploy the API instance to"
+  description = "Managed Omni Gateway target ID to deploy the API instance to"
   type        = string
   default     = "731e6f7f-2b9e-495a-b3fc-5ac5121d07ea"
 }

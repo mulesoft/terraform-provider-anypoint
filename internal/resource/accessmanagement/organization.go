@@ -362,7 +362,7 @@ func (r *OrganizationResource) Schema(_ context.Context, _ resource.SchemaReques
 						},
 					},
 					"flex_gateway": schema.SingleNestedAttribute{
-						Description: "Flex Gateway entitlement. Inherited from the master organization on sub-orgs.",
+						Description: "Omni Gateway entitlement. Inherited from the master organization on sub-orgs.",
 						Optional:    true,
 						Computed:    true,
 						Attributes:  getEnabledEntitlementSchema(),
@@ -793,7 +793,7 @@ func expandEntitlements(ctx context.Context, obj types.Object) (accessmanagement
 // zeroEnabled returns a concrete {enabled = false} Object.
 //
 // NOTE: flatten no longer synthesises this when the server omits an
-// enabled-style entitlement (hybrid / flex_gateway / worker_logging_override /
+// enabled-style entitlement (hybrid / flexGateway / worker_logging_override /
 // service_mesh). On sub-orgs those flags can be inherited-true at the master
 // level and a hardcoded false desyncs from what the server echoes in PUT
 // responses, causing "inconsistent result after apply". Enabled-style

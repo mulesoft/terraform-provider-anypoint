@@ -2,17 +2,17 @@
 
 ## Overview
 
-The `anypoint_api_instance` resource now supports **both FlexGateway and Mule4 technologies** through a unified interface. The resource automatically handles the different endpoint configurations required by each technology.
+The `anypoint_api_instance` resource now supports **both OmniGateway and Mule4 technologies** through a unified interface. The resource automatically handles the different endpoint configurations required by each technology.
 
 ## Changes Made
 
 ### 1. Enhanced Terraform Schema
 
-The `endpoint` block now supports both FlexGateway and Mule4 patterns:
+The `endpoint` block now supports both OmniGateway and Mule4 patterns:
 
-- **`base_path`** (Optional): For FlexGateway - constructs proxy URI as `http://0.0.0.0:8081/<base_path>`
+- **`base_path`** (Optional): For OmniGateway - constructs proxy URI as `http://0.0.0.0:8081/<base_path>`
 - **`uri`** (Optional): For Mule4 - direct implementation URI (e.g., `http://www.google.com`)
-- **`ssl_context_id`** (Optional): For FlexGateway TLS context (format: `secretGroupId/tlsContextId`)
+- **`ssl_context_id`** (Optional): For OmniGateway TLS context (format: `secretGroupId/tlsContextId`)
 
 These fields are **mutually exclusive** based on the `technology` value.
 
@@ -22,11 +22,11 @@ These fields are **mutually exclusive** based on the `technology` value.
 type EndpointModel struct {
     DeploymentType   types.String `tfsdk:"deployment_type"`
     Type             types.String `tfsdk:"type"`
-    BasePath         types.String `tfsdk:"base_path"`        // FlexGateway
+    BasePath         types.String `tfsdk:"base_path"`        // OmniGateway
     URI              types.String `tfsdk:"uri"`              // Mule4
     ConsumerEndpoint types.String `tfsdk:"consumer_endpoint"`
     ResponseTimeout  types.Int64  `tfsdk:"response_timeout"`
-    SSLContextID     types.String `tfsdk:"ssl_context_id"`   // FlexGateway
+    SSLContextID     types.String `tfsdk:"ssl_context_id"`   // OmniGateway
 }
 ```
 
@@ -34,7 +34,7 @@ type EndpointModel struct {
 
 #### Create & Update Operations (`expandCreateRequest`, `expandUpdateRequest`)
 
-**For FlexGateway (`technology = "flexGateway"` or empty):**
+**For OmniGateway (`technology = "omniGateway"` or empty):**
 ```go
 - Uses base_path → constructs proxyURI
 - Sets TLSContexts with inbound context
@@ -51,7 +51,7 @@ type EndpointModel struct {
 
 #### Read Operation (`flattenInstance`)
 
-**For FlexGateway:**
+**For OmniGateway:**
 ```go
 - Extracts base_path from proxyURI
 - Reconstructs ssl_context_id from TLSContexts
@@ -66,13 +66,13 @@ type EndpointModel struct {
 
 ## Usage Examples
 
-### FlexGateway API Instance (Existing Pattern)
+### OmniGateway API Instance (Existing Pattern)
 
 ```hcl
-resource "anypoint_api_instance" "flex_api" {
+resource "anypoint_api_instance" "omni_api" {
   environment_id  = var.environment_id
   technology      = "flexGateway"
-  instance_label  = "flex-api"
+  instance_label  = "omni-api"
   approval_method = "manual"
 
   spec = {
@@ -85,10 +85,10 @@ resource "anypoint_api_instance" "flex_api" {
     deployment_type = "HY"
     type            = "http"
     base_path       = "my-api"
-    ssl_context_id  = "${anypoint_secret_group.main.id}/${anypoint_flex_tls_context.flex.id}"
+    ssl_context_id  = "${anypoint_secret_group.main.id}/${anypoint_omni_tls_context.omni.id}"
   }
 
-  gateway_id = anypoint_managed_flexgateway.main.id
+  gateway_id = anypoint_managed_omni_gateway.main.id
 
   routing = [
     {
@@ -133,10 +133,10 @@ resource "anypoint_api_instance" "mule4_api" {
 
 ## API Request Payloads
 
-### FlexGateway Request
+### OmniGateway Request
 ```json
 {
-  "technology": "flexGateway",
+  "technology": "omniGateway",
   "spec": {
     "assetId": "my-api",
     "groupId": "org-id",
@@ -206,12 +206,12 @@ The Mule4 API returns the autodiscovery instance name needed for Mule applicatio
 
 ## Key Differences
 
-| Feature | FlexGateway | Mule4 |
+| Feature | OmniGateway | Mule4 |
 |---------|-------------|-------|
 | **Endpoint** | `base_path` → `proxyURI` | Direct `uri` |
 | **Gateway** | Requires `gateway_id` | Not applicable |
 | **Routing** | Weighted upstreams | Handled by Mule app |
-| **TLS** | FlexGateway TLS context | Mulesoft runtime config |
+| **TLS** | OmniGateway TLS context | Mulesoft runtime config |
 | **Deployment** | Target gateway details | Environment only |
 | **Autodiscovery** | Not used | Use `autodiscoveryInstanceName` |
 
@@ -229,13 +229,13 @@ terraform apply -var-file=terraform.tfvars
 ## Validation
 
 The resource will validate that:
-1. For `technology="flexGateway"`: `base_path` is provided (not `uri`)
+1. For `technology="omniGateway"`: `base_path` is provided (not `uri`)
 2. For `technology="mule4"`: `uri` is provided (not `base_path`)
-3. TLS context is only used with FlexGateway
-4. Routing is only used with FlexGateway
+3. TLS context is only used with OmniGateway
+4. Routing is only used with OmniGateway
 
 ## Backward Compatibility
 
-✅ All existing FlexGateway configurations continue to work without changes.
+✅ All existing OmniGateway configurations continue to work without changes.
 
-The default `technology` value remains `"flexGateway"` for backward compatibility.
+The default `technology` value remains `"omniGateway"` for backward compatibility.

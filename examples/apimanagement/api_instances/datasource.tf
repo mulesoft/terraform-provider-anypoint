@@ -40,9 +40,9 @@ output "api_instance_summary" {
   ]
 }
 
-# Filter by technology (e.g. only FlexGateway instances)
-output "flex_gateway_instances" {
-  description = "API instances deployed on FlexGateway"
+# Filter by technology (e.g. only OmniGateway instances)
+output "omni_gateway_instances" {
+  description = "API instances deployed on OmniGateway"
   value = [
     for inst in data.anypoint_api_instances.all.instances :
     inst if inst.technology == "flexGateway"

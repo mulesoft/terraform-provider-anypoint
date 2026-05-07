@@ -56,12 +56,12 @@ func NewTLSContextResource() resource.Resource {
 }
 
 func (r *TLSContextResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_flex_tls_context"
+	resp.TypeName = req.ProviderTypeName + "_secret_group_tls_context"
 }
 
 func (r *TLSContextResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Manages a Flex Gateway TLS context within a secret group in Anypoint Secrets Manager. " +
+		Description: "Manages a Omni Gateway TLS context within a secret group in Anypoint Secrets Manager. " +
 			"The target is automatically set to 'FlexGateway'. " +
 			"References keystore and truststore resources by their IDs — the provider " +
 			"automatically builds the internal path references (keystores/{id}, truststores/{id}).",

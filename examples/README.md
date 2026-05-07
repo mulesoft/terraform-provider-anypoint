@@ -15,7 +15,7 @@ examples/
 │   └── user/            # User management
 ├── apimanagement/       # API Management resources
 │   ├── api_instance/    # API instance management
-│   ├── managed_flexgateway/  # Flex Gateway management
+│   ├── managed_omni_gateway/  # Omni Gateway management
 │   ├── policies/        # API policy examples
 │   └── slatier/         # SLA tier configuration
 ├── auth_types/          # Authentication method examples
@@ -61,11 +61,11 @@ Manage users, teams, organizations, and environments within Anypoint Platform.
 - Team-based access control
 
 ### 🌐 [API Management](./apimanagement/)
-Manage API instances, policies, SLA tiers, and Flex Gateways.
+Manage API instances, policies, SLA tiers, and Omni Gateways.
 
 **Resources:**
 - **API Instance** - Deploy and manage API instances
-- **Managed Flex Gateway** - Deploy managed Flex Gateway instances
+- **Managed Omni Gateway** - Deploy managed Omni Gateway instances
 - **Policies** - Apply security and traffic management policies
 - **SLA Tier** - Configure rate limits and access tiers for API consumers
 
@@ -73,7 +73,7 @@ Manage API instances, policies, SLA tiers, and Flex Gateways.
 - API lifecycle management
 - Implementing API security policies (JWT, OAuth, rate limiting)
 - Creating tiered API access levels
-- Managing Flex Gateway deployments
+- Managing Omni Gateway deployments
 
 ### ☁️ [CloudHub 2.0](./cloudhub2/)
 Manage CloudHub 2.0 infrastructure including private spaces, networking, and security.

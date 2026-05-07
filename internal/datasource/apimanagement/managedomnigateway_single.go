@@ -15,16 +15,16 @@ import (
 )
 
 var (
-	_ datasource.DataSource              = &ManagedFlexGatewaySingleDataSource{}
-	_ datasource.DataSourceWithConfigure = &ManagedFlexGatewaySingleDataSource{}
+	_ datasource.DataSource              = &ManagedOmniGatewaySingleDataSource{}
+	_ datasource.DataSourceWithConfigure = &ManagedOmniGatewaySingleDataSource{}
 )
 
-// ManagedFlexGatewaySingleDataSource fetches a single managed Flex Gateway by ID.
-type ManagedFlexGatewaySingleDataSource struct {
-	client *apimanagement.ManagedFlexGatewayClient
+// ManagedOmniGatewaySingleDataSource fetches a single managed Omni Gateway by ID.
+type ManagedOmniGatewaySingleDataSource struct {
+	client *apimanagement.ManagedOmniGatewayClient
 }
 
-type ManagedFlexGatewaySingleDataSourceModel struct {
+type ManagedOmniGatewaySingleDataSourceModel struct {
 	ID             types.String `tfsdk:"id"`
 	OrganizationID types.String `tfsdk:"organization_id"`
 	EnvironmentID  types.String `tfsdk:"environment_id"`
@@ -72,15 +72,15 @@ var (
 	}
 )
 
-func NewManagedFlexGatewaySingleDataSource() datasource.DataSource {
-	return &ManagedFlexGatewaySingleDataSource{}
+func NewManagedOmniGatewaySingleDataSource() datasource.DataSource {
+	return &ManagedOmniGatewaySingleDataSource{}
 }
 
-func (d *ManagedFlexGatewaySingleDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_managed_flexgateway"
+func (d *ManagedOmniGatewaySingleDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_managed_omnigateway"
 }
 
-func (d *ManagedFlexGatewaySingleDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
+func (d *ManagedOmniGatewaySingleDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	portEntryAttrs := map[string]schema.Attribute{
 		"port": schema.Int64Attribute{
 			Computed:    true,
@@ -93,11 +93,11 @@ func (d *ManagedFlexGatewaySingleDataSource) Schema(_ context.Context, _ datasou
 	}
 
 	resp.Schema = schema.Schema{
-		Description: "Fetches the full details of a single managed Flex Gateway by ID.",
+		Description: "Fetches the full details of a single managed Omni Gateway by ID.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Required:    true,
-				Description: "The managed Flex Gateway ID.",
+				Description: "The managed Omni Gateway ID.",
 			},
 			"organization_id": schema.StringAttribute{
 				Optional:    true,
@@ -231,7 +231,7 @@ func (d *ManagedFlexGatewaySingleDataSource) Schema(_ context.Context, _ datasou
 	}
 }
 
-func (d *ManagedFlexGatewaySingleDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
+func (d *ManagedOmniGatewaySingleDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
 	}
@@ -241,16 +241,16 @@ func (d *ManagedFlexGatewaySingleDataSource) Configure(_ context.Context, req da
 			fmt.Sprintf("Expected *client.Config, got: %T.", req.ProviderData))
 		return
 	}
-	gwClient, err := apimanagement.NewManagedFlexGatewayClient(config)
+	gwClient, err := apimanagement.NewManagedOmniGatewayClient(config)
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to Create Managed Flex Gateway Client", err.Error())
+		resp.Diagnostics.AddError("Unable to Create Managed Omni Gateway Client", err.Error())
 		return
 	}
 	d.client = gwClient
 }
 
-func (d *ManagedFlexGatewaySingleDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	var data ManagedFlexGatewaySingleDataSourceModel
+func (d *ManagedOmniGatewaySingleDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
+	var data ManagedOmniGatewaySingleDataSourceModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -263,9 +263,9 @@ func (d *ManagedFlexGatewaySingleDataSource) Read(ctx context.Context, req datas
 	envID := data.EnvironmentID.ValueString()
 	gatewayID := data.ID.ValueString()
 
-	gw, err := d.client.GetManagedFlexGateway(ctx, orgID, envID, gatewayID)
+	gw, err := d.client.GetManagedOmniGateway(ctx, orgID, envID, gatewayID)
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading managed Flex Gateway", err.Error())
+		resp.Diagnostics.AddError("Error reading managed Omni Gateway", err.Error())
 		return
 	}
 

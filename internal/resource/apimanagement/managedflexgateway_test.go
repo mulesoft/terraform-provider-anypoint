@@ -14,34 +14,34 @@ import (
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
 )
 
-func TestNewManagedFlexGatewayResource(t *testing.T) {
-	r := NewManagedFlexGatewayResource()
+func TestNewManagedOmniGatewayResource(t *testing.T) {
+	r := NewManagedOmniGatewayResource()
 	if r == nil {
-		t.Error("NewManagedFlexGatewayResource() returned nil")
+		t.Error("NewManagedOmniGatewayResource() returned nil")
 	}
 	if _, ok := r.(resource.ResourceWithConfigure); !ok {
-		t.Error("ManagedFlexGatewayResource should implement ResourceWithConfigure")
+		t.Error("ManagedOmniGatewayResource should implement ResourceWithConfigure")
 	}
 	if _, ok := r.(resource.ResourceWithImportState); !ok {
-		t.Error("ManagedFlexGatewayResource should implement ResourceWithImportState")
+		t.Error("ManagedOmniGatewayResource should implement ResourceWithImportState")
 	}
 }
 
-func TestManagedFlexGatewayResource_Metadata(t *testing.T) {
-	r := NewManagedFlexGatewayResource()
-	testutil.TestResourceMetadata(t, r, "_managed_flexgateway")
+func TestManagedOmniGatewayResource_Metadata(t *testing.T) {
+	r := NewManagedOmniGatewayResource()
+	testutil.TestResourceMetadata(t, r, "_managed_omnigateway")
 }
 
-func TestManagedFlexGatewayResource_Schema(t *testing.T) {
-	r := NewManagedFlexGatewayResource()
+func TestManagedOmniGatewayResource_Schema(t *testing.T) {
+	r := NewManagedOmniGatewayResource()
 	requiredAttrs := []string{"name", "environment_id", "target_id"}
 	optionalAttrs := []string{"organization_id", "runtime_version", "release_channel", "size", "ingress", "properties", "logging", "tracing"}
 	computedAttrs := []string{"id", "status", "organization_id"}
 	testutil.TestResourceSchema(t, r, requiredAttrs, optionalAttrs, computedAttrs)
 }
 
-func TestManagedFlexGatewayResource_Configure(t *testing.T) {
-	res := NewManagedFlexGatewayResource().(*ManagedFlexGatewayResource)
+func TestManagedOmniGatewayResource_Configure(t *testing.T) {
+	res := NewManagedOmniGatewayResource().(*ManagedOmniGatewayResource)
 	server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
 	providerData := &anypointclient.Config{
 		BaseURL:      server.URL,
@@ -54,8 +54,8 @@ func TestManagedFlexGatewayResource_Configure(t *testing.T) {
 	}
 }
 
-func TestManagedFlexGatewayResource_Configure_InvalidProviderData(t *testing.T) {
-	res := NewManagedFlexGatewayResource().(*ManagedFlexGatewayResource)
+func TestManagedOmniGatewayResource_Configure_InvalidProviderData(t *testing.T) {
+	res := NewManagedOmniGatewayResource().(*ManagedOmniGatewayResource)
 	ctx := context.Background()
 	req := resource.ConfigureRequest{ProviderData: "invalid"}
 	resp := &resource.ConfigureResponse{}
@@ -68,15 +68,15 @@ func TestManagedFlexGatewayResource_Configure_InvalidProviderData(t *testing.T) 
 	}
 }
 
-func TestManagedFlexGatewayResource_ImportState(t *testing.T) {
-	r := NewManagedFlexGatewayResource()
+func TestManagedOmniGatewayResource_ImportState(t *testing.T) {
+	r := NewManagedOmniGatewayResource()
 	if _, ok := r.(resource.ResourceWithImportState); !ok {
 		t.Error("resource does not implement ImportState")
 	}
 }
 
-func TestManagedFlexGatewayResourceModel_Validation(t *testing.T) {
-	model := ManagedFlexGatewayResourceModel{}
+func TestManagedOmniGatewayResourceModel_Validation(t *testing.T) {
+	model := ManagedOmniGatewayResourceModel{}
 	_ = model.ID
 	_ = model.Name
 	_ = model.OrganizationID
@@ -92,7 +92,7 @@ func TestManagedFlexGatewayResourceModel_Validation(t *testing.T) {
 	_ = model.Tracing
 }
 
-func TestManagedFlexGatewayResource_Read(t *testing.T) {
+func TestManagedOmniGatewayResource_Read(t *testing.T) {
 	basePath := "/gatewaymanager/xapi/v1/organizations/test-org-id/environments/test-env-id/gateways/test-gw-id"
 
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
@@ -116,8 +116,8 @@ func TestManagedFlexGatewayResource_Read(t *testing.T) {
 	}
 	server := testutil.MockHTTPServer(t, handlers)
 
-	res := NewManagedFlexGatewayResource().(*ManagedFlexGatewayResource)
-	res.client = &apimgmtclient.ManagedFlexGatewayClient{
+	res := NewManagedOmniGatewayResource().(*ManagedOmniGatewayResource)
+	res.client = &apimgmtclient.ManagedOmniGatewayClient{
 		AnypointClient: &anypointclient.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
@@ -159,7 +159,7 @@ func TestManagedFlexGatewayResource_Read(t *testing.T) {
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("Read() reported errors: %v", resp.Diagnostics.Errors())
 	}
-	var got ManagedFlexGatewayResourceModel
+	var got ManagedOmniGatewayResourceModel
 	if diags := resp.State.Get(ctx, &got); diags.HasError() {
 		t.Fatalf("State.Get errors: %v", diags.Errors())
 	}
@@ -168,9 +168,8 @@ func TestManagedFlexGatewayResource_Read(t *testing.T) {
 	}
 }
 
-func TestManagedFlexGatewayResource_Read_NotFound(t *testing.T) {
+func TestManagedOmniGatewayResource_Read_NotFound(t *testing.T) {
 	basePath := "/gatewaymanager/xapi/v1/organizations/test-org-id/environments/test-env-id/gateways/test-gw-id"
-
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 		basePath: func(w http.ResponseWriter, r *http.Request) {
 			testutil.ErrorResponse(w, http.StatusNotFound, "not found")
@@ -178,8 +177,8 @@ func TestManagedFlexGatewayResource_Read_NotFound(t *testing.T) {
 	}
 	server := testutil.MockHTTPServer(t, handlers)
 
-	res := NewManagedFlexGatewayResource().(*ManagedFlexGatewayResource)
-	res.client = &apimgmtclient.ManagedFlexGatewayClient{
+	res := NewManagedOmniGatewayResource().(*ManagedOmniGatewayResource)
+	res.client = &apimgmtclient.ManagedOmniGatewayClient{
 		AnypointClient: &anypointclient.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",

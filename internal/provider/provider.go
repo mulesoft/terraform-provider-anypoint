@@ -216,7 +216,7 @@ func (p *AnypointProvider) Resources(_ context.Context) []func() resource.Resour
 		resourceAccessManagement.NewTeamResource,
 		resourceAccessManagement.NewConnectedAppScopesResource,
 		// API Management resources
-		resourceApiManagement.NewManagedFlexGatewayResource,
+		resourceApiManagement.NewManagedOmniGatewayResource,
 		resourceApiManagement.NewAPIInstanceResource,
 		resourceApiManagement.NewAPIPolicyResource,
 		resourceApiManagement.NewSLATierResource,
@@ -251,8 +251,8 @@ func (p *AnypointProvider) DataSources(_ context.Context) []func() datasource.Da
 		dsCloudHub2.NewPrivateSpaceAssociationDataSource,
 		dsCloudHub2.NewPrivateSpaceUpgradeDataSource,
 		// API Management data sources
-		dsApiManagement.NewManagedFlexGatewayDataSource,
-		dsApiManagement.NewManagedFlexGatewaySingleDataSource,
+		dsApiManagement.NewManagedOmniGatewayDataSource,
+		dsApiManagement.NewManagedOmniGatewaySingleDataSource,
 		dsApiManagement.NewAPIInstanceDataSource,
 		dsApiManagement.NewAPIUpstreamsDataSource,
 		// Agents Tools data sources

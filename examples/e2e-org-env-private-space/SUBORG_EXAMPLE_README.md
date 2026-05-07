@@ -235,7 +235,7 @@ Sub-organization includes:
 | VPNs | 2 |
 | Network Connections | 3 |
 | Runtime Fabric | Enabled |
-| Flex Gateway | Enabled |
+| Omni Gateway | Enabled |
 
 Adjust in `entitlements` block as needed.
 
@@ -307,9 +307,9 @@ Destroys in reverse order:
 
 See related examples in this directory:
 
-- `main.tf` - FlexGateway API instance with policies
+- `main.tf` - OmniGateway API instance with policies
 - `api_instance_mule4_example.tf` - Mule4 API instance
-- `MULE4_SUPPORT.md` - Mule4 vs FlexGateway comparison
+- `MULE4_SUPPORT.md` - Mule4 vs OmniGateway comparison
 
 ## Support
 

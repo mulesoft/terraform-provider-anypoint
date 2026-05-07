@@ -95,7 +95,7 @@ func (d *MCPServerDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 							Computed:    true,
 						},
 						"technology": schema.StringAttribute{
-							Description: "The gateway technology (typically flexGateway for MCP).",
+							Description: "The gateway technology (typically omniGateway for MCP).",
 							Computed:    true,
 						},
 						"instance_label": schema.StringAttribute{

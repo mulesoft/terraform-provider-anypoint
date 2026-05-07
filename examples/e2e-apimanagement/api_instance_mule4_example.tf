@@ -3,7 +3,7 @@
 # # This example demonstrates how to create an API instance using Mule4 technology
 # # and apply the full set of Mule4-compatible policies.
 # #
-# # Key differences from FlexGateway:
+# # Key differences from OmniGateway:
 # # - technology = "mule4"
 # # - endpoint.uri is used (direct implementation URL) instead of endpoint.base_path
 # # - No gateway_id or deployment block needed
@@ -194,7 +194,7 @@
 # }
 
 # # ─── 9. XML Threat Protection ────────────────────────────────────────────────
-# # NOTE: xml-threat-protection is supported on Mule4 only (not FlexGateway).
+# # NOTE: xml-threat-protection is supported on Mule4 only (not OmniGateway).
 # resource "anypoint_api_policy_xml_threat_protection" "mule4_xml_threat_protection" {
 #   organization_id = local.mule4_org_id
 #   environment_id  = local.mule4_env_id
@@ -362,7 +362,7 @@
 # ###############################################################################
 # # Mule4-specific OAuth Token Enforcement Policies
 # # These use the generic anypoint_api_policy resource (policy_type shortcut) as
-# # they are Mule4-runtime policies not available on Flex Gateway.
+# # they are Mule4-runtime policies not available on Omni Gateway.
 # ###############################################################################
 
 # # ─── 18. OpenAM OAuth 2.0 Token Enforcement ──────────────────────────────────

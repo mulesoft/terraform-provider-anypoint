@@ -5,7 +5,7 @@ This example demonstrates how to create and manage API instances in Anypoint Pla
 ## Overview
 
 API instances represent deployed API proxies in API Manager. They connect API specifications from Exchange to runtime implementations and enable you to:
-- Deploy APIs to Flex Gateway or other targets
+- Deploy APIs to Omni Gateway or other targets
 - Configure routing rules with weighted load balancing
 - Define consumer endpoints
 - Apply policies and SLA tiers
@@ -16,7 +16,7 @@ API instances represent deployed API proxies in API Manager. They connect API sp
 This example creates **2 API instances**:
 
 ### 1. **MyHealth API** - Complex routing with weighted upstreams
-- Technology: Flex Gateway
+- Technology: Omni Gateway
 - Instance Label: `myhealth-api`
 - Approval Method: Manual
 - Base Path: `/myhealth`
@@ -28,7 +28,7 @@ This example creates **2 API instances**:
     - 100% → Write Backend
 
 ### 2. **Simple API** - Basic routing configuration
-- Technology: Flex Gateway
+- Technology: Omni Gateway
 - Instance Label: `simple-api`
 - Approval Method: Automatic
 - Base Path: `/simple`
@@ -40,7 +40,7 @@ Before running this example, you need:
 
 1. **Anypoint Platform Account** with API Manager permissions
 2. **Connected App Credentials** (Client ID and Secret)
-3. **Existing Managed Flex Gateway** - Get the gateway ID
+3. **Existing Managed Omni Gateway** - Get the gateway ID
 4. **API Specification in Exchange** - Asset ID and version
 5. **Environment ID** - Where the API will be deployed
 
@@ -91,7 +91,7 @@ resource "anypoint_api_instance" "example" {
 ## Key Configuration Options
 
 ### Technology
-- `flexGateway` - Flex Gateway runtime
+- `flexGateway` - Omni Gateway runtime
 - `mule4` - Mule 4 runtime
 - `mule3` - Mule 3 runtime
 
@@ -346,9 +346,9 @@ Error: Gateway with ID 'xxx' not found
 **Solution:** Verify the gateway exists and is deployed:
 ```bash
 # Use Anypoint CLI
-anypoint-cli runtime-mgr cloudhub2 flexgateway list
+anypoint-cli runtime-mgr cloudhub2 omnigateway list
 
-# Or check in UI: Runtime Manager → Flex Gateway
+# Or check in UI: Runtime Manager → Omni Gateway
 ```
 
 ### Error: Asset Not Found in Exchange
@@ -401,7 +401,7 @@ terraform destroy -target=anypoint_api_instance.myhealth_api
 ## Additional Resources
 
 - [Anypoint API Manager Documentation](https://docs.mulesoft.com/api-manager/)
-- [Flex Gateway Documentation](https://docs.mulesoft.com/gateway/)
+- [Omni Gateway Documentation](https://docs.mulesoft.com/gateway/)
 - [API Routing Strategies](https://docs.mulesoft.com/api-manager/2.x/configure-multiple-credential-providers)
 - [API Lifecycle Management](https://docs.mulesoft.com/api-manager/2.x/api-lifecycle-concept)
 

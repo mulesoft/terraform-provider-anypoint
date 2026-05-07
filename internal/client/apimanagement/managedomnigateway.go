@@ -12,24 +12,24 @@ import (
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 )
 
-// ManagedFlexGatewayClient wraps the AnypointClient for managed Flex Gateway operations
-type ManagedFlexGatewayClient struct {
+// ManagedOmniGatewayClient wraps the AnypointClient for managed Omni Gateway operations
+type ManagedOmniGatewayClient struct {
 	*client.AnypointClient
 }
 
-// NewManagedFlexGatewayClient creates a new ManagedFlexGatewayClient
-func NewManagedFlexGatewayClient(config *client.Config) (*ManagedFlexGatewayClient, error) {
+// NewManagedOmniGatewayClient creates a new ManagedOmniGatewayClient
+func NewManagedOmniGatewayClient(config *client.Config) (*ManagedOmniGatewayClient, error) {
 	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err
 	}
-	return &ManagedFlexGatewayClient{AnypointClient: anypointClient}, nil
+	return &ManagedOmniGatewayClient{AnypointClient: anypointClient}, nil
 }
 
 // --- Domain Models ---
 
-// ManagedFlexGateway represents a managed Flex Gateway instance
-type ManagedFlexGateway struct {
+// ManagedOmniGateway represents a managed Omni Gateway instance
+type ManagedOmniGateway struct {
 	ID             string                   `json:"id"`
 	Name           string                   `json:"name"`
 	TargetID       string                   `json:"targetId"`
@@ -44,7 +44,7 @@ type ManagedFlexGateway struct {
 	DateCreated    string                   `json:"dateCreated,omitempty"`
 	LastUpdated    string                   `json:"lastUpdated,omitempty"`
 	APILimit       int                      `json:"apiLimit,omitempty"`
-	Configuration  ManagedFlexGatewayConfig `json:"configuration"`
+	Configuration  ManagedOmniGatewayConfig `json:"configuration"`
 	PortConfig     *PortConfiguration       `json:"portConfiguration,omitempty"`
 	OrganizationID string                   `json:"organizationId,omitempty"`
 	EnvironmentID  string                   `json:"environmentId,omitempty"`
@@ -62,8 +62,8 @@ type PortConfiguration struct {
 	Egress  PortEntry `json:"egress"`
 }
 
-// ManagedFlexGatewayConfig holds the full configuration block
-type ManagedFlexGatewayConfig struct {
+// ManagedOmniGatewayConfig holds the full configuration block
+type ManagedOmniGatewayConfig struct {
 	Ingress    IngressConfig    `json:"ingress"`
 	Properties PropertiesConfig `json:"properties"`
 	Logging    LoggingConfig    `json:"logging"`
@@ -118,31 +118,31 @@ type TracingConfig struct {
 
 // --- Request / Response Models ---
 
-// CreateManagedFlexGatewayRequest represents the payload to create a gateway
-type CreateManagedFlexGatewayRequest struct {
+// CreateManagedOmniGatewayRequest represents the payload to create a gateway
+type CreateManagedOmniGatewayRequest struct {
 	Name           string                   `json:"name"`
 	TargetID       string                   `json:"targetId"`
 	RuntimeVersion string                   `json:"runtimeVersion"`
 	ReleaseChannel string                   `json:"releaseChannel"`
 	Size           string                   `json:"size"`
-	Configuration  ManagedFlexGatewayConfig `json:"configuration"`
+	Configuration  ManagedOmniGatewayConfig `json:"configuration"`
 }
 
-// UpdateManagedFlexGatewayRequest represents the full PUT body to update a gateway.
+// UpdateManagedOmniGatewayRequest represents the full PUT body to update a gateway.
 // The update API is a full replacement (PUT), so all fields must be provided.
-type UpdateManagedFlexGatewayRequest struct {
+type UpdateManagedOmniGatewayRequest struct {
 	Name           string                   `json:"name"`
 	TargetID       string                   `json:"targetId"`
 	RuntimeVersion string                   `json:"runtimeVersion"`
 	ReleaseChannel string                   `json:"releaseChannel"`
 	Size           string                   `json:"size"`
-	Configuration  ManagedFlexGatewayConfig `json:"configuration"`
+	Configuration  ManagedOmniGatewayConfig `json:"configuration"`
 }
 
 // --- CRUD Operations ---
 
-// CreateManagedFlexGateway creates a new managed Flex Gateway
-func (c *ManagedFlexGatewayClient) CreateManagedFlexGateway(ctx context.Context, orgID, envID string, request *CreateManagedFlexGatewayRequest) (*ManagedFlexGateway, error) {
+// CreateManagedOmniGateway creates a new managed Omni Gateway
+func (c *ManagedOmniGatewayClient) CreateManagedOmniGateway(ctx context.Context, orgID, envID string, request *CreateManagedOmniGatewayRequest) (*ManagedOmniGateway, error) {
 	url := fmt.Sprintf("%s/gatewaymanager/api/v1/organizations/%s/environments/%s/gateways", c.BaseURL, orgID, envID)
 
 	jsonData, err := json.Marshal(request)
@@ -168,10 +168,10 @@ func (c *ManagedFlexGatewayClient) CreateManagedFlexGateway(ctx context.Context,
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to create managed flex gateway with status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("failed to create managed omni gateway with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	var gw ManagedFlexGateway
+	var gw ManagedOmniGateway
 	if err := json.NewDecoder(resp.Body).Decode(&gw); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
@@ -179,10 +179,8 @@ func (c *ManagedFlexGatewayClient) CreateManagedFlexGateway(ctx context.Context,
 	return &gw, nil
 }
 
-// GetManagedFlexGateway retrieves a managed Flex Gateway by ID.
-// Uses xapi/v1 which returns the full configuration including tracing.sampling and tracing.labels;
-// the api/v1 GET endpoint omits those fields.
-func (c *ManagedFlexGatewayClient) GetManagedFlexGateway(ctx context.Context, orgID, envID, gatewayID string) (*ManagedFlexGateway, error) {
+// GetManagedOmniGateway retrieves a managed Omni Gateway by ID
+func (c *ManagedOmniGatewayClient) GetManagedOmniGateway(ctx context.Context, orgID, envID, gatewayID string) (*ManagedOmniGateway, error) {
 	url := fmt.Sprintf("%s/gatewaymanager/xapi/v1/organizations/%s/environments/%s/gateways/%s", c.BaseURL, orgID, envID, gatewayID)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
@@ -201,15 +199,15 @@ func (c *ManagedFlexGatewayClient) GetManagedFlexGateway(ctx context.Context, or
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, client.NewNotFoundError("managed flex gateway")
+		return nil, client.NewNotFoundError("managed omni gateway")
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to get managed flex gateway with status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("failed to get managed omni gateway with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	var gw ManagedFlexGateway
+	var gw ManagedOmniGateway
 	if err := json.NewDecoder(resp.Body).Decode(&gw); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
@@ -217,8 +215,8 @@ func (c *ManagedFlexGatewayClient) GetManagedFlexGateway(ctx context.Context, or
 	return &gw, nil
 }
 
-// UpdateManagedFlexGateway replaces an existing managed Flex Gateway (PUT).
-func (c *ManagedFlexGatewayClient) UpdateManagedFlexGateway(ctx context.Context, orgID, envID, gatewayID string, request *UpdateManagedFlexGatewayRequest) (*ManagedFlexGateway, error) {
+// UpdateManagedOmniGateway replaces an existing managed Omni Gateway (PUT).
+func (c *ManagedOmniGatewayClient) UpdateManagedOmniGateway(ctx context.Context, orgID, envID, gatewayID string, request *UpdateManagedOmniGatewayRequest) (*ManagedOmniGateway, error) {
 	url := fmt.Sprintf("%s/gatewaymanager/api/v1/organizations/%s/environments/%s/gateways/%s", c.BaseURL, orgID, envID, gatewayID)
 
 	jsonData, err := json.Marshal(request)
@@ -243,15 +241,15 @@ func (c *ManagedFlexGatewayClient) UpdateManagedFlexGateway(ctx context.Context,
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, client.NewNotFoundError("managed flex gateway")
+		return nil, client.NewNotFoundError("managed omni gateway")
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to update managed flex gateway with status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("failed to update managed omni gateway with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	var gw ManagedFlexGateway
+	var gw ManagedOmniGateway
 	if err := json.NewDecoder(resp.Body).Decode(&gw); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
@@ -261,7 +259,7 @@ func (c *ManagedFlexGatewayClient) UpdateManagedFlexGateway(ctx context.Context,
 
 // GetDomains fetches the available domains for a target in an environment.
 // The domains are used to construct the public and internal ingress URLs.
-func (c *ManagedFlexGatewayClient) GetDomains(ctx context.Context, orgID, targetID, envID string) (*DomainsResponse, error) {
+func (c *ManagedOmniGatewayClient) GetDomains(ctx context.Context, orgID, targetID, envID string) (*DomainsResponse, error) {
 	url := fmt.Sprintf("%s/runtimefabric/api/organizations/%s/targets/%s/environments/%s/domains?sendAppUniqueId=true",
 		c.BaseURL, orgID, targetID, envID)
 
@@ -312,8 +310,8 @@ func BuildIngressURLs(gwName string, domains []string) (publicURLs []string, int
 	return
 }
 
-// DeleteManagedFlexGateway deletes a managed Flex Gateway by ID
-func (c *ManagedFlexGatewayClient) DeleteManagedFlexGateway(ctx context.Context, orgID, envID, gatewayID string) error {
+// DeleteManagedOmniGateway deletes a managed Omni Gateway by ID
+func (c *ManagedOmniGatewayClient) DeleteManagedOmniGateway(ctx context.Context, orgID, envID, gatewayID string) error {
 	url := fmt.Sprintf("%s/gatewaymanager/api/v1/organizations/%s/environments/%s/gateways/%s", c.BaseURL, orgID, envID, gatewayID)
 
 	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
@@ -333,7 +331,7 @@ func (c *ManagedFlexGatewayClient) DeleteManagedFlexGateway(ctx context.Context,
 
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to delete managed flex gateway with status %d: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("failed to delete managed omni gateway with status %d: %s", resp.StatusCode, string(body))
 	}
 
 	return nil
@@ -359,7 +357,7 @@ type GatewayVersion struct {
 }
 
 // GetGatewayVersions fetches available gateway runtime versions grouped by release channel
-func (c *ManagedFlexGatewayClient) GetGatewayVersions(ctx context.Context) (*GatewayVersionsResponse, error) {
+func (c *ManagedOmniGatewayClient) GetGatewayVersions(ctx context.Context) (*GatewayVersionsResponse, error) {
 	url := fmt.Sprintf("%s/gatewaymanager/xapi/v1/gateway/versions", c.BaseURL)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
@@ -399,9 +397,9 @@ func (v *GatewayVersionsResponse) LatestVersionForChannel(channel string) string
 	return ch.Versions[0].DisplayName
 }
 
-// ManagedFlexGatewayListItem represents a single gateway entry from the api/v1 list endpoint.
+// ManagedOmniGatewayListItem represents a single gateway entry from the api/v1 list endpoint.
 // The list response has a different (lighter) shape than the single-item CRUD response.
-type ManagedFlexGatewayListItem struct {
+type ManagedOmniGatewayListItem struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	TargetID    string `json:"targetId"`
@@ -410,16 +408,16 @@ type ManagedFlexGatewayListItem struct {
 	LastUpdated string `json:"lastUpdated"`
 }
 
-// ManagedFlexGatewayListResponse wraps the paginated list response from the Gateway Manager list endpoint.
-type ManagedFlexGatewayListResponse struct {
-	Content       []ManagedFlexGatewayListItem `json:"content"`
+// ManagedOmniGatewayListResponse wraps the paginated list response from the Gateway Manager list endpoint.
+type ManagedOmniGatewayListResponse struct {
+	Content       []ManagedOmniGatewayListItem `json:"content"`
 	PageSize      int                          `json:"pageSize"`
 	PageNumber    int                          `json:"pageNumber"`
 	TotalElements int                          `json:"totalElements"`
 }
 
-// ListManagedFlexGateways returns all managed Flex Gateways for the given org/environment.
-func (c *ManagedFlexGatewayClient) ListManagedFlexGateways(ctx context.Context, orgID, envID string) ([]ManagedFlexGatewayListItem, error) {
+// ListManagedOmniGateways returns all managed Omni Gateways for the given org/environment.
+func (c *ManagedOmniGatewayClient) ListManagedOmniGateways(ctx context.Context, orgID, envID string) ([]ManagedOmniGatewayListItem, error) {
 	url := fmt.Sprintf("%s/gatewaymanager/api/v1/organizations/%s/environments/%s/gateways", c.BaseURL, orgID, envID)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
@@ -440,10 +438,10 @@ func (c *ManagedFlexGatewayClient) ListManagedFlexGateways(ctx context.Context, 
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to list managed flex gateways with status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("failed to list managed omni gateways with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	var listResp ManagedFlexGatewayListResponse
+	var listResp ManagedOmniGatewayListResponse
 	if err := json.NewDecoder(resp.Body).Decode(&listResp); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}

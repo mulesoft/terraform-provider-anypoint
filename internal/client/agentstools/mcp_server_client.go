@@ -130,7 +130,7 @@ func (c *MCPServerClient) GetGatewayInfo(ctx context.Context, orgID, envID, gate
 
 // CreateMCPServerRequest is the payload sent to create an MCP server
 type CreateMCPServerRequest struct {
-	Technology     string               `json:"technology"` // Should be "flexGateway"
+	Technology     string               `json:"technology"` // Should be "omniGateway"
 	ApprovalMethod *string              `json:"approvalMethod"`
 	ProviderID     *string              `json:"providerId"`
 	EndpointURI    *string              `json:"endpointUri"`

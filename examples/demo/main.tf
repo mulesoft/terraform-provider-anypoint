@@ -4,7 +4,7 @@
 # This demo walks through a real-world API lifecycle:
 #
 #   Step 1 → Create a sub-organization with Sandbox & Production environments
-#   Step 2 → Grant Connected App access, create Private Space & Flex Gateway
+#   Step 2 → Grant Connected App access, create Private Space & Omni Gateway
 #   Step 3 → Create an API Instance with canary routing
 #   Step 4 → Apply security policies (JWT, rate limiting, IP allowlist)
 #   Step 5 → Define SLA tiers for consumer self-service
@@ -89,10 +89,10 @@ resource "anypoint_environment" "production" {
 }
 
 ###############################################################################
-# Step 2 – Connected App Permissions, Private Space & Flex Gateway
+# Step 2 – Connected App Permissions, Private Space & Omni Gateway
 # ------------------------------------------------------------------
 # Grant our Connected App fine-grained access to the new org and
-# environments, provision a Private Space, and deploy a Flex Gateway.
+# environments, provision a Private Space, and deploy a Omni Gateway.
 ###############################################################################
 
 # 2a. Grant the Connected App scopes for the new org and environments
@@ -165,10 +165,10 @@ resource "anypoint_secret_group_truststore" "ca" {
   depends_on = [anypoint_secret_group.main]
 }
 
-resource "anypoint_flex_tls_context" "flex" {
+resource "anypoint_secret_group_tls_context" "omni" {
   environment_id  = var.environment_id
   secret_group_id = anypoint_secret_group.main.id
-  name            = "commerce-flex-tls-context"
+  name            = "commerce-omni-tls-context"
 
   keystore_id   = anypoint_secret_group_keystore.tls.id
   truststore_id = anypoint_secret_group_truststore.ca.id
@@ -177,19 +177,19 @@ resource "anypoint_flex_tls_context" "flex" {
   depends_on = [anypoint_secret_group_keystore.tls, anypoint_secret_group_truststore.ca]
 }
 
-# 2e. Deploy a Managed Flex Gateway into the Private Space
-resource "anypoint_managed_flexgateway" "commerce-gateway" {
+# 2e. Deploy a Managed Omni Gateway into the Private Space
+resource "anypoint_managed_omni_gateway" "commerce-gateway" {
   environment_id  = var.environment_id
   name            = "commerce-gateway"
   target_id       = var.target_id
 
-  depends_on = [anypoint_flex_tls_context.flex]
+  depends_on = [anypoint_secret_group_tls_context.omni]
 }
 
 ###############################################################################
 # Step 3 – API Instance with Single Upstream
 # --------------------------------------------
-# Deploy an API from Exchange to the Flex Gateway with a single backend.
+# Deploy an API from Exchange to the Omni Gateway with a single backend.
 # For simple deployments, use upstream_uri for a single backend service.
 ###############################################################################
 
@@ -211,10 +211,10 @@ resource "anypoint_api_instance" "orders_api" {
     base_path       = "/orders/v1"
   }
 
-  gateway_id = anypoint_managed_flexgateway.commerce-gateway.id
+  gateway_id = anypoint_managed_omni_gateway.commerce-gateway.id
   upstream_uri = "http://orders-api.internal:8080"
 
-  depends_on = [anypoint_managed_flexgateway.commerce-gateway]
+  depends_on = [anypoint_managed_omni_gateway.commerce-gateway]
 }
 
 ###############################################################################
@@ -243,7 +243,7 @@ resource "anypoint_api_instance" "inventory_api_canary" {
     base_path       = "/inventory/v1"
   }
 
-  gateway_id = anypoint_managed_flexgateway.commerce-gateway.id
+  gateway_id = anypoint_managed_omni_gateway.commerce-gateway.id
 
   # Multi-upstream routing: 90% stable, 10% canary
   # This pattern is ONLY available for api_instance, NOT for agent/mcp resources
@@ -265,7 +265,7 @@ resource "anypoint_api_instance" "inventory_api_canary" {
     }
   ]
 
-  depends_on = [anypoint_managed_flexgateway.commerce-gateway]
+  depends_on = [anypoint_managed_omni_gateway.commerce-gateway]
 }
 
 ###############################################################################
@@ -427,14 +427,14 @@ resource "anypoint_api_instance" "payments_api" {
     base_path       = "/payments/v1"
   }
 
-  gateway_id   = anypoint_managed_flexgateway.commerce-gateway.id
+  gateway_id   = anypoint_managed_omni_gateway.commerce-gateway.id
   upstream_uri = "http://payments.internal:8080"
 
-  depends_on = [anypoint_managed_flexgateway.commerce-gateway]
+  depends_on = [anypoint_managed_omni_gateway.commerce-gateway]
 }
 
 
-resource "anypoint_managed_flexgateway" "commerce-suborg-gateway" {
+resource "anypoint_managed_omni_gateway" "commerce-suborg-gateway" {
   organization_id = anypoint_organization.commerce_bu.id
   environment_id  = anypoint_environment.sandbox.id
   name            = "commerce-suborg-gateway"

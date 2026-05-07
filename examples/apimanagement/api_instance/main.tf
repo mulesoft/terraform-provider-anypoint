@@ -247,7 +247,7 @@ variable "environment_id" {
 }
 
 variable "gateway_id" {
-  description = "Base name for the Managed Flex Gateway (will have '-gw' appended)"
+  description = "Base name for the Managed Omni Gateway (will have '-gw' appended)"
   type        = string
   default     = "b123b2eb-35aa-454c-9750-dff9e2d218c9"
 }

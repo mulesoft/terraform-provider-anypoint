@@ -19,7 +19,7 @@ Creates and manages an AI agent instance in API Manager. Agent instances can:
 - Route to a backend agent implementation
 
 **Key Features:**
-- Integration with Flex Gateway
+- Integration with Omni Gateway
 - Support for Exchange asset specifications
 - `upstream_uri` shorthand or explicit `routing` block (one upstream per route)
 - `status` is populated automatically after creation via a POST + GET
@@ -31,7 +31,7 @@ Creates and manages an AI agent instance in API Manager. Agent instances can:
 Creates and manages an MCP (Model Context Protocol) server instance. MCP servers:
 - Expose tools and resources that agents can use
 - Follow the Model Context Protocol standard
-- Deploy to Flex Gateway with custom proxy URIs
+- Deploy to Omni Gateway with custom proxy URIs
 
 **Key Features:**
 - MCP-specific endpoint type (`type = "mcp"`)
@@ -83,7 +83,7 @@ Lists all MCP servers in an environment. Useful for:
 - Anypoint Platform account
 - Connected App credentials
 - Existing organization and environment
-- Deployed Flex Gateway
+- Deployed Omni Gateway
 
 ### Deploy an Agent Instance
 
@@ -127,7 +127,7 @@ The Agents Tools resources enable this architecture:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                  Anypoint Flex Gateway                      │
+│                  Anypoint Omni Gateway                      │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
 │  ┌─────────────────┐         ┌──────────────────────┐      │

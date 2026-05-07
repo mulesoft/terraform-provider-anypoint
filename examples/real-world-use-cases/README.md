@@ -6,10 +6,10 @@ This directory contains focused, real-world Terraform configurations that demons
 
 | File | Description |
 |------|-------------|
-| `secretsgroup_flexgateway.tf` | Provision a Secret Group (keystore + truststore + TLS context) and a Managed Flex Gateway with a custom public URL and ingress security settings |
-| `api_instance.tf` | Deploy a FlexGateway-backed API instance with weighted read/write routing, referencing the gateway and TLS context from datasources |
+| `secretsgroup_omnigateway.tf` | Provision a Secret Group (keystore + truststore + TLS context) and a Managed Omni Gateway with a custom public URL and ingress security settings |
+| `api_instance.tf` | Deploy a OmniGateway-backed API instance with weighted read/write routing, referencing the gateway and TLS context from datasources |
 
-> **Note:** These two files share state in the same Terraform root module. `api_instance.tf` depends on resources defined in `secretsgroup_flexgateway.tf` (specifically `anypoint_secret_group.main` and `anypoint_flex_tls_context.flex`).
+> **Note:** These two files share state in the same Terraform root module. `api_instance.tf` depends on resources defined in `secretsgroup_omnigateway.tf` (specifically `anypoint_secret_group.main` and `anypoint_omni_tls_context.omni`).
 
 ---
 
@@ -22,11 +22,11 @@ This configuration models the following real-world pattern:
   anypoint_secret_group          "real-world-example-secrets"
   ├── anypoint_secret_group_keystore   "tls-keystore"     (PEM cert + key)
   ├── anypoint_secret_group_truststore "ca-truststore"    (PEM CA chain)
-  └── anypoint_flex_tls_context        "flex-tls-context" (h2 + http/1.1)
+  └── anypoint_omni_tls_context        "omni-tls-context" (h2 + http/1.1)
           │
           ▼
-[Managed Flex Gateway]
-  anypoint_managed_flexgateway   "real-world-example-gateway"
+[Managed Omni Gateway]
+  anypoint_managed_omni_gateway   "real-world-example-gateway"
   └── ingress: custom public URL, SSL session forwarding, last-mile security
           │
           ▼  (looked up via datasource in api_instance.tf)
@@ -43,7 +43,7 @@ This configuration models the following real-world pattern:
 `api_instance.tf` does not hard-code the gateway ID or TLS context ID. Instead it uses datasources and `locals` to look them up by name at plan time:
 
 ```hcl
-data "anypoint_managed_flexgateways" "all" {
+data "anypoint_managed_omni_gateways" "all" {
   environment_id = var.env_id
 }
 
@@ -54,25 +54,25 @@ data "anypoint_secret_group_tls_contexts" "main" {
 
 locals {
   gateway_id = one([
-    for gw in data.anypoint_managed_flexgateways.all.gateways :
+    for gw in data.anypoint_managed_omni_gateways.all.gateways :
     gw.id if gw.name == "real-world-example-gateway"
   ])
 
-  flex_tls_context_id = one([
+  omni_tls_context_id = one([
     for tls in data.anypoint_secret_group_tls_contexts.main.tls_contexts :
-    tls.id if tls.name == "flex-tls-context"
+    tls.id if tls.name == "omni-tls-context"
   ])
 }
 ```
 
 This pattern lets `api_instance.tf` remain reusable regardless of whether the gateway was created in the same config or already existed.
 
-**2. Custom public URL on Flex Gateway**
+**2. Custom public URL on Omni Gateway**
 
 The gateway overrides the auto-derived ingress URL with a user-supplied domain:
 
 ```hcl
-resource "anypoint_managed_flexgateway" "complete" {
+resource "anypoint_managed_omni_gateway" "complete" {
   ingress = {
     public_url          = "https://example.mulesoft.com/"
     forward_ssl_session = true
@@ -89,7 +89,7 @@ The `ssl_context_id` for the API instance endpoint is constructed by combining t
 
 ```hcl
 endpoint = {
-  ssl_context_id = "${anypoint_secret_group.main.id}/${local.flex_tls_context_id}"
+  ssl_context_id = "${anypoint_secret_group.main.id}/${local.omni_tls_context_id}"
 }
 ```
 
@@ -134,11 +134,11 @@ routing = [
 
 | Variable | Defined in | Description | Default |
 |----------|-----------|-------------|---------|
-| `anypoint_client_id` | `secretsgroup_flexgateway.tf` | Connected App client ID | — |
-| `anypoint_client_secret` | `secretsgroup_flexgateway.tf` | Connected App client secret | — |
-| `anypoint_base_url` | `secretsgroup_flexgateway.tf` | Anypoint control-plane URL | stgx |
-| `environment_id` | `secretsgroup_flexgateway.tf` | Environment for gateway + secrets | — |
-| `target_id` | `secretsgroup_flexgateway.tf` | Private space / target ID for the gateway | — |
+| `anypoint_client_id` | `secretsgroup_omnigateway.tf` | Connected App client ID | — |
+| `anypoint_client_secret` | `secretsgroup_omnigateway.tf` | Connected App client secret | — |
+| `anypoint_base_url` | `secretsgroup_omnigateway.tf` | Anypoint control-plane URL | stgx |
+| `environment_id` | `secretsgroup_omnigateway.tf` | Environment for gateway + secrets | — |
+| `target_id` | `secretsgroup_omnigateway.tf` | Private space / target ID for the gateway | — |
 | `organization_id` | `api_instance.tf` | Organization for the API instance | — |
 | `env_id` | `api_instance.tf` | Environment for the API instance (same as `environment_id`) | — |
 | `api_asset_id` | `api_instance.tf` | Exchange asset ID for the API spec | `api-test` |
@@ -162,11 +162,11 @@ terraform apply
 
 ---
 
-## Outputs (from `secretsgroup_flexgateway.tf`)
+## Outputs (from `secretsgroup_omnigateway.tf`)
 
 | Output | Description |
 |--------|-------------|
-| `complete_gateway_id` | ID of the created Flex Gateway |
+| `complete_gateway_id` | ID of the created Omni Gateway |
 | `complete_gateway_public_url` | Ingress public URL (custom or auto-derived) |
 | `complete_gateway_internal_url` | Ingress internal URL |
 | `complete_gateway_status` | Runtime status of the gateway |

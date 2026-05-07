@@ -2,12 +2,12 @@
 page_title: "anypoint_api_instance Resource - terraform-provider-anypoint"
 subcategory: "API Management"
 description: |-
-  Manages an API instance in Anypoint API Manager. An API instance represents an API specification deployed to a Flex Gateway target with routing rules and upstream backends.
+  Manages an API instance in Anypoint API Manager. An API instance represents an API specification deployed to a Omni Gateway target with routing rules and upstream backends.
 ---
 
 # anypoint_api_instance (Resource)
 
-Manages an API instance in Anypoint API Manager. An API instance represents an API specification deployed to a Flex Gateway target with routing rules and upstream backends.
+Manages an API instance in Anypoint API Manager. An API instance represents an API specification deployed to a Omni Gateway target with routing rules and upstream backends.
 
 ## Example Usage
 
@@ -86,7 +86,7 @@ resource "anypoint_api_instance" "weighted_routing" {
 - `approval_method` (String) Client approval method. Valid values: `manual`, `automatic`. Defaults to null (no approval required).
 - `consumer_endpoint` (String) Consumer-facing endpoint URI (the public URL clients use to reach the API). Maps to top-level endpointUri in the API.
 - `upstream_uri` (String) Shorthand for a single-upstream routing configuration. When set, the provider constructs routing as `[{upstreams: [{weight: 100, uri: <value>}]}]`. Mutually exclusive with the `routing` block.
-- `gateway_id` (String) The Flex Gateway UUID. When provided, the deployment block is auto-populated by fetching gateway details (target_id, target_name, gateway_version) from the Gateway Manager API. Mutually exclusive with specifying a full deployment block.
+- `gateway_id` (String) The Omni Gateway UUID. When provided, the deployment block is auto-populated by fetching gateway details (target_id, target_name, gateway_version) from the Gateway Manager API. Mutually exclusive with specifying a full deployment block.
 - `endpoint` (Block) Endpoint / proxy configuration for the API instance. See [below for nested schema](#nestedschema--endpoint).
 - `deployment` (Block) Deployment target configuration. Auto-populated when gateway_id is set. See [below for nested schema](#nestedschema--deployment).
 - `routing` (Block List) Routing rules with weighted upstream backends. See [below for nested schema](#nestedschema--routing).
@@ -115,7 +115,7 @@ Optional:
 
 - `deployment_type` (String) Deployment type. Valid values: `HY` (hybrid), `CH` (CloudHub), `CH2`, `RF` (Runtime Fabric). Defaults to `HY`.
 - `type` (String) Endpoint protocol type. Valid values: `http`, `rest`, `raml`. Defaults to `http`.
-- `base_path` (String) API base path for FlexGateway (e.g. 'my-api'). The provider constructs the full proxy URI as `http://0.0.0.0:8081/<base_path>`. Required when technology='flexGateway'. Mutually exclusive with `uri`.
+- `base_path` (String) API base path for OmniGateway (e.g. 'my-api'). The provider constructs the full proxy URI as `http://0.0.0.0:8081/<base_path>`. Required when technology='omniGateway'. Mutually exclusive with `uri`.
 - `uri` (String) Direct implementation URI for Mule4 or other technologies (e.g. 'http://www.google.com'). Required when technology='mule4'. Mutually exclusive with `base_path`.
 - `response_timeout` (Number) Response timeout in milliseconds.
 
@@ -130,7 +130,7 @@ Optional:
 - `overwrite` (Boolean) Whether to overwrite an existing deployment.
 - `target_id` (String) The target gateway ID to deploy to.
 - `target_name` (String) The target gateway name.
-- `gateway_version` (String) The Flex Gateway runtime version.
+- `gateway_version` (String) The Omni Gateway runtime version.
 
 <a id="nestedschema--routing"></a>
 ### Nested Schema for `routing`

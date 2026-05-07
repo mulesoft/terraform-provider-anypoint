@@ -48,7 +48,7 @@ variable "environment_id" {
 
 resource "anypoint_secret_group" "main" {
   environment_id = var.environment_id
-  name           = "terraform-tls"
+  name           = "terraform-tls-123"
   downloadable   = true
 }
 
@@ -79,7 +79,7 @@ resource "anypoint_secret_group_keystore" "tls_1" {
 resource "anypoint_secret_group_truststore" "ca" {
   environment_id  = var.environment_id
   secret_group_id = anypoint_secret_group.main.id
-  name            = "ca-truststore-renamed"
+  name            = "ca-truststore-renamed-123"
   type            = "PEM"
 
   truststore_base64 = base64encode(file("${path.module}/../../certs/truststore2.pem"))
@@ -89,11 +89,10 @@ resource "anypoint_secret_group_truststore" "ca" {
 # References keystore and truststore by their IDs — the provider
 # automatically builds "keystores/{id}" and "truststores/{id}" paths.
 
-resource "anypoint_secret_group_tls_context" "flex" {
+resource "anypoint_secret_group_tls_context" "omni" {
   environment_id  = var.environment_id
   secret_group_id = anypoint_secret_group.main.id
-  name            = "flex-tls-context"
-  target          = "FlexGateway"
+  name            = "omni-tls-context-123"
 
   keystore_id   = anypoint_secret_group_keystore.tls.id
   truststore_id = anypoint_secret_group_truststore.ca.id
@@ -111,8 +110,7 @@ resource "anypoint_secret_group_tls_context" "flex" {
 resource "anypoint_secret_group_tls_context" "mtls" {
   environment_id  = var.environment_id
   secret_group_id = anypoint_secret_group.main.id
-  name            = "mtls-context"
-  target          = "FlexGateway"
+  name            = "mtls-context-123"
 
   keystore_id   = anypoint_secret_group_keystore.tls_1.id
   truststore_id = anypoint_secret_group_truststore.ca.id
@@ -128,7 +126,7 @@ resource "anypoint_secret_group_tls_context" "mtls" {
 # ─── Outputs ─────────────────────────────────────────────────────
 
 output "tls_context_id" {
-  value = anypoint_secret_group_tls_context.flex.id
+  value = anypoint_secret_group_tls_context.omni.id
 }
 
 output "mtls_context_id" {

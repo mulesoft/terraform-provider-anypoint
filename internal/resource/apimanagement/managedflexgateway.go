@@ -24,9 +24,9 @@ import (
 )
 
 var (
-	_ resource.Resource                = &ManagedFlexGatewayResource{}
-	_ resource.ResourceWithConfigure   = &ManagedFlexGatewayResource{}
-	_ resource.ResourceWithImportState = &ManagedFlexGatewayResource{}
+	_ resource.Resource                = &ManagedOmniGatewayResource{}
+	_ resource.ResourceWithConfigure   = &ManagedOmniGatewayResource{}
+	_ resource.ResourceWithImportState = &ManagedOmniGatewayResource{}
 )
 
 // attr type maps — used to build and validate types.Object values for nested blocks.
@@ -58,15 +58,15 @@ var (
 	}
 )
 
-// ManagedFlexGatewayResource is the resource implementation.
-type ManagedFlexGatewayResource struct {
-	client *apimanagement.ManagedFlexGatewayClient
+// ManagedOmniGatewayResource is the resource implementation.
+type ManagedOmniGatewayResource struct {
+	client *apimanagement.ManagedOmniGatewayClient
 }
 
-// ManagedFlexGatewayResourceModel is the Terraform state model.
+// ManagedOmniGatewayResourceModel is the Terraform state model.
 // Nested optional+computed blocks use types.Object so the framework can
 // represent the "unknown" value during plan without a conversion error.
-type ManagedFlexGatewayResourceModel struct {
+type ManagedOmniGatewayResourceModel struct {
 	ID             types.String `tfsdk:"id"`
 	Name           types.String `tfsdk:"name"`
 	OrganizationID types.String `tfsdk:"organization_id"`
@@ -82,27 +82,27 @@ type ManagedFlexGatewayResourceModel struct {
 	Tracing        types.Object `tfsdk:"tracing"`
 }
 
-func NewManagedFlexGatewayResource() resource.Resource {
-	return &ManagedFlexGatewayResource{}
+func NewManagedOmniGatewayResource() resource.Resource {
+	return &ManagedOmniGatewayResource{}
 }
 
-func (r *ManagedFlexGatewayResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_managed_flexgateway"
+func (r *ManagedOmniGatewayResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_managed_omnigateway"
 }
 
-func (r *ManagedFlexGatewayResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *ManagedOmniGatewayResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Manages a CloudHub 2.0 Managed Flex Gateway instance in Anypoint Platform.",
+		Description: "Manages a CloudHub 2.0 Managed Omni Gateway instance in Anypoint Platform.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Description: "The unique identifier of the managed Flex Gateway.",
+				Description: "The unique identifier of the managed Omni Gateway.",
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"name": schema.StringAttribute{
-				Description: "The name of the managed Flex Gateway.",
+				Description: "The name of the managed Omni Gateway.",
 				Required:    true,
 			},
 			"organization_id": schema.StringAttribute{
@@ -128,7 +128,7 @@ func (r *ManagedFlexGatewayResource) Schema(_ context.Context, _ resource.Schema
 				},
 			},
 			"runtime_version": schema.StringAttribute{
-				Description: "The Flex Gateway runtime version (e.g., '1.9.9'). " +
+				Description: "The Omni Gateway runtime version (e.g., '1.9.9'). " +
 					"If omitted, the provider auto-selects the latest version for the chosen release_channel.",
 				Optional: true,
 				Computed: true,
@@ -155,7 +155,7 @@ func (r *ManagedFlexGatewayResource) Schema(_ context.Context, _ resource.Schema
 				},
 			},
 			"status": schema.StringAttribute{
-				Description: "The current status of the managed Flex Gateway.",
+				Description: "The current status of the managed Omni Gateway.",
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -299,7 +299,7 @@ func (r *ManagedFlexGatewayResource) Schema(_ context.Context, _ resource.Schema
 	}
 }
 
-func (r *ManagedFlexGatewayResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (r *ManagedOmniGatewayResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
 	}
@@ -313,11 +313,11 @@ func (r *ManagedFlexGatewayResource) Configure(_ context.Context, req resource.C
 		return
 	}
 
-	gwClient, err := apimanagement.NewManagedFlexGatewayClient(config)
+	gwClient, err := apimanagement.NewManagedOmniGatewayClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to Create Managed Flex Gateway API Client",
-			"An unexpected error occurred when creating the Managed Flex Gateway API client. "+
+			"Unable to Create Managed Omni Gateway API Client",
+			"An unexpected error occurred when creating the Managed Omni Gateway API client. "+
 				"If the error is not clear, please contact the provider developers.\n\n"+
 				"Anypoint Client Error: "+err.Error(),
 		)
@@ -329,8 +329,8 @@ func (r *ManagedFlexGatewayResource) Configure(_ context.Context, req resource.C
 
 // --- CRUD ---
 
-func (r *ManagedFlexGatewayResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var data ManagedFlexGatewayResourceModel
+func (r *ManagedOmniGatewayResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var data ManagedOmniGatewayResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -405,7 +405,7 @@ func (r *ManagedFlexGatewayResource) Create(ctx context.Context, req resource.Cr
 		}
 	}
 
-	createReq := &apimanagement.CreateManagedFlexGatewayRequest{
+	createReq := &apimanagement.CreateManagedOmniGatewayRequest{
 		Name:           gwName,
 		TargetID:       targetID,
 		RuntimeVersion: runtimeVersion,
@@ -419,20 +419,20 @@ func (r *ManagedFlexGatewayResource) Create(ctx context.Context, req resource.Cr
 	// trigger a "provider produced an unexpected new value" framework error.
 	planTracing := data.Tracing
 
-	gw, err := r.client.CreateManagedFlexGateway(ctx, orgID, envID, createReq)
+	gw, err := r.client.CreateManagedOmniGateway(ctx, orgID, envID, createReq)
 	if err != nil {
-		resp.Diagnostics.AddError("Error creating managed Flex Gateway", "Could not create managed Flex Gateway, unexpected error: "+err.Error())
+		resp.Diagnostics.AddError("Error creating managed Omni Gateway", "Could not create managed Omni Gateway, unexpected error: "+err.Error())
 		return
 	}
 
 	r.flattenGateway(gw, &data, orgID, envID)
 	data.Tracing = reconcileTracing(planTracing, data.Tracing)
-	tflog.Trace(ctx, "created managed flex gateway", map[string]interface{}{"id": gw.ID})
+	tflog.Trace(ctx, "created managed omni gateway", map[string]interface{}{"id": gw.ID})
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r *ManagedFlexGatewayResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var data ManagedFlexGatewayResourceModel
+func (r *ManagedOmniGatewayResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var data ManagedOmniGatewayResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -444,13 +444,13 @@ func (r *ManagedFlexGatewayResource) Read(ctx context.Context, req resource.Read
 	}
 	envID := data.EnvironmentID.ValueString()
 
-	gw, err := r.client.GetManagedFlexGateway(ctx, orgID, envID, data.ID.ValueString())
+	gw, err := r.client.GetManagedOmniGateway(ctx, orgID, envID, data.ID.ValueString())
 	if err != nil {
 		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
-		resp.Diagnostics.AddError("Error reading managed Flex Gateway", "Could not read managed Flex Gateway ID "+data.ID.ValueString()+": "+err.Error())
+		resp.Diagnostics.AddError("Error reading managed Omni Gateway", "Could not read managed Omni Gateway ID "+data.ID.ValueString()+": "+err.Error())
 		return
 	}
 
@@ -458,8 +458,8 @@ func (r *ManagedFlexGatewayResource) Read(ctx context.Context, req resource.Read
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r *ManagedFlexGatewayResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var plan, state ManagedFlexGatewayResourceModel
+func (r *ManagedOmniGatewayResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var plan, state ManagedOmniGatewayResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -495,7 +495,7 @@ func (r *ManagedFlexGatewayResource) Update(ctx context.Context, req resource.Up
 	}
 
 	// PUT requires the full object — send everything from the plan.
-	updateReq := &apimanagement.UpdateManagedFlexGatewayRequest{
+	updateReq := &apimanagement.UpdateManagedOmniGatewayRequest{
 		Name:           plan.Name.ValueString(),
 		TargetID:       state.TargetID.ValueString(), // target_id is RequiresReplace, so state == plan
 		RuntimeVersion: plan.RuntimeVersion.ValueString(),
@@ -508,9 +508,9 @@ func (r *ManagedFlexGatewayResource) Update(ctx context.Context, req resource.Up
 	// echo configuration.tracing back (same issue as Create).
 	planTracing := plan.Tracing
 
-	gw, err := r.client.UpdateManagedFlexGateway(ctx, orgID, envID, state.ID.ValueString(), updateReq)
+	gw, err := r.client.UpdateManagedOmniGateway(ctx, orgID, envID, state.ID.ValueString(), updateReq)
 	if err != nil {
-		resp.Diagnostics.AddError("Error updating managed Flex Gateway", "Could not update managed Flex Gateway, unexpected error: "+err.Error())
+		resp.Diagnostics.AddError("Error updating managed Omni Gateway", "Could not update managed Omni Gateway, unexpected error: "+err.Error())
 		return
 	}
 
@@ -519,8 +519,8 @@ func (r *ManagedFlexGatewayResource) Update(ctx context.Context, req resource.Up
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func (r *ManagedFlexGatewayResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var data ManagedFlexGatewayResourceModel
+func (r *ManagedOmniGatewayResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var data ManagedOmniGatewayResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -532,14 +532,14 @@ func (r *ManagedFlexGatewayResource) Delete(ctx context.Context, req resource.De
 	}
 	envID := data.EnvironmentID.ValueString()
 
-	err := r.client.DeleteManagedFlexGateway(ctx, orgID, envID, data.ID.ValueString())
+	err := r.client.DeleteManagedOmniGateway(ctx, orgID, envID, data.ID.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddError("Error deleting managed Flex Gateway", "Could not delete managed Flex Gateway, unexpected error: "+err.Error())
+		resp.Diagnostics.AddError("Error deleting managed Omni Gateway", "Could not delete managed Omni Gateway, unexpected error: "+err.Error())
 		return
 	}
 }
 
-func (r *ManagedFlexGatewayResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+func (r *ManagedOmniGatewayResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
@@ -549,8 +549,8 @@ func (r *ManagedFlexGatewayResource) ImportState(ctx context.Context, req resour
 // All nested blocks are types.Object so we pull values via .Attributes().
 // When a block is null/unknown (i.e. the user omitted it), we fall back to the same
 // defaults declared in the schema so the API never receives invalid zero values.
-func (r *ManagedFlexGatewayResource) expandConfiguration(data ManagedFlexGatewayResourceModel) apimanagement.ManagedFlexGatewayConfig {
-	cfg := apimanagement.ManagedFlexGatewayConfig{}
+func (r *ManagedOmniGatewayResource) expandConfiguration(data ManagedOmniGatewayResourceModel) apimanagement.ManagedOmniGatewayConfig {
+	cfg := apimanagement.ManagedOmniGatewayConfig{}
 
 	if !data.Ingress.IsNull() && !data.Ingress.IsUnknown() {
 		attrs := data.Ingress.Attributes()
@@ -628,7 +628,7 @@ func (r *ManagedFlexGatewayResource) expandConfiguration(data ManagedFlexGateway
 
 // flattenGateway maps the API response into the Terraform state model.
 // Nested blocks are stored as types.Object to handle unknown values during plan.
-func (r *ManagedFlexGatewayResource) flattenGateway(gw *apimanagement.ManagedFlexGateway, data *ManagedFlexGatewayResourceModel, orgID, envID string) {
+func (r *ManagedOmniGatewayResource) flattenGateway(gw *apimanagement.ManagedOmniGateway, data *ManagedOmniGatewayResourceModel, orgID, envID string) {
 	data.ID = types.StringValue(gw.ID)
 	data.Name = types.StringValue(gw.Name)
 	data.TargetID = types.StringValue(gw.TargetID)
