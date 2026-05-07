@@ -283,12 +283,12 @@ func (r *APIInstanceResource) Schema(_ context.Context, _ resource.SchemaRequest
 				},
 			},
 			"technology": schema.StringAttribute{
-				Description: "The gateway technology. Valid values: 'omniGateway', 'mule4', 'serviceMesh'.",
+				Description: "The gateway technology. Valid values: 'flexGateway', 'mule4', 'serviceMesh'.",
 				Optional:    true,
 				Computed:    true,
-				Default:     stringdefault.StaticString("omniGateway"),
+				Default:     stringdefault.StaticString("flexGateway"),
 				Validators: []validator.String{
-					stringvalidator.OneOf("omniGateway", "mule4", "serviceMesh"),
+					stringvalidator.OneOf("flexGateway", "mule4", "serviceMesh"),
 				},
 			},
 			"provider_id": schema.StringAttribute{
@@ -885,7 +885,7 @@ func (r *APIInstanceResource) expandCreateRequest(ctx context.Context, data APII
 
 		technology := data.Technology.ValueString()
 		switch technology {
-		case "omniGateway", "":
+		case "flexGateway", "":
 			if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
 				basePath := strings.TrimPrefix(ep.BasePath.ValueString(), "/")
 				proxyURI := "http://0.0.0.0:8081/" + basePath
@@ -967,7 +967,7 @@ func (r *APIInstanceResource) expandUpdateRequest(ctx context.Context, data APII
 
 		technology := data.Technology.ValueString()
 		switch technology {
-		case "omniGateway", "":
+		case "flexGateway", "":
 			if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
 				basePath := strings.TrimPrefix(ep.BasePath.ValueString(), "/")
 				proxyURI := "http://0.0.0.0:8081/" + basePath
@@ -1158,7 +1158,7 @@ func (r *APIInstanceResource) flattenInstance(_ context.Context, inst *apimanage
 
 		technology := inst.Technology
 		switch technology {
-		case "omniGateway", "":
+		case "flexGateway", "":
 			if inst.Endpoint.ProxyURI != nil && *inst.Endpoint.ProxyURI != "" {
 				ep.BasePath = types.StringValue(strings.TrimPrefix(*inst.Endpoint.ProxyURI, "http://0.0.0.0:8081/"))
 			} else {

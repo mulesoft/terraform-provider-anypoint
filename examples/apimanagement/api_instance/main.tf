@@ -20,7 +20,7 @@ provider "anypoint" {
 # --------------------------------------------------------------------------
 # Only needs: environment_id, gateway_id, spec, endpoint.base_path,
 # and upstream_uri. Everything else uses defaults:
-#   technology     = "omniGateway"
+#   technology     = "flexGateway"
 #   endpoint.type  = "http"
 #   endpoint.deployment_type = "HY"
 #   upstream weight = 100

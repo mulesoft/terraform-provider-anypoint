@@ -274,13 +274,8 @@ resource "anypoint_managed_omnigateway" "main" {
 # Deploy API instance to gateway
 resource "anypoint_api_instance" "api" {
   environment_id = var.environment_id
-<<<<<<< Updated upstream:examples/apimanagement/managed_omnigateway/README.md
-  technology     = "omniGateway"
-  gateway_id     = anypoint_managed_omnigateway.main.id
-=======
-  technology     = "omniGateway"
+  technology     = "flexGateway"
   gateway_id     = anypoint_managed_omni_gateway.main.id
->>>>>>> Stashed changes:examples/apimanagement/managed_omni_gateway/README.md
 
   spec = {
     asset_id = "customer-api"
@@ -455,17 +450,10 @@ anypoint-cli runtime-mgr cloudhub2 omnigateway logs <gateway-id>
 
 ## Additional Resources
 
-<<<<<<< Updated upstream:examples/apimanagement/managed_omnigateway/README.md
 - [Omni Gateway Documentation](https://docs.mulesoft.com/gateway/)
 - [Omni Gateway Installation](https://docs.mulesoft.com/gateway/omni-install)
 - [Gateway Sizing Guide](https://docs.mulesoft.com/gateway/omni-architecture)
 - [Gateway Configuration Reference](https://docs.mulesoft.com/gateway/omni-conn-reg-run)
-=======
-- [Omni Gateway Documentation](https://docs.mulesoft.com/gateway/)
-- [Omni Gateway Installation](https://docs.mulesoft.com/gateway/omni-install)
-- [Gateway Sizing Guide](https://docs.mulesoft.com/gateway/omni-architecture)
-- [Gateway Configuration Reference](https://docs.mulesoft.com/gateway/omni-conn-reg-run)
->>>>>>> Stashed changes:examples/apimanagement/managed_omni_gateway/README.md
 
 ## Cleanup
 

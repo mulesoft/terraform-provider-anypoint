@@ -162,7 +162,7 @@ func TestUpdatePayload_MatchesUIContract(t *testing.T) {
 		"vpcs":                    zeroVCore(),
 		"network_connections":     zeroVCore(),
 		"hybrid":                  zeroEnabled(),
-		"omni_gateway":            zeroEnabled(),
+		"flex_gateway":            zeroEnabled(),
 		"worker_logging_override": zeroEnabled(),
 		"service_mesh":            zeroEnabled(),
 		"mq_messages": types.ObjectValueMust(
@@ -276,7 +276,7 @@ func TestUpdatePayload_MatchesUIContract(t *testing.T) {
 //  2. User bumps vCoresProduction to 1 via the Anypoint UI.
 //  3. Terraform detects drift and tries to PUT back to 0.
 //  4. Provider ships a "full" entitlements blob including
-//     `hybrid:{enabled:false}`, `omniGateway:{enabled:false}`,
+//     `hybrid:{enabled:false}`, `flexGateway:{enabled:false}`,
 //     `runtimeFabric:false`, etc. — filled in from state via
 //     UseStateForUnknown.
 //  5. Server 403s: "Can not enable entitlement on a business group. It can
@@ -325,7 +325,7 @@ func TestUpdatePayload_BusinessGroupOmitsMasterOrgOnlyEntitlements(t *testing.T)
 		"vpcs":                    types.ObjectNull(getVCoreEntitlementAttributeTypes()),
 		"network_connections":     types.ObjectNull(getVCoreEntitlementAttributeTypes()),
 		"hybrid":                  types.ObjectNull(map[string]attr.Type{"enabled": types.BoolType}),
-		"omni_gateway":            types.ObjectNull(map[string]attr.Type{"enabled": types.BoolType}),
+		"flex_gateway":            types.ObjectNull(map[string]attr.Type{"enabled": types.BoolType}),
 		"worker_logging_override": types.ObjectNull(map[string]attr.Type{"enabled": types.BoolType}),
 		"service_mesh":            types.ObjectNull(map[string]attr.Type{"enabled": types.BoolType}),
 		"mq_messages":             types.ObjectNull(map[string]attr.Type{"base": types.Int64Type, "add_on": types.Int64Type}),
@@ -382,7 +382,7 @@ func TestUpdatePayload_BusinessGroupOmitsMasterOrgOnlyEntitlements(t *testing.T)
 	forbidden := []string{
 		`"runtimeFabric"`,
 		`"hybrid"`,
-		`"omniGateway"`,
+		`"flexGateway"`,
 		`"serviceMesh"`,
 		`"workerLoggingOverride"`,
 	}
@@ -422,7 +422,7 @@ func TestUpdatePayload_BusinessGroupOmitsMasterOrgOnlyEntitlements(t *testing.T)
 //     fields the user declared, so the server is happy (no 403).
 //  2. The PUT response contains the server's current view of the org.
 //     For a business group that view typically OMITS `service_mesh` /
-//     `omni_gateway` / `hybrid` / `worker_logging_override` because those are
+//     `flexGateway` / `hybrid` / `worker_logging_override` because those are
 //     master-org-only flags inherited from the parent.
 //  3. If we overwrite state with just the PUT response's entitlements blob,
 //     every previously-known value becomes null — but the plan (via
@@ -456,7 +456,7 @@ func TestMergeEntitlements_PreservesPlanWhenApiOmitsMasterOrgFields(t *testing.T
 		// These two had concrete false in plan (e.g. carried forward via
 		// UseStateForUnknown from an older zero-filled state). The merge must
 		// preserve them because the API response omits them.
-		"omni_gateway": types.ObjectValueMust(
+		"flex_gateway": types.ObjectValueMust(
 			map[string]attr.Type{"enabled": types.BoolType},
 			map[string]attr.Value{"enabled": types.BoolValue(false)},
 		),
@@ -491,7 +491,7 @@ func TestMergeEntitlements_PreservesPlanWhenApiOmitsMasterOrgFields(t *testing.T
 		ManagedGatewaySmall: &am.AssignedEntitlement{
 			Assigned: 1,
 		},
-		// omni_gateway, service_mesh, hybrid, worker_logging_override,
+		// flex_gateway, service_mesh, hybrid, worker_logging_override,
 		// design_center intentionally nil — the server didn't return them.
 	}
 	apiObj, diags := flattenEntitlements(ctx, apiResponse)
@@ -506,10 +506,10 @@ func TestMergeEntitlements_PreservesPlanWhenApiOmitsMasterOrgFields(t *testing.T
 		t.Fatalf("merge: %s", diags)
 	}
 
-	// ── omni_gateway and service_mesh MUST carry the plan's false value
+	// ── flex_gateway and service_mesh MUST carry the plan's false value
 	//    through; otherwise Terraform fails with "inconsistent result after
 	//    apply".
-	for _, name := range []string{"omni_gateway", "service_mesh"} {
+	for _, name := range []string{"flex_gateway", "service_mesh"} {
 		obj, ok := merged.Attributes()[name].(types.Object)
 		if !ok {
 			t.Errorf("%s: not an Object", name)
@@ -546,9 +546,9 @@ func TestMergeEntitlements_PreservesPlanWhenApiOmitsMasterOrgFields(t *testing.T
 // regression slug:
 //
 //	Provider produced inconsistent result after apply ...
-//	.entitlements.omni_gateway: was null, but now cty.ObjectVal({"enabled":true})
+//	.entitlements.flex_gateway: was null, but now cty.ObjectVal({"enabled":true})
 //
-// This happens when the user has not declared omni_gateway / service_mesh in
+// This happens when the user has not declared flex_gateway / service_mesh in
 // HCL and the prior state for that attribute is null (because flatten now
 // stores null for omitted enabled-style entitlements rather than zero-filling).
 // Terraform's planning then proposes plan = null. If the server's PUT response
@@ -560,7 +560,7 @@ func TestMergeEntitlements_PreservesPlanWhenApiOmitsMasterOrgFields(t *testing.T
 func TestMergeEntitlements_PreservesPlanNullAgainstConcreteApi(t *testing.T) {
 	ctx := context.Background()
 
-	// Plan attributes — user did NOT declare omni_gateway or service_mesh,
+	// Plan attributes — user did NOT declare flex_gateway or service_mesh,
 	// state was null (post-fix flatten leaves null for omitted enabled-style
 	// entitlements), so Terraform's plan is null for them.
 	enabledType := map[string]attr.Type{"enabled": types.BoolType}
@@ -575,7 +575,7 @@ func TestMergeEntitlements_PreservesPlanNullAgainstConcreteApi(t *testing.T) {
 		"vpcs":                    types.ObjectNull(getVCoreEntitlementAttributeTypes()),
 		"network_connections":     types.ObjectNull(getVCoreEntitlementAttributeTypes()),
 		"hybrid":                  types.ObjectNull(enabledType),
-		"omni_gateway":            types.ObjectNull(enabledType), // ← plan null
+		"flex_gateway":            types.ObjectNull(enabledType), // ← plan null
 		"worker_logging_override": types.ObjectNull(enabledType),
 		"service_mesh":            types.ObjectNull(enabledType), // ← plan null
 		"mq_messages":             types.ObjectNull(map[string]attr.Type{"base": types.Int64Type, "add_on": types.Int64Type}),
@@ -591,14 +591,14 @@ func TestMergeEntitlements_PreservesPlanNullAgainstConcreteApi(t *testing.T) {
 		t.Fatalf("plan obj: %s", diags)
 	}
 
-	// API response includes omni_gateway and service_mesh as concrete
+	// API response includes flex_gateway and service_mesh as concrete
 	// `{enabled:true}` (master-org-inherited). This is exactly what triggered
 	// the user's "was null, but now cty.ObjectVal(...)" diagnostic.
 	apiResponse := am.Entitlements{
 		CreateSubOrgs:      false,
 		CreateEnvironments: true,
 		GlobalDeployment:   false,
-		OmniGateway:        &am.EnabledEntitlement{Enabled: true},
+		FlexGateway:        &am.EnabledEntitlement{Enabled: true},
 		ServiceMesh:        &am.EnabledEntitlement{Enabled: true},
 	}
 	apiObj, diags := flattenEntitlements(ctx, apiResponse)
@@ -611,9 +611,9 @@ func TestMergeEntitlements_PreservesPlanNullAgainstConcreteApi(t *testing.T) {
 		t.Fatalf("merge: %s", diags)
 	}
 
-	// omni_gateway and service_mesh MUST stay null — Terraform's post-apply
+	// flex_gateway and service_mesh MUST stay null — Terraform's post-apply
 	// must equal plan even though the server returned a concrete value.
-	for _, name := range []string{"omni_gateway", "service_mesh"} {
+	for _, name := range []string{"flex_gateway", "service_mesh"} {
 		obj, ok := merged.Attributes()[name].(types.Object)
 		if !ok {
 			t.Errorf("%s: not an Object", name)
@@ -685,7 +685,7 @@ func TestFlatten_ServerOmitsManagedGatewayLarge(t *testing.T) {
 		}
 	}
 
-	// Enabled-style entitlements (hybrid / omni_gateway / worker_logging_override
+	// Enabled-style entitlements (hybrid / flex_gateway / worker_logging_override
 	// / service_mesh) and design_center MUST be null when the server omits
 	// them. On sub-orgs these are typically inherited from the master org and
 	// may be returned as `{enabled:true}` on a PUT response; hardcoding false
@@ -693,7 +693,7 @@ func TestFlatten_ServerOmitsManagedGatewayLarge(t *testing.T) {
 	// inconsistent-result diagnostic on apply.
 	nullChecks := []string{
 		"hybrid",
-		"omni_gateway",
+		"flex_gateway",
 		"worker_logging_override",
 		"service_mesh",
 		"design_center",
@@ -847,7 +847,7 @@ func TestExpandEntitlements_NullObjectYieldsZeroPayload(t *testing.T) {
 		"vcores_sandbox":        ent.VCoresSandbox,
 		"managed_gateway_large": ent.ManagedGatewayLarge,
 		"hybrid":                ent.Hybrid,
-		"omni_gateway":          ent.OmniGateway,
+		"flex_gateway":          ent.FlexGateway,
 		"design_center":         ent.DesignCenter,
 		"mq_messages":           ent.MqMessages,
 	} {
@@ -867,7 +867,7 @@ func TestExpandEntitlements_NullObjectYieldsZeroPayload(t *testing.T) {
 	// Master-org-only / nested entitlements must all be omitted by `omitempty`.
 	forbidden := []string{
 		"runtimeFabric", "vCoresProduction", "managedGatewayLarge",
-		"hybrid", "omniGateway", "designCenter", "mqMessages", "vpns", "staticIps",
+		"hybrid", "flexGateway", "designCenter", "mqMessages", "vpns", "staticIps",
 	}
 	for _, f := range forbidden {
 		if strings.Contains(got, f) {
@@ -1349,7 +1349,7 @@ func TestOrganizationResource_EntitlementsSchema_InheritableFieldsHaveNoDefault(
 	}
 
 	// Object-shaped inheritable entitlements: no Default.
-	for _, name := range []string{"hybrid", "omni_gateway", "service_mesh", "worker_logging_override", "design_center"} {
+	for _, name := range []string{"hybrid", "flex_gateway", "service_mesh", "worker_logging_override", "design_center"} {
 		nested, ok := entAttr.Attributes[name].(schema.SingleNestedAttribute)
 		if !ok {
 			t.Errorf("entitlements.%s: expected SingleNestedAttribute, got %T", name, entAttr.Attributes[name])
@@ -1381,7 +1381,7 @@ func TestStripMasterOrgOnlyEntitlements_DropsAllInheritedFields(t *testing.T) {
 		CreateEnvironments:    true,
 		GlobalDeployment:      false,
 		Hybrid:                &am.HybridEntitlement{Enabled: true},
-		OmniGateway:           &am.EnabledEntitlement{Enabled: true},
+		FlexGateway:           &am.EnabledEntitlement{Enabled: true},
 		ServiceMesh:           &am.EnabledEntitlement{Enabled: true},
 		WorkerLoggingOverride: &am.WorkerLoggingOverrideEntitlement{Enabled: true},
 		RuntimeFabric:         &tr,
@@ -1396,8 +1396,8 @@ func TestStripMasterOrgOnlyEntitlements_DropsAllInheritedFields(t *testing.T) {
 	if ent.Hybrid != nil {
 		t.Errorf("Hybrid: must be nil after strip, got %+v", ent.Hybrid)
 	}
-	if ent.OmniGateway != nil {
-		t.Errorf("OmniGateway: must be nil after strip, got %+v", ent.OmniGateway)
+	if ent.FlexGateway != nil {
+		t.Errorf("FlexGateway: must be nil after strip, got %+v", ent.FlexGateway)
 	}
 	if ent.ServiceMesh != nil {
 		t.Errorf("ServiceMesh: must be nil after strip, got %+v", ent.ServiceMesh)
@@ -1455,7 +1455,7 @@ func TestUpdatePayload_BusinessGroupOmitsDesignCenter(t *testing.T) {
 			enabledType,
 			map[string]attr.Value{"enabled": types.BoolValue(true)},
 		),
-		"omni_gateway":            types.ObjectNull(enabledType),
+		"flex_gateway":            types.ObjectNull(enabledType),
 		"worker_logging_override": types.ObjectNull(enabledType),
 		"service_mesh":            types.ObjectNull(enabledType),
 		"mq_messages":             types.ObjectNull(map[string]attr.Type{"base": types.Int64Type, "add_on": types.Int64Type}),
@@ -1499,7 +1499,7 @@ func TestUpdatePayload_BusinessGroupOmitsDesignCenter(t *testing.T) {
 	// All master-only / inheritable fields MUST be absent from the wire.
 	for _, forbidden := range []string{
 		`"hybrid"`,
-		`"omniGateway"`,
+		`"flexGateway"`,
 		`"serviceMesh"`,
 		`"workerLoggingOverride"`,
 		`"runtimeFabric"`,
@@ -1538,7 +1538,7 @@ func TestMergeEntitlements_PlanUnknownLetsApiValueThrough(t *testing.T) {
 		"global_deployment":       types.BoolValue(false),
 		"runtime_fabric":          types.BoolUnknown(),
 		"hybrid":                  types.ObjectUnknown(enabledType),
-		"omni_gateway":            types.ObjectUnknown(enabledType),
+		"flex_gateway":            types.ObjectUnknown(enabledType),
 		"service_mesh":            types.ObjectUnknown(enabledType),
 		"worker_logging_override": types.ObjectUnknown(enabledType),
 		"design_center":           types.ObjectUnknown(map[string]attr.Type{"api": types.BoolType, "mozart": types.BoolType}),
@@ -1566,7 +1566,7 @@ func TestMergeEntitlements_PlanUnknownLetsApiValueThrough(t *testing.T) {
 		CreateEnvironments:    true,
 		GlobalDeployment:      false,
 		Hybrid:                &am.HybridEntitlement{Enabled: true},
-		OmniGateway:           &am.EnabledEntitlement{Enabled: true},
+		FlexGateway:           &am.EnabledEntitlement{Enabled: true},
 		ServiceMesh:           &am.EnabledEntitlement{Enabled: true},
 		WorkerLoggingOverride: &am.WorkerLoggingOverrideEntitlement{Enabled: true},
 		RuntimeFabric:         &tr,
@@ -1589,7 +1589,7 @@ func TestMergeEntitlements_PlanUnknownLetsApiValueThrough(t *testing.T) {
 	}
 
 	// Object-shaped inheritable fields: API concrete value wins.
-	for _, name := range []string{"hybrid", "omni_gateway", "service_mesh", "worker_logging_override"} {
+	for _, name := range []string{"hybrid", "flex_gateway", "service_mesh", "worker_logging_override"} {
 		obj, ok := merged.Attributes()[name].(types.Object)
 		if !ok {
 			t.Errorf("%s: not an Object", name)

@@ -293,7 +293,7 @@ resource "anypoint_api_policy_json_threat_protection" "json_threat_protection" {
 # ─── 13. XML Threat Protection ───────────────────────────────
 # NOTE: xml-threat-protection is a Mule 4 native policy and is NOT supported
 # on Omni Gateway (the Anypoint API returns 400 "does not have an implementation
-# for the API with technology(omniGateway)"). Apply this policy only to Mule 4
+# for the API with technology(flexGateway)"). Apply this policy only to Mule 4
 # API instances (technology = "mule4").
 #
 # resource "anypoint_api_policy_xml_threat_protection" "xml_threat_protection" {

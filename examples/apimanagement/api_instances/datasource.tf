@@ -45,7 +45,7 @@ output "omni_gateway_instances" {
   description = "API instances deployed on OmniGateway"
   value = [
     for inst in data.anypoint_api_instances.all.instances :
-    inst if inst.technology == "omniGateway"
+    inst if inst.technology == "flexGateway"
   ]
 }
 
