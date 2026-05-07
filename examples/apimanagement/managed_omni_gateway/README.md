@@ -64,7 +64,7 @@ anypoint-cli runtime-mgr runtime-fabric list
 ### Managed Omni Gateway Resource Structure
 
 ```hcl
-resource "anypoint_managed_omnigateway" "example" {
+resource "anypoint_managed_omni_gateway" "example" {
   name            = "my-gateway"
   environment_id  = var.environment_id
   target_id       = var.target_id
@@ -190,7 +190,7 @@ terraform output
 Quick setup for development and testing:
 
 ```hcl
-resource "anypoint_managed_omnigateway" "dev" {
+resource "anypoint_managed_omni_gateway" "dev" {
   name           = "dev-gateway"
   environment_id = var.dev_environment_id
   target_id      = var.dev_target_id
@@ -204,7 +204,7 @@ resource "anypoint_managed_omnigateway" "dev" {
 Full observability configuration:
 
 ```hcl
-resource "anypoint_managed_omnigateway" "prod" {
+resource "anypoint_managed_omni_gateway" "prod" {
   name            = "prod-gateway"
   environment_id  = var.prod_environment_id
   target_id       = var.prod_target_id
@@ -238,7 +238,7 @@ resource "anypoint_managed_omnigateway" "prod" {
 Multiple gateways for load balancing:
 
 ```hcl
-resource "anypoint_managed_omnigateway" "gateway" {
+resource "anypoint_managed_omni_gateway" "gateway" {
   count = 3  # Deploy 3 instances
 
   name            = "prod-gateway-${count.index + 1}"
@@ -265,7 +265,7 @@ resource "anypoint_managed_omnigateway" "gateway" {
 
 ```hcl
 # Create gateway
-resource "anypoint_managed_omnigateway" "main" {
+resource "anypoint_managed_omni_gateway" "main" {
   name           = "api-gateway"
   environment_id = var.environment_id
   target_id      = var.target_id
@@ -275,7 +275,7 @@ resource "anypoint_managed_omnigateway" "main" {
 resource "anypoint_api_instance" "api" {
   environment_id = var.environment_id
   technology     = "flexGateway"
-  gateway_id     = anypoint_managed_omnigateway.main.id
+  gateway_id     = anypoint_managed_omni_gateway.main.id
 
   spec = {
     asset_id = "customer-api"
@@ -382,7 +382,7 @@ terraform apply
 ### Upgrade Runtime Version
 
 ```hcl
-resource "anypoint_managed_omnigateway" "main" {
+resource "anypoint_managed_omni_gateway" "main" {
   runtime_version = "1.10.0"  # Updated version
   # ... other configuration
 }
@@ -402,7 +402,7 @@ size = "large"  # Was "small"
 ### Remove Gateway
 
 ```bash
-terraform destroy -target=anypoint_managed_omnigateway.basic
+terraform destroy -target=anypoint_managed_omni_gateway.basic
 ```
 
 **Warning:** Ensure no API instances are deployed to the gateway first.

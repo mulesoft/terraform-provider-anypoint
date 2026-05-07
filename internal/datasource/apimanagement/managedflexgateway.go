@@ -44,7 +44,7 @@ func NewManagedFlexGatewayDataSource() datasource.DataSource {
 }
 
 func (d *ManagedFlexGatewayDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_managed_omnigateway"
+	resp.TypeName = req.ProviderTypeName + "_managed_omni_gateway"
 }
 
 func (d *ManagedFlexGatewayDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
