@@ -1,102 +1,170 @@
-*This is a suggested `CONTRIBUTING.md` file template for use by open sourced Salesforce projects. The main goal of this file is to make clear the intents and expectations that end-users may have regarding this project and how/if to engage with it. Adjust as needed (especially look for `{project_slug}` which refers to the org and repo name of your project) and remove this paragraph before committing to your repo.*
+# Contributing Guide for terraform-provider-anypoint
 
-# Contributing Guide For {NAME OF PROJECT}
+This page covers the governance model, development workflow, and contribution requirements for the MuleSoft Anypoint Terraform Provider. Thanks for contributing!
 
-This page lists the operational governance model of this project, as well as the recommendations and requirements for how to best contribute to {PROJECT}. We strive to obey these as best as possible. As always, thanks for contributing – we hope these guidelines make it easier and shed some light on our approach and processes.
+## Governance Model
 
-# Governance Model
-> Pick the most appropriate one
+### Salesforce Sponsored
 
-## Community Based
+Only Salesforce/MuleSoft employees hold `admin` rights and make final decisions on accepted contributions.
 
-The intent and goal of open sourcing this project is to increase the contributor and user base. The governance model is one where new project leads (`admins`) will be added to the project based on their contributions and efforts, a so-called "do-acracy" or "meritocracy" similar to that used by all Apache Software Foundation projects.
+## Getting Started
 
-> or
+### Prerequisites
 
-## Salesforce Sponsored
+- Go 1.25+
+- Terraform CLI
+- `golangci-lint` (for linting)
+- `terraform-plugin-docs` (auto-installed via `go generate`)
 
-The intent and goal of open sourcing this project is to increase the contributor and user base. However, only Salesforce employees will be given `admin` rights and will be the final arbitrars of what contributions are accepted or not.
+### Development Setup
 
-> or
+```bash
+git clone https://github.com/mulesoft/terraform-provider-anypoint.git
+cd terraform-provider-anypoint
+make dev-setup   # runs: deps, fmt, docs
+```
 
-## Published but not supported
+To install the provider locally for manual testing:
 
-The intent and goal of open sourcing this project is because it may contain useful or interesting code/concepts that we wish to share with the larger open source community. Although occasional work may be done on it, we will not be looking for or soliciting contributions.
+```bash
+make install
+```
 
-# Getting started
+This builds the binary and places it under `~/.terraform.d/plugins/`.
 
-Please join the community on {Here list Slack channels, Email lists, Glitter, Discord, etc... links}. Also please make sure to take a look at the project [roadmap](ROADMAP.md) to see where are headed.
+## Project Structure
 
-# Issues, requests & ideas
+```
+.
+├── internal/
+│   ├── provider/          # Provider registration and configuration
+│   ├── resource/          # Managed resources
+│   │   ├── accessmanagement/
+│   │   ├── apimanagement/
+│   │   ├── agentstools/
+│   │   ├── cloudhub2/
+│   │   └── secretsmanagement/
+│   ├── datasource/        # Read-only data sources (mirrors resource/ layout)
+│   └── acctest/           # Acceptance test helpers
+├── examples/              # Per-resource Terraform usage examples
+├── docs/                  # Auto-generated Terraform Registry documentation
+├── scripts/               # Build and distribution utilities
+└── .github/workflows/     # CI (test.yml, release.yml)
+```
 
-Use GitHub Issues page to submit issues, enhancement requests and discuss ideas.
+## Building
 
-### Bug Reports and Fixes
--  If you find a bug, please search for it in the [Issues](https://github.com/{project_slug}/issues), and if it isn't already tracked,
-   [create a new issue](https://github.com/{project_slug}/issues/new). Fill out the "Bug Report" section of the issue template. Even if an Issue is closed, feel free to comment and add details, it will still
-   be reviewed.
--  Issues that have already been identified as a bug (note: able to reproduce) will be labelled `bug`.
--  If you'd like to submit a fix for a bug, [send a Pull Request](#creating_a_pull_request) and mention the Issue number.
-  -  Include tests that isolate the bug and verifies that it was fixed.
+```bash
+make build        # build for current platform
+make build-all    # cross-platform builds (Windows, Linux, macOS x86_64/ARM64)
+```
 
-### New Features
--  If you'd like to add new functionality to this project, describe the problem you want to solve in a [new Issue](https://github.com/{project_slug}/issues/new).
--  Issues that have been identified as a feature request will be labelled `enhancement`.
--  If you'd like to implement the new feature, please wait for feedback from the project
-   maintainers before spending too much time writing the code. In some cases, `enhancement`s may
-   not align well with the project objectives at the time.
+## Testing
 
-### Tests, Documentation, Miscellaneous
--  If you'd like to improve the tests, you want to make the documentation clearer, you have an
-   alternative implementation of something that may have advantages over the way its currently
-   done, or you have any other change, we would be happy to hear about it!
-  -  If its a trivial change, go ahead and [send a Pull Request](#creating_a_pull_request) with the changes you have in mind.
-  -  If not, [open an Issue](https://github.com/{project_slug}/issues/new) to discuss the idea first.
+### Unit Tests
 
-If you're new to our project and looking for some way to make your first contribution, look for
-Issues labelled `good first contribution`.
+```bash
+make test
+```
 
-# Contribution Checklist
+A minimum **25% code coverage** is enforced. The CI pipeline fails if coverage drops below this threshold.
 
-- [x] Clean, simple, well styled code
-- [x] Commits should be atomic and messages must be descriptive. Related issues should be mentioned by Issue number.
-- [x] Comments
-  - Module-level & function-level comments.
-  - Comments on complex blocks of code or algorithms (include references to sources).
-- [x] Tests
-  - The test suite, if provided, must be complete and pass
-  - Increase code coverage, not versa.
-  - Use any of our testkits that contains a bunch of testing facilities you would need. For example: `import com.salesforce.op.test._` and borrow inspiration from existing tests.
-- [x] Dependencies
-  - Minimize number of dependencies.
-  - Prefer Apache 2.0, BSD3, MIT, ISC and MPL licenses.
-- [x] Reviews
-  - Changes must be approved via peer code review
+```bash
+make test-coverage   # generate local HTML coverage report
+```
 
-# Creating a Pull Request
+### Acceptance Tests
 
-1. **Ensure the bug/feature was not already reported** by searching on GitHub under Issues.  If none exists, create a new issue so that other contributors can keep track of what you are trying to add/fix and offer suggestions (or let you know if there is already an effort in progress).
-2. **Clone** the forked repo to your machine.
-3. **Create** a new branch to contain your work (e.g. `git br fix-issue-11`)
-4. **Commit** changes to your own branch.
-5. **Push** your work back up to your fork. (e.g. `git push fix-issue-11`)
-6. **Submit** a Pull Request against the `main` branch and refer to the issue(s) you are fixing. Try not to pollute your pull request with unintended changes. Keep it simple and small.
-7. **Sign** the Salesforce CLA (you will be prompted to do so when submitting the Pull Request)
+Acceptance tests make real API calls against an Anypoint Platform environment. Set the following environment variables before running:
 
-> **NOTE**: Be sure to [sync your fork](https://help.github.com/articles/syncing-a-fork/) before making a pull request.
+| Variable | Description |
+|---|---|
+| `TF_ACC` | Set to `1` to enable acceptance tests |
+| `ANYPOINT_CLIENT_ID` | Connected App client ID |
+| `ANYPOINT_CLIENT_SECRET` | Connected App client secret |
+| `ANYPOINT_BASE_URL` | Anypoint Platform base URL (optional, defaults to production) |
 
-# Contributor License Agreement ("CLA")
-In order to accept your pull request, we need you to submit a CLA. You only need
-to do this once to work on any of Salesforce's open source projects.
+```bash
+TF_ACC=1 \
+ANYPOINT_CLIENT_ID=... \
+ANYPOINT_CLIENT_SECRET=... \
+make testacc
+```
 
-Complete your CLA here: <https://cla.salesforce.com/sign-cla>
+Acceptance tests have a 120-minute timeout.
 
-# Issues
-We use GitHub issues to track public bugs. Please ensure your description is
-clear and has sufficient instructions to be able to reproduce the issue.
+## Code Style
 
-# Code of Conduct
+Format all Go source and Terraform example files before submitting:
+
+```bash
+make fmt
+```
+
+Lint:
+
+```bash
+make lint
+```
+
+## Documentation
+
+Docs under `docs/` are auto-generated from resource schemas and the content in `examples/`. Do not edit files in `docs/` directly — edit the schema descriptions or example `.tf` files instead, then regenerate:
+
+```bash
+make docs
+```
+
+## Distribution Examples
+
+The `scripts/sanitize_dist_examples.sh` script scrubs hardcoded credentials, UUIDs, and placeholder values from example files before distribution. It replaces sensitive values with `<add-your-value-here>`. This runs automatically as part of the packaging pipeline — do not commit real credentials in `examples/`.
+
+## Issues, Requests & Ideas
+
+Use the [GitHub Issues](https://github.com/mulesoft/terraform-provider-anypoint/issues) page to report bugs, request features, and discuss ideas.
+
+### Bug Reports
+
+- Search existing issues before filing a new one.
+- Include steps to reproduce, Terraform version, and provider version.
+- Issues confirmed as bugs will be labelled `bug`.
+
+### Feature Requests
+
+- Describe the problem you want to solve in a new issue.
+- Wait for maintainer feedback before investing significant implementation time.
+
+## Contribution Checklist
+
+- [ ] Code is formatted (`make fmt`) and lints cleanly (`make lint`)
+- [ ] Unit tests pass and coverage stays at or above 25%
+- [ ] New resources/data sources include acceptance tests
+- [ ] Schema attributes have clear `Description` strings (used for doc generation)
+- [ ] Examples under `examples/` do not contain real credentials or UUIDs
+- [ ] `make docs` has been run if schemas or examples changed
+- [ ] Commits are atomic with descriptive messages referencing the relevant issue
+
+## Creating a Pull Request
+
+1. Fork the repository and create a branch from `main`.
+2. Make your changes following the checklist above.
+3. Push your branch and open a Pull Request against `main`.
+4. Reference any related issues in the PR description.
+5. Sign the Salesforce CLA when prompted (required once per contributor).
+
+> **Note:** Sync your fork with `main` before opening a PR to minimize merge conflicts.
+
+## Contributor License Agreement (CLA)
+
+You must sign the Salesforce CLA before we can accept your pull request. You only need to do this once across all Salesforce open source projects.
+
+Sign here: <https://cla.salesforce.com/sign-cla>
+
+## Code of Conduct
+
 Please follow our [Code of Conduct](CODE_OF_CONDUCT.md).
 
-# License
-By contributing your code, you agree to license your contribution under the terms of our project [LICENSE](LICENSE.txt) and to sign the [Salesforce CLA](https://cla.salesforce.com/sign-cla)
+## License
+
+By contributing, you agree to license your code under the project [LICENSE](LICENSE.txt) and to sign the [Salesforce CLA](https://cla.salesforce.com/sign-cla).
