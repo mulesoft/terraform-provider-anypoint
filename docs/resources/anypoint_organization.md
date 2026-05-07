@@ -197,6 +197,8 @@ Optional:
 <a id="nestedschema--environments"></a>
 ### Nested Schema for `environments`
 
+~> **Note:** When a new organization is created, Anypoint Platform automatically provisions two environments: **Sandbox** and **Production**. These appear in the `environments` read-only attribute after the first apply and do not need to be declared in your configuration.
+
 Read-Only:
 
 - `client_id` (String) The environment client ID.
