@@ -45,8 +45,16 @@ var (
 		"level":        types.StringType,
 		"forward_logs": types.BoolType,
 	}
+	tracingLabelAttrTypes = map[string]attr.Type{
+		"type":          types.StringType,
+		"name":          types.StringType,
+		"default_value": types.StringType,
+		"key_name":      types.StringType,
+	}
 	tracingAttrTypes = map[string]attr.Type{
-		"enabled": types.BoolType,
+		"enabled":  types.BoolType,
+		"sampling": types.Int64Type,
+		"labels":   types.ListType{ElemType: types.ObjectType{AttrTypes: tracingLabelAttrTypes}},
 	}
 )
 
@@ -250,6 +258,40 @@ func (r *ManagedFlexGatewayResource) Schema(_ context.Context, _ resource.Schema
 						Optional:    true,
 						Computed:    true,
 						Default:     booldefault.StaticBool(false),
+					},
+					"sampling": schema.Int64Attribute{
+						Description: "Sampling rate as a percentage (1–100). Defaults to 1.",
+						Optional:    true,
+						Computed:    true,
+						Default:     int64default.StaticInt64(1),
+					},
+					"labels": schema.ListNestedAttribute{
+						Description: "Labels attached to tracing spans.",
+						Optional:    true,
+						Computed:    true,
+						NestedObject: schema.NestedAttributeObject{
+							Attributes: map[string]schema.Attribute{
+								"type": schema.StringAttribute{
+									Description: "Label source type. Valid values: 'environment', 'requestHeader', 'literal'.",
+									Required:    true,
+									Validators: []validator.String{
+										stringvalidator.OneOf("environment", "requestHeader", "literal"),
+									},
+								},
+								"name": schema.StringAttribute{
+									Description: "Display name of the label.",
+									Required:    true,
+								},
+								"default_value": schema.StringAttribute{
+									Description: "Default value for the label.",
+									Required:    true,
+								},
+								"key_name": schema.StringAttribute{
+									Description: "Key name for 'environment' and 'requestHeader' types. Not applicable for 'literal'.",
+									Optional:    true,
+								},
+							},
+						},
 					},
 				},
 			},
@@ -553,12 +595,31 @@ func (r *ManagedFlexGatewayResource) expandConfiguration(data ManagedFlexGateway
 
 	if !data.Tracing.IsNull() && !data.Tracing.IsUnknown() {
 		attrs := data.Tracing.Attributes()
-		cfg.Tracing = apimanagement.TracingConfig{
-			Enabled: attrs["enabled"].(types.Bool).ValueBool(),
+		tc := apimanagement.TracingConfig{
+			Enabled:  attrs["enabled"].(types.Bool).ValueBool(),
+			Sampling: int(attrs["sampling"].(types.Int64).ValueInt64()),
 		}
+		if labelsVal, ok := attrs["labels"].(types.List); ok && !labelsVal.IsNull() && !labelsVal.IsUnknown() {
+			for _, elem := range labelsVal.Elements() {
+				obj := elem.(types.Object)
+				la := obj.Attributes()
+				keyName := ""
+				if kn, ok := la["key_name"].(types.String); ok && !kn.IsNull() && !kn.IsUnknown() {
+					keyName = kn.ValueString()
+				}
+				tc.Labels = append(tc.Labels, apimanagement.TracingLabel{
+					Type:         la["type"].(types.String).ValueString(),
+					Name:         la["name"].(types.String).ValueString(),
+					DefaultValue: la["default_value"].(types.String).ValueString(),
+					KeyName:      keyName,
+				})
+			}
+		}
+		cfg.Tracing = tc
 	} else {
 		cfg.Tracing = apimanagement.TracingConfig{
-			Enabled: false,
+			Enabled:  false,
+			Sampling: 1,
 		}
 	}
 
@@ -613,8 +674,30 @@ func (r *ManagedFlexGatewayResource) flattenGateway(gw *apimanagement.ManagedFle
 		data.Logging = loggingObj
 	}
 
+	labelElems := make([]attr.Value, 0, len(gw.Configuration.Tracing.Labels))
+	for _, l := range gw.Configuration.Tracing.Labels {
+		keyName := types.StringNull()
+		if l.KeyName != "" {
+			keyName = types.StringValue(l.KeyName)
+		}
+		labelObj, _ := types.ObjectValue(tracingLabelAttrTypes, map[string]attr.Value{
+			"type":          types.StringValue(l.Type),
+			"name":          types.StringValue(l.Name),
+			"default_value": types.StringValue(l.DefaultValue),
+			"key_name":      keyName,
+		})
+		labelElems = append(labelElems, labelObj)
+	}
+	labelsList, _ := types.ListValue(types.ObjectType{AttrTypes: tracingLabelAttrTypes}, labelElems)
+
+	sampling := gw.Configuration.Tracing.Sampling
+	if sampling == 0 {
+		sampling = 1
+	}
 	tracingObj, traceDiags := types.ObjectValue(tracingAttrTypes, map[string]attr.Value{
-		"enabled": types.BoolValue(gw.Configuration.Tracing.Enabled),
+		"enabled":  types.BoolValue(gw.Configuration.Tracing.Enabled),
+		"sampling": types.Int64Value(int64(sampling)),
+		"labels":   labelsList,
 	})
 	if traceDiags.HasError() {
 		data.Tracing = types.ObjectNull(tracingAttrTypes)
@@ -623,12 +706,11 @@ func (r *ManagedFlexGatewayResource) flattenGateway(gw *apimanagement.ManagedFle
 	}
 }
 
-// reconcileTracing returns the API-returned tracing value when it matches the
-// plan, or falls back to the plan value when the API response dropped the field
-// (returns enabled=false after we sent enabled=true). This prevents the
-// "provider produced an unexpected new value: .tracing.enabled" framework error
-// that occurs when the Gateway Manager POST/PUT response omits tracing.
-// Read() is unaffected — it always uses the live API value for drift detection.
+// reconcileTracing returns the API-returned tracing value when the API response
+// looks complete, or falls back to the plan value when the Gateway Manager
+// POST/PUT response silently drops tracing fields (e.g. returns enabled=false
+// after we sent enabled=true). This prevents "provider produced an unexpected
+// new value" framework errors. Read() always uses the live API value.
 func reconcileTracing(plan, fromAPI types.Object) types.Object {
 	if fromAPI.IsNull() || fromAPI.IsUnknown() {
 		return plan
@@ -644,8 +726,7 @@ func reconcileTracing(plan, fromAPI types.Object) types.Object {
 		return plan
 	}
 	// If the API echoed false but the plan requested true, the API silently
-	// dropped the field — keep the plan value in state so Terraform doesn't
-	// detect a spurious diff on the next refresh.
+	// dropped the tracing block — keep the full plan value in state.
 	if !apiEnabled.ValueBool() && planEnabled.ValueBool() {
 		return plan
 	}

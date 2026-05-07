@@ -35,11 +35,11 @@ variable "anypoint_base_url" {
 variable "connected_app_id" {
   description = "The ID of the connected application to manage scopes for"
   type        = string
-  default     = "e5a776d9862a4f2d8f61ba8450803908"
+  default     = "27ad947a731840b1bf3a03b1efb2d72a"
 }
 
 variable "target_organization_id" {
   description = "The organization ID to grant scopes for"
   type        = string
-  default     = "a02fab4f-4695-4325-882e-f326d1cef704"
+  default     = "542cc7e3-2143-40ce-90e9-cf69da9b4da6"
 }

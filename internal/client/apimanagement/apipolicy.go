@@ -253,6 +253,143 @@ func (c *APIPolicyClient) DeleteAPIPolicy(ctx context.Context, orgID, envID stri
 	return c.doDeletePolicy(ctx, fmt.Sprintf("%s/%d", c.basePath(orgID, envID, apiID), policyID), orgID, envID)
 }
 
+// ListAPIPolicies returns every policy applied to an API instance (both
+// inbound and outbound). It hits the universal inbound listing endpoint
+// (apimanager/api/v1/.../policies) which is the only listing endpoint the
+// Anypoint Platform exposes today: the outbound-policies path only allows
+// POST and returns 405 on GET, so this is the recovery path used when an
+// outbound CREATE returns 409 because the policy already exists on the
+// server but was lost from local state.
+func (c *APIPolicyClient) ListAPIPolicies(ctx context.Context, orgID, envID string, apiID int) ([]APIPolicy, error) {
+	url := c.basePath(orgID, envID, apiID)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	req.Header.Set("X-ANYPNT-ORG-ID", orgID)
+	req.Header.Set("X-ANYPNT-ENV-ID", envID)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to list policies with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+	body = bytes.TrimSpace(body)
+
+	// The listing endpoint historically returns one of three shapes:
+	//   1. A top-level array of full APIPolicy objects (legacy).
+	//   2. An envelope `{"policies":[...]}` of full APIPolicy objects.
+	//   3. A top-level array of compact list entries that use a different
+	//      shape: `policyId` instead of `id`, `implementationAsset.{assetId,
+	//      groupId,version}` instead of top-level fields, `configuration`
+	//      instead of `configurationData`. Outbound policies appear ONLY in
+	//      this third shape today, with their `upstreamIds` echoed at the
+	//      top level. We must support all three or 409-conflict recovery
+	//      will silently fail with "no matching policy".
+	var rawArr []json.RawMessage
+	if len(body) > 0 && body[0] == '[' {
+		if err := json.Unmarshal(body, &rawArr); err != nil {
+			return nil, fmt.Errorf("failed to decode policies array: %w", err)
+		}
+	} else {
+		var envelope struct {
+			Policies []json.RawMessage `json:"policies"`
+		}
+		if err := json.Unmarshal(body, &envelope); err != nil {
+			return nil, fmt.Errorf("failed to decode policies response: %w", err)
+		}
+		rawArr = envelope.Policies
+	}
+
+	policies := make([]APIPolicy, 0, len(rawArr))
+	for _, raw := range rawArr {
+		policies = append(policies, decodePolicyListEntry(raw))
+	}
+	return policies, nil
+}
+
+// policyListEntry is the compact JSON shape returned by the policies LIST
+// endpoint (different from the per-id GET response — see ListAPIPolicies for
+// the rationale). Both inbound and outbound policies appear in this list,
+// outbound being identifiable by a non-empty UpstreamIDs.
+type policyListEntry struct {
+	PolicyID            int                    `json:"policyId"`
+	ID                  int                    `json:"id"`
+	PolicyTemplateID    json.Number            `json:"policyTemplateId"`
+	Order               int                    `json:"order"`
+	Disabled            bool                   `json:"disabled"`
+	Label               string                 `json:"label"`
+	Configuration       map[string]interface{} `json:"configuration"`
+	ConfigurationData   map[string]interface{} `json:"configurationData"`
+	UpstreamIDs         []string               `json:"upstreamIds"`
+	ImplementationAsset *struct {
+		AssetID string `json:"assetId"`
+		GroupID string `json:"groupId"`
+		Version string `json:"version"`
+	} `json:"implementationAsset"`
+	Template *struct {
+		AssetID      string `json:"assetId"`
+		GroupID      string `json:"groupId"`
+		AssetVersion string `json:"assetVersion"`
+	} `json:"template"`
+	AssetID      string `json:"assetId"`
+	GroupID      string `json:"groupId"`
+	AssetVersion string `json:"assetVersion"`
+}
+
+// decodePolicyListEntry parses one element of a policies LIST response and
+// normalises it into APIPolicy regardless of which shape the Anypoint
+// Platform returned (legacy full-object vs compact list entry).
+func decodePolicyListEntry(raw json.RawMessage) APIPolicy {
+	var e policyListEntry
+	_ = json.Unmarshal(raw, &e)
+
+	out := APIPolicy{
+		Order:       e.Order,
+		Disabled:    e.Disabled,
+		Label:       e.Label,
+		UpstreamIDs: e.UpstreamIDs,
+	}
+	if e.ID != 0 {
+		out.ID = e.ID
+	} else {
+		out.ID = e.PolicyID
+	}
+	if s := e.PolicyTemplateID.String(); s != "" {
+		out.PolicyTemplateID = s
+	}
+	if e.ConfigurationData != nil {
+		out.ConfigurationData = e.ConfigurationData
+	} else if e.Configuration != nil {
+		out.ConfigurationData = e.Configuration
+	}
+	switch {
+	case e.AssetID != "":
+		out.AssetID = e.AssetID
+		out.GroupID = e.GroupID
+		out.AssetVersion = e.AssetVersion
+	case e.Template != nil && e.Template.AssetID != "":
+		out.AssetID = e.Template.AssetID
+		out.GroupID = e.Template.GroupID
+		out.AssetVersion = e.Template.AssetVersion
+	case e.ImplementationAsset != nil:
+		out.AssetID = e.ImplementationAsset.AssetID
+		out.GroupID = e.ImplementationAsset.GroupID
+		out.AssetVersion = e.ImplementationAsset.Version
+	}
+	return out
+}
+
 // --- internal helpers for outbound (separate structs, no pointcutData/order/disabled) ---
 
 func (c *APIPolicyClient) doCreateOutboundPolicy(ctx context.Context, createURL, orgID, envID string, request *CreateOutboundAPIPolicyRequest) (*APIPolicy, error) {
@@ -359,24 +496,82 @@ func (c *APIPolicyClient) doUpdateOutboundPolicy(ctx context.Context, updateURL,
 
 // CreateOutboundAPIPolicy applies an outbound policy to an API instance.
 // Uses CreateOutboundAPIPolicyRequest which omits pointcutData, order, and disabled.
+//
+// IMPORTANT: only the CREATE operation uses the dedicated `xapi/v1/.../policies/outbound-policies`
+// endpoint — that path on the Anypoint Platform is POST-only and returns 404/405 for GET, PATCH,
+// DELETE, and LIST. After creation the policy lives in the same store as inbound policies, so
+// every subsequent CRUD operation goes through the standard `api/v1/.../policies/{id}` path.
+// Hitting the xapi/v1 path on Read returns 404 even for policies that demonstrably exist, which
+// previously caused the resource Read handler to silently call `RemoveResource` and drop the
+// outbound policy from Terraform state — leading to 409 conflicts on the next apply.
 func (c *APIPolicyClient) CreateOutboundAPIPolicy(ctx context.Context, orgID, envID string, apiID int, request *CreateOutboundAPIPolicyRequest) (*APIPolicy, error) {
 	return c.doCreateOutboundPolicy(ctx, c.outboundBasePath(orgID, envID, apiID)+"?allowDuplicated=true", orgID, envID, request)
 }
 
-// GetOutboundAPIPolicy retrieves a single outbound policy by ID
+// GetOutboundAPIPolicy retrieves a single outbound policy by ID via the universal
+// inbound `api/v1/.../policies/{id}` endpoint. The dedicated xapi/v1 outbound-policies
+// path is POST-only and 404s on GET — see CreateOutboundAPIPolicy.
 func (c *APIPolicyClient) GetOutboundAPIPolicy(ctx context.Context, orgID, envID string, apiID, policyID int) (*APIPolicy, error) {
-	return c.doGetPolicy(ctx, fmt.Sprintf("%s/%d", c.outboundBasePath(orgID, envID, apiID), policyID), orgID, envID)
+	return c.doGetPolicy(ctx, fmt.Sprintf("%s/%d", c.basePath(orgID, envID, apiID), policyID), orgID, envID)
 }
 
-// UpdateOutboundAPIPolicy patches an existing outbound policy.
+// UpdateOutboundAPIPolicy patches an existing outbound policy via the universal
+// `api/v1/.../policies/{id}` endpoint. The xapi/v1 outbound-policies path is
+// POST-only and 404s on PATCH — see CreateOutboundAPIPolicy.
 // Uses UpdateOutboundAPIPolicyRequest which omits pointcutData, order, and disabled.
 func (c *APIPolicyClient) UpdateOutboundAPIPolicy(ctx context.Context, orgID, envID string, apiID, policyID int, request *UpdateOutboundAPIPolicyRequest) (*APIPolicy, error) {
-	return c.doUpdateOutboundPolicy(ctx, fmt.Sprintf("%s/%d", c.outboundBasePath(orgID, envID, apiID), policyID), orgID, envID, request)
+	return c.doUpdateOutboundPolicy(ctx, fmt.Sprintf("%s/%d", c.basePath(orgID, envID, apiID), policyID), orgID, envID, request)
 }
 
-// DeleteOutboundAPIPolicy removes an outbound policy from an API instance
+// DeleteOutboundAPIPolicy removes an outbound policy via the universal
+// `api/v1/.../policies/{id}` endpoint. The xapi/v1 outbound-policies path is
+// POST-only and 404s on DELETE — see CreateOutboundAPIPolicy.
 func (c *APIPolicyClient) DeleteOutboundAPIPolicy(ctx context.Context, orgID, envID string, apiID, policyID int) error {
-	return c.doDeletePolicy(ctx, fmt.Sprintf("%s/%d", c.outboundBasePath(orgID, envID, apiID), policyID), orgID, envID)
+	return c.doDeletePolicy(ctx, fmt.Sprintf("%s/%d", c.basePath(orgID, envID, apiID), policyID), orgID, envID)
+}
+
+// ListOutboundAPIPolicies returns all outbound policies for the given API instance.
+func (c *APIPolicyClient) ListOutboundAPIPolicies(ctx context.Context, orgID, envID string, apiID int) ([]APIPolicy, error) {
+	url := c.outboundBasePath(orgID, envID, apiID)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	req.Header.Set("X-ANYPNT-ORG-ID", orgID)
+	req.Header.Set("X-ANYPNT-ENV-ID", envID)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to list outbound policies with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+	body = bytes.TrimSpace(body)
+
+	// Response may be an array or an envelope object with a "policies" key.
+	if len(body) > 0 && body[0] == '[' {
+		var policies []APIPolicy
+		if err := json.Unmarshal(body, &policies); err != nil {
+			return nil, fmt.Errorf("failed to decode policies array: %w", err)
+		}
+		return policies, nil
+	}
+	var envelope struct {
+		Policies []APIPolicy `json:"policies"`
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return nil, fmt.Errorf("failed to decode policies response: %w", err)
+	}
+	return envelope.Policies, nil
 }
 
 // --- Known Policy Registry ---

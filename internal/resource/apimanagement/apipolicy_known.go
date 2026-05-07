@@ -16,6 +16,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/numberdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -243,16 +245,38 @@ func (r *KnownPolicyResource) Schema(_ context.Context, _ resource.SchemaRequest
 				Optional:    true,
 			},
 			"configuration": generateConfigurationSchema(r.policyInfo.AssetID),
-			"order": schema.Int64Attribute{
-				Description: "Execution order of the policy. Lower numbers execute first.",
-				Optional:    true,
-				Computed:    true,
-			},
+			"order": func() schema.Int64Attribute {
+				// Outbound policies don't accept `order` in the request payload
+				// (the server assigns it), so it's Computed-only there. Either
+				// way we use the prior state value when the plan is unknown so
+				// terraform doesn't show spurious "(known after apply)" diffs
+				// every plan.
+				if r.policyInfo.OutboundPolicy {
+					return schema.Int64Attribute{
+						Description: "Execution order assigned by the server. Read-only for outbound policies.",
+						Computed:    true,
+						PlanModifiers: []planmodifier.Int64{
+							int64planmodifier.UseStateForUnknown(),
+						},
+					}
+				}
+				return schema.Int64Attribute{
+					Description: "Execution order of the policy. Lower numbers execute first.",
+					Optional:    true,
+					Computed:    true,
+					PlanModifiers: []planmodifier.Int64{
+						int64planmodifier.UseStateForUnknown(),
+					},
+				}
+			}(),
 			"disabled": schema.BoolAttribute{
 				Description: "Whether the policy is disabled.",
 				Optional:    true,
 				Computed:    true,
 				Default:     booldefault.StaticBool(false),
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"policy_template_id": schema.StringAttribute{
 				Description: "Policy template ID assigned by the server.",
@@ -717,6 +741,19 @@ func (r *KnownPolicyResource) Create(ctx context.Context, req resource.CreateReq
 			outboundReq.UpstreamIDs = ids
 		}
 		policy, err = r.client.CreateOutboundAPIPolicy(ctx, orgID, envID, apiID, outboundReq)
+		if err != nil && strings.Contains(err.Error(), "409") {
+			// The policy already exists on the server (orphaned from a previous apply
+			// whose state was lost). Find it via the universal /policies endpoint —
+			// the outbound-policies path only allows POST and returns 405 on GET, so
+			// we cannot list outbound policies directly.
+			adopted, recErr := r.recoverOutboundConflict(ctx, orgID, envID, apiID, outboundReq)
+			if recErr != nil {
+				err = recErr
+			} else {
+				policy = adopted
+				err = nil
+			}
+		}
 	} else {
 		createReq := &apimanagement.CreateAPIPolicyRequest{
 			ConfigurationData: configData,
@@ -1044,6 +1081,75 @@ func (r *KnownPolicyResource) flatten(ctx context.Context, policy *apimanagement
 	} else if data.UpstreamIDs.IsNull() || data.UpstreamIDs.IsUnknown() {
 		data.UpstreamIDs = types.ListValueMust(types.StringType, []attr.Value{})
 	}
+}
+
+// recoverOutboundConflict handles the case where Create returned a 409 because
+// the outbound policy already exists on the server (typically because a prior
+// apply created it but the state file lost the entry). The dedicated outbound
+// listing endpoint returns 405 on GET, so we list via the universal inbound
+// endpoint (which returns both inbound and outbound policies) and match the
+// asset coordinates plus label. We then GET the full record via the outbound
+// path so the response shape is identical to a fresh Create.
+func (r *KnownPolicyResource) recoverOutboundConflict(
+	ctx context.Context,
+	orgID, envID string,
+	apiID int,
+	req *apimanagement.CreateOutboundAPIPolicyRequest,
+) (*apimanagement.APIPolicy, error) {
+	existing, listErr := r.client.ListAPIPolicies(ctx, orgID, envID, apiID)
+	if listErr != nil {
+		return nil, fmt.Errorf(
+			"policy 409 conflict (label=%q, asset=%s/%s); recovery list failed: %w",
+			req.Label, req.GroupID, req.AssetID, listErr,
+		)
+	}
+
+	candidates := make([]apimanagement.APIPolicy, 0, 2)
+	for _, p := range existing {
+		if p.AssetID != req.AssetID {
+			continue
+		}
+		if req.GroupID != "" && p.GroupID != "" && p.GroupID != req.GroupID {
+			continue
+		}
+		if req.Label != "" && p.Label != req.Label {
+			continue
+		}
+		candidates = append(candidates, p)
+	}
+
+	switch len(candidates) {
+	case 0:
+		return nil, fmt.Errorf(
+			"policy 409 conflict (label=%q, asset=%s/%s); no matching policy found among %d existing policies — "+
+				"the existing policy may have been created with a different label/asset coordinates; "+
+				"manually delete it from API Manager UI or `terraform import` it",
+			req.Label, req.GroupID, req.AssetID, len(existing),
+		)
+	case 1:
+		// Single match — adopt it.
+	default:
+		// Multiple matches with the same asset+label — fail loudly so the user
+		// can disambiguate manually rather than silently picking the wrong one.
+		ids := make([]string, 0, len(candidates))
+		for _, p := range candidates {
+			ids = append(ids, strconv.Itoa(p.ID))
+		}
+		return nil, fmt.Errorf(
+			"policy 409 conflict (label=%q, asset=%s/%s); %d existing policies match — "+
+				"import the correct one with `terraform import` (candidate ids: %s)",
+			req.Label, req.GroupID, req.AssetID, len(candidates), strings.Join(ids, ", "),
+		)
+	}
+
+	full, getErr := r.client.GetOutboundAPIPolicy(ctx, orgID, envID, apiID, candidates[0].ID)
+	if getErr != nil {
+		return nil, fmt.Errorf(
+			"policy 409 conflict (label=%q, asset=%s/%s); recovery GET id=%d failed: %w",
+			req.Label, req.GroupID, req.AssetID, candidates[0].ID, getErr,
+		)
+	}
+	return full, nil
 }
 
 // KnownPolicyTypes returns the list of all known policy type names,

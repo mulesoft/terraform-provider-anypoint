@@ -114,12 +114,51 @@ func (c *ConnectedAppScopesClient) UpdateConnectedAppScopes(ctx context.Context,
 	return c.GetConnectedAppScopes(ctx, connectedAppID)
 }
 
-// DeleteConnectedAppScopes removes all scopes from a connected app (sets empty scopes list)
-func (c *ConnectedAppScopesClient) DeleteConnectedAppScopes(ctx context.Context, connectedAppID string) error {
-	request := &UpdateConnectedAppScopesRequest{
-		Scopes: []Scope{}, // Empty scopes list
+// RemoveConnectedAppScopes removes specific scopes from a connected app via DELETE.
+// The API endpoint requires the org ID in the path.
+func (c *ConnectedAppScopesClient) RemoveConnectedAppScopes(ctx context.Context, connectedAppID string, scopes []Scope) error {
+	url := fmt.Sprintf("%s/accounts/api/organizations/%s/connectedApplications/%s/scopes", c.BaseURL, c.OrgID, connectedAppID)
+
+	request := &UpdateConnectedAppScopesRequest{Scopes: scopes}
+	jsonData, err := json.Marshal(request)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	_, err := c.UpdateConnectedAppScopes(ctx, connectedAppID, request)
-	return err
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to make request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// DeleteConnectedAppScopes removes all scopes from a connected app.
+func (c *ConnectedAppScopesClient) DeleteConnectedAppScopes(ctx context.Context, connectedAppID string) error {
+	current, err := c.GetConnectedAppScopes(ctx, connectedAppID)
+	if err != nil {
+		return err
+	}
+	if len(current.Scopes) == 0 {
+		return nil
+	}
+	return c.RemoveConnectedAppScopes(ctx, connectedAppID, current.Scopes)
 }

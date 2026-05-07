@@ -99,9 +99,21 @@ type LoggingConfig struct {
 	ForwardLogs bool   `json:"forwardLogs"`
 }
 
+// TracingLabel is a single label attached to tracing spans.
+// Type must be one of "environment", "requestHeader", or "literal".
+// KeyName is required for "environment" and "requestHeader" types; omitted for "literal".
+type TracingLabel struct {
+	Type         string `json:"type"`
+	Name         string `json:"name"`
+	DefaultValue string `json:"defaultValue"`
+	KeyName      string `json:"keyName,omitempty"`
+}
+
 // TracingConfig represents tracing settings for the gateway
 type TracingConfig struct {
-	Enabled bool `json:"enabled"`
+	Enabled  bool           `json:"enabled"`
+	Sampling int            `json:"sampling,omitempty"`
+	Labels   []TracingLabel `json:"labels,omitempty"`
 }
 
 // --- Request / Response Models ---
@@ -167,9 +179,11 @@ func (c *ManagedFlexGatewayClient) CreateManagedFlexGateway(ctx context.Context,
 	return &gw, nil
 }
 
-// GetManagedFlexGateway retrieves a managed Flex Gateway by ID
+// GetManagedFlexGateway retrieves a managed Flex Gateway by ID.
+// Uses xapi/v1 which returns the full configuration including tracing.sampling and tracing.labels;
+// the api/v1 GET endpoint omits those fields.
 func (c *ManagedFlexGatewayClient) GetManagedFlexGateway(ctx context.Context, orgID, envID, gatewayID string) (*ManagedFlexGateway, error) {
-	url := fmt.Sprintf("%s/gatewaymanager/api/v1/organizations/%s/environments/%s/gateways/%s", c.BaseURL, orgID, envID, gatewayID)
+	url := fmt.Sprintf("%s/gatewaymanager/xapi/v1/organizations/%s/environments/%s/gateways/%s", c.BaseURL, orgID, envID, gatewayID)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {

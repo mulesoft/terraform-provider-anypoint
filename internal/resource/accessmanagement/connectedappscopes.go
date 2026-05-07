@@ -2,6 +2,7 @@ package accessmanagement
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -225,41 +226,43 @@ func (r *ConnectedAppScopesResource) Read(ctx context.Context, req resource.Read
 
 // Update updates the resource and sets the updated Terraform state on success.
 func (r *ConnectedAppScopesResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data ConnectedAppScopesResourceModel
+	var planned, prior ConnectedAppScopesResourceModel
 
-	// Read Terraform plan data into the model
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &planned)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &prior)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Validate scopes before converting
-	if diags := r.validateScopes(ctx, data.Scopes); diags.HasError() {
+	if diags := r.validateScopes(ctx, planned.Scopes); diags.HasError() {
 		resp.Diagnostics.Append(diags...)
 		return
 	}
 
-	// Convert Terraform scopes to API format
-	apiScopes := r.convertScopesToAPI(ctx, data.Scopes)
+	connectedAppID := planned.ConnectedAppID.ValueString()
 
-	// Create the update request
-	updateRequest := &accessmanagement.UpdateConnectedAppScopesRequest{
-		Scopes: apiScopes,
+	plannedScopes := r.convertScopesToAPI(ctx, planned.Scopes)
+	priorScopes := r.convertScopesToAPI(ctx, prior.Scopes)
+
+	toAdd := scopeDiff(plannedScopes, priorScopes)
+	toRemove := scopeDiff(priorScopes, plannedScopes)
+
+	if len(toAdd) > 0 {
+		_, err := r.client.UpdateConnectedAppScopes(ctx, connectedAppID, &accessmanagement.UpdateConnectedAppScopesRequest{Scopes: toAdd})
+		if err != nil {
+			resp.Diagnostics.AddError("Error adding connected app scopes", err.Error())
+			return
+		}
 	}
 
-	// Update connected app scopes
-	connectedAppID := data.ConnectedAppID.ValueString()
-	_, err := r.client.UpdateConnectedAppScopes(ctx, connectedAppID, updateRequest)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error updating connected app scopes",
-			"Could not update connected app scopes: "+err.Error(),
-		)
-		return
+	if len(toRemove) > 0 {
+		if err := r.client.RemoveConnectedAppScopes(ctx, connectedAppID, toRemove); err != nil {
+			resp.Diagnostics.AddError("Error removing connected app scopes", err.Error())
+			return
+		}
 	}
 
-	// Save updated data into Terraform state - use planned values to ensure consistency
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &planned)...)
 }
 
 // Delete deletes the resource and removes the Terraform state on success.
@@ -375,6 +378,27 @@ func (r *ConnectedAppScopesResource) convertScopesToAPI(_ context.Context, scope
 	}
 
 	return apiScopes
+}
+
+// scopeDiff returns scopes in `a` that are not in `b`, matched by scope name + context_params.
+func scopeDiff(a, b []accessmanagement.Scope) []accessmanagement.Scope {
+	type key struct {
+		scope  string
+		params string
+	}
+	inB := make(map[key]struct{}, len(b))
+	for _, s := range b {
+		p, _ := json.Marshal(s.ContextParams)
+		inB[key{s.Scope, string(p)}] = struct{}{}
+	}
+	var diff []accessmanagement.Scope
+	for _, s := range a {
+		p, _ := json.Marshal(s.ContextParams)
+		if _, found := inB[key{s.Scope, string(p)}]; !found {
+			diff = append(diff, s)
+		}
+	}
+	return diff
 }
 
 // validateScopes validates that all scope names are valid Anypoint Platform scopes

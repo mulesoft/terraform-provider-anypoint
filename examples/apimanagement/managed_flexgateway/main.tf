@@ -26,7 +26,7 @@ provider "anypoint" {
 resource "anypoint_managed_flexgateway" "gw" {
   environment_id = var.environment_id # local.sandbox_env_id  # from remote state — not hardcoded
   target_id    = var.target_id
-  name      = "test-gw"
+  name      = "test-gw-1"
   size      = "small"
   release_channel = "lts"
   logging = {
@@ -34,7 +34,27 @@ resource "anypoint_managed_flexgateway" "gw" {
     forward_logs = true
   }
   tracing = {
-    enabled = true
+    enabled  = true
+    sampling = 10
+    labels = [
+      {
+        type          = "environment"
+        name          = "env-label"
+        default_value = "v1"
+        key_name      = "MY_ENV_VAR"
+      },
+      {
+        type          = "requestHeader"
+        name          = "header-label"
+        default_value = "v2"
+        key_name      = "X-Request-ID"
+      },
+      {
+        type          = "literal"
+        name          = "static-label"
+        default_value = "my-service"
+      }
+    ]
   }
 }
 
@@ -66,7 +86,9 @@ resource "anypoint_managed_flexgateway" "gw" {
 #   }
 
 #   tracing = {
-#     enabled = false
+#     enabled  = false
+#     sampling = 1
+#     labels   = []
 #   }
 # }
 
@@ -101,7 +123,7 @@ variable "environment_id" {
 variable "target_id" {
   description = "The private space / target ID for the gateway deployment"
   type        = string
-  default     = "675c4efb-d44e-44cd-ac6f-d5a1128e6236"
+  default     = "8b5e6c2b-f8f3-4555-b7be-6e75f18dd04e"
 }
 
 # # --------------------------------------------------------------------------
