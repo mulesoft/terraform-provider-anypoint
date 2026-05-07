@@ -171,7 +171,7 @@ resource "anypoint_api_instance" "mule4_api" {
   "endpointUri": null,
   "spec": {
     "assetId": "api-test",
-    "groupId": "542cc7e3-2143-40ce-90e9-cf69da9b4da6",
+    "groupId": "<org_id>",
     "version": "1.0.0"
   },
   "endpoint": {

@@ -54,8 +54,8 @@ echo ""
 
 # Connected App Credentials
 echo "Connected App Authentication (for resource management):"
-read -p "Client ID (default: e5a776d9862a4f2d8f61ba8450803908): " client_id
-client_id=${client_id:-e5a776d9862a4f2d8f61ba8450803908}
+read -p "Client ID (default: <anypoint_connected_app_client_id>): " client_id
+client_id=${client_id:-<anypoint_connected_app_client_id>}
 
 read -s -p "Client Secret: " client_secret
 echo ""

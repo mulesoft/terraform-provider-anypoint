@@ -22,7 +22,7 @@ Create a `terraform.tfvars` file:
 
 ```hcl
 # Admin credentials
-anypoint_admin_client_id     = "a66da37ba83d4c599264347952d4d533"
+anypoint_admin_client_id     = "<anypoint_admin_client_id>"
 anypoint_admin_client_secret = "your-admin-secret"
 anypoint_admin_username      = "admin@example.com"
 anypoint_admin_password      = "admin-password"
@@ -39,7 +39,7 @@ anypoint_base_url = "https://stgx.anypoint.mulesoft.com"
 
 ```bash
 # Admin credentials
-export TF_VAR_anypoint_admin_client_id="a66da37ba83d4c599264347952d4d533"
+export TF_VAR_anypoint_admin_client_id="<anypoint_admin_client_id>"
 export TF_VAR_anypoint_admin_client_secret="your-admin-secret"
 export TF_VAR_anypoint_admin_username="admin@example.com"
 export TF_VAR_anypoint_admin_password="admin-password"

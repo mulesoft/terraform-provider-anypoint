@@ -34,7 +34,7 @@ The setup script will:
 │ │                                                         │ │
 │ └─────────────────────────────────────────────────────────┘ │
 │                                                             │
-│ Connected App (Existing: e5a776d9862a4f2d8f61ba8450803908)│
+│ Connected App (Existing: <anypoint_connected_app_client_id>)│
 │ ├── Scopes Assigned:                                       │
 │ │   ├── admin:cloudhub                                    │
 │ │   ├── manage:runtime_fabrics                            │
@@ -98,7 +98,7 @@ cp suborg_with_privatespace.tfvars.example terraform.tfvars
 # Edit terraform.tfvars with your values
 
 # 2. Set environment variables
-export ANYPOINT_CLIENT_ID="e5a776d9862a4f2d8f61ba8450803908"
+export ANYPOINT_CLIENT_ID="<anypoint_connected_app_client_id>"
 export ANYPOINT_CLIENT_SECRET="your-secret"
 export ANYPOINT_ADMIN_USERNAME="admin@example.com"
 export ANYPOINT_ADMIN_PASSWORD="password"
@@ -118,7 +118,7 @@ terraform apply -var-file=terraform.tfvars
 parent_organization_id     = "parent-org-uuid"
 owner_user_id              = "owner-user-uuid"
 sub_org_name               = "my-suborg"
-anypoint_admin_client_id     = "e5a776d9862a4f2d8f61ba8450803908"
+anypoint_admin_client_id     = "<anypoint_connected_app_client_id>"
 anypoint_admin_client_secret = "your-client-secret"
 anypoint_admin_username      = "your-admin-username"
 anypoint_admin_password      = "your-admin-password"

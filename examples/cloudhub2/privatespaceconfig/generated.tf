@@ -36,7 +36,7 @@ resource "anypoint_private_space_config" "imported" {
     },
   ]
   name            = "demo-private-space"
-  organization_id = "542cc7e3-2143-40ce-90e9-cf69da9b4da6"
+  organization_id = "<org_id>"
   network {
     cidr_block     = "10.0.0.0/18"
     region         = "us-east-2"

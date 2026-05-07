@@ -11,7 +11,7 @@
 # Prerequisites:
 #   - Parent organization ID (Salesforce org)
 #   - Owner user ID (existing user in parent org)
-#   - Connected app with client_id: e5a776d9862a4f2d8f61ba8450803908
+#   - Connected app with client_id: <anypoint_connected_app_client_id>
 #   - User authentication (username/password) for connected app scope assignment
 ###############################################################################
 

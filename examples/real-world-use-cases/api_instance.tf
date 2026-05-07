@@ -78,13 +78,13 @@ resource "anypoint_api_instance" "payments" {
 variable "organization_id" {
   description = "The organization ID where the API instance will be deployed"
   type        = string
-  default     = "542cc7e3-2143-40ce-90e9-cf69da9b4da6"
+  default     = "<org_id>"
 }
 
 variable "env_id" {
   description = "The environment ID where the API instance will be deployed"
   type        = string
-  default     = "c0c9f7f5-57bb-4333-82d7-dbdcab912234"
+  default     = "<private_space_id>"
 }
 
 # ── API Instance ────────────────────────────────────────────────────────────

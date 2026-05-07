@@ -2,16 +2,16 @@
 # Note: All variables have defaults, so this file is optional
 
 # Admin user authentication credentials (required for connected_app_scopes)
-anypoint_admin_client_id     = "a66da37ba83d4c599264347952d4d533"
-anypoint_admin_client_secret = "0de4EA9E5bae4651B599a2071bFDD4E1"
-anypoint_admin_username      = "ankitsarda_anypointstgx"
-anypoint_admin_password      = "Dreamz@007"
+anypoint_admin_client_id     = "<anypoint_admin_client_id>"
+anypoint_admin_client_secret = "<anypoint_admin_client_secret>"
+anypoint_admin_username      = "<admin_username_here>"
+anypoint_admin_password      = "<admin_password_here>"
 
 # Platform configuration
 anypoint_base_url = "https://stgx.anypoint.mulesoft.com"
 
 # Connected app to manage
-connected_app_id = "e5a776d9862a4f2d8f61ba8450803908"
+connected_app_id = "<anypoint_connected_app_client_id>"
 
 # Target organization for scopes
-target_organization_id = "542cc7e3-2143-40ce-90e9-cf69da9b4da6"
+target_organization_id = "<org_id>"

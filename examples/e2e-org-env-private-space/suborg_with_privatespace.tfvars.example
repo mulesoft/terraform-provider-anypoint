@@ -5,7 +5,7 @@
 # Provider Configuration - Admin Credentials
 ###############################################################################
 
-anypoint_admin_client_id     = "e5a776d9862a4f2d8f61ba8450803908"
+anypoint_admin_client_id     = "<anypoint_connected_app_client_id>"
 anypoint_admin_client_secret = "your-admin-client-secret-here"
 anypoint_admin_username      = "your-admin-username"  # or use env: TF_VAR_anypoint_admin_username
 anypoint_admin_password      = "your-admin-password"  # or use env: TF_VAR_anypoint_admin_password
@@ -29,7 +29,7 @@ anypoint_base_url = "https://stgx.anypoint.mulesoft.com"
 # Organization Configuration
 ###############################################################################
 
-parent_organization_id = "542cc7e3-2143-40ce-90e9-cf69da9b4da6"  # Replace with your Salesforce org ID
+parent_organization_id = "<org_id>"  # Replace with your Salesforce org ID
 owner_user_id          = "f7f43384-b33e-470c-ad4c-285aa0c01212"  # Replace with existing user ID
 sub_org_name           = "my-suborg-test"
 
@@ -37,7 +37,7 @@ sub_org_name           = "my-suborg-test"
 # Connected App Configuration
 ###############################################################################
 
-connected_app_client_id = "e5a776d9862a4f2d8f61ba8450803908"
+connected_app_client_id = "<anypoint_connected_app_client_id>"
 
 ###############################################################################
 # Private Space Configuration

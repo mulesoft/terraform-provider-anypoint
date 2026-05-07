@@ -3,14 +3,14 @@ variable "anypoint_client_id" {
   description = "Anypoint Platform client ID"
   type        = string
   sensitive   = true
-  default     = "e5a776d9862a4f2d8f61ba8450803908"
+  default     = "<anypoint_connected_app_client_id>"
 }
 
 variable "anypoint_client_secret" {
   description = "Anypoint Platform client secret"
   type        = string
   sensitive   = true
-  default     = "0a5E1fbfc1154D9885c32842171F7490"
+  default     = "<anypoint_connected_app_client_secret>"
 }
 
 variable "anypoint_base_url" {
@@ -29,7 +29,7 @@ variable "private_space_id" {
 variable "organization_id" {
   description = "The ID of the organization"
   type        = string
-  default     = "542cc7e3-2143-40ce-90e9-cf69da9b4da6"
+  default     = "<org_id>"
 }
 
 # Certificate / Key file paths

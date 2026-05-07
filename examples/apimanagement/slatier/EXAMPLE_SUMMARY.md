@@ -26,7 +26,7 @@ Complete Terraform configuration with 8 different SLA tier examples:
 ### 2. `variables.tf`
 Standard provider and resource configuration variables:
 - Provider credentials (with defaults from e2e)
-- Organization ID (default: `542cc7e3-2143-40ce-90e9-cf69da9b4da6`)
+- Organization ID (default: `<org_id>`)
 - Environment ID (required)
 - API Instance ID (required)
 

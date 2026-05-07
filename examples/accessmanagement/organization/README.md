@@ -181,7 +181,7 @@ recreating it.
    e.g.
 
    ```bash
-   terraform import anypoint_organization.imported_org a02fab4f-4695-4325-882e-f326d1cef704
+   terraform import anypoint_organization.imported_org <org_id>
    ```
 
 3. Run `terraform plan`. A clean plan means the import succeeded and your HCL
