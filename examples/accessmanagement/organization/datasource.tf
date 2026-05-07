@@ -25,7 +25,7 @@
 # Example: Fetch information about an existing organization
 data "anypoint_organization" "example" {
   provider = anypoint.admin
-  id = "542cc7e3-2143-40ce-90e9-cf69da9b4da6"
+  id = "<org_id>"
 }
 
 # Output the organization information

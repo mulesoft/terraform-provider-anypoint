@@ -346,7 +346,7 @@ func TestUpdatePayload_BusinessGroupOmitsMasterOrgOnlyEntitlements(t *testing.T)
 	}
 
 	req := &am.UpdateOrganizationRequest{
-		ID:      "a02fab4f-4695-4325-882e-f326d1cef704",
+		ID:      "<org_id>",
 		Name:    "terraform-suborg-example-renamed",
 		OwnerID: "f7f43384-b33e-470c-ad4c-285aa0c01212",
 		Properties: map[string]interface{}{
@@ -901,7 +901,7 @@ func TestOrganizationResource_ImportState_PassthroughID(t *testing.T) {
 		t.Fatal("OrganizationResource does not implement ResourceWithImportState")
 	}
 
-	req := resource.ImportStateRequest{ID: "a02fab4f-4695-4325-882e-f326d1cef704"}
+	req := resource.ImportStateRequest{ID: "<org_id>"}
 	resp := &resource.ImportStateResponse{
 		State: tfsdk.State{
 			Schema: schemaResp.Schema,
@@ -933,8 +933,8 @@ func TestOrganizationResource_ImportState_PassthroughID(t *testing.T) {
 // imported resource.
 func TestOrganizationResource_Read_DerivesParentOrgIDOnImport(t *testing.T) {
 	const (
-		orgID          = "a02fab4f-4695-4325-882e-f326d1cef704"
-		masterParent   = "542cc7e3-2143-40ce-90e9-cf69da9b4da6"
+		orgID          = "<org_id>"
+		masterParent   = "<org_id>"
 		intermediateID = "11111111-2222-3333-4444-555555555555"
 	)
 
@@ -1034,8 +1034,8 @@ func TestOrganizationResource_Read_DerivesParentOrgIDOnImport(t *testing.T) {
 // state value alone — rewriting it would cause a RequiresReplace churn.
 func TestOrganizationResource_Read_PreservesExistingParentOrgID(t *testing.T) {
 	const (
-		orgID      = "a02fab4f-4695-4325-882e-f326d1cef704"
-		userParent = "542cc7e3-2143-40ce-90e9-cf69da9b4da6"
+		orgID      = "<org_id>"
+		userParent = "<org_id>"
 		tailID     = "99999999-9999-9999-9999-999999999999"
 	)
 
@@ -1179,7 +1179,7 @@ func TestOrganizationResource_Update_DoesNotWriteApiUpdatedAtIntoState(t *testin
 	const (
 		orgID         = "9d156999-be80-43f5-aea5-666779c7e1a3"
 		ownerID       = "f7f43384-b33e-470c-ad4c-285aa0c01212"
-		parentID      = "542cc7e3-2143-40ce-90e9-cf69da9b4da6"
+		parentID      = "<org_id>"
 		priorUpdated  = "2026-05-05T11:30:23.342Z" // what state already has
 		serverUpdated = "2026-05-05T12:00:00.000Z" // what the PUT response returns
 	)
@@ -1484,7 +1484,7 @@ func TestUpdatePayload_BusinessGroupOmitsDesignCenter(t *testing.T) {
 	stripMasterOrgOnlyEntitlements(&expanded)
 
 	body, err := json.Marshal(am.UpdateOrganizationRequest{
-		ID:           "a02fab4f-4695-4325-882e-f326d1cef704",
+		ID:           "<org_id>",
 		Name:         "renamed-sub-org",
 		OwnerID:      "f7f43384-b33e-470c-ad4c-285aa0c01212",
 		Properties:   map[string]interface{}{"flow_designer": map[string]interface{}{}},

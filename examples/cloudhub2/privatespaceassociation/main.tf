@@ -18,7 +18,7 @@ resource "anypoint_private_space_association" "example" {
   private_space_id = var.private_space_id
   associations = [
     # {
-    #   organization_id = "542cc7e3-2143-40ce-90e9-cf69da9b4da6"
+    #   organization_id = "<org_id>"
     #   environment     = "all"
     # },
     {

@@ -11,7 +11,7 @@
 #   anypoint_private_space_config -> <private_space_id>
 
 # locals {
-#   org_id = "a02fab4f-4695-4325-882e-f326d1cef704"   # e.g. "849c361b-da3e-4c7d-9c68-a5784bb4dc58"
+#   org_id = "<org_id>"   # e.g. "849c361b-da3e-4c7d-9c68-a5784bb4dc58"
 # }
 
 # import {

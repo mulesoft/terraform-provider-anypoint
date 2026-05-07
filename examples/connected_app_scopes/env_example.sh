@@ -5,18 +5,18 @@
 # Note: All variables have defaults in variables.tf, so you can override only what's needed
 
 # Set your admin user credentials (required for connected_app_scopes)
-export ANYPOINT_USERNAME="ankitsarda_anypointstgx"
-export ANYPOINT_PASSWORD="Dreamz@007"
+export ANYPOINT_USERNAME="<admin_username_here>"
+export ANYPOINT_PASSWORD="<admin_password_here>"
 
 # Set your admin connected app credentials
-export TF_VAR_anypoint_admin_client_id="a66da37ba83d4c599264347952d4d533"
-export TF_VAR_anypoint_admin_client_secret="0de4EA9E5bae4651B599a2071bFDD4E1"
-export TF_VAR_anypoint_admin_username="ankitsarda_anypointstgx"
-export TF_VAR_anypoint_admin_password="Dreamz@007"
+export TF_VAR_anypoint_admin_client_id="<anypoint_admin_client_id>"
+export TF_VAR_anypoint_admin_client_secret="<anypoint_admin_client_secret>"
+export TF_VAR_anypoint_admin_username="<admin_username_here>"
+export TF_VAR_anypoint_admin_password="<admin_password_here>"
 
 # Set your target configuration
-export TF_VAR_connected_app_id="e5a776d9862a4f2d8f61ba8450803908"
-export TF_VAR_target_organization_id="542cc7e3-2143-40ce-90e9-cf69da9b4da6"
+export TF_VAR_connected_app_id="<anypoint_connected_app_client_id>"
+export TF_VAR_target_organization_id="<org_id>"
 
 # Set base URL (staging environment)
 export TF_VAR_anypoint_base_url="https://stgx.anypoint.mulesoft.com"

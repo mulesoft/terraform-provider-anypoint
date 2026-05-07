@@ -33,7 +33,7 @@ Parent Organization (Salesforce)
 ### 1. Existing Resources
 - **Parent Organization ID** (Salesforce org)
 - **Owner User ID** (existing user who will own the sub-org)
-- **Connected App** with client ID `e5a776d9862a4f2d8f61ba8450803908`
+- **Connected App** with client ID `<anypoint_connected_app_client_id>`
 
 ### 2. Authentication Requirements
 
@@ -90,7 +90,7 @@ cp suborg_with_privatespace.tfvars.example terraform.tfvars
 parent_organization_id     = "your-parent-org-id"
 owner_user_id              = "your-owner-user-id"
 sub_org_name               = "my-test-suborg"
-anypoint_admin_client_id     = "e5a776d9862a4f2d8f61ba8450803908"
+anypoint_admin_client_id     = "<anypoint_connected_app_client_id>"
 anypoint_admin_client_secret = "your-client-secret"
 anypoint_admin_username      = "your-admin-username"
 anypoint_admin_password      = "your-admin-password"
@@ -100,7 +100,7 @@ anypoint_admin_password      = "your-admin-password"
 
 ```bash
 # For resource management (connected app)
-export ANYPOINT_CLIENT_ID="e5a776d9862a4f2d8f61ba8450803908"
+export ANYPOINT_CLIENT_ID="<anypoint_connected_app_client_id>"
 export ANYPOINT_CLIENT_SECRET="your-client-secret"
 
 # For scope assignment (user authentication)

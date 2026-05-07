@@ -8,14 +8,14 @@ variable "anypoint_client_id" {
   description = "Connected App client ID"
   type        = string
   sensitive   = true
-  default     = "e5a776d9862a4f2d8f61ba8450803908"
+  default     = "<anypoint_connected_app_client_id>"
 }
 
 variable "anypoint_client_secret" {
   description = "Connected App client secret"
   type        = string
   sensitive   = true
-  default     = "0a5E1fbfc1154D9885c32842171F7490"
+  default     = "<anypoint_connected_app_client_secret>"
 }
 
 variable "anypoint_base_url" {
@@ -30,28 +30,28 @@ variable "anypoint_admin_client_id" {
   description = "Anypoint Connected App Client ID (must support password grant)"
   type        = string
   sensitive   = true
-  default     = "a66da37ba83d4c599264347952d4d533"
+  default     = "<anypoint_admin_client_id>"
 }
 
 variable "anypoint_admin_client_secret" {
   description = "Anypoint Connected App Client Secret"
   type        = string
   sensitive   = true
-  default     = "0de4EA9E5bae4651B599a2071bFDD4E1"
+  default     = "<anypoint_admin_client_secret>"
 }
 
 variable "anypoint_username" {
   description = "Anypoint Platform username (for admin provider)"
   type        = string
   sensitive   = true
-  default     = "ankitsarda_anypointstgx"
+  default     = "<admin_username_here>"
 }
 
 variable "anypoint_password" {
   description = "Anypoint Platform password (for admin provider)"
   type        = string
   sensitive   = true
-  default     = "Dreamz@007"
+  default     = "<admin_password_here>"
 }
 
 # ── Organisation ─────────────────────────────────────────────────────────────
@@ -59,7 +59,7 @@ variable "anypoint_password" {
 variable "parent_organization_id" {
   description = "Parent organization ID under which to create the sub-org"
   type        = string
-  default     = "542cc7e3-2143-40ce-90e9-cf69da9b4da6"
+  default     = "<org_id>"
 }
 
 variable "owner_id" {
@@ -71,7 +71,7 @@ variable "owner_id" {
 variable "environment_id" {
   description = "Environment ID"
   type        = string
-  default     = "c0c9f7f5-57bb-4333-82d7-dbdcab912234"
+  default     = "<private_space_id>"
 }
 
 variable "target_id" {

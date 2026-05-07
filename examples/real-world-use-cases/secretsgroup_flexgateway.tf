@@ -70,14 +70,14 @@ resource "anypoint_managed_omni_gateway" "complete" {
 variable "anypoint_client_id" {
   description = "Anypoint Platform Connected App client ID"
   type        = string
-  default     = "e5a776d9862a4f2d8f61ba8450803908"
+  default     = "<anypoint_connected_app_client_id>"
 }
 
 variable "anypoint_client_secret" {
   description = "Anypoint Platform Connected App client secret"
   type        = string
   sensitive   = true
-  default     = "0a5E1fbfc1154D9885c32842171F7490"
+  default     = "<anypoint_connected_app_client_secret>"
 }
 
 variable "anypoint_base_url" {
@@ -89,7 +89,7 @@ variable "anypoint_base_url" {
 variable "environment_id" {
   description = "The environment ID where the gateway will be deployed"
   type        = string
-  default     = "c0c9f7f5-57bb-4333-82d7-dbdcab912234"
+  default     = "<private_space_id>"
 }
 
 variable "target_id" {
