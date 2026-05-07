@@ -165,7 +165,7 @@ resource "anypoint_secret_group_truststore" "ca" {
   depends_on = [anypoint_secret_group.main]
 }
 
-resource "anypoint_omni_tls_context" "omni" {
+resource "anypoint_secret_group_tls_context" "omni" {
   environment_id  = var.environment_id
   secret_group_id = anypoint_secret_group.main.id
   name            = "commerce-omni-tls-context"
@@ -183,7 +183,7 @@ resource "anypoint_managed_omni_gateway" "commerce-gateway" {
   name            = "commerce-gateway"
   target_id       = var.target_id
 
-  depends_on = [anypoint_omni_tls_context.omni]
+  depends_on = [anypoint_secret_group_tls_context.omni]
 }
 
 ###############################################################################

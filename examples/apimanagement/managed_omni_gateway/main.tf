@@ -26,7 +26,7 @@ provider "anypoint" {
 resource "anypoint_managed_omnigateway" "gw" {
   environment_id = var.environment_id # local.sandbox_env_id  # from remote state — not hardcoded
   target_id    = var.target_id
-  name      = "test-gw-1"
+  name      = "test-gw-23"
   size      = "small"
   release_channel = "lts"
   logging = {

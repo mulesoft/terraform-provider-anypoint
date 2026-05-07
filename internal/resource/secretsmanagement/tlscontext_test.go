@@ -31,7 +31,7 @@ func TestNewTLSContextResource(t *testing.T) {
 
 func TestTLSContextResource_Metadata(t *testing.T) {
 	r := NewTLSContextResource()
-	testutil.TestResourceMetadata(t, r, "_omni_tls_context")
+	testutil.TestResourceMetadata(t, r, "_secret_group_tls_context")
 }
 
 func TestTLSContextResource_Schema(t *testing.T) {

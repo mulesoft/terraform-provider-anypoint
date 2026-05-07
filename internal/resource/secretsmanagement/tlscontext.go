@@ -56,7 +56,7 @@ func NewTLSContextResource() resource.Resource {
 }
 
 func (r *TLSContextResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_omni_tls_context"
+	resp.TypeName = req.ProviderTypeName + "_secret_group_tls_context"
 }
 
 func (r *TLSContextResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {

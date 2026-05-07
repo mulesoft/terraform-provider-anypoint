@@ -109,7 +109,7 @@ provider "anypoint" {
 #   truststore_base64 = base64encode(file("${path.module}/../certs/truststore.pem"))
 # }
 
-# resource "anypoint_omni_tls_context" "omni" {
+# resource "anypoint_secret_group_tls_context" "omni" {
 #   environment_id  = var.environment_id
 #   secret_group_id = anypoint_secret_group.main.id
 #   name            = "omni-tls-context"
@@ -148,7 +148,7 @@ provider "anypoint" {
 #   #   enabled = false
 #   # }
 
-#   depends_on = [anypoint_omni_tls_context.omni]
+#   depends_on = [anypoint_secret_group_tls_context.omni]
 # }
 
 # ###############################################################################
