@@ -44,7 +44,7 @@ func NewManagedOmniGatewayDataSource() datasource.DataSource {
 }
 
 func (d *ManagedOmniGatewayDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_managed_omnigateways"
+	resp.TypeName = req.ProviderTypeName + "_managed_omni_gateways"
 }
 
 func (d *ManagedOmniGatewayDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {

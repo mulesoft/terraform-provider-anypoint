@@ -9,7 +9,7 @@ This directory contains focused, real-world Terraform configurations that demons
 | `secretsgroup_omnigateway.tf` | Provision a Secret Group (keystore + truststore + TLS context) and a Managed Omni Gateway with a custom public URL and ingress security settings |
 | `api_instance.tf` | Deploy a OmniGateway-backed API instance with weighted read/write routing, referencing the gateway and TLS context from datasources |
 
-> **Note:** These two files share state in the same Terraform root module. `api_instance.tf` depends on resources defined in `secretsgroup_omnigateway.tf` (specifically `anypoint_secret_group.main` and `anypoint_omni_tls_context.omni`).
+> **Note:** These two files share state in the same Terraform root module. `api_instance.tf` depends on resources defined in `secretsgroup_omnigateway.tf` (specifically `anypoint_secret_group.main` and `anypoint_secret_group_tls_context.omni`).
 
 ---
 
@@ -22,7 +22,7 @@ This configuration models the following real-world pattern:
   anypoint_secret_group          "real-world-example-secrets"
   ├── anypoint_secret_group_keystore   "tls-keystore"     (PEM cert + key)
   ├── anypoint_secret_group_truststore "ca-truststore"    (PEM CA chain)
-  └── anypoint_omni_tls_context        "omni-tls-context" (h2 + http/1.1)
+  └── anypoint_secret_group_tls_context        "omni-tls-context" (h2 + http/1.1)
           │
           ▼
 [Managed Omni Gateway]

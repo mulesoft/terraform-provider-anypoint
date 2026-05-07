@@ -29,7 +29,7 @@ func TestNewManagedOmniGatewayResource(t *testing.T) {
 
 func TestManagedOmniGatewayResource_Metadata(t *testing.T) {
 	r := NewManagedOmniGatewayResource()
-	testutil.TestResourceMetadata(t, r, "_managed_omnigateway")
+	testutil.TestResourceMetadata(t, r, "_managed_omni_gateway")
 }
 
 func TestManagedOmniGatewayResource_Schema(t *testing.T) {

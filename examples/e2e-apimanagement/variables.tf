@@ -209,6 +209,6 @@ variable "aws_secret_access_key" {
 variable "api_instance_id" {
   description = "API instance ID"
   type        = string
-  default     = "4714224"
+  default     = "4714672"
 }
 

@@ -43,7 +43,7 @@ Steps 1–3 (private space, network, VPN) are commented out so you can run the e
 | `anypoint_secret_group` | `main` |
 | `anypoint_secret_group_keystore` | `tls` (PEM type) |
 | `anypoint_secret_group_truststore` | `ca` (PEM type) |
-| `anypoint_omni_tls_context` | `omni` (ALPN: h2 + http/1.1) |
+| `anypoint_secret_group_tls_context` | `omni` (ALPN: h2 + http/1.1) |
 
 #### Gateway & API
 | Resource | Description |
@@ -229,7 +229,7 @@ After `terraform apply`, the following outputs are available:
   anypoint_secret_group
   └── anypoint_secret_group_keystore  (TLS cert)
   └── anypoint_secret_group_truststore (CA chain)
-  └── anypoint_omni_tls_context        (TLS policy)
+  └── anypoint_secret_group_tls_context        (TLS policy)
           │
           ▼
 [Managed Omni Gateway]

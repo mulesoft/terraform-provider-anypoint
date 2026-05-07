@@ -85,7 +85,7 @@ resource "anypoint_api_instance" "omni_api" {
     deployment_type = "HY"
     type            = "http"
     base_path       = "my-api"
-    ssl_context_id  = "${anypoint_secret_group.main.id}/${anypoint_omni_tls_context.omni.id}"
+    ssl_context_id  = "${anypoint_secret_group.main.id}/${anypoint_secret_group_tls_context.omni.id}"
   }
 
   gateway_id = anypoint_managed_omni_gateway.main.id
