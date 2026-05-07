@@ -80,7 +80,7 @@ resource "anypoint_api_instance" "weighted_routing" {
 ### Optional
 
 - `organization_id` (String) The organization ID. If not provided, the organization ID will be inferred from the connected app credentials.
-- `technology` (String) The gateway technology. Valid values: `flexGateway`, `mule4`, `serviceMesh`. Defaults to `flexGateway`.
+- `technology` (String) The gateway technology. Valid values: `omniGateway`, `mule4`, `serviceMesh`. Defaults to `omniGateway`.
 - `provider_id` (String) The identity provider ID for the API.
 - `instance_label` (String) A human-readable label for this API instance.
 - `approval_method` (String) Client approval method. Valid values: `manual`, `automatic`. Defaults to null (no approval required).

@@ -283,12 +283,12 @@ func (r *APIInstanceResource) Schema(_ context.Context, _ resource.SchemaRequest
 				},
 			},
 			"technology": schema.StringAttribute{
-				Description: "The gateway technology. Valid values: 'flexGateway', 'mule4', 'serviceMesh'.",
+				Description: "The gateway technology. Valid values: 'omniGateway', 'mule4', 'serviceMesh'.",
 				Optional:    true,
 				Computed:    true,
-				Default:     stringdefault.StaticString("flexGateway"),
+				Default:     stringdefault.StaticString("omniGateway"),
 				Validators: []validator.String{
-					stringvalidator.OneOf("flexGateway", "mule4", "serviceMesh"),
+					stringvalidator.OneOf("omniGateway", "mule4", "serviceMesh"),
 				},
 			},
 			"provider_id": schema.StringAttribute{
@@ -379,7 +379,7 @@ func (r *APIInstanceResource) Schema(_ context.Context, _ resource.SchemaRequest
 						},
 					},
 					"base_path": schema.StringAttribute{
-						Description: "API base path for OmniGateway (e.g. 'my-api'). The provider constructs the full proxy URI as http://0.0.0.0:8081/<base_path>. Required when technology='omniGateway'. Mutually exclusive with 'uri'.",
+						Description: "API base path for Omni Gateway (e.g. 'my-api'). The provider constructs the full proxy URI as http://0.0.0.0:8081/<base_path>. Required when technology='omniGateway'. Mutually exclusive with 'uri'.",
 						Optional:    true,
 					},
 					"uri": schema.StringAttribute{
@@ -852,9 +852,23 @@ func (r *APIInstanceResource) resolveGatewayDeployment(ctx context.Context, orgI
 	}, nil
 }
 
+func technologyToAPI(t string) string {
+	if t == "omniGateway" {
+		return "flexGateway"
+	}
+	return t
+}
+
+func technologyFromAPI(t string) string {
+	if t == "flexGateway" {
+		return "omniGateway"
+	}
+	return t
+}
+
 func (r *APIInstanceResource) expandCreateRequest(ctx context.Context, data APIInstanceResourceModel) *apimanagement.CreateAPIInstanceRequest {
 	req := &apimanagement.CreateAPIInstanceRequest{
-		Technology: data.Technology.ValueString(),
+		Technology: technologyToAPI(data.Technology.ValueString()),
 	}
 
 	if !data.ProviderID.IsNull() && !data.ProviderID.IsUnknown() {
@@ -885,7 +899,7 @@ func (r *APIInstanceResource) expandCreateRequest(ctx context.Context, data APII
 
 		technology := data.Technology.ValueString()
 		switch technology {
-		case "flexGateway", "":
+		case "omniGateway", "flexGateway", "":
 			if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
 				basePath := strings.TrimPrefix(ep.BasePath.ValueString(), "/")
 				proxyURI := "http://0.0.0.0:8081/" + basePath
@@ -951,7 +965,7 @@ func (r *APIInstanceResource) expandCreateRequest(ctx context.Context, data APII
 func (r *APIInstanceResource) expandUpdateRequest(ctx context.Context, data APIInstanceResourceModel) *apimanagement.UpdateAPIInstanceRequest {
 	req := &apimanagement.UpdateAPIInstanceRequest{}
 
-	tech := data.Technology.ValueString()
+	tech := technologyToAPI(data.Technology.ValueString())
 	req.Technology = &tech
 
 	if !data.InstanceLabel.IsNull() && !data.InstanceLabel.IsUnknown() {
@@ -967,7 +981,7 @@ func (r *APIInstanceResource) expandUpdateRequest(ctx context.Context, data APII
 
 		technology := data.Technology.ValueString()
 		switch technology {
-		case "flexGateway", "":
+		case "omniGateway", "flexGateway", "":
 			if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
 				basePath := strings.TrimPrefix(ep.BasePath.ValueString(), "/")
 				proxyURI := "http://0.0.0.0:8081/" + basePath
@@ -1125,7 +1139,7 @@ func (r *APIInstanceResource) flattenInstance(_ context.Context, inst *apimanage
 	data.AssetID = types.StringValue(inst.AssetID)
 	data.AssetVersion = types.StringValue(inst.AssetVersion)
 	data.ProductVersion = types.StringValue(inst.ProductVersion)
-	data.Technology = types.StringValue(inst.Technology)
+	data.Technology = types.StringValue(technologyFromAPI(inst.Technology))
 
 	if data.OrganizationID.IsNull() || data.OrganizationID.IsUnknown() || data.OrganizationID.ValueString() == "" {
 		data.OrganizationID = types.StringValue(orgID)
@@ -1158,7 +1172,7 @@ func (r *APIInstanceResource) flattenInstance(_ context.Context, inst *apimanage
 
 		technology := inst.Technology
 		switch technology {
-		case "flexGateway", "":
+		case "omniGateway", "flexGateway", "":
 			if inst.Endpoint.ProxyURI != nil && *inst.Endpoint.ProxyURI != "" {
 				ep.BasePath = types.StringValue(strings.TrimPrefix(*inst.Endpoint.ProxyURI, "http://0.0.0.0:8081/"))
 			} else {

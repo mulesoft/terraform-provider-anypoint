@@ -101,7 +101,7 @@ type EntitlementsModel struct {
 	LoadBalancer          types.Object `tfsdk:"load_balancer"`
 	RuntimeFabric         types.Bool   `tfsdk:"runtime_fabric"`
 	ServiceMesh           types.Object `tfsdk:"service_mesh"`
-	FlexGateway           types.Object `tfsdk:"flex_gateway"`
+	OmniGateway           types.Object `tfsdk:"omni_gateway"`
 	ManagedGatewaySmall   types.Object `tfsdk:"managed_gateway_small"`
 	ManagedGatewayLarge   types.Object `tfsdk:"managed_gateway_large"`
 }
@@ -331,7 +331,7 @@ func (r *OrganizationResource) Schema(_ context.Context, _ resource.SchemaReques
 						Attributes:  getVCoreEntitlementSchema(),
 						Default:     objectdefault.StaticValue(zeroVCore()),
 					},
-					// hybrid / runtime_fabric / flex_gateway / service_mesh /
+					// hybrid / runtime_fabric / omni_gateway / service_mesh /
 					// worker_logging_override / design_center are
 					// MASTER-ORG-ONLY entitlements: on a sub-org their values
 					// are inherited from the master and the Anypoint API
@@ -361,7 +361,7 @@ func (r *OrganizationResource) Schema(_ context.Context, _ resource.SchemaReques
 							boolplanmodifier.UseStateForUnknown(),
 						},
 					},
-					"flex_gateway": schema.SingleNestedAttribute{
+					"omni_gateway": schema.SingleNestedAttribute{
 						Description: "Omni Gateway entitlement. Inherited from the master organization on sub-orgs.",
 						Optional:    true,
 						Computed:    true,
@@ -621,7 +621,7 @@ func getEntitlementsAttributeTypes() map[string]attr.Type {
 		"network_connections":     vcoreType,
 		"hybrid":                  enabledType,
 		"runtime_fabric":          types.BoolType,
-		"flex_gateway":            enabledType,
+		"omni_gateway":            enabledType,
 		"worker_logging_override": enabledType,
 		"mq_messages":             mqType,
 		"mq_requests":             mqType,
@@ -776,7 +776,7 @@ func expandEntitlements(ctx context.Context, obj types.Object) (accessmanagement
 	ent.NetworkConnections = vCoreEntitlementFromModel(model.NetworkConnections)
 
 	ent.Hybrid = hybridEntitlementFromModel(model.Hybrid)
-	ent.FlexGateway = enabledEntitlementFromModel(model.FlexGateway)
+	ent.FlexGateway = enabledEntitlementFromModel(model.OmniGateway)
 	ent.WorkerLoggingOverride = workerLoggingOverrideEntitlementFromModel(model.WorkerLoggingOverride)
 	ent.MqMessages = mqEntitlementFromModel(model.MqMessages)
 	ent.MqRequests = mqEntitlementFromModel(model.MqRequests)
@@ -793,7 +793,7 @@ func expandEntitlements(ctx context.Context, obj types.Object) (accessmanagement
 // zeroEnabled returns a concrete {enabled = false} Object.
 //
 // NOTE: flatten no longer synthesises this when the server omits an
-// enabled-style entitlement (hybrid / flexGateway / worker_logging_override /
+// enabled-style entitlement (hybrid / omniGateway / worker_logging_override /
 // service_mesh). On sub-orgs those flags can be inherited-true at the master
 // level and a hardcoded false desyncs from what the server echoes in PUT
 // responses, causing "inconsistent result after apply". Enabled-style
@@ -847,16 +847,16 @@ func zeroMq() types.Object {
 // does not trigger a perpetual in-place update plan.
 func flattenEntitlements(ctx context.Context, ent accessmanagement.Entitlements) (types.Object, diag.Diagnostics) {
 	enabledNull := types.ObjectNull(map[string]attr.Type{"enabled": types.BoolType})
-	var hybrid, flexGateway, workerLogging, serviceMesh types.Object
+	var hybrid, omniGateway, workerLogging, serviceMesh types.Object
 	if ent.Hybrid != nil {
 		hybrid = hybridEntitlementToModel(ent.Hybrid)
 	} else {
 		hybrid = enabledNull
 	}
 	if ent.FlexGateway != nil {
-		flexGateway = enabledEntitlementToModel(ent.FlexGateway)
+		omniGateway = enabledEntitlementToModel(ent.FlexGateway)
 	} else {
-		flexGateway = enabledNull
+		omniGateway = enabledNull
 	}
 	if ent.WorkerLoggingOverride != nil {
 		workerLogging = workerLoggingOverrideEntitlementToModel(ent.WorkerLoggingOverride)
@@ -927,7 +927,7 @@ func flattenEntitlements(ctx context.Context, ent accessmanagement.Entitlements)
 		Vpcs:                  vcoreOrZero(ent.Vpcs),
 		NetworkConnections:    vcoreOrZero(ent.NetworkConnections),
 		Hybrid:                hybrid,
-		FlexGateway:           flexGateway,
+		OmniGateway:           omniGateway,
 		WorkerLoggingOverride: workerLogging,
 		MqMessages:            mqMessages,
 		MqRequests:            mqRequests,
@@ -1272,7 +1272,7 @@ func (r *OrganizationResource) Create(ctx context.Context, req resource.CreateRe
 
 	// parent_organization_id is Required, so every Create through this
 	// provider produces a sub-org / business group. Master-org-only
-	// entitlements (hybrid, flexGateway, serviceMesh, workerLoggingOverride,
+	// entitlements (hybrid, omniGateway, serviceMesh, workerLoggingOverride,
 	// runtimeFabric, designCenter) are inherited from the master and the
 	// API 403s on a POST/PUT body that even mentions them. If the user
 	// declared one of these in HCL we drop it here so the create succeeds;
@@ -1609,7 +1609,7 @@ func (r *OrganizationResource) Update(ctx context.Context, req resource.UpdateRe
 	}
 
 	// The Anypoint API 403s when a PUT for a business group includes any
-	// master-org-only entitlements (hybrid, flexGateway, serviceMesh,
+	// master-org-only entitlements (hybrid, omniGateway, serviceMesh,
 	// workerLoggingOverride, runtimeFabric, designCenter) even when set to
 	// false/nil/zero. After `terraform import`, generated.tf often captures
 	// these as concrete values from state (e.g. design_center.api = true

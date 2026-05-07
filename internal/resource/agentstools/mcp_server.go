@@ -97,12 +97,12 @@ func (r *MCPServerResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				},
 			},
 			"technology": schema.StringAttribute{
-				Description: "The gateway technology. Valid values: 'flexGateway', 'mule4', 'serviceMesh'.",
+				Description: "The gateway technology. Valid values: 'omniGateway', 'mule4', 'serviceMesh'.",
 				Optional:    true,
 				Computed:    true,
-				Default:     stringdefault.StaticString("flexGateway"),
+				Default:     stringdefault.StaticString("omniGateway"),
 				Validators: []validator.String{
-					stringvalidator.OneOf("flexGateway", "mule4", "serviceMesh"),
+					stringvalidator.OneOf("omniGateway", "mule4", "serviceMesh"),
 				},
 			},
 			"provider_id": schema.StringAttribute{
@@ -193,7 +193,7 @@ func (r *MCPServerResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 						},
 					},
 					"base_path": schema.StringAttribute{
-						Description: "MCP server base path for OmniGateway (e.g. 'my-mcp-server'). The provider constructs the full proxy URI as http://0.0.0.0:8081/<base_path>. Required when technology='flexGateway'. Mutually exclusive with 'uri'.",
+						Description: "MCP server base path for Omni Gateway (e.g. 'my-mcp-server'). The provider constructs the full proxy URI as http://0.0.0.0:8081/<base_path>. Required when technology='omniGateway'. Mutually exclusive with 'uri'.",
 						Optional:    true,
 					},
 					"uri": schema.StringAttribute{
@@ -675,7 +675,7 @@ func (r *MCPServerResource) resolveGatewayDeployment(ctx context.Context, orgID,
 
 func (r *MCPServerResource) expandCreateRequest(ctx context.Context, data MCPServerResourceModel) *agentstools.CreateMCPServerRequest {
 	req := &agentstools.CreateMCPServerRequest{
-		Technology: data.Technology.ValueString(),
+		Technology: technologyToAPI(data.Technology.ValueString()),
 	}
 
 	if !data.ProviderID.IsNull() && !data.ProviderID.IsUnknown() {
@@ -706,7 +706,7 @@ func (r *MCPServerResource) expandCreateRequest(ctx context.Context, data MCPSer
 
 		technology := data.Technology.ValueString()
 		switch technology {
-		case "flexGateway", "":
+		case "omniGateway", "flexGateway", "":
 			if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
 				basePath := strings.TrimPrefix(ep.BasePath.ValueString(), "/")
 				proxyURI := "http://0.0.0.0:8081/" + basePath
@@ -772,7 +772,7 @@ func (r *MCPServerResource) expandCreateRequest(ctx context.Context, data MCPSer
 func (r *MCPServerResource) expandUpdateRequest(ctx context.Context, data MCPServerResourceModel) *agentstools.UpdateMCPServerRequest {
 	req := &agentstools.UpdateMCPServerRequest{}
 
-	tech := data.Technology.ValueString()
+	tech := technologyToAPI(data.Technology.ValueString())
 	req.Technology = &tech
 
 	if !data.InstanceLabel.IsNull() && !data.InstanceLabel.IsUnknown() {
@@ -788,7 +788,7 @@ func (r *MCPServerResource) expandUpdateRequest(ctx context.Context, data MCPSer
 
 		technology := data.Technology.ValueString()
 		switch technology {
-		case "flexGateway", "":
+		case "omniGateway", "flexGateway", "":
 			if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
 				basePath := strings.TrimPrefix(ep.BasePath.ValueString(), "/")
 				proxyURI := "http://0.0.0.0:8081/" + basePath
@@ -964,7 +964,7 @@ func (r *MCPServerResource) flattenInstance(_ context.Context, inst *agentstools
 		data.ProductVersion = types.StringValue(inst.ProductVersion)
 	}
 	if inst.Technology != "" {
-		data.Technology = types.StringValue(inst.Technology)
+		data.Technology = types.StringValue(technologyFromAPI(inst.Technology))
 	}
 
 	if data.OrganizationID.IsNull() || data.OrganizationID.IsUnknown() || data.OrganizationID.ValueString() == "" {
@@ -998,7 +998,7 @@ func (r *MCPServerResource) flattenInstance(_ context.Context, inst *agentstools
 
 		technology := inst.Technology
 		switch technology {
-		case "flexGateway", "":
+		case "omniGateway", "flexGateway", "":
 			if inst.Endpoint.ProxyURI != nil && *inst.Endpoint.ProxyURI != "" {
 				ep.BasePath = types.StringValue(strings.TrimPrefix(*inst.Endpoint.ProxyURI, "http://0.0.0.0:8081/"))
 			} else {

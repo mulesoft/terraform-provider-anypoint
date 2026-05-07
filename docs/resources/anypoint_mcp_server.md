@@ -23,7 +23,7 @@ Manages an MCP server in Anypoint API Manager. An MCP server represents an MCP s
 resource "anypoint_mcp_server" "example" {
   organization_id = var.organization_id
   environment_id  = var.environment_id
-  technology      = "flexGateway"
+  technology      = "omniGateway"
   instance_label  = "atlassian-mcp-server"
 
   spec = {
@@ -48,7 +48,7 @@ resource "anypoint_mcp_server" "example" {
 resource "anypoint_mcp_server" "advanced" {
   organization_id = var.organization_id
   environment_id  = var.environment_id
-  technology      = "flexGateway"
+  technology      = "omniGateway"
   instance_label  = "enterprise-tools-mcp"
 
   spec = {
@@ -87,7 +87,7 @@ resource "anypoint_mcp_server" "advanced" {
 ### Optional
 
 - `organization_id` (String) The organization ID. If not provided, the organization ID will be inferred from the connected app credentials.
-- `technology` (String) The gateway technology. Valid values: `flexGateway`, `mule4`, `serviceMesh`. Defaults to `flexGateway`.
+- `technology` (String) The gateway technology. Valid values: `omniGateway`, `mule4`, `serviceMesh`. Defaults to `omniGateway`.
 - `provider_id` (String) The identity provider ID for the MCP server.
 - `instance_label` (String) A human-readable label for this MCP server.
 - `approval_method` (String) Client approval method. Valid values: `manual`, `automatic`. Defaults to null (no approval required).
@@ -123,7 +123,7 @@ Optional:
 
 - `deployment_type` (String) Deployment type. Valid values: `HY` (hybrid), `CH` (CloudHub), `RF` (Runtime Fabric). Defaults to `HY`.
 - `type` (String) Endpoint protocol type. For MCP servers, this is `mcp`. Defaults to `mcp`.
-- `base_path` (String) MCP server base path for OmniGateway (e.g. `my-mcp-server`). The provider constructs the full proxy URI as `http://0.0.0.0:8081/<base_path>`. Required when technology=`flexGateway`. Mutually exclusive with `uri`.
+- `base_path` (String) MCP server base path for Omni Gateway (e.g. `my-mcp-server`). The provider constructs the full proxy URI as `http://0.0.0.0:8081/<base_path>`. Required when technology=`omniGateway`. Mutually exclusive with `uri`.
 - `uri` (String) Direct implementation URI for Mule4 or other technologies (e.g. `http://www.google.com`). Required when technology=`mule4`. Mutually exclusive with `base_path`.
 - `response_timeout` (Number) Response timeout in milliseconds.
 
