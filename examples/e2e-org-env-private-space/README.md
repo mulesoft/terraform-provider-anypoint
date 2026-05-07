@@ -110,7 +110,7 @@ The created sub-org is provisioned with the following entitlement allocation:
 | `vpns` | 0 |
 | `static_ips` | 0 |
 
-Adjust these values in `suborg_with_privatespace_complete.tf` to match your org's available quota. Note: `hybrid`, `runtime_fabric`, and `flex_gateway` flags are master-org-only and are inherited — they cannot be set on sub-orgs.
+Adjust these values in `suborg_with_privatespace_complete.tf` to match your org's available quota. Note: `hybrid`, `runtime_fabric`, and `omni_gateway` flags are master-org-only and are inherited — they cannot be set on sub-orgs.
 
 The sub-org resource uses `lifecycle { ignore_changes = all; prevent_destroy = true }` to protect against accidental drift corrections or deletions.
 

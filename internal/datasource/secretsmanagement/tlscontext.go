@@ -79,7 +79,7 @@ func (d *TLSContextDataSource) Schema(_ context.Context, _ datasource.SchemaRequ
 						},
 						"target": schema.StringAttribute{
 							Computed:    true,
-							Description: "The target (e.g. FlexGateway).",
+							Description: "The target (e.g. OmniGateway).",
 						},
 						"min_tls_version": schema.StringAttribute{
 							Computed:    true,

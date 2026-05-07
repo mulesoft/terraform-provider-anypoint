@@ -11,7 +11,7 @@ resource "anypoint_organization" "imported_org" {
       api    = true
       mozart = false
     }
-    flex_gateway = null
+    omni_gateway = null
     gateways = {
       assigned = 0
     }

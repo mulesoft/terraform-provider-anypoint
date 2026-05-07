@@ -38,13 +38,13 @@ This directory contains examples for managing Anypoint Platform Secrets Manager 
   - Validate server certificates
 
 ### [TLS Context](./tlscontext/)
-- **Resource**: `anypoint_flex_tls_context`
+- **Resource**: `anypoint_omni_tls_context`
 - **Description**: Configure TLS contexts combining keystores and truststores for comprehensive TLS setup
 - **API**: `/secrets-manager/api/v1/organizations/{orgId}/environments/{envId}/secretGroups/{secretGroupId}/tlsContexts`
 - **Use Cases**:
   - Complete TLS configuration with client and server certificates
   - Configure cipher suites and TLS versions
-  - Implement mutual TLS authentication for Flex Gateway APIs
+  - Implement mutual TLS authentication for Omni Gateway APIs
 
 ### [Shared Secret](./sharedsecret/)
 - **Resource**: `anypoint_secret_group_shared_secret`
@@ -103,7 +103,7 @@ Secret Group (Foundation)  ← anypoint_secret_group
 │   └── Private keys + certificates
 ├── Truststores            ← anypoint_secret_group_truststore
 │   └── Trusted CA certificates
-├── TLS Context            ← anypoint_flex_tls_context
+├── TLS Context            ← anypoint_omni_tls_context
 │   ├── References keystore (optional)
 │   └── References truststore (optional)
 └── Shared Secrets         ← anypoint_secret_group_shared_secret
@@ -151,8 +151,8 @@ resource "anypoint_secret_group_truststore" "ca_trust" {
   passphrase        = var.truststore_passphrase
 }
 
-# 4. Configure TLS context (Flex Gateway)
-resource "anypoint_flex_tls_context" "mtls" {
+# 4. Configure TLS context (Omni Gateway)
+resource "anypoint_omni_tls_context" "mtls" {
   organization_id = var.organization_id
   environment_id  = var.environment_id
   secret_group_id = anypoint_secret_group.api_secrets.id
@@ -224,7 +224,7 @@ resource "anypoint_secret_group_shared_secret" "oauth_secret" {
 }
 ```
 
-### PEM Keystore for Flex Gateway
+### PEM Keystore for Omni Gateway
 
 ```hcl
 resource "anypoint_secret_group_keystore" "pem_ks" {
@@ -245,8 +245,8 @@ resource "anypoint_secret_group_keystore" "pem_ks" {
 ## TLS Context Configuration
 
 ### Target Types
-- **outbound** - For outgoing connections from Flex Gateway to upstream
-- **inbound** - For incoming connections (currently only outbound is used with `anypoint_flex_tls_context`)
+- **outbound** - For outgoing connections from Omni Gateway to upstream
+- **inbound** - For incoming connections (currently only outbound is used with `anypoint_omni_tls_context`)
 
 ### Supported TLS Versions
 Configure via `min_tls_version` and `max_tls_version` (e.g. `"TLSv1.2"`, `"TLSv1.3"`).

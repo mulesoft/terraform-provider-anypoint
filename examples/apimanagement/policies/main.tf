@@ -292,8 +292,8 @@ resource "anypoint_api_policy_json_threat_protection" "json_threat_protection" {
 
 # ─── 13. XML Threat Protection ───────────────────────────────
 # NOTE: xml-threat-protection is a Mule 4 native policy and is NOT supported
-# on Flex Gateway (the Anypoint API returns 400 "does not have an implementation
-# for the API with technology(flexGateway)"). Apply this policy only to Mule 4
+# on Omni Gateway (the Anypoint API returns 400 "does not have an implementation
+# for the API with technology(omniGateway)"). Apply this policy only to Mule 4
 # API instances (technology = "mule4").
 #
 # resource "anypoint_api_policy_xml_threat_protection" "xml_threat_protection" {
@@ -386,7 +386,7 @@ resource "anypoint_api_policy_http_caching" "http_caching" {
 
 # ─── 18. Message Logging (Outbound) ──────────────────────────
 # Outbound policies require valid upstream_ids from the API instance's
-# Flex Gateway routing configuration. Uncomment and set upstream_ids
+# Omni Gateway routing configuration. Uncomment and set upstream_ids
 # to a real upstream UUID before applying.
 #
 # resource "anypoint_api_policy_message_logging_outbound" "message_logging_outbound" {

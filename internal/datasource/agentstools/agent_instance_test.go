@@ -115,7 +115,7 @@ func TestAgentInstanceDataSource_Read(t *testing.T) {
 
 	mockItems := agentsclient.AgentInstanceListResponse{
 		Instances: []agentsclient.AgentInstance{
-			{ID: 1, AssetID: "agent-asset-1", Technology: "flexGateway", Status: "Active"},
+			{ID: 1, AssetID: "agent-asset-1", Technology: "omniGateway", Status: "Active"},
 		},
 		Total: 1,
 	}

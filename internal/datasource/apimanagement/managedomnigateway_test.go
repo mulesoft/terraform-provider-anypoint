@@ -14,29 +14,29 @@ import (
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
 )
 
-func TestNewManagedFlexGatewayDataSource(t *testing.T) {
-	ds := NewManagedFlexGatewayDataSource()
+func TestNewManagedOmniGatewayDataSource(t *testing.T) {
+	ds := NewManagedOmniGatewayDataSource()
 	if ds == nil {
-		t.Error("NewManagedFlexGatewayDataSource() returned nil")
+		t.Error("NewManagedOmniGatewayDataSource() returned nil")
 	}
 	if _, ok := ds.(datasource.DataSourceWithConfigure); !ok {
-		t.Error("ManagedFlexGatewayDataSource should implement DataSourceWithConfigure")
+		t.Error("ManagedOmniGatewayDataSource should implement DataSourceWithConfigure")
 	}
 }
 
-func TestManagedFlexGatewayDataSource_Metadata(t *testing.T) {
-	ds := NewManagedFlexGatewayDataSource()
+func TestManagedOmniGatewayDataSource_Metadata(t *testing.T) {
+	ds := NewManagedOmniGatewayDataSource()
 	ctx := context.Background()
 	req := datasource.MetadataRequest{ProviderTypeName: "test"}
 	resp := &datasource.MetadataResponse{}
 	ds.Metadata(ctx, req, resp)
-	if resp.TypeName != "test_managed_flexgateways" {
-		t.Errorf("Metadata() TypeName = %q, want %q", resp.TypeName, "test_managed_flexgateways")
+	if resp.TypeName != "test_managed_omnigateways" {
+		t.Errorf("Metadata() TypeName = %q, want %q", resp.TypeName, "test_managed_omnigateways")
 	}
 }
 
-func TestManagedFlexGatewayDataSource_Schema(t *testing.T) {
-	ds := NewManagedFlexGatewayDataSource()
+func TestManagedOmniGatewayDataSource_Schema(t *testing.T) {
+	ds := NewManagedOmniGatewayDataSource()
 	ctx := context.Background()
 	req := datasource.SchemaRequest{}
 	resp := &datasource.SchemaResponse{}
@@ -68,8 +68,8 @@ func TestManagedFlexGatewayDataSource_Schema(t *testing.T) {
 	}
 }
 
-func TestManagedFlexGatewayDataSource_Configure(t *testing.T) {
-	ds := NewManagedFlexGatewayDataSource().(*ManagedFlexGatewayDataSource)
+func TestManagedOmniGatewayDataSource_Configure(t *testing.T) {
+	ds := NewManagedOmniGatewayDataSource().(*ManagedOmniGatewayDataSource)
 	server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
 	providerData := &anypointclient.Config{
 		BaseURL:      server.URL,
@@ -88,8 +88,8 @@ func TestManagedFlexGatewayDataSource_Configure(t *testing.T) {
 	}
 }
 
-func TestManagedFlexGatewayDataSource_Configure_InvalidProviderData(t *testing.T) {
-	ds := NewManagedFlexGatewayDataSource().(*ManagedFlexGatewayDataSource)
+func TestManagedOmniGatewayDataSource_Configure_InvalidProviderData(t *testing.T) {
+	ds := NewManagedOmniGatewayDataSource().(*ManagedOmniGatewayDataSource)
 	ctx := context.Background()
 	req := datasource.ConfigureRequest{ProviderData: "invalid"}
 	resp := &datasource.ConfigureResponse{}
@@ -102,19 +102,19 @@ func TestManagedFlexGatewayDataSource_Configure_InvalidProviderData(t *testing.T
 	}
 }
 
-func TestManagedFlexGatewayDataSourceModel_Validation(t *testing.T) {
-	model := ManagedFlexGatewayDataSourceModel{}
+func TestManagedOmniGatewayDataSourceModel_Validation(t *testing.T) {
+	model := ManagedOmniGatewayDataSourceModel{}
 	_ = model.ID
 	_ = model.OrganizationID
 	_ = model.EnvironmentID
 	_ = model.Gateways
 }
 
-func TestManagedFlexGatewayDataSource_Read(t *testing.T) {
+func TestManagedOmniGatewayDataSource_Read(t *testing.T) {
 	basePath := "/gatewaymanager/api/v1/organizations/test-org-id/environments/test-env-id/gateways"
 
-	mockResp := apimgmtclient.ManagedFlexGatewayListResponse{
-		Content: []apimgmtclient.ManagedFlexGatewayListItem{
+	mockResp := apimgmtclient.ManagedOmniGatewayListResponse{
+		Content: []apimgmtclient.ManagedOmniGatewayListItem{
 			{ID: "gw-id-1", Name: "gateway-one", Status: "Active"},
 		},
 	}
@@ -126,8 +126,8 @@ func TestManagedFlexGatewayDataSource_Read(t *testing.T) {
 	}
 	server := testutil.MockHTTPServer(t, handlers)
 
-	ds := NewManagedFlexGatewayDataSource().(*ManagedFlexGatewayDataSource)
-	ds.client = &apimgmtclient.ManagedFlexGatewayClient{
+	ds := NewManagedOmniGatewayDataSource().(*ManagedOmniGatewayDataSource)
+	ds.client = &apimgmtclient.ManagedOmniGatewayClient{
 		AnypointClient: &anypointclient.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
@@ -157,7 +157,7 @@ func TestManagedFlexGatewayDataSource_Read(t *testing.T) {
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("Read() reported errors: %v", resp.Diagnostics.Errors())
 	}
-	var got ManagedFlexGatewayDataSourceModel
+	var got ManagedOmniGatewayDataSourceModel
 	if diags := resp.State.Get(ctx, &got); diags.HasError() {
 		t.Fatalf("State.Get errors: %v", diags.Errors())
 	}
@@ -166,7 +166,7 @@ func TestManagedFlexGatewayDataSource_Read(t *testing.T) {
 	}
 }
 
-func TestManagedFlexGatewayDataSource_Read_Error(t *testing.T) {
+func TestManagedOmniGatewayDataSource_Read_Error(t *testing.T) {
 	basePath := "/gatewaymanager/api/v1/organizations/test-org-id/environments/test-env-id/gateways"
 
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
@@ -176,8 +176,8 @@ func TestManagedFlexGatewayDataSource_Read_Error(t *testing.T) {
 	}
 	server := testutil.MockHTTPServer(t, handlers)
 
-	ds := NewManagedFlexGatewayDataSource().(*ManagedFlexGatewayDataSource)
-	ds.client = &apimgmtclient.ManagedFlexGatewayClient{
+	ds := NewManagedOmniGatewayDataSource().(*ManagedOmniGatewayDataSource)
+	ds.client = &apimgmtclient.ManagedOmniGatewayClient{
 		AnypointClient: &anypointclient.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
@@ -209,8 +209,8 @@ func TestManagedFlexGatewayDataSource_Read_Error(t *testing.T) {
 	}
 }
 
-func BenchmarkManagedFlexGatewayDataSource_Schema(b *testing.B) {
-	ds := NewManagedFlexGatewayDataSource()
+func BenchmarkManagedOmniGatewayDataSource_Schema(b *testing.B) {
+	ds := NewManagedOmniGatewayDataSource()
 	ctx := context.Background()
 	req := datasource.SchemaRequest{}
 
@@ -223,29 +223,29 @@ func BenchmarkManagedFlexGatewayDataSource_Schema(b *testing.B) {
 
 // --- Single datasource ---
 
-func TestNewManagedFlexGatewaySingleDataSource(t *testing.T) {
-	ds := NewManagedFlexGatewaySingleDataSource()
+func TestNewManagedOmniGatewaySingleDataSource(t *testing.T) {
+	ds := NewManagedOmniGatewaySingleDataSource()
 	if ds == nil {
-		t.Error("NewManagedFlexGatewaySingleDataSource() returned nil")
+		t.Error("NewManagedOmniGatewaySingleDataSource() returned nil")
 	}
 	if _, ok := ds.(datasource.DataSourceWithConfigure); !ok {
-		t.Error("ManagedFlexGatewaySingleDataSource should implement DataSourceWithConfigure")
+		t.Error("ManagedOmniGatewaySingleDataSource should implement DataSourceWithConfigure")
 	}
 }
 
-func TestManagedFlexGatewaySingleDataSource_Metadata(t *testing.T) {
-	ds := NewManagedFlexGatewaySingleDataSource()
+func TestManagedOmniGatewaySingleDataSource_Metadata(t *testing.T) {
+	ds := NewManagedOmniGatewaySingleDataSource()
 	ctx := context.Background()
 	req := datasource.MetadataRequest{ProviderTypeName: "test"}
 	resp := &datasource.MetadataResponse{}
 	ds.Metadata(ctx, req, resp)
-	if resp.TypeName != "test_managed_flexgateway" {
-		t.Errorf("Metadata() TypeName = %q, want %q", resp.TypeName, "test_managed_flexgateway")
+	if resp.TypeName != "test_managed_omnigateway" {
+		t.Errorf("Metadata() TypeName = %q, want %q", resp.TypeName, "test_managed_omnigateway")
 	}
 }
 
-func TestManagedFlexGatewaySingleDataSource_Schema(t *testing.T) {
-	ds := NewManagedFlexGatewaySingleDataSource()
+func TestManagedOmniGatewaySingleDataSource_Schema(t *testing.T) {
+	ds := NewManagedOmniGatewaySingleDataSource()
 	ctx := context.Background()
 	req := datasource.SchemaRequest{}
 	resp := &datasource.SchemaResponse{}
@@ -277,8 +277,8 @@ func TestManagedFlexGatewaySingleDataSource_Schema(t *testing.T) {
 	}
 }
 
-func TestManagedFlexGatewaySingleDataSource_Configure(t *testing.T) {
-	ds := NewManagedFlexGatewaySingleDataSource().(*ManagedFlexGatewaySingleDataSource)
+func TestManagedOmniGatewaySingleDataSource_Configure(t *testing.T) {
+	ds := NewManagedOmniGatewaySingleDataSource().(*ManagedOmniGatewaySingleDataSource)
 	server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
 	providerData := &anypointclient.Config{
 		BaseURL:      server.URL,
@@ -297,8 +297,8 @@ func TestManagedFlexGatewaySingleDataSource_Configure(t *testing.T) {
 	}
 }
 
-func TestManagedFlexGatewaySingleDataSource_Configure_InvalidProviderData(t *testing.T) {
-	ds := NewManagedFlexGatewaySingleDataSource().(*ManagedFlexGatewaySingleDataSource)
+func TestManagedOmniGatewaySingleDataSource_Configure_InvalidProviderData(t *testing.T) {
+	ds := NewManagedOmniGatewaySingleDataSource().(*ManagedOmniGatewaySingleDataSource)
 	ctx := context.Background()
 	req := datasource.ConfigureRequest{ProviderData: "invalid"}
 	resp := &datasource.ConfigureResponse{}
@@ -311,8 +311,8 @@ func TestManagedFlexGatewaySingleDataSource_Configure_InvalidProviderData(t *tes
 	}
 }
 
-func TestManagedFlexGatewaySingleDataSourceModel_Validation(t *testing.T) {
-	model := ManagedFlexGatewaySingleDataSourceModel{}
+func TestManagedOmniGatewaySingleDataSourceModel_Validation(t *testing.T) {
+	model := ManagedOmniGatewaySingleDataSourceModel{}
 	_ = model.ID
 	_ = model.OrganizationID
 	_ = model.EnvironmentID

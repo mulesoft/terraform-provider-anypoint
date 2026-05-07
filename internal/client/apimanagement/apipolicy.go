@@ -582,7 +582,7 @@ type PolicyInfo struct {
 	AssetID        string
 	DefaultVersion string
 	// SupportedTechnologies lists the runtime technologies this policy supports
-	// (e.g. []string{"flexGateway"}, []string{"mule4"}). Empty means all technologies.
+	// (e.g. []string{"omniGateway"}, []string{"mule4"}). Empty means all technologies.
 	SupportedTechnologies []string
 	// InboundPolicy marks standard inbound policies (api/v1 endpoint).
 	InboundPolicy bool

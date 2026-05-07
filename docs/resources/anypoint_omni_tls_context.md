@@ -1,13 +1,13 @@
 ---
-page_title: "anypoint_flex_tls_context Resource - terraform-provider-anypoint"
+page_title: "anypoint_omni_tls_context Resource - terraform-provider-anypoint"
 subcategory: "Secrets Management"
 description: |-
-  Manages a Flex Gateway TLS context within a secret group in Anypoint Secrets Manager.
+  Manages a Omni Gateway TLS context within a secret group in Anypoint Secrets Manager.
 ---
 
-# anypoint_flex_tls_context (Resource)
+# anypoint_omni_tls_context (Resource)
 
-Manages a Flex Gateway TLS context within a secret group in Anypoint Secrets Manager. The target is automatically set to `FlexGateway`. References keystore and truststore resources by their IDs — the provider automatically builds the internal path references (`keystores/{id}`, `truststores/{id}`).
+Manages a Omni Gateway TLS context within a secret group in Anypoint Secrets Manager. The target is automatically set to `OmniGateway`. References keystore and truststore resources by their IDs — the provider automatically builds the internal path references (`keystores/{id}`, `truststores/{id}`).
 
 ~> **Delete behaviour:** The Anypoint Secrets Manager API does not expose individual DELETE endpoints for sub-resources. `terraform destroy` removes this resource from Terraform state only — the TLS context is deleted on the Platform when the parent `anypoint_secret_group` is destroyed.
 
@@ -16,10 +16,10 @@ Manages a Flex Gateway TLS context within a secret group in Anypoint Secrets Man
 ### Basic TLS Context
 
 ```terraform
-resource "anypoint_flex_tls_context" "example" {
+resource "anypoint_omni_tls_context" "example" {
   environment_id  = var.environment_id
   secret_group_id = anypoint_secret_group.main.id
-  name            = "flex-tls-context"
+  name            = "omni-tls-context"
 
   keystore_id   = anypoint_secret_group_keystore.tls.id
   truststore_id = anypoint_secret_group_truststore.ca.id
@@ -36,7 +36,7 @@ resource "anypoint_flex_tls_context" "example" {
 ### mTLS-enabled TLS Context
 
 ```terraform
-resource "anypoint_flex_tls_context" "mtls" {
+resource "anypoint_omni_tls_context" "mtls" {
   environment_id  = var.environment_id
   secret_group_id = anypoint_secret_group.main.id
   name            = "mtls-context"
@@ -76,7 +76,7 @@ resource "anypoint_flex_tls_context" "mtls" {
 ### Read-Only
 
 - `id` (String) Unique identifier of the TLS context.
-- `target` (String) Target runtime for the TLS context. Always `FlexGateway` for this resource.
+- `target` (String) Target runtime for the TLS context. Always `OmniGateway` for this resource.
 - `expiration_date` (String) Expiration date of the TLS context.
 
 ## Import
@@ -84,5 +84,5 @@ resource "anypoint_flex_tls_context" "mtls" {
 Import is supported using the following syntax:
 
 ```shell
-terraform import anypoint_flex_tls_context.example organization_id/environment_id/secret_group_id/tls_context_id
+terraform import anypoint_omni_tls_context.example organization_id/environment_id/secret_group_id/tls_context_id
 ```

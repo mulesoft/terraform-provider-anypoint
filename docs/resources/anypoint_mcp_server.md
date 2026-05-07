@@ -2,12 +2,12 @@
 page_title: "anypoint_mcp_server Resource - terraform-provider-anypoint"
 subcategory: "Agents Tools"
 description: |-
-  Manages an MCP server in Anypoint API Manager. An MCP server represents an MCP server specification deployed to a Flex Gateway target with routing rules and upstream backends.
+  Manages an MCP server in Anypoint API Manager. An MCP server represents an MCP server specification deployed to a Omni Gateway target with routing rules and upstream backends.
 ---
 
 # anypoint_mcp_server (Resource)
 
-Manages an MCP server in Anypoint API Manager. An MCP server represents an MCP server specification deployed to a Flex Gateway target with routing rules and upstream backends.
+Manages an MCP server in Anypoint API Manager. An MCP server represents an MCP server specification deployed to a Omni Gateway target with routing rules and upstream backends.
 
 -> **Status after create:** After a successful `terraform apply` the `status` field is populated from a GET request made immediately after the POST. The Platform typically returns `status = "active"` right away.
 
@@ -94,7 +94,7 @@ resource "anypoint_mcp_server" "advanced" {
 - `endpoint` (Block) Endpoint / proxy configuration for the MCP server. See [`endpoint`](#nestedschema--endpoint) below.
 - `consumer_endpoint` (String) Consumer-facing endpoint URI (the public URL clients use to reach the MCP server). Maps to top-level endpointUri in the MCP server. For MCP, this is the proxy_uri that clients connect to.
 - `upstream_uri` (String) Shorthand for a single-upstream routing configuration. When set, the provider constructs routing as `[{upstreams: [{weight: 100, uri: <value>}]}]`. Mutually exclusive with the `routing` block. For MCP servers, this is typically the upstream MCP server URI that the proxy_uri forwards to.
-- `gateway_id` (String) The Flex Gateway UUID. When provided, the deployment block is auto-populated by fetching gateway details (target_id, target_name, gateway_version) from the Gateway Manager MCP server. Mutually exclusive with specifying a full deployment block.
+- `gateway_id` (String) The Omni Gateway UUID. When provided, the deployment block is auto-populated by fetching gateway details (target_id, target_name, gateway_version) from the Gateway Manager MCP server. Mutually exclusive with specifying a full deployment block.
 - `deployment` (Block) Deployment target configuration. Auto-populated when gateway_id is set. See [`deployment`](#nestedschema--deployment) below.
 - `routing` (Block List) Routing rules with weighted upstream backends. For MCP servers, upstreams typically point to the actual MCP server implementation URIs. See [`routing`](#nestedschema--routing) below.
 
@@ -123,7 +123,7 @@ Optional:
 
 - `deployment_type` (String) Deployment type. Valid values: `HY` (hybrid), `CH` (CloudHub), `RF` (Runtime Fabric). Defaults to `HY`.
 - `type` (String) Endpoint protocol type. For MCP servers, this is `mcp`. Defaults to `mcp`.
-- `base_path` (String) MCP server base path for FlexGateway (e.g. `my-mcp-server`). The provider constructs the full proxy URI as `http://0.0.0.0:8081/<base_path>`. Required when technology=`flexGateway`. Mutually exclusive with `uri`.
+- `base_path` (String) MCP server base path for OmniGateway (e.g. `my-mcp-server`). The provider constructs the full proxy URI as `http://0.0.0.0:8081/<base_path>`. Required when technology=`flexGateway`. Mutually exclusive with `uri`.
 - `uri` (String) Direct implementation URI for Mule4 or other technologies (e.g. `http://www.google.com`). Required when technology=`mule4`. Mutually exclusive with `base_path`.
 - `response_timeout` (Number) Response timeout in milliseconds.
 
@@ -138,7 +138,7 @@ Optional:
 - `overwrite` (Boolean) Whether to overwrite an existing deployment.
 - `target_id` (String) The target gateway ID to deploy to.
 - `target_name` (String) The target gateway name.
-- `gateway_version` (String) The Flex Gateway runtime version.
+- `gateway_version` (String) The Omni Gateway runtime version.
 
 <a id="nestedschema--routing"></a>
 ### Nested Schema for `routing`

@@ -368,7 +368,7 @@ func TestListAPIPolicies_AcceptsCompactListShape(t *testing.T) {
 			"order": 11,
 			"label": "sse-logs",
 			"template": {"groupId":"68ef9520-24e9-4cf2-b2f5-620025690913","assetId":"sse-logging","assetVersion":"1.0.1"},
-			"implementationAsset": {"assetId":"sse-logging-policy-flex","groupId":"68ef9520-24e9-4cf2-b2f5-620025690913","version":"1.0.3"},
+			"implementationAsset": {"assetId":"sse-logging-policy-omni","groupId":"68ef9520-24e9-4cf2-b2f5-620025690913","version":"1.0.3"},
 			"configuration": {"logs":[]},
 			"policyTemplateId": "1185"
 		},

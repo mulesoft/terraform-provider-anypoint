@@ -108,8 +108,8 @@ provider "anypoint" {
 
 | Community resource | Official resource | Status | Notes |
 |---|---|---|---|
-| `anypoint_apim_mule4` | `anypoint_api_instance` | **Renamed + Schema change** | Official `anypoint_api_instance` is the unified resource for any API-instance type (Mule 3, Mule 4, Flex, proxy, etc.) — no separate `_mule4` or `_flexgateway` resources. Type is selected via attributes on the single resource. |
-| `anypoint_apim_flexgateway` | `anypoint_managed_flexgateway` (plus `anypoint_api_instance` for the API side) | **Renamed + Schema change** | Managed Flex Gateway infrastructure is a first-class resource now; API-instance attachment goes through `anypoint_api_instance`. |
+| `anypoint_apim_mule4` | `anypoint_api_instance` | **Renamed + Schema change** | Official `anypoint_api_instance` is the unified resource for any API-instance type (Mule 3, Mule 4, Omni, proxy, etc.) — no separate `_mule4` or `_omnigateway` resources. Type is selected via attributes on the single resource. |
+| `anypoint_apim_omnigateway` | `anypoint_managed_omni_gateway` (plus `anypoint_api_instance` for the API side) | **Renamed + Schema change** | Managed Omni Gateway infrastructure is a first-class resource now; API-instance attachment goes through `anypoint_api_instance`. |
 | `anypoint_apim_policy_client_id_enforcement` | `anypoint_api_policy_client_id_enforcement` | **Renamed (`apim_` → `api_`)** | |
 | `anypoint_apim_policy_jwt_validation` | `anypoint_api_policy_jwt_validation` | **Renamed** | |
 | `anypoint_apim_policy_rate_limiting` | `anypoint_api_policy_rate_limiting` | **Renamed** | |
@@ -162,8 +162,8 @@ in the official provider (note the added underscore).
 | `anypoint_secretgroup_keystore` | `anypoint_secret_group_keystore` | **Renamed** |
 | `anypoint_secretgroup_truststore` | `anypoint_secret_group_truststore` | **Renamed** |
 | `anypoint_secretgroup_certificate` | `anypoint_secret_group_certificate` | **Renamed** |
-| `anypoint_secretgroup_tlscontext_flexgateway` | `anypoint_flex_tls_context` | **Renamed + Schema change** |
-| `anypoint_secretgroup_tlscontext_mule` | — | **Not supported** (Mule-runtime TLS context is not in the official provider; only the Flex variant is). |
+| `anypoint_secretgroup_tlscontext_omnigateway` | `anypoint_omni_tls_context` | **Renamed + Schema change** |
+| `anypoint_secretgroup_tlscontext_mule` | — | **Not supported** (Mule-runtime TLS context is not in the official provider; only the Omni variant is). |
 | `anypoint_secretgroup_tlscontext_securityfabric` | — | **Not supported** |
 | `anypoint_secretgroup_crldistrib_cfgs` | — | **Not supported** |
 | — | `anypoint_secret_group_shared_secret` | **New in official** |
@@ -184,14 +184,14 @@ even for list queries; the official provider distinguishes singular vs plural):
 | `anypoint_apim_instance` | `anypoint_api_instance` | Renamed. |
 | `anypoint_apim_instance_policies` | — | Use the `anypoint_api_policy*` resources as the source of truth. |
 | `anypoint_secretgroups` | — | Not supported as a data source. |
-| `anypoint_flexgateway_registration_token` | — | Not supported. |
+| `anypoint_omnigateway_registration_token` | — | Not supported. |
 | `anypoint_exchange_policy_template*` | — | Not needed — the official provider ships strongly-typed policy resources for every supported policy. |
 
 Data sources unique to the official provider:
 `anypoint_firewallrules`, `anypoint_private_space_connection`,
 `anypoint_private_space_associations`, `anypoint_private_space_upgrade`,
 `anypoint_tls_context`, `anypoint_private_network`,
-`anypoint_secret_group_*` (plural variants), `anypoint_managed_flexgateway[s]`,
+`anypoint_secret_group_*` (plural variants), `anypoint_managed_omnigateway[s]`,
 `anypoint_api_instances`, `anypoint_agent_instances`, `anypoint_mcp_servers`.
 
 ## Migration runbook

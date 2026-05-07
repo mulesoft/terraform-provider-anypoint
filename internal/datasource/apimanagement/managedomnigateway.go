@@ -13,24 +13,24 @@ import (
 )
 
 var (
-	_ datasource.DataSource              = &ManagedFlexGatewayDataSource{}
-	_ datasource.DataSourceWithConfigure = &ManagedFlexGatewayDataSource{}
+	_ datasource.DataSource              = &ManagedOmniGatewayDataSource{}
+	_ datasource.DataSourceWithConfigure = &ManagedOmniGatewayDataSource{}
 )
 
-// ManagedFlexGatewayDataSource lists all managed Flex Gateways in an environment.
-type ManagedFlexGatewayDataSource struct {
-	client *apimanagement.ManagedFlexGatewayClient
+// ManagedOmniGatewayDataSource lists all managed Omni Gateways in an environment.
+type ManagedOmniGatewayDataSource struct {
+	client *apimanagement.ManagedOmniGatewayClient
 }
 
-type ManagedFlexGatewayDataSourceModel struct {
+type ManagedOmniGatewayDataSourceModel struct {
 	ID             types.String                  `tfsdk:"id"`
 	OrganizationID types.String                  `tfsdk:"organization_id"`
 	EnvironmentID  types.String                  `tfsdk:"environment_id"`
-	Gateways       []ManagedFlexGatewayItemModel `tfsdk:"gateways"`
+	Gateways       []ManagedOmniGatewayItemModel `tfsdk:"gateways"`
 }
 
-// ManagedFlexGatewayItemModel reflects the fields returned by the api/v1 list endpoint.
-type ManagedFlexGatewayItemModel struct {
+// ManagedOmniGatewayItemModel reflects the fields returned by the api/v1 list endpoint.
+type ManagedOmniGatewayItemModel struct {
 	ID          types.String `tfsdk:"id"`
 	Name        types.String `tfsdk:"name"`
 	TargetID    types.String `tfsdk:"target_id"`
@@ -39,17 +39,17 @@ type ManagedFlexGatewayItemModel struct {
 	LastUpdated types.String `tfsdk:"last_updated"`
 }
 
-func NewManagedFlexGatewayDataSource() datasource.DataSource {
-	return &ManagedFlexGatewayDataSource{}
+func NewManagedOmniGatewayDataSource() datasource.DataSource {
+	return &ManagedOmniGatewayDataSource{}
 }
 
-func (d *ManagedFlexGatewayDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_managed_flexgateways"
+func (d *ManagedOmniGatewayDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_managed_omnigateways"
 }
 
-func (d *ManagedFlexGatewayDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
+func (d *ManagedOmniGatewayDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Lists all managed Flex Gateway instances in the given environment.",
+		Description: "Lists all managed Omni Gateway instances in the given environment.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Description: "Composite identifier: <organization_id>/<environment_id>.",
@@ -65,7 +65,7 @@ func (d *ManagedFlexGatewayDataSource) Schema(_ context.Context, _ datasource.Sc
 				Required:    true,
 			},
 			"gateways": schema.ListNestedAttribute{
-				Description: "List of managed Flex Gateway instances.",
+				Description: "List of managed Omni Gateway instances.",
 				Computed:    true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
@@ -100,7 +100,7 @@ func (d *ManagedFlexGatewayDataSource) Schema(_ context.Context, _ datasource.Sc
 	}
 }
 
-func (d *ManagedFlexGatewayDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
+func (d *ManagedOmniGatewayDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
 	}
@@ -114,11 +114,11 @@ func (d *ManagedFlexGatewayDataSource) Configure(_ context.Context, req datasour
 		return
 	}
 
-	gwClient, err := apimanagement.NewManagedFlexGatewayClient(config)
+	gwClient, err := apimanagement.NewManagedOmniGatewayClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to Create Managed Flex Gateway Client",
-			"An unexpected error occurred when creating the Managed Flex Gateway client.\n\n"+
+			"Unable to Create Managed Omni Gateway Client",
+			"An unexpected error occurred when creating the Managed Omni Gateway client.\n\n"+
 				"Client Error: "+err.Error(),
 		)
 		return
@@ -127,8 +127,8 @@ func (d *ManagedFlexGatewayDataSource) Configure(_ context.Context, req datasour
 	d.client = gwClient
 }
 
-func (d *ManagedFlexGatewayDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	var data ManagedFlexGatewayDataSourceModel
+func (d *ManagedOmniGatewayDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
+	var data ManagedOmniGatewayDataSourceModel
 
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
@@ -141,21 +141,21 @@ func (d *ManagedFlexGatewayDataSource) Read(ctx context.Context, req datasource.
 	}
 	envID := data.EnvironmentID.ValueString()
 
-	gateways, err := d.client.ListManagedFlexGateways(ctx, orgID, envID)
+	gateways, err := d.client.ListManagedOmniGateways(ctx, orgID, envID)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error listing managed Flex Gateways",
-			"Could not list managed Flex Gateways for environment "+envID+": "+err.Error(),
+			"Error listing managed Omni Gateways",
+			"Could not list managed Omni Gateways for environment "+envID+": "+err.Error(),
 		)
 		return
 	}
 
 	data.ID = types.StringValue(orgID + "/" + envID)
 	data.OrganizationID = types.StringValue(orgID)
-	data.Gateways = make([]ManagedFlexGatewayItemModel, len(gateways))
+	data.Gateways = make([]ManagedOmniGatewayItemModel, len(gateways))
 
 	for i, gw := range gateways {
-		data.Gateways[i] = ManagedFlexGatewayItemModel{
+		data.Gateways[i] = ManagedOmniGatewayItemModel{
 			ID:          types.StringValue(gw.ID),
 			Name:        types.StringValue(gw.Name),
 			TargetID:    types.StringValue(gw.TargetID),

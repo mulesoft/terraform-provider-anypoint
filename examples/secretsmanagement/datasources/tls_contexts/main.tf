@@ -58,14 +58,14 @@ output "all_tls_contexts" {
 
 locals {
   # Look up a TLS context by name — useful when referencing an existing TLS context
-  # in a Flex Gateway deployment or API instance without managing it in Terraform.
-  flex_tls_context = one([
+  # in a Omni Gateway deployment or API instance without managing it in Terraform.
+  omni_tls_context = one([
     for tls in data.anypoint_secret_group_tls_contexts.all.tls_contexts
-    : tls if tls.name == "flex-gateway-tls"
+    : tls if tls.name == "omni-gateway-tls"
   ])
 }
 
-output "flex_tls_context_id" {
-  description = "ID of the TLS context named 'flex-gateway-tls'"
-  value       = local.flex_tls_context != null ? local.flex_tls_context.id : null
+output "omni_tls_context_id" {
+  description = "ID of the TLS context named 'omni-gateway-tls'"
+  value       = local.omni_tls_context != null ? local.omni_tls_context.id : null
 }

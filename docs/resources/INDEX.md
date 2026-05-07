@@ -18,14 +18,14 @@ All resources provided by `terraform-provider-anypoint`.
 | [anypoint_api_instance](anypoint_api_instance.md) | Manages an API instance in Anypoint API Manager. |
 | [anypoint_api_instance_sla_tier](anypoint_api_instance_sla_tier.md) | Manages an SLA tier for an API instance in Anypoint API Manager. |
 | [anypoint_api_policy](anypoint_api_policy.md) | Manages a policy applied to an API instance. Supports both known policies (via `policy_type`) and custom policies (via `group_id` + `asset_id`). |
-| [anypoint_managed_flexgateway](anypoint_managed_flexgateway.md) | Manages a CloudHub 2.0 Managed Flex Gateway instance in Anypoint Platform. |
+| [anypoint_managed_omnigateway](anypoint_managed_omnigateway.md) | Manages a CloudHub 2.0 Managed Omni Gateway instance in Anypoint Platform. |
 
 ## Agents & Tools
 
 | Resource | Description |
 |----------|-------------|
-| [anypoint_agent_instance](anypoint_agent_instance.md) | Manages an Agent instance in Anypoint API Manager. An Agent instance represents an Agent specification deployed to a Flex Gateway target with routing rules and upstream backends. |
-| [anypoint_mcp_server](anypoint_mcp_server.md) | Manages an MCP server in Anypoint API Manager. An MCP server represents an MCP server specification deployed to a Flex Gateway target. |
+| [anypoint_agent_instance](anypoint_agent_instance.md) | Manages an Agent instance in Anypoint API Manager. An Agent instance represents an Agent specification deployed to a Omni Gateway target with routing rules and upstream backends. |
+| [anypoint_mcp_server](anypoint_mcp_server.md) | Manages an MCP server in Anypoint API Manager. An MCP server represents an MCP server specification deployed to a Omni Gateway target. |
 
 ## API Policies — Inbound
 
@@ -155,7 +155,7 @@ All resources provided by `terraform-provider-anypoint`.
 
 | Resource | Description |
 |----------|-------------|
-| [anypoint_flex_tls_context](anypoint_flex_tls_context.md) | Manages a Flex Gateway TLS context within a secret group in Anypoint Secrets Manager. |
+| [anypoint_omni_tls_context](anypoint_omni_tls_context.md) | Manages a Omni Gateway TLS context within a secret group in Anypoint Secrets Manager. |
 | [anypoint_secret_group](anypoint_secret_group.md) | Manages a secret group in Anypoint Secrets Manager. |
 | [anypoint_secret_group_certificate](anypoint_secret_group_certificate.md) | Manages a certificate within a secret group. Supports PEM, JKS, PKCS12, and JCEKS formats. |
 | [anypoint_secret_group_certificate_pinset](anypoint_secret_group_certificate_pinset.md) | Manages a certificate pinset within a secret group for certificate pinning validation. |

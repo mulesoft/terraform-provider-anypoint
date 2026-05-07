@@ -17,7 +17,7 @@ This document provides a comprehensive reference of all REST API endpoints used 
 | Access Management | `/accounts/api/` | User, team, role, and organization management |
 | API Management | `/apimanager/api/v1/` | API instance and policy management |
 | Monitoring | `/monitoring/api/alerts/api/v2/` | Alert management |
-| Gateway Manager | `/gatewaymanager/api/v1/` | Flex Gateway management |
+| Gateway Manager | `/gatewaymanager/api/v1/` | Omni Gateway management |
 | CloudHub 2.0 | `/runtimefabric/api/` | Private space and networking |
 | Governance | `/governance/xapi/api/v1/` | API governance profiles |
 | Secrets Management | `/secrets-manager/api/v1/` | Secrets, certificates, and TLS contexts |
@@ -168,7 +168,7 @@ This document provides a comprehensive reference of all REST API endpoints used 
 
 **Notes:** Read operation uses list endpoint and filters by tier ID
 
-### Managed Flex Gateway
+### Managed Omni Gateway
 | Operation | Method | Endpoint |
 |-----------|--------|----------|
 | Create | POST | `/gatewaymanager/api/v1/organizations/{orgId}/environments/{envId}/gateways` |
@@ -330,7 +330,7 @@ This document provides a comprehensive reference of all REST API endpoints used 
 | Update | PUT | `/secrets-manager/api/v1/organizations/{orgId}/environments/{envId}/secretGroups/{secretGroupId}/shared-secrets/{sharedSecretId}` |
 | Delete | DELETE | `/secrets-manager/api/v1/organizations/{orgId}/environments/{envId}/secretGroups/{secretGroupId}/shared-secrets/{sharedSecretId}` |
 
-### TLS Context (Flex Gateway)
+### TLS Context (Omni Gateway)
 | Operation | Method | Endpoint |
 |-----------|--------|----------|
 | Create | POST | `/secrets-manager/api/v1/organizations/{orgId}/environments/{envId}/secretGroups/{secretGroupId}/tlscontexts` |
@@ -338,7 +338,7 @@ This document provides a comprehensive reference of all REST API endpoints used 
 | Update | PUT | `/secrets-manager/api/v1/organizations/{orgId}/environments/{envId}/secretGroups/{secretGroupId}/tlscontexts/{tlsContextId}` |
 | Delete | DELETE | `/secrets-manager/api/v1/organizations/{orgId}/environments/{envId}/secretGroups/{secretGroupId}/tlscontexts/{tlsContextId}` |
 
-**Notes:** Target automatically set to FlexGateway
+**Notes:** Target automatically set to OmniGateway
 
 ### Truststore
 | Operation | Method | Endpoint |
@@ -363,7 +363,7 @@ This document provides a comprehensive reference of all REST API endpoints used 
 | `{policyId}` | Policy ID (numeric) | `987654` |
 | `{tierId}` | SLA Tier ID (numeric) | `123456` |
 | `{alertId}` | Alert ID (numeric) | `456789` |
-| `{gatewayId}` | Gateway ID | `flex-gateway-01` |
+| `{gatewayId}` | Gateway ID | `omni-gateway-01` |
 | `{clientID}` | Connected App Client ID | `abc123def456` |
 | `{userId}` | User ID (UUID) | `c3d4e5f6-a7b8-9012-cdef-123456789012` |
 | `{teamId}` | Team ID (UUID) | `d4e5f6a7-b8c9-0123-def0-123456789abc` |
@@ -408,7 +408,7 @@ The following resources use `multipart/form-data` for file uploads:
 
 ### Query Parameters
 - **API Policy Create**: `?allowDuplicated=true`
-- **Managed Flex Gateway Domains**: `?sendAppUniqueId=true`
+- **Managed Omni Gateway Domains**: `?sendAppUniqueId=true`
 
 ---
 

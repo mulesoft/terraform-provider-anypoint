@@ -112,7 +112,7 @@ resource "anypoint_organization" "sub_org" {
 
     # runtime_fabric = true
 
-    # flex_gateway = {
+    # omni_gateway = {
     #   enabled = true
     # }
   }
@@ -165,7 +165,7 @@ resource "anypoint_organization" "sub_org" {
 #       reassigned = 0
 #     }
 
-#     # Note: hybrid, runtime_fabric, flex_gateway are master-org-only flags.
+#     # Note: hybrid, runtime_fabric, omni_gateway are master-org-only flags.
 #     # They are inherited by sub-orgs and cannot be set here.
 #   }
 
@@ -218,7 +218,7 @@ resource "anypoint_organization" "sub_org" {
 #       reassigned = 0
 #     }
 
-#     # Note: hybrid, runtime_fabric, flex_gateway are master-org-only flags.
+#     # Note: hybrid, runtime_fabric, omni_gateway are master-org-only flags.
 #     # They are inherited by sub-orgs and cannot be set here.
 #   }
 

@@ -1,10 +1,10 @@
-# Managed Flex Gateway Example
+# Managed Omni Gateway Example
 
-This example demonstrates how to deploy and configure Managed Flex Gateways in Anypoint Platform using Terraform.
+This example demonstrates how to deploy and configure Managed Omni Gateways in Anypoint Platform using Terraform.
 
 ## Overview
 
-Managed Flex Gateway is a lightweight, high-performance API gateway that runs as a container or Kubernetes service. In managed mode, the gateway is controlled and monitored from Anypoint Platform.
+Managed Omni Gateway is a lightweight, high-performance API gateway that runs as a container or Kubernetes service. In managed mode, the gateway is controlled and monitored from Anypoint Platform.
 
 Key features:
 - Deploy to CloudHub 2.0 private spaces, Kubernetes, or Docker
@@ -15,7 +15,7 @@ Key features:
 
 ## What This Example Creates
 
-This example creates **2 Managed Flex Gateway instances**:
+This example creates **2 Managed Omni Gateway instances**:
 
 ### 1. **Basic Gateway** - Minimal configuration
 - Name: `my-basic-gateway`
@@ -61,10 +61,10 @@ anypoint-cli runtime-mgr runtime-fabric list
 
 ## Configuration
 
-### Managed Flex Gateway Resource Structure
+### Managed Omni Gateway Resource Structure
 
 ```hcl
-resource "anypoint_managed_flexgateway" "example" {
+resource "anypoint_managed_omnigateway" "example" {
   name            = "my-gateway"
   environment_id  = var.environment_id
   target_id       = var.target_id
@@ -180,7 +180,7 @@ terraform apply
 terraform output
 
 # Check in Runtime Manager UI
-# Navigate to: Runtime Manager → Flex Gateway
+# Navigate to: Runtime Manager → Omni Gateway
 ```
 
 ## Common Use Cases
@@ -190,7 +190,7 @@ terraform output
 Quick setup for development and testing:
 
 ```hcl
-resource "anypoint_managed_flexgateway" "dev" {
+resource "anypoint_managed_omnigateway" "dev" {
   name           = "dev-gateway"
   environment_id = var.dev_environment_id
   target_id      = var.dev_target_id
@@ -204,7 +204,7 @@ resource "anypoint_managed_flexgateway" "dev" {
 Full observability configuration:
 
 ```hcl
-resource "anypoint_managed_flexgateway" "prod" {
+resource "anypoint_managed_omnigateway" "prod" {
   name            = "prod-gateway"
   environment_id  = var.prod_environment_id
   target_id       = var.prod_target_id
@@ -238,7 +238,7 @@ resource "anypoint_managed_flexgateway" "prod" {
 Multiple gateways for load balancing:
 
 ```hcl
-resource "anypoint_managed_flexgateway" "gateway" {
+resource "anypoint_managed_omnigateway" "gateway" {
   count = 3  # Deploy 3 instances
 
   name            = "prod-gateway-${count.index + 1}"
@@ -265,7 +265,7 @@ resource "anypoint_managed_flexgateway" "gateway" {
 
 ```hcl
 # Create gateway
-resource "anypoint_managed_flexgateway" "main" {
+resource "anypoint_managed_omnigateway" "main" {
   name           = "api-gateway"
   environment_id = var.environment_id
   target_id      = var.target_id
@@ -274,8 +274,13 @@ resource "anypoint_managed_flexgateway" "main" {
 # Deploy API instance to gateway
 resource "anypoint_api_instance" "api" {
   environment_id = var.environment_id
-  technology     = "flexGateway"
-  gateway_id     = anypoint_managed_flexgateway.main.id
+<<<<<<< Updated upstream:examples/apimanagement/managed_omnigateway/README.md
+  technology     = "omniGateway"
+  gateway_id     = anypoint_managed_omnigateway.main.id
+=======
+  technology     = "omniGateway"
+  gateway_id     = anypoint_managed_omni_gateway.main.id
+>>>>>>> Stashed changes:examples/apimanagement/managed_omni_gateway/README.md
 
   spec = {
     asset_id = "customer-api"
@@ -340,7 +345,7 @@ terraform output complete_gateway_internal_url
 
 ### View Gateway Metrics
 
-Navigate to: **Runtime Manager → Flex Gateway → Your Gateway → Monitoring**
+Navigate to: **Runtime Manager → Omni Gateway → Your Gateway → Monitoring**
 
 Metrics available:
 - Request rate and latency
@@ -353,9 +358,9 @@ Metrics available:
 
 ```bash
 # Via Anypoint CLI
-anypoint-cli runtime-mgr cloudhub2 flexgateway logs <gateway-id>
+anypoint-cli runtime-mgr cloudhub2 omnigateway logs <gateway-id>
 
-# Or in UI: Runtime Manager → Flex Gateway → Logs
+# Or in UI: Runtime Manager → Omni Gateway → Logs
 ```
 
 ### Enable Tracing
@@ -382,7 +387,7 @@ terraform apply
 ### Upgrade Runtime Version
 
 ```hcl
-resource "anypoint_managed_flexgateway" "main" {
+resource "anypoint_managed_omnigateway" "main" {
   runtime_version = "1.10.0"  # Updated version
   # ... other configuration
 }
@@ -402,7 +407,7 @@ size = "large"  # Was "small"
 ### Remove Gateway
 
 ```bash
-terraform destroy -target=anypoint_managed_flexgateway.basic
+terraform destroy -target=anypoint_managed_omnigateway.basic
 ```
 
 **Warning:** Ensure no API instances are deployed to the gateway first.
@@ -429,7 +434,7 @@ anypoint-cli runtime-mgr cloudhub2 private-space list
 
 **Check logs:**
 ```bash
-anypoint-cli runtime-mgr cloudhub2 flexgateway logs <gateway-id>
+anypoint-cli runtime-mgr cloudhub2 omnigateway logs <gateway-id>
 ```
 
 ### Gateway Status: Disconnected
@@ -450,10 +455,17 @@ anypoint-cli runtime-mgr cloudhub2 flexgateway logs <gateway-id>
 
 ## Additional Resources
 
-- [Flex Gateway Documentation](https://docs.mulesoft.com/gateway/)
-- [Flex Gateway Installation](https://docs.mulesoft.com/gateway/flex-install)
-- [Gateway Sizing Guide](https://docs.mulesoft.com/gateway/flex-architecture)
-- [Gateway Configuration Reference](https://docs.mulesoft.com/gateway/flex-conn-reg-run)
+<<<<<<< Updated upstream:examples/apimanagement/managed_omnigateway/README.md
+- [Omni Gateway Documentation](https://docs.mulesoft.com/gateway/)
+- [Omni Gateway Installation](https://docs.mulesoft.com/gateway/omni-install)
+- [Gateway Sizing Guide](https://docs.mulesoft.com/gateway/omni-architecture)
+- [Gateway Configuration Reference](https://docs.mulesoft.com/gateway/omni-conn-reg-run)
+=======
+- [Omni Gateway Documentation](https://docs.mulesoft.com/gateway/)
+- [Omni Gateway Installation](https://docs.mulesoft.com/gateway/omni-install)
+- [Gateway Sizing Guide](https://docs.mulesoft.com/gateway/omni-architecture)
+- [Gateway Configuration Reference](https://docs.mulesoft.com/gateway/omni-conn-reg-run)
+>>>>>>> Stashed changes:examples/apimanagement/managed_omni_gateway/README.md
 
 ## Cleanup
 

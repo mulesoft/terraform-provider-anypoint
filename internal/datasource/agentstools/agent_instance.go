@@ -94,7 +94,7 @@ func (d *AgentInstanceDataSource) Schema(_ context.Context, _ datasource.SchemaR
 							Computed:    true,
 						},
 						"technology": schema.StringAttribute{
-							Description: "The gateway technology (flexGateway, mule4, etc.).",
+							Description: "The gateway technology (omniGateway, mule4, etc.).",
 							Computed:    true,
 						},
 						"instance_label": schema.StringAttribute{

@@ -12,7 +12,7 @@ import (
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
 )
 
-func TestIntegrationManagedFlexGatewayResource_CRUD(t *testing.T) {
+func TestIntegrationManagedOmniGatewayResource_CRUD(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -20,7 +20,7 @@ func TestIntegrationManagedFlexGatewayResource_CRUD(t *testing.T) {
 	gwName := "integration-test-gateway"
 	gwNameUpdated := "integration-test-gateway-updated"
 
-	mockGateway := &apimanagement.ManagedFlexGateway{
+	mockGateway := &apimanagement.ManagedOmniGateway{
 		ID:             "gw-integration-123",
 		Name:           gwName,
 		TargetID:       "target-integration-abc",
@@ -28,7 +28,7 @@ func TestIntegrationManagedFlexGatewayResource_CRUD(t *testing.T) {
 		ReleaseChannel: "lts",
 		Size:           "small",
 		Status:         "running",
-		Configuration: apimanagement.ManagedFlexGatewayConfig{
+		Configuration: apimanagement.ManagedOmniGatewayConfig{
 			Ingress: apimanagement.IngressConfig{
 				PublicURL:         "https://integration-test-gateway-hey4z8.usa-e2.stgx.cloudhub.io",
 				InternalURL:       "https://integration-test-gateway-.internal-hey4z8.usa-e2.stgx.cloudhub.io",
@@ -90,8 +90,8 @@ func TestIntegrationManagedFlexGatewayResource_CRUD(t *testing.T) {
 		t.Fatalf("Failed to create client: %v", err)
 	}
 
-	gwClient := &apimanagement.ManagedFlexGatewayClient{AnypointClient: anypointClient}
-	gwResource := &ManagedFlexGatewayResource{client: gwClient}
+	gwClient := &apimanagement.ManagedOmniGatewayClient{AnypointClient: anypointClient}
+	gwResource := &ManagedOmniGatewayResource{client: gwClient}
 
 	t.Run("Create", func(t *testing.T) {
 		if gwResource.client == nil {
@@ -100,9 +100,9 @@ func TestIntegrationManagedFlexGatewayResource_CRUD(t *testing.T) {
 	})
 
 	t.Run("Read", func(t *testing.T) {
-		gw, err := gwClient.GetManagedFlexGateway(context.Background(), "test-org-id", "test-env-id", "gw-integration-123")
+		gw, err := gwClient.GetManagedOmniGateway(context.Background(), "test-org-id", "test-env-id", "gw-integration-123")
 		if err != nil {
-			t.Fatalf("GetManagedFlexGateway failed: %v", err)
+			t.Fatalf("GetManagedOmniGateway failed: %v", err)
 		}
 		if gw.ID != "gw-integration-123" {
 			t.Errorf("Expected ID gw-integration-123, got %s", gw.ID)
@@ -119,13 +119,13 @@ func TestIntegrationManagedFlexGatewayResource_CRUD(t *testing.T) {
 	})
 
 	t.Run("Update", func(t *testing.T) {
-		updateReq := &apimanagement.UpdateManagedFlexGatewayRequest{
+		updateReq := &apimanagement.UpdateManagedOmniGatewayRequest{
 			Name: gwNameUpdated,
 		}
 
-		gw, err := gwClient.UpdateManagedFlexGateway(context.Background(), "test-org-id", "test-env-id", "gw-integration-123", updateReq)
+		gw, err := gwClient.UpdateManagedOmniGateway(context.Background(), "test-org-id", "test-env-id", "gw-integration-123", updateReq)
 		if err != nil {
-			t.Fatalf("UpdateManagedFlexGateway failed: %v", err)
+			t.Fatalf("UpdateManagedOmniGateway failed: %v", err)
 		}
 		if gw.Name != gwNameUpdated {
 			t.Errorf("Expected Name %s, got %s", gwNameUpdated, gw.Name)
@@ -133,15 +133,15 @@ func TestIntegrationManagedFlexGatewayResource_CRUD(t *testing.T) {
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		err := gwClient.DeleteManagedFlexGateway(context.Background(), "test-org-id", "test-env-id", "gw-integration-123")
+		err := gwClient.DeleteManagedOmniGateway(context.Background(), "test-org-id", "test-env-id", "gw-integration-123")
 		if err != nil {
-			t.Fatalf("DeleteManagedFlexGateway failed: %v", err)
+			t.Fatalf("DeleteManagedOmniGateway failed: %v", err)
 		}
 	})
 }
 
-func TestIntegrationManagedFlexGatewayResource_InterfaceCompliance(t *testing.T) {
-	gwResource := &ManagedFlexGatewayResource{}
+func TestIntegrationManagedOmniGatewayResource_InterfaceCompliance(t *testing.T) {
+	gwResource := &ManagedOmniGatewayResource{}
 
 	var _ resource.ResourceWithConfigure = gwResource
 	var _ resource.ResourceWithImportState = gwResource
@@ -152,8 +152,8 @@ func TestIntegrationManagedFlexGatewayResource_InterfaceCompliance(t *testing.T)
 	metaResp := &resource.MetadataResponse{}
 	gwResource.Metadata(ctx, metaReq, metaResp)
 
-	if metaResp.TypeName != "anypoint_managed_flexgateway" {
-		t.Errorf("Expected TypeName anypoint_managed_flexgateway, got %s", metaResp.TypeName)
+	if metaResp.TypeName != "anypoint_managed_omnigateway" {
+		t.Errorf("Expected TypeName anypoint_managed_omnigateway, got %s", metaResp.TypeName)
 	}
 
 	schemaReq := resource.SchemaRequest{}
@@ -186,8 +186,8 @@ func TestIntegrationManagedFlexGatewayResource_InterfaceCompliance(t *testing.T)
 	}
 }
 
-func BenchmarkIntegrationManagedFlexGatewayResource_Schema(b *testing.B) {
-	gwResource := &ManagedFlexGatewayResource{}
+func BenchmarkIntegrationManagedOmniGatewayResource_Schema(b *testing.B) {
+	gwResource := &ManagedOmniGatewayResource{}
 	ctx := context.Background()
 	req := resource.SchemaRequest{}
 
@@ -198,8 +198,8 @@ func BenchmarkIntegrationManagedFlexGatewayResource_Schema(b *testing.B) {
 	}
 }
 
-func BenchmarkIntegrationManagedFlexGatewayResource_Metadata(b *testing.B) {
-	gwResource := &ManagedFlexGatewayResource{}
+func BenchmarkIntegrationManagedOmniGatewayResource_Metadata(b *testing.B) {
+	gwResource := &ManagedOmniGatewayResource{}
 	ctx := context.Background()
 	req := resource.MetadataRequest{ProviderTypeName: "anypoint"}
 

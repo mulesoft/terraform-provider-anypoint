@@ -1,11 +1,11 @@
 ---
-page_title: "anypoint_managed_omnigateway Resource - terraform-provider-anypoint"
+page_title: "anypoint_managed_omni_gateway Resource - terraform-provider-anypoint"
 subcategory: "API Management"
 description: |-
   Manages a CloudHub 2.0 Managed Omni Gateway instance in Anypoint Platform.
 ---
 
-# anypoint_managed_omnigateway (Resource)
+# anypoint_managed_omni_gateway (Resource)
 
 Manages a CloudHub 2.0 Managed Omni Gateway instance in Anypoint Platform.
 

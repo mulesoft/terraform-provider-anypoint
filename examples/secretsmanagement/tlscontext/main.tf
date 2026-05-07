@@ -89,10 +89,10 @@ resource "anypoint_secret_group_truststore" "ca" {
 # References keystore and truststore by their IDs — the provider
 # automatically builds "keystores/{id}" and "truststores/{id}" paths.
 
-resource "anypoint_secret_group_tls_context" "flex" {
+resource "anypoint_secret_group_tls_context" "omni" {
   environment_id  = var.environment_id
   secret_group_id = anypoint_secret_group.main.id
-  name            = "flex-tls-context"
+  name            = "omni-tls-context"
   target          = "FlexGateway"
 
   keystore_id   = anypoint_secret_group_keystore.tls.id
@@ -128,7 +128,7 @@ resource "anypoint_secret_group_tls_context" "mtls" {
 # ─── Outputs ─────────────────────────────────────────────────────
 
 output "tls_context_id" {
-  value = anypoint_secret_group_tls_context.flex.id
+  value = anypoint_secret_group_tls_context.omni.id
 }
 
 output "mtls_context_id" {

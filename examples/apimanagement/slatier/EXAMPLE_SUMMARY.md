@@ -279,7 +279,7 @@ Added API Management section with:
 ```
 examples/apimanagement/
 ├── api_instance/
-├── managed_flexgateway/
+├── managed_omni_gateway/
 ├── policies/
 └── slatier/          ← NEW
     ├── main.tf

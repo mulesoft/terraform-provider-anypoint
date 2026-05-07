@@ -63,7 +63,7 @@ func TestAPIInstanceClient_CRUD(t *testing.T) {
 		AssetID:      "myhealth-test",
 		AssetVersion: "1.0.0",
 		GroupID:      "test-org-id",
-		Technology:   "flexGateway",
+		Technology:   "omniGateway",
 		Status:       "active",
 		Spec: &APIInstanceSpec{
 			AssetID: "myhealth-test",
@@ -160,7 +160,7 @@ func TestAPIInstanceClient_CRUD(t *testing.T) {
 
 	t.Run("Create", func(t *testing.T) {
 		createReq := &CreateAPIInstanceRequest{
-			Technology: "flexGateway",
+			Technology: "omniGateway",
 			Spec: &APIInstanceSpec{
 				AssetID: "myhealth-test",
 				GroupID: "test-org-id",
@@ -198,8 +198,8 @@ func TestAPIInstanceClient_CRUD(t *testing.T) {
 		if inst.ID != 19876543 {
 			t.Errorf("Expected ID 19876543, got %d", inst.ID)
 		}
-		if inst.Technology != "flexGateway" {
-			t.Errorf("Expected Technology flexGateway, got %s", inst.Technology)
+		if inst.Technology != "omniGateway" {
+			t.Errorf("Expected Technology omniGateway, got %s", inst.Technology)
 		}
 		if len(inst.Routing) != 2 {
 			t.Errorf("Expected 2 routes, got %d", len(inst.Routing))
@@ -300,7 +300,7 @@ func TestAPIInstanceClient_ErrorHandling(t *testing.T) {
 func TestAPIInstance_JSONSerialization(t *testing.T) {
 	inst := &APIInstance{
 		ID:         12345,
-		Technology: "flexGateway",
+		Technology: "omniGateway",
 		Status:     "active",
 		Spec:       &APIInstanceSpec{AssetID: "test", GroupID: "org-1", Version: "1.0.0"},
 		Routing: []APIInstanceRoute{
@@ -412,7 +412,7 @@ func TestAPIInstanceClient_GetGatewayInfo(t *testing.T) {
 
 func TestAPIInstanceClient_ListAPIInstances(t *testing.T) {
 	mockInstances := []APIInstance{
-		{ID: 100, AssetID: "api-1", Technology: "flexGateway", Status: "active"},
+		{ID: 100, AssetID: "api-1", Technology: "omniGateway", Status: "active"},
 		{ID: 200, AssetID: "api-2", Technology: "mule4", Status: "inactive"},
 	}
 	mockResp := APIInstanceListResponse{

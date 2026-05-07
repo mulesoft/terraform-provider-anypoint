@@ -102,7 +102,7 @@ The provider supports **37 resources** across **5 main categories**:
 | Category | Resources | Description |
 |----------|-----------|-------------|
 | **Access Management** | 11 | Organizations, environments, users, teams, roles, and connected apps |
-| **API Management** | 6 | API instances, policies, SLA tiers, alerts, and Flex Gateways |
+| **API Management** | 6 | API instances, policies, SLA tiers, alerts, and Omni Gateways |
 | **CloudHub 2.0** | 11 | Private spaces, networks, VPNs, firewalls, and TLS contexts |
 | **Governance** | 1 | API governance profiles and conformance validation |
 | **Secrets Management** | 8 | Certificates, keystores, truststores, and TLS contexts |
@@ -227,7 +227,7 @@ resource "anypoint_vpn_connection" "on_prem" {
 | `anypoint_api_instance` | Deploy and manage API instances |
 | `anypoint_api_policy` | Apply policies to API instances (rate limiting, JWT validation, etc.) |
 | `anypoint_api_instance_sla_tier` | Configure SLA tiers for API access control |
-| `anypoint_managed_flexgateway` | Deploy managed Flex Gateway instances |
+| `anypoint_managed_omni_gateway` | Deploy managed Omni Gateway instances |
 
 **Example:** [API Management Examples](./examples/apimanagement)
 
@@ -267,7 +267,7 @@ resource "anypoint_vpn_connection" "on_prem" {
 | `anypoint_secret_group_keystore` | Manage keystores (PEM, JKS, PKCS12, JCEKS) |
 | `anypoint_secret_group_truststore` | Manage truststores for certificate validation |
 | `anypoint_secret_group_shared_secret` | Store shared secrets and credentials |
-| `anypoint_flex_tls_context` | Configure TLS contexts for Flex Gateway |
+| `anypoint_omni_tls_context` | Configure TLS contexts for Omni Gateway |
 | `anypoint_secret_group_tls_context` | Configure TLS contexts in secret groups |
 
 **Example:** [Secrets Management Examples](./examples/secretsmanagement)

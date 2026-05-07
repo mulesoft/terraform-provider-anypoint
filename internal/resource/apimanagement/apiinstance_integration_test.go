@@ -23,7 +23,7 @@ func TestIntegrationAPIInstanceResource_CRUD(t *testing.T) {
 		AssetVersion:   "1.0.0",
 		ProductVersion: "v1",
 		GroupID:        "test-org-id",
-		Technology:     "flexGateway",
+		Technology:     "omniGateway",
 		Status:         "active",
 		Spec: &apimanagement.APIInstanceSpec{
 			AssetID: "myhealth-test",
@@ -132,8 +132,8 @@ func TestIntegrationAPIInstanceResource_CRUD(t *testing.T) {
 		if inst.ID != 19876543 {
 			t.Errorf("Expected ID 19876543, got %d", inst.ID)
 		}
-		if inst.Technology != "flexGateway" {
-			t.Errorf("Expected Technology flexGateway, got %s", inst.Technology)
+		if inst.Technology != "omniGateway" {
+			t.Errorf("Expected Technology omniGateway, got %s", inst.Technology)
 		}
 		if len(inst.Routing) != 2 {
 			t.Errorf("Expected 2 routes, got %d", len(inst.Routing))

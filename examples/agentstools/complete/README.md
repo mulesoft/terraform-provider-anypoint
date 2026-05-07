@@ -6,7 +6,7 @@ This example demonstrates a complete AI agents infrastructure setup with MCP (Mo
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      Anypoint Flex Gateway                      │
+│                      Anypoint Omni Gateway                      │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌───────────────┐ │
@@ -50,7 +50,7 @@ This example demonstrates a complete AI agents infrastructure setup with MCP (Mo
 1. Anypoint Platform account with appropriate permissions
 2. Connected App credentials (client ID and secret)
 3. An existing organization and environment
-4. A deployed Flex Gateway
+4. A deployed Omni Gateway
 
 ## Usage
 

@@ -186,7 +186,7 @@ The sub-organization is created with the following entitlements:
 | VPNs | 2 | Site-to-site connections |
 | Network Connections | 3 | VPN, etc. |
 | Runtime Fabric | Enabled | On-premises runtime |
-| Flex Gateway | Enabled | API gateway |
+| Omni Gateway | Enabled | API gateway |
 
 You can adjust these in the `entitlements` section of the configuration.
 
@@ -253,7 +253,7 @@ Create API instances and apply policies:
 ```hcl
 resource "anypoint_api_instance" "my_api" {
   environment_id = anypoint_environment.production.id
-  technology     = "flexGateway"
+  technology     = "omniGateway"
   # ... API configuration
 }
 ```

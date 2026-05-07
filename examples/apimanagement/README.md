@@ -6,10 +6,10 @@ This directory contains examples for managing Anypoint Platform API Management r
 
 ### [API Instance](./api_instance/)
 - **Resource**: `anypoint_api_instance`
-- **Description**: Deploy and configure API instances in API Manager for FlexGateway, Mule 4, or HTTP-managed deployments
+- **Description**: Deploy and configure API instances in API Manager for OmniGateway, Mule 4, or HTTP-managed deployments
 - **API**: `/apimanager/api/v1/organizations/{orgId}/environments/{envId}/apis`
 - **Use Cases**:
-  - Deploy FlexGateway-backed API instances with routing rules
+  - Deploy OmniGateway-backed API instances with routing rules
   - Deploy Mule 4 runtime API instances with endpoint configuration
   - Configure approval methods (auto/manual), SLA tiers, and instance labels
 
@@ -25,10 +25,10 @@ This directory contains examples for managing Anypoint Platform API Management r
 
 ---
 
-### [Managed Flex Gateway](./managed_flexgateway/)
-- **Resource**: `anypoint_managed_flexgateway`
-- **Data Source**: `anypoint_managed_flexgateway`
-- **Description**: Deploy and manage Flex Gateway instances in managed mode on a private space; also look up an existing gateway by ID
+### [Managed Omni Gateway](./managed_omni_gateway/)
+- **Resource**: `anypoint_managed_omni_gateway`
+- **Data Source**: `anypoint_managed_omni_gateway`
+- **Description**: Deploy and manage Omni Gateway instances in managed mode on a private space; also look up an existing gateway by ID
 - **API**: `/gatewaymanager/api/v1/organizations/{orgId}/environments/{envId}/gateways`
 - **Use Cases**:
   - Create a gateway with auto-derived ingress URLs (from target domain)
@@ -38,9 +38,9 @@ This directory contains examples for managing Anypoint Platform API Management r
 
 ---
 
-### [Managed Flex Gateways Datasource](./managed_flexgateways/)
-- **Data Source**: `anypoint_managed_flexgateways`
-- **Description**: List all managed Flex Gateways in an environment
+### [Managed Omni Gateways Datasource](./managed_omni_gateways/)
+- **Data Source**: `anypoint_managed_omni_gateways`
+- **Description**: List all managed Omni Gateways in an environment
 - **API**: `/gatewaymanager/api/v1/organizations/{orgId}/environments/{envId}/gateways`
 - **Use Cases**:
   - Enumerate all gateways with their ID, name, target, and status
@@ -130,7 +130,7 @@ terraform apply
 ## Resource Dependency Map
 
 ```
-anypoint_managed_flexgateway  (deploy gateway on private space)
+anypoint_managed_omni_gateway  (deploy gateway on private space)
 └── anypoint_api_instance      (deploy API on that gateway)
     ├── anypoint_api_policy    (apply security / traffic policies)
     └── anypoint_api_instance_sla_tier  (define consumer access tiers)
@@ -139,8 +139,8 @@ anypoint_api_group             (bundle API instances)
 └── anypoint_api_group_sla_tier
 
 Datasources (read-only, no dependencies):
-  anypoint_managed_flexgateways  → look up gateway ID by name
-  anypoint_managed_flexgateway   → look up full gateway detail by ID
+  anypoint_managed_omni_gateways  → look up gateway ID by name
+  anypoint_managed_omni_gateway   → look up full gateway detail by ID
   anypoint_api_instances         → look up API instance ID by label
 ```
 
@@ -150,13 +150,13 @@ When the gateway and API instance live in separate Terraform configs, use the da
 
 ```hcl
 # In api_instance config — reference a gateway created elsewhere
-data "anypoint_managed_flexgateways" "all" {
+data "anypoint_managed_omni_gateways" "all" {
   environment_id = var.environment_id
 }
 
 locals {
   gateway_id = one([
-    for gw in data.anypoint_managed_flexgateways.all.gateways :
+    for gw in data.anypoint_managed_omni_gateways.all.gateways :
     gw.id if gw.name == "my-gateway-name"
   ])
 }
@@ -164,7 +164,7 @@ locals {
 resource "anypoint_api_instance" "api" {
   environment_id = var.environment_id
   gateway_id     = local.gateway_id
-  technology     = "flexGateway"
+  technology     = "omniGateway"
   # ...
 }
 ```
@@ -174,4 +174,4 @@ resource "anypoint_api_instance" "api" {
 - [Anypoint API Manager Documentation](https://docs.mulesoft.com/api-manager/)
 - [API Policy Reference](https://docs.mulesoft.com/api-manager/2.x/policies)
 - [SLA Tiers Overview](https://docs.mulesoft.com/api-manager/2.x/manage-client-apps-latest-task)
-- [Flex Gateway Documentation](https://docs.mulesoft.com/gateway/)
+- [Omni Gateway Documentation](https://docs.mulesoft.com/gateway/)

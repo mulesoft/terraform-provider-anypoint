@@ -71,7 +71,7 @@ func (r *AgentInstanceResource) Metadata(_ context.Context, req resource.Metadat
 func (r *AgentInstanceResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Manages an Agent instance in Anypoint API Manager. An Agent instance represents " +
-			"an Agent specification deployed to a Flex Gateway target with routing rules and upstream backends.",
+			"an Agent specification deployed to a Omni Gateway target with routing rules and upstream backends.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Description: "The numeric identifier of the Agent instance (stored as string for Terraform compatibility).",
@@ -96,12 +96,12 @@ func (r *AgentInstanceResource) Schema(_ context.Context, _ resource.SchemaReque
 				},
 			},
 			"technology": schema.StringAttribute{
-				Description: "The gateway technology. Valid values: 'flexGateway', 'mule4', 'serviceMesh'.",
+				Description: "The gateway technology. Valid values: 'omniGateway', 'mule4', 'serviceMesh'.",
 				Optional:    true,
 				Computed:    true,
-				Default:     stringdefault.StaticString("flexGateway"),
+				Default:     stringdefault.StaticString("omniGateway"),
 				Validators: []validator.String{
-					stringvalidator.OneOf("flexGateway", "mule4", "serviceMesh"),
+					stringvalidator.OneOf("omniGateway", "mule4", "serviceMesh"),
 				},
 			},
 			"provider_id": schema.StringAttribute{
@@ -192,7 +192,7 @@ func (r *AgentInstanceResource) Schema(_ context.Context, _ resource.SchemaReque
 						},
 					},
 					"base_path": schema.StringAttribute{
-						Description: "Agent base path for FlexGateway (e.g. 'my-agent'). The provider constructs the full proxy URI as http://0.0.0.0:8081/<base_path>. Required when technology='flexGateway'. Mutually exclusive with 'uri'.",
+						Description: "Agent base path for OmniGateway (e.g. 'my-agent'). The provider constructs the full proxy URI as http://0.0.0.0:8081/<base_path>. Required when technology='omniGateway'. Mutually exclusive with 'uri'.",
 						Optional:    true,
 					},
 					"uri": schema.StringAttribute{
@@ -216,7 +216,7 @@ func (r *AgentInstanceResource) Schema(_ context.Context, _ resource.SchemaReque
 				Optional: true,
 			},
 			"gateway_id": schema.StringAttribute{
-				Description: "The Flex Gateway UUID. When provided, the deployment block is auto-populated " +
+				Description: "The Omni Gateway UUID. When provided, the deployment block is auto-populated " +
 					"by fetching gateway details (target_id, target_name, gateway_version) from the Gateway Manager Agent. " +
 					"Mutually exclusive with specifying a full deployment block.",
 				Optional: true,
@@ -261,7 +261,7 @@ func (r *AgentInstanceResource) Schema(_ context.Context, _ resource.SchemaReque
 						Computed:    true,
 					},
 					"gateway_version": schema.StringAttribute{
-						Description: "The Flex Gateway runtime version.",
+						Description: "The Omni Gateway runtime version.",
 						Optional:    true,
 						Computed:    true,
 					},
@@ -691,7 +691,7 @@ func (r *AgentInstanceResource) expandCreateRequest(ctx context.Context, data Ag
 
 		technology := data.Technology.ValueString()
 		switch technology {
-		case "flexGateway", "":
+		case "omniGateway", "":
 			if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
 				basePath := strings.TrimPrefix(ep.BasePath.ValueString(), "/")
 				proxyURI := "http://0.0.0.0:8081/" + basePath
@@ -773,7 +773,7 @@ func (r *AgentInstanceResource) expandUpdateRequest(ctx context.Context, data Ag
 
 		technology := data.Technology.ValueString()
 		switch technology {
-		case "flexGateway", "":
+		case "omniGateway", "":
 			if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
 				basePath := strings.TrimPrefix(ep.BasePath.ValueString(), "/")
 				proxyURI := "http://0.0.0.0:8081/" + basePath
@@ -983,7 +983,7 @@ func (r *AgentInstanceResource) flattenInstance(_ context.Context, inst *agentst
 
 		technology := inst.Technology
 		switch technology {
-		case "flexGateway", "":
+		case "omniGateway", "":
 			if inst.Endpoint.ProxyURI != nil && *inst.Endpoint.ProxyURI != "" {
 				ep.BasePath = types.StringValue(strings.TrimPrefix(*inst.Endpoint.ProxyURI, "http://0.0.0.0:8081/"))
 			} else {

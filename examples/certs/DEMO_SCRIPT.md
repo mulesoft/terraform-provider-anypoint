@@ -28,7 +28,7 @@
 
 ---
 
-## Scene 2 – Connected App Permissions, Private Space & Flex Gateway (60 seconds)
+## Scene 2 – Connected App Permissions, Private Space & Omni Gateway (60 seconds)
 
 **[Scroll to Scene 2 in `main.tf`]**
 
@@ -36,7 +36,7 @@
 >
 > Here, we define all the scopes declaratively — `manage:apis`, `manage:api_policies`, `manage:secret_groups` — scoped to specific org-and-environment combinations. If we add a new environment later, we add one line and re-apply.
 >
-> Next, we provision a **Private Space** in `us-east-1` for workload isolation. And inside that Private Space, we deploy a **Managed Flex Gateway** — our API gateway runtime. We configure LTS release channel, small sizing, SSL forwarding, and logging — all in code.
+> Next, we provision a **Private Space** in `us-east-1` for workload isolation. And inside that Private Space, we deploy a **Managed Omni Gateway** — our API gateway runtime. We configure LTS release channel, small sizing, SSL forwarding, and logging — all in code.
 >
 > So in Scene 1 and 2, we went from nothing to a fully provisioned infrastructure: org, two environments, permissions, a private space, and a running gateway. Zero clicks."
 
@@ -46,7 +46,7 @@
 
 **[Scroll to Scene 3]**
 
-> "Now we deploy an API. In about 20 lines, we define an API instance — referencing the Orders API spec from Exchange, version 1.0. We deploy it to the Flex Gateway we just created.
+> "Now we deploy an API. In about 20 lines, we define an API instance — referencing the Orders API spec from Exchange, version 1.0. We deploy it to the Omni Gateway we just created.
 >
 > And here's the interesting part — **canary routing** with weighted traffic splitting: 90% to our stable backend, 10% to a canary release. This is the exact same thing you'd configure through 5-6 screens in the API Manager UI — but it's code, reviewable in a PR.
 >
@@ -121,7 +121,7 @@ terraform plan
 >
 > - Created an organization and two environments
 > - Granted fine-grained connected app permissions
-> - Provisioned a Private Space and Flex Gateway
+> - Provisioned a Private Space and Omni Gateway
 > - Deployed an API with canary routing
 > - Applied security policies, SLA tiers, and alerts
 > - Promoted everything to production
@@ -152,7 +152,7 @@ terraform plan
 2. Terminal: Run `terraform plan` to show the execution plan (19 resources)
 3. Terminal: Run `terraform apply -auto-approve` (optional — takes ~60s)
 4. Browser: Show the new sub-org and environments in Access Management
-5. Browser: Show the Private Space and Flex Gateway in Runtime Manager
+5. Browser: Show the Private Space and Omni Gateway in Runtime Manager
 6. Browser: Show the API instance in API Manager UI
 7. Browser: Show policies, SLA tiers, and alerts applied in the UI
 

@@ -49,7 +49,7 @@
 #     base_path       = "agent/support"
 #   }
 
-#   # Flex Gateway deployment
+#   # Omni Gateway deployment
 #   gateway_id = var.gateway_id
 
 #   # Backend agent service URI

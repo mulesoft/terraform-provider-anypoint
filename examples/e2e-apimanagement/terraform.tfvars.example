@@ -23,7 +23,7 @@ vpn_tunnel_1_ptp_cidr = ""
 vpn_tunnel_2_psk      = ""
 vpn_tunnel_2_ptp_cidr = ""
 
-# Flex Gateway
+# Omni Gateway
 gateway_size            = "small"
 gateway_runtime_version = "1.0.0"
 

@@ -17,7 +17,7 @@ The provider honours **user-defined state** for entitlements, not Platform defau
 
 - If you declare an entitlement field in your Terraform config, the provider manages it: any Platform-side change will be reverted on the next `apply`.
 - If you **omit** an entitlement field, the provider treats it as unmanaged. Platform-side updates to that field are not reflected in the plan and will not be reverted.
-- Master-org-only entitlements (`hybrid`, `flex_gateway`, `service_mesh`, `worker_logging_override`, `runtime_fabric`, `design_center`) are inherited on sub-orgs and **cannot** be set via this resource on a business group. They are stripped from API requests to prevent HTTP 403 errors.
+- Master-org-only entitlements (`hybrid`, `omni_gateway`, `service_mesh`, `worker_logging_override`, `runtime_fabric`, `design_center`) are inherited on sub-orgs and **cannot** be set via this resource on a business group. They are stripped from API requests to prevent HTTP 403 errors.
 
 > **In short:** only declare entitlement fields you want Terraform to own. Leave everything else out of your config.
 
@@ -124,7 +124,7 @@ Optional:
 - `create_sub_orgs` (Boolean) Whether sub-organizations can be created. Defaults to `false`.
 - `global_deployment` (Boolean) Whether global deployment is enabled. Defaults to `false`.
 - `design_center` (Block) Design Center entitlement. **Master-org-only** — ignored on business groups. See [below for nested schema](#nestedschema--entitlements--design_center).
-- `flex_gateway` (Block) Flex Gateway entitlement. **Master-org-only** — ignored on business groups. See [below for nested schema](#nestedschema--entitlements--enabled_entitlement).
+- `omni_gateway` (Block) Omni Gateway entitlement. **Master-org-only** — ignored on business groups. See [below for nested schema](#nestedschema--entitlements--enabled_entitlement).
 - `gateways` (Block) Gateways entitlement. See [below for nested schema](#nestedschema--entitlements--assigned_entitlement).
 - `hybrid` (Block) Hybrid entitlement. **Master-org-only** — ignored on business groups. See [below for nested schema](#nestedschema--entitlements--enabled_entitlement).
 - `load_balancer` (Block) Load balancer entitlement. See [below for nested schema](#nestedschema--entitlements--assigned_entitlement).
@@ -152,7 +152,7 @@ Optional:
 - `reassigned` (Number) The number of reassigned units. Defaults to `0`.
 
 <a id="nestedschema--entitlements--enabled_entitlement"></a>
-### Nested Schema for `hybrid` / `flex_gateway` / `worker_logging_override` / `service_mesh`
+### Nested Schema for `hybrid` / `omni_gateway` / `worker_logging_override` / `service_mesh`
 
 Optional:
 

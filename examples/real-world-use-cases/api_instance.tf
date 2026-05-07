@@ -1,4 +1,4 @@
-data "anypoint_managed_flexgateways" "all" {
+data "anypoint_managed_omni_gateways" "all" {
   organization_id = var.organization_id
   environment_id  = var.env_id
 }
@@ -11,20 +11,20 @@ data "anypoint_secret_group_tls_contexts" "main" {
 
 locals {
   gateway_id = one([
-    for gw in data.anypoint_managed_flexgateways.all.gateways :
+    for gw in data.anypoint_managed_omni_gateways.all.gateways :
     gw.id if gw.name == "real-world-example-gateway"
   ])
 
-  flex_tls_context_id = one([
+  omni_tls_context_id = one([
     for tls in data.anypoint_secret_group_tls_contexts.main.tls_contexts :
-    tls.id if tls.name == "flex-tls-context"
+    tls.id if tls.name == "omni-tls-context"
   ])
 }
 
 resource "anypoint_api_instance" "payments" {
   environment_id = var.env_id
   gateway_id     = local.gateway_id
-  technology     = "flexGateway"
+  technology     = "omniGateway"
   instance_label = "payments-api"
   approval_method = "manual"
   spec = {
@@ -36,7 +36,7 @@ resource "anypoint_api_instance" "payments" {
     deployment_type = "HY"
     type            = "http"
     base_path       = "payments"
-    ssl_context_id  = "${anypoint_secret_group.main.id}/${local.flex_tls_context_id}"
+    ssl_context_id  = "${anypoint_secret_group.main.id}/${local.omni_tls_context_id}"
   }
   
   routing = [

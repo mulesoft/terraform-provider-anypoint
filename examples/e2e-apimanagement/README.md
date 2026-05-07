@@ -6,16 +6,16 @@ This directory contains comprehensive end-to-end examples that provision a compl
 
 | File | Description |
 |------|-------------|
-| `api_instance_flexgateway_secretsmanager_example.tf` | Full FlexGateway stack: Secrets Management → Flex Gateway → API Instance → 33+ inbound policies → SLA Tier |
+| `api_instance_omnigateway_secretsmanager_example.tf` | Full OmniGateway stack: Secrets Management → Omni Gateway → API Instance → 33+ inbound policies → SLA Tier |
 | `api_instance_mule4_example.tf` | Mule4 runtime stack: API Instance + 17 inbound policies (including Mule4-exclusive ones) |
 | `variables.tf` | All input variables shared across both examples |
-| `outputs.tf` | Outputs for the FlexGateway example (gateway URLs, API instance ID, policy IDs, etc.) |
+| `outputs.tf` | Outputs for the OmniGateway example (gateway URLs, API instance ID, policy IDs, etc.) |
 | `terraform.tfvars.example` | Template for your credentials and IDs — copy to `terraform.tfvars` |
-| `MULE4_SUPPORT.md` | Technical notes on Mule4 vs FlexGateway schema differences |
+| `MULE4_SUPPORT.md` | Technical notes on Mule4 vs OmniGateway schema differences |
 
 ---
 
-## Example 1: FlexGateway + Secrets Manager (`api_instance_flexgateway_secretsmanager_example.tf`)
+## Example 1: OmniGateway + Secrets Manager (`api_instance_omnigateway_secretsmanager_example.tf`)
 
 A complete provisioning flow across 7 steps.
 
@@ -26,8 +26,8 @@ Step 1  (commented)   anypoint_private_space
 Step 2  (commented)   anypoint_private_network
 Step 3  (commented)   anypoint_vpn_connection
 Step 3b (active)      Secrets Management: secret group → keystore → truststore → TLS context
-Step 4  (active)      anypoint_managed_flexgateway
-Step 5  (active)      anypoint_api_instance  (technology = "flexGateway", weighted routing)
+Step 4  (active)      anypoint_managed_omni_gateway
+Step 5  (active)      anypoint_api_instance  (technology = "omniGateway", weighted routing)
 Step 6  (active)      33 inbound API policies
 Step 6b (commented)   7 outbound API policies (require upstream_id)
 Step 6c (active)      anypoint_api_instance_sla_tier
@@ -43,13 +43,13 @@ Steps 1–3 (private space, network, VPN) are commented out so you can run the e
 | `anypoint_secret_group` | `main` |
 | `anypoint_secret_group_keystore` | `tls` (PEM type) |
 | `anypoint_secret_group_truststore` | `ca` (PEM type) |
-| `anypoint_flex_tls_context` | `flex` (ALPN: h2 + http/1.1) |
+| `anypoint_omni_tls_context` | `omni` (ALPN: h2 + http/1.1) |
 
 #### Gateway & API
 | Resource | Description |
 |----------|-------------|
-| `anypoint_managed_flexgateway` | Flex Gateway on private space target |
-| `anypoint_api_instance` | FlexGateway-backed proxy with TLS context and weighted read/write routing |
+| `anypoint_managed_omni_gateway` | Omni Gateway on private space target |
+| `anypoint_api_instance` | OmniGateway-backed proxy with TLS context and weighted read/write routing |
 
 #### Inbound Policies (33 total, applied in order)
 
@@ -114,9 +114,9 @@ To enable outbound policies, set `var.upstream_id` to the routing upstream UUID 
 
 Demonstrates a `technology = "mule4"` API instance with a direct implementation URI and the full set of Mule4-compatible policies.
 
-### Key Differences from FlexGateway
+### Key Differences from OmniGateway
 
-| Aspect | FlexGateway | Mule4 |
+| Aspect | OmniGateway | Mule4 |
 |--------|-------------|-------|
 | `endpoint.base_path` | Required | Not used |
 | `endpoint.uri` | Not used | Required (implementation URL) |
@@ -147,7 +147,7 @@ Demonstrates a `technology = "mule4"` API instance with a direct implementation 
 | 16 | `anypoint_api_policy_http_caching` | |
 | 17 | `anypoint_api_policy_external_oauth2_access_token_enforcement` | Mule OAuth Provider — **disabled** |
 
-Additional Mule4-specific OAuth policies are commented out (OpenAM, OpenID Connect, PingFederate token enforcement). These use the `anypoint_api_policy` generic resource as they are not available on FlexGateway.
+Additional Mule4-specific OAuth policies are commented out (OpenAM, OpenID Connect, PingFederate token enforcement). These use the `anypoint_api_policy` generic resource as they are not available on OmniGateway.
 
 ---
 
@@ -161,7 +161,7 @@ cd examples/e2e-apimanagement
 cp terraform.tfvars.example terraform.tfvars
 # Edit terraform.tfvars with your real values
 
-# 3. Place TLS certificate files (for FlexGateway example)
+# 3. Place TLS certificate files (for OmniGateway example)
 # The example expects PEM files at:
 #   ../certs/cert.pem        – server certificate
 #   ../certs/key.pem         – private key
@@ -184,9 +184,9 @@ terraform apply
 | `environment_id` | Source environment ID | Yes |
 | `api_asset_id` | Exchange asset ID for the API spec | Yes |
 | `api_asset_version` | Exchange asset version | Yes |
-| `api_base_path` | API base path (FlexGateway) | Yes (FlexGateway) |
-| `upstream_primary_uri` | Primary backend URI | Yes (FlexGateway) |
-| `upstream_secondary_uri` | Secondary backend URI | Yes (FlexGateway) |
+| `api_base_path` | API base path (OmniGateway) | Yes (OmniGateway) |
+| `upstream_primary_uri` | Primary backend URI | Yes (OmniGateway) |
+| `upstream_secondary_uri` | Secondary backend URI | Yes (OmniGateway) |
 | `upstream_primary_weight` | Traffic weight for primary (0–100) | No (default: `90`) |
 | `upstream_id` | Routing upstream UUID (for outbound policies) | No (default: `""`) |
 | `alert_email` | Email address for alerts | No (default: `admin@example.com`) |
@@ -201,7 +201,7 @@ The Connected App must have the following scopes granted for the relevant enviro
 | `manage:api_alerts` | Create API alerts |
 | `read:secrets` | Read secrets in Secrets Manager |
 | `manage:secrets` | Create/update secret groups, keystores, TLS contexts |
-| `manage:gateways` | Create/update Flex Gateway instances |
+| `manage:gateways` | Create/update Omni Gateway instances |
 
 ## Outputs
 
@@ -209,10 +209,10 @@ After `terraform apply`, the following outputs are available:
 
 | Output | Description |
 |--------|-------------|
-| `flex_gateway_id` | ID of the created Flex Gateway |
-| `flex_gateway_status` | Gateway runtime status |
-| `flex_gateway_public_url` | Public ingress URL (auto-derived or user-provided) |
-| `flex_gateway_internal_url` | Internal ingress URL |
+| `omni_gateway_id` | ID of the created Omni Gateway |
+| `omni_gateway_status` | Gateway runtime status |
+| `omni_gateway_public_url` | Public ingress URL (auto-derived or user-provided) |
+| `omni_gateway_internal_url` | Internal ingress URL |
 | `api_instance_id` | Numeric ID of the API instance in API Manager |
 | `api_instance_status` | API instance status |
 | `api_base_path` | Configured base path |
@@ -229,16 +229,16 @@ After `terraform apply`, the following outputs are available:
   anypoint_secret_group
   └── anypoint_secret_group_keystore  (TLS cert)
   └── anypoint_secret_group_truststore (CA chain)
-  └── anypoint_flex_tls_context        (TLS policy)
+  └── anypoint_omni_tls_context        (TLS policy)
           │
           ▼
-[Managed Flex Gateway]
-  anypoint_managed_flexgateway
+[Managed Omni Gateway]
+  anypoint_managed_omni_gateway
   └── ingress: TLS context ID → public_url + internal_url
           │
           ▼
 [API Instance]
-  anypoint_api_instance  (technology=flexGateway)
+  anypoint_api_instance  (technology=omniGateway)
   ├── routing: read traffic  → 90% primary + 10% secondary upstream
   └── routing: write traffic → 100% primary upstream
           │
@@ -308,4 +308,4 @@ re-plans don't show spurious diffs for `order` when nothing else changed.
 - [API Management Examples](../apimanagement/README.md) — individual resource examples
 - [Secrets Management Examples](../secretsmanagement/) — standalone secrets resource examples
 - [Real-World Use Cases](../real-world-use-cases/) — smaller focused scenarios
-- [MULE4_SUPPORT.md](./MULE4_SUPPORT.md) — technical notes on Mule4 vs FlexGateway API differences
+- [MULE4_SUPPORT.md](./MULE4_SUPPORT.md) — technical notes on Mule4 vs OmniGateway API differences

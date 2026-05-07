@@ -251,7 +251,7 @@ type TelemetryExporterEntitlement struct {
 //     omitted from the payload entirely, rather than sent as zero/false. This
 //     is required because the Access Management endpoint 403s on business
 //     groups when the body even MENTIONS master-org-only entitlements (e.g.
-//     hybrid, flexGateway, serviceMesh) — value false/zero is not a get-out.
+//     hybrid, omniGateway, serviceMesh) — value false/zero is not a get-out.
 //   - RuntimeFabric is a pointer for the same reason; the UI omits it for
 //     sub-orgs and so must we unless the user explicitly declared it.
 //   - StaticIps / Vpns are server-managed and never accepted on write; they
@@ -269,7 +269,7 @@ type Entitlements struct {
 	NetworkConnections    *VCoreEntitlement                 `json:"networkConnections,omitempty"`
 	Hybrid                *HybridEntitlement                `json:"hybrid,omitempty"`
 	RuntimeFabric         *bool                             `json:"runtimeFabric,omitempty"`
-	FlexGateway           *EnabledEntitlement               `json:"flexGateway,omitempty"`
+	OmniGateway           *EnabledEntitlement               `json:"omniGateway,omitempty"`
 	WorkerLoggingOverride *WorkerLoggingOverrideEntitlement `json:"workerLoggingOverride,omitempty"`
 	MqMessages            *MqEntitlement                    `json:"mqMessages,omitempty"`
 	MqRequests            *MqEntitlement                    `json:"mqRequests,omitempty"`

@@ -50,7 +50,7 @@ The demo follows a specific provisioning order due to API dependencies:
    ↓
 4. Secrets Management (Secret Groups, Keystores, Truststores, TLS Contexts)
    ↓
-5. Flex Gateway (requires TLS context)
+5. Omni Gateway (requires TLS context)
    ↓
 6. API Instances (requires gateway)
    ↓
@@ -214,7 +214,7 @@ Secrets follow a strict hierarchy:
    - `anypoint_secret_group_truststore` (PEM, JKS)
    - `anypoint_secret_group_certificate`
 3. Reference in TLS contexts:
-   - `anypoint_flex_tls_context` (for Flex Gateway)
+   - `anypoint_omni_tls_context` (for Omni Gateway)
    - `anypoint_secret_group_tls_context` (for CloudHub)
 
 **Base64 Encoding**: Certificate and key files must be base64-encoded: `base64encode(file("path/to/cert.pem"))`

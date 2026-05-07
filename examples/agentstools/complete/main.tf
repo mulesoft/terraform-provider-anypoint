@@ -7,7 +7,7 @@
 #   - Proper routing and deployment configuration
 #
 # Architecture:
-#   Agent Instance → Flex Gateway → MCP Servers → Backend Systems
+#   Agent Instance → Omni Gateway → MCP Servers → Backend Systems
 #
 # Usage:
 #   terraform init

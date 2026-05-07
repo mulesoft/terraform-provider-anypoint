@@ -37,6 +37,6 @@ variable "environment_id" {
 # ── Gateway ──────────────────────────────────────────────────────────────────
 
 variable "gateway_id" {
-  description = "Flex Gateway ID for agent and MCP server deployment"
+  description = "Omni Gateway ID for agent and MCP server deployment"
   type        = string
 }
