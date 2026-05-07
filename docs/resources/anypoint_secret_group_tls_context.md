@@ -1,11 +1,11 @@
 ---
-page_title: "anypoint_omni_tls_context Resource - terraform-provider-anypoint"
+page_title: "anypoint_secret_group_tls_context Resource - terraform-provider-anypoint"
 subcategory: "Secrets Management"
 description: |-
   Manages a Omni Gateway TLS context within a secret group in Anypoint Secrets Manager.
 ---
 
-# anypoint_omni_tls_context (Resource)
+# anypoint_secret_group_tls_context (Resource)
 
 Manages a Omni Gateway TLS context within a secret group in Anypoint Secrets Manager. The target is automatically set to `OmniGateway`. References keystore and truststore resources by their IDs — the provider automatically builds the internal path references (`keystores/{id}`, `truststores/{id}`).
 
@@ -16,7 +16,7 @@ Manages a Omni Gateway TLS context within a secret group in Anypoint Secrets Man
 ### Basic TLS Context
 
 ```terraform
-resource "anypoint_omni_tls_context" "example" {
+resource "anypoint_secret_group_tls_context" "example" {
   environment_id  = var.environment_id
   secret_group_id = anypoint_secret_group.main.id
   name            = "omni-tls-context"
@@ -36,7 +36,7 @@ resource "anypoint_omni_tls_context" "example" {
 ### mTLS-enabled TLS Context
 
 ```terraform
-resource "anypoint_omni_tls_context" "mtls" {
+resource "anypoint_secret_group_tls_context" "mtls" {
   environment_id  = var.environment_id
   secret_group_id = anypoint_secret_group.main.id
   name            = "mtls-context"
@@ -84,5 +84,5 @@ resource "anypoint_omni_tls_context" "mtls" {
 Import is supported using the following syntax:
 
 ```shell
-terraform import anypoint_omni_tls_context.example organization_id/environment_id/secret_group_id/tls_context_id
+terraform import anypoint_secret_group_tls_context.example organization_id/environment_id/secret_group_id/tls_context_id
 ```

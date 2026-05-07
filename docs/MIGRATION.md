@@ -162,7 +162,7 @@ in the official provider (note the added underscore).
 | `anypoint_secretgroup_keystore` | `anypoint_secret_group_keystore` | **Renamed** |
 | `anypoint_secretgroup_truststore` | `anypoint_secret_group_truststore` | **Renamed** |
 | `anypoint_secretgroup_certificate` | `anypoint_secret_group_certificate` | **Renamed** |
-| `anypoint_secretgroup_tlscontext_omnigateway` | `anypoint_omni_tls_context` | **Renamed + Schema change** |
+| `anypoint_secretgroup_tlscontext_omnigateway` | `anypoint_secret_group_tls_context` | **Renamed + Schema change** |
 | `anypoint_secretgroup_tlscontext_mule` | — | **Not supported** (Mule-runtime TLS context is not in the official provider; only the Omni variant is). |
 | `anypoint_secretgroup_tlscontext_securityfabric` | — | **Not supported** |
 | `anypoint_secretgroup_crldistrib_cfgs` | — | **Not supported** |
@@ -191,7 +191,7 @@ Data sources unique to the official provider:
 `anypoint_firewallrules`, `anypoint_private_space_connection`,
 `anypoint_private_space_associations`, `anypoint_private_space_upgrade`,
 `anypoint_tls_context`, `anypoint_private_network`,
-`anypoint_secret_group_*` (plural variants), `anypoint_managed_omnigateway[s]`,
+`anypoint_secret_group_*` (plural variants), `anypoint_managed_omni_gateway`, `anypoint_managed_omni_gateways`,
 `anypoint_api_instances`, `anypoint_agent_instances`, `anypoint_mcp_servers`.
 
 ## Migration runbook

@@ -1868,8 +1868,7 @@ func (r *OrganizationResource) Delete(ctx context.Context, req resource.DeleteRe
 
 	// Wait for the organization to be fully deleted to prevent "name already used" errors
 	// when recreating an organization with the same name
-	// 15 retries (30 seconds) should be sufficient as deletion typically completes within 15 seconds
-	err = r.client.WaitForOrganizationDeletion(ctx, organizationID, 15, 2*time.Second)
+	err = r.client.WaitForOrganizationDeletion(ctx, organizationID, 30, 2*time.Second)
 	if err != nil {
 		resp.Diagnostics.AddWarning(
 			"Organization Deletion Timeout",

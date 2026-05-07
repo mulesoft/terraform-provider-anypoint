@@ -247,13 +247,13 @@ resource "anypoint_api_policy_credential_injection_oauth2" "oauth2" {
 #     // Expose port
 #     // Rename this to tls_***
 #     // Export host
-#     ssl_context_id  = "${anypoint_secret_group.main.id}/${anypoint_omni_tls_context.omni.id}"
+#     ssl_context_id  = "${anypoint_secret_group.main.id}/${anypoint_secret_group_tls_context.omni.id}"
 #   }
 
 #     # upstream = {
 #     #  uri = "http://echo.com"
 #     #  label = "echo1"
-#     #  tls_context_id = "${anypoint_secret_group.main.id}/${anypoint_omni_tls_context.omni.id}"
+#     #  tls_context_id = "${anypoint_secret_group.main.id}/${anypoint_secret_group_tls_context.omni.id}"
 #     # }
 
 #   gateway_id = anypoint_managed_omni_gateway.main.id
@@ -293,7 +293,7 @@ resource "anypoint_api_policy_credential_injection_oauth2" "oauth2" {
 #     }
 #   ]
 
-#   depends_on = [anypoint_managed_omni_gateway.main, anypoint_omni_tls_context.omni]
+#   depends_on = [anypoint_managed_omni_gateway.main, anypoint_secret_group_tls_context.omni]
 # }
 
 ###############################################################################
@@ -331,7 +331,7 @@ locals {
   # upstream_id resolves the "primary" upstream from the datasource lookup.
   # Change "primary" to match the label used in the routing configuration above.
   # upstream_id = local.upstream_by_label["primary"]
-  upstream_id = "66f635fd-bfc5-4382-8536-6a7f66063ffc"
+  upstream_id = "d69c564a-b9b8-4ab4-98bd-69f72cab7039"
 }
 
 # ─── 1. Rate Limiting ───────────────────────────────────────────────────────
