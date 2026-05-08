@@ -516,6 +516,13 @@ func (r *ManagedOmniGatewayResource) Update(ctx context.Context, req resource.Up
 
 	r.flattenGateway(gw, &plan, orgID, envID)
 	plan.Tracing = reconcileTracing(planTracing, plan.Tracing)
+	// Retain prior status to avoid a Terraform consistency-check error when the
+	// gateway re-enters its async provisioning cycle (RUNNING → APPLYING) after a
+	// size or config change. The framework compares post-apply state against the
+	// plan value (which inherits the prior RUNNING status via UseStateForUnknown)
+	// and errors when it sees APPLYING. Read() will pick up the live status on the
+	// next refresh cycle.
+	plan.Status = state.Status
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
