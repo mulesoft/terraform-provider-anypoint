@@ -1,4 +1,4 @@
-# Anypoint Platform Terraform Provider
+# Mulesoft Terraform Provider
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/mulesoft/terraform-provider-anypoint)
 [![License](https://img.shields.io/badge/license-MIT-blue)](https://opensource.org/licenses/MIT)
@@ -13,7 +13,7 @@ A comprehensive Terraform provider for managing your Anypoint Platform resources
 -   ** Improve Collaboration:** Use version control to manage your infrastructure, making it easier for teams to collaborate and review changes
 -   ** Increase Agility:** Spin up or tear down entire environments in minutes, not hours, allowing you to innovate faster
 -   ** Enhance Governance:** Enforce standards and policies across all your environments by defining them in code
--   ** Complete Coverage:** 37 resources across 5 modules supporting the full Anypoint Platform lifecycle
+-   ** Complete Coverage:** 23 base resources + 65 typed API policy resources across 6 modules supporting the full Anypoint Platform lifecycle
 
 ## Table of Contents
 
@@ -43,7 +43,7 @@ Add the following to your Terraform configuration:
 terraform {
   required_providers {
     anypoint = {
-      source  = "sf.com/mulesoft/anypoint"
+      source  = "mulesoft/anypoint"
       version = "0.1.0"
     }
   }
@@ -97,15 +97,15 @@ provider "anypoint" {
 
 ## Resources Overview
 
-The provider supports **37 resources** across **5 main categories**:
+The provider supports **23 base resources** plus **65 typed API policy resources** across **6 main categories**:
 
 | Category | Resources | Description |
 |----------|-----------|-------------|
-| **Access Management** | 11 | Organizations, environments, users, teams, roles, and connected apps |
-| **API Management** | 6 | API instances, policies, SLA tiers, alerts, and Omni Gateways |
-| **CloudHub 2.0** | 11 | Private spaces, networks, VPNs, firewalls, and TLS contexts |
-| **Governance** | 1 | API governance profiles and conformance validation |
-| **Secrets Management** | 8 | Certificates, keystores, truststores, and TLS contexts |
+| **Access Management** | 4 | Organizations, environments, teams, and connected app scopes |
+| **API Management** | 4 + 65 typed policies | API instances, generic policy, SLA tiers, Omni Gateways, and dedicated per-policy-type resources |
+| **CloudHub 2.0** | 6 | Private spaces, VPNs, firewall rules, TLS contexts, and associations |
+| **Agents & Tools** | 2 | Agent instances and MCP servers |
+| **Secrets Management** | 7 | Secret groups, certificates, keystores, truststores, TLS contexts, and shared secrets |
 
 ## Provider Configuration
 
@@ -168,15 +168,10 @@ resource "anypoint_environment" "dev" {
 ### Deploy a Private Space
 
 ```hcl
-resource "anypoint_private_space" "production" {
+resource "anypoint_private_space_config" "production" {
   organization_id = var.organization_id
   name            = "production-space"
   region          = "us-east-2"
-
-  features {
-    enhanced_security = true
-    persistent_object_store = true
-  }
 }
 ```
 
@@ -185,7 +180,7 @@ resource "anypoint_private_space" "production" {
 ```hcl
 resource "anypoint_vpn_connection" "on_prem" {
   organization_id  = var.organization_id
-  private_space_id = anypoint_private_space.production.id
+  private_space_id = anypoint_private_space_config.production.id
 
   name                 = "OnPrem-VPN"
   remote_ip_address    = "203.0.113.5"
@@ -208,15 +203,8 @@ resource "anypoint_vpn_connection" "on_prem" {
 |----------|-------------|
 | `anypoint_organization` | Manage Anypoint organizations and sub-organizations |
 | `anypoint_environment` | Create and manage environments (sandbox/production) |
-| `anypoint_user` | Manage platform users and their properties |
 | `anypoint_team` | Create teams for organizing users |
-| `anypoint_team_members` | Assign users to teams |
-| `anypoint_team_roles` | Assign roles to teams |
-| `anypoint_rolegroup` | Create custom role groups |
-| `anypoint_rolegroup_roles` | Assign roles to role groups |
-| `anypoint_rolegroup_users` | Assign users to role groups |
-| `anypoint_connectedapp` | Create connected applications for API authentication |
-| `anypoint_connectedapp_scopes` | Manage scopes for connected apps |
+| `anypoint_connected_app_scopes` | Manage scopes for connected apps |
 
 **Example:** [Access Management Examples](./examples/accessmanagement)
 
@@ -225,9 +213,31 @@ resource "anypoint_vpn_connection" "on_prem" {
 | Resource | Description |
 |----------|-------------|
 | `anypoint_api_instance` | Deploy and manage API instances |
-| `anypoint_api_policy` | Apply policies to API instances (rate limiting, JWT validation, etc.) |
+| `anypoint_api_policy` | Apply a generic policy to an API instance |
 | `anypoint_api_instance_sla_tier` | Configure SLA tiers for API access control |
 | `anypoint_managed_omni_gateway` | Deploy managed Omni Gateway instances |
+
+In addition, each known policy type has a dedicated typed resource of the form `anypoint_api_policy_<type>` (hyphens replaced with underscores). The 65 available types are:
+
+**Traffic Management:** `rate_limiting`, `rate_limiting_sla_based`, `spike_control`, `circuit_breaker`, `idle_timeout`, `response_timeout`, `stream_idle_timeout`
+
+**Security — Inbound:** `ip_blocklist`, `ip_allowlist`, `jwt_validation`, `client_id_enforcement`, `http_basic_authentication`, `ldap_authentication`, `oauth2_token_introspection`, `external_oauth2_access_token_enforcement`, `access_block`, `native_ext_authz`
+
+**Security — Outbound:** `intask_authorization_code_policy`, `intask_authentication_policy`, `credential_injection_oauth2`, `credential_injection_basic_auth`, `credential_injection_oauth2_obo`
+
+**Transformation:** `header_injection`, `header_removal`, `body_transformation`, `header_transformation`, `dataweave_body_transformation`, `dataweave_headers_transformation`, `dataweave_request_filter`, `script_evaluation_transformation`
+
+**Threat Protection:** `json_threat_protection`, `xml_threat_protection`, `injection_protection`, `spec_validation`
+
+**Observability:** `cors`, `message_logging`, `message_logging_outbound`, `sse_logging`, `tracing`, `agent_connection_telemetry`
+
+**Routing & Caching:** `http_caching`, `health_check`, `native_ext_proc`, `native_aws_lambda`
+
+**MCP (Model Context Protocol):** `mcp_pii_detector`, `mcp_schema_validation`, `mcp_access_control`, `mcp_support`, `mcp_global_access_policy`, `mcp_tool_mapping`, `mcp_transcoding_router`
+
+**LLM Gateway:** `llm_proxy_core_policy`, `llm_gw_core_policy`, `llm_proxy_core`, `model_based_routing`, `semantic_routing_policy_huggingface`, `semantic_prompt_guard_policy_openai`, `bedrock_llm_provider_policy`, `gemini_llm_provider_policy`, `openai_transcoding_policy`, `gemini_transcoding_policy`
+
+**A2A (Agent-to-Agent):** `a2a_pii_detector`, `a2a_agent_card`, `a2a_schema_validation`, `a2a_token_rate_limit`, `a2a_prompt_decorator`
 
 **Example:** [API Management Examples](./examples/apimanagement)
 
@@ -235,27 +245,21 @@ resource "anypoint_vpn_connection" "on_prem" {
 
 | Resource | Description |
 |----------|-------------|
-| `anypoint_private_space` | Create isolated runtime environments in CloudHub 2.0 |
-| `anypoint_private_network` | Configure private networking for spaces |
+| `anypoint_private_space_config` | Create and configure isolated runtime environments in CloudHub 2.0 |
 | `anypoint_vpn_connection` | Establish site-to-site VPN connections |
-| `anypoint_firewall_rules` | Define ingress firewall rules for private spaces |
 | `anypoint_tls_context` | Configure TLS/SSL for private space ingress |
-| `anypoint_transit_gateway` | Connect to AWS Transit Gateways |
-| `anypoint_private_space_connection` | Manage private space connections |
 | `anypoint_private_space_association` | Associate environments with private spaces |
-| `anypoint_private_space_advanced_config` | Configure advanced private space settings |
-| `anypoint_private_space_upgrade` | Schedule private space upgrades |
-| `anypoint_privatespace_advanced_config` | Advanced configuration for private spaces |
+| `anypoint_private_space_upgrade` | Schedule private space runtime upgrades |
+| `anypoint_privatespace_advanced_config` | Configure advanced private space settings |
 
 **Example:** [CloudHub 2.0 Examples](./examples/cloudhub2)
 
-###  Governance Resources
+###  Agents & Tools Resources
 
 | Resource | Description |
 |----------|-------------|
-| `anypoint_api_governance_profile` | Define API governance rules and conformance validation |
-
-**Example:** [Governance Examples](./examples/governance)
+| `anypoint_agent_instance` | Deploy and manage agent instances |
+| `anypoint_mcp_server` | Deploy and manage MCP servers |
 
 ###  Secrets Management Resources
 
@@ -263,23 +267,56 @@ resource "anypoint_vpn_connection" "on_prem" {
 |----------|-------------|
 | `anypoint_secret_group` | Create groups for organizing secrets |
 | `anypoint_secret_group_certificate` | Store and manage TLS certificates |
-| `anypoint_secret_group_certificate_pinset` | Configure certificate pinning |
+| `anypoint_secret_group_certificate_pinset` | Configure certificate pinning sets |
 | `anypoint_secret_group_keystore` | Manage keystores (PEM, JKS, PKCS12, JCEKS) |
 | `anypoint_secret_group_truststore` | Manage truststores for certificate validation |
 | `anypoint_secret_group_shared_secret` | Store shared secrets and credentials |
-| `anypoint_omni_tls_context` | Configure TLS contexts for Omni Gateway |
 | `anypoint_secret_group_tls_context` | Configure TLS contexts in secret groups |
 
 **Example:** [Secrets Management Examples](./examples/secretsmanagement)
 
 ##  Data Sources
 
-The provider also includes data sources for reading existing resources:
+The provider includes data sources for reading existing resources:
 
-- `anypoint_user_data` - Read user information
-- `anypoint_environment_data` - Read environment details
-- `anypoint_organization_data` - Read organization information
-- And more...
+### Access Management
+| Data Source | Description |
+|-------------|-------------|
+| `anypoint_organization` | Read organization details |
+| `anypoint_environment` | Read environment details |
+| `anypoint_team` | Read team details |
+
+### CloudHub 2.0
+| Data Source | Description |
+|-------------|-------------|
+| `anypoint_tls_context` | Read TLS context details |
+| `anypoint_private_space_associations` | List private space associations |
+| `anypoint_private_space_upgrade` | Read private space upgrade details |
+
+### API Management
+| Data Source | Description |
+|-------------|-------------|
+| `anypoint_managed_omni_gateways` | List managed Omni Gateway instances |
+| `anypoint_managed_omni_gateway` | Read a single Omni Gateway instance |
+| `anypoint_api_instances` | List API instances in an environment |
+| `anypoint_api_upstreams` | Read upstreams for an API instance |
+
+### Agents & Tools
+| Data Source | Description |
+|-------------|-------------|
+| `anypoint_agent_instances` | List agent instances |
+| `anypoint_mcp_servers` | List MCP servers |
+
+### Secrets Management
+| Data Source | Description |
+|-------------|-------------|
+| `anypoint_secret_groups` | List secret groups |
+| `anypoint_secret_group_certificates` | List certificates in a secret group |
+| `anypoint_secret_group_certificate_pinsets` | List certificate pinsets in a secret group |
+| `anypoint_secret_group_keystores` | List keystores in a secret group |
+| `anypoint_secret_group_truststores` | List truststores in a secret group |
+| `anypoint_secret_group_shared_secrets` | List shared secrets in a secret group |
+| `anypoint_secret_group_tls_contexts` | List TLS contexts in a secret group |
 
 ##  Examples
 
@@ -287,12 +324,10 @@ Comprehensive examples are available in the [`examples/`](./examples) directory:
 
 ### Basic Examples by Category
 
-- **[Access Management](./examples/accessmanagement)** - Users, teams, roles, and organizations
-- **[API Management](./examples/apimanagement)** - API instances, policies, and monitoring
-- **[CloudHub 2.0](./examples/cloudhub2)** - Private spaces, networking, and security
-- **[Governance](./examples/governance)** - API governance profiles
+- **[Access Management](./examples/accessmanagement)** - Teams, organizations, and connected app scopes
+- **[API Management](./examples/apimanagement)** - API instances, policies, and Omni Gateways
+- **[CloudHub 2.0](./examples/cloudhub2)** - Private spaces, VPNs, and TLS contexts
 - **[Secrets Management](./examples/secretsmanagement)** - Certificates and secure storage
-- **[Connected App Scopes](./examples/connected_app_scopes)** - Managing connected app permissions
 
 ### Complete End-to-End Examples
 
@@ -374,23 +409,19 @@ resource "anypoint_environment" "prod" {
 
 ```hcl
 # Private Space
-resource "anypoint_private_space" "secure_space" {
-  name   = "secure-production"
-  region = "us-east-1"
-}
-
-# Private Network
-resource "anypoint_private_network" "internal" {
-  private_space_id = anypoint_private_space.secure_space.id
-  cidr_block       = "10.0.0.0/16"
+resource "anypoint_private_space_config" "secure_space" {
+  organization_id = var.organization_id
+  name            = "secure-production"
+  region          = "us-east-1"
 }
 
 # VPN to On-Premises
 resource "anypoint_vpn_connection" "datacenter" {
-  private_space_id  = anypoint_private_space.secure_space.id
-  name              = "Corporate-Datacenter"
+  organization_id  = var.organization_id
+  private_space_id = anypoint_private_space_config.secure_space.id
+  name             = "Corporate-Datacenter"
   remote_ip_address = var.datacenter_public_ip
-  static_routes     = ["192.168.0.0/16"]
+  static_routes    = ["192.168.0.0/16"]
 
   tunnels {
     psk      = var.vpn_psk
@@ -398,16 +429,10 @@ resource "anypoint_vpn_connection" "datacenter" {
   }
 }
 
-# Firewall Rules
-resource "anypoint_firewall_rules" "ingress" {
-  private_space_id = anypoint_private_space.secure_space.id
-
-  rules {
-    cidr_block = "10.0.0.0/8"
-    protocol   = "tcp"
-    from_port  = 443
-    to_port    = 443
-  }
+# TLS Context
+resource "anypoint_tls_context" "ingress" {
+  organization_id  = var.organization_id
+  private_space_id = anypoint_private_space_config.secure_space.id
 }
 ```
 
