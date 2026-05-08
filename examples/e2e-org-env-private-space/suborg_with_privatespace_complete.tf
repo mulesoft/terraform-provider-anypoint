@@ -18,7 +18,7 @@
 terraform {
   required_providers {
     anypoint = {
-      source  = "sfprod.com/mulesoft/anypoint"
+      source  = "mulesoft/anypoint"
       version = "0.1.0"
     }
   }
