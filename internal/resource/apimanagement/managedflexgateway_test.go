@@ -221,3 +221,122 @@ func TestManagedOmniGatewayResource_Read_NotFound(t *testing.T) {
 		t.Error("Read() for 404 should remove resource (state should be null)")
 	}
 }
+
+// TestManagedOmniGatewayResource_Update_RetainsPriorStatusOnAsyncTransition verifies
+// that after a successful PUT the provider writes the prior state status (e.g. RUNNING)
+// rather than the transient async status (e.g. APPLYING) returned by the API. This
+// prevents "provider produced inconsistent result" errors from the Terraform framework.
+func TestManagedOmniGatewayResource_Update_RetainsPriorStatusOnAsyncTransition(t *testing.T) {
+	putPath := "/gatewaymanager/api/v1/organizations/test-org-id/environments/test-env-id/gateways/test-gw-id"
+	domainPath := "/runtimefabric/api/organizations/test-org-id/targets/test-target-id/environments/test-env-id/domains"
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		putPath: func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPut {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				return
+			}
+			// Platform accepted the size change and re-entered async provisioning.
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"id":             "test-gw-id",
+				"name":           "test-gateway",
+				"targetId":       "test-target-id",
+				"runtimeVersion": "1.6.0",
+				"releaseChannel": "lts",
+				"size":           "large",
+				"status":         "APPLYING",
+				"configuration": map[string]interface{}{
+					"ingress": map[string]interface{}{
+						"publicUrl":         "https://test-gateway.example.com",
+						"internalUrl":       "https://test-gateway.internal.example.com",
+						"forwardSslSession": true,
+						"lastMileSecurity":  true,
+					},
+					"properties": map[string]interface{}{
+						"upstreamResponseTimeout": 15,
+						"connectionIdleTimeout":   60,
+					},
+					"logging": map[string]interface{}{
+						"level":       "info",
+						"forwardLogs": true,
+					},
+					"tracing": map[string]interface{}{
+						"enabled":  false,
+						"sampling": 1,
+					},
+				},
+			})
+		},
+		domainPath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"domains": []string{"*.example.com"},
+			})
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	res := NewManagedOmniGatewayResource().(*ManagedOmniGatewayResource)
+	res.client = &apimgmtclient.ManagedOmniGatewayClient{
+		AnypointClient: &anypointclient.AnypointClient{
+			BaseURL:    server.URL,
+			Token:      "mock-token",
+			HTTPClient: &http.Client{},
+			OrgID:      "test-org-id",
+		},
+	}
+
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+	objType := stateType.(tftypes.Object)
+	ingressObjType := objType.AttributeTypes["ingress"].(tftypes.Object)
+	propertiesObjType := objType.AttributeTypes["properties"].(tftypes.Object)
+	loggingObjType := objType.AttributeTypes["logging"].(tftypes.Object)
+	tracingObjType := objType.AttributeTypes["tracing"].(tftypes.Object)
+
+	buildState := func(size, status string) tftypes.Value {
+		return tftypes.NewValue(stateType, map[string]tftypes.Value{
+			"id":              tftypes.NewValue(tftypes.String, "test-gw-id"),
+			"name":            tftypes.NewValue(tftypes.String, "test-gateway"),
+			"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
+			"environment_id":  tftypes.NewValue(tftypes.String, "test-env-id"),
+			"target_id":       tftypes.NewValue(tftypes.String, "test-target-id"),
+			"runtime_version": tftypes.NewValue(tftypes.String, "1.6.0"),
+			"release_channel": tftypes.NewValue(tftypes.String, "lts"),
+			"size":            tftypes.NewValue(tftypes.String, size),
+			"status":          tftypes.NewValue(tftypes.String, status),
+			"ingress":         tftypes.NewValue(ingressObjType, nil),
+			"properties":      tftypes.NewValue(propertiesObjType, nil),
+			"logging":         tftypes.NewValue(loggingObjType, nil),
+			"tracing":         tftypes.NewValue(tracingObjType, nil),
+		})
+	}
+
+	priorStateRaw := buildState("small", "RUNNING")
+	planRaw := buildState("large", "RUNNING") // plan inherits RUNNING via UseStateForUnknown
+
+	req := resource.UpdateRequest{
+		Plan:  tfsdk.Plan{Schema: schemaResp.Schema, Raw: planRaw},
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw},
+	}
+	resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
+	res.Update(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("Update() reported unexpected errors: %v", resp.Diagnostics.Errors())
+	}
+
+	var got ManagedOmniGatewayResourceModel
+	if diags := resp.State.Get(ctx, &got); diags.HasError() {
+		t.Fatalf("State.Get errors: %v", diags.Errors())
+	}
+
+	if got.Size.ValueString() != "large" {
+		t.Errorf("Expected Size 'large', got %q", got.Size.ValueString())
+	}
+	// The provider must write RUNNING (prior state), not APPLYING (async API transition).
+	if got.Status.ValueString() != "RUNNING" {
+		t.Errorf("Expected Status 'RUNNING' (prior state retained), got %q — async status race not handled", got.Status.ValueString())
+	}
+}
