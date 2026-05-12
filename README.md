@@ -7,13 +7,13 @@
 
 A comprehensive Terraform provider for managing your Anypoint Platform resources with ease and efficiency. Automate your infrastructure, from access management to CloudHub 2.0 deployments, and embrace Infrastructure as Code (IaC) for a more reliable and scalable integration landscape.
 
-##  Why Use This Provider?
+## Why Use This Provider?
 
--   ** Automate Everything:** Codify your Anypoint Platform setup to ensure consistency and eliminate manual errors
--   ** Improve Collaboration:** Use version control to manage your infrastructure, making it easier for teams to collaborate and review changes
--   ** Increase Agility:** Spin up or tear down entire environments in minutes, not hours, allowing you to innovate faster
--   ** Enhance Governance:** Enforce standards and policies across all your environments by defining them in code
--   ** Complete Coverage:** 23 base resources + 65 typed API policy resources across 6 modules supporting the full Anypoint Platform lifecycle
+- **Automate Everything:** Codify your Anypoint Platform setup to ensure consistency and eliminate manual errors
+- **Improve Collaboration:** Use version control to manage your infrastructure, making it easier for teams to collaborate and review changes
+- **Increase Agility:** Spin up or tear down entire environments in minutes, not hours, allowing you to innovate faster
+- **Enhance Governance:** Enforce standards and policies across all your environments by defining them in code
+- **Complete Coverage:** 23 base resources + 96 typed API policy resources across 6 modules supporting the full Anypoint Platform lifecycle
 
 ## Table of Contents
 
@@ -97,12 +97,12 @@ provider "anypoint" {
 
 ## Resources Overview
 
-The provider supports **23 base resources** plus **65 typed API policy resources** across **6 main categories**:
+The provider supports **23 base resources** plus **96 typed API policy resources** across **6 main categories**:
 
 | Category | Resources | Description |
 |----------|-----------|-------------|
 | **Access Management** | 4 | Organizations, environments, teams, and connected app scopes |
-| **API Management** | 4 + 65 typed policies | API instances, generic policy, SLA tiers, Omni Gateways, and dedicated per-policy-type resources |
+| **API Management** | 4 + 96 typed policies | API instances, generic policy, SLA tiers, Omni Gateways, and dedicated per-policy-type resources |
 | **CloudHub 2.0** | 6 | Private spaces, VPNs, firewall rules, TLS contexts, and associations |
 | **Agents & Tools** | 2 | Agent instances and MCP servers |
 | **Secrets Management** | 7 | Secret groups, certificates, keystores, truststores, TLS contexts, and shared secrets |
@@ -136,7 +136,8 @@ export ANYPOINT_CLIENT_ID="your-client-id"
 export ANYPOINT_CLIENT_SECRET="your-client-secret"
 export ANYPOINT_USERNAME="your-username"         # Optional
 export ANYPOINT_PASSWORD="your-password"         # Optional
-export ANYPOINT_BASE_URL="https://anypoint.mulesoft.com"
+export ANYPOINT_BASE_URL="https://anypoint.mulesoft.com"  # Optional, defaults to US control plane
+export ANYPOINT_AUTH_TYPE="connected_app"        # Optional: "connected_app" (default) or "user"
 ```
 
 ##  Quick Start Examples
@@ -217,7 +218,7 @@ resource "anypoint_vpn_connection" "on_prem" {
 | `anypoint_api_instance_sla_tier` | Configure SLA tiers for API access control |
 | `anypoint_managed_omni_gateway` | Deploy managed Omni Gateway instances |
 
-In addition, each known policy type has a dedicated typed resource of the form `anypoint_api_policy_<type>` (hyphens replaced with underscores). The 65 available types are:
+In addition, each known policy type has a dedicated typed resource of the form `anypoint_api_policy_<type>` (hyphens replaced with underscores). The 96 available types are:
 
 **Traffic Management:** `rate_limiting`, `rate_limiting_sla_based`, `spike_control`, `circuit_breaker`, `idle_timeout`, `response_timeout`, `stream_idle_timeout`
 
