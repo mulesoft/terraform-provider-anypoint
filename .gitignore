@@ -78,3 +78,12 @@ Thumbs.db
 tmp/
 temp/
 *.tmp
+examples_local/
+examples/prod_registry/
+scripts/
+CLIENT_DISTRIBUTION_GUIDE.md
+CLIENT_QUICK_START.md
+CLIENT_SOP.md
+TESTING_FRAMEWORK.md
+TEST_ORGANIZATION.md
+PRE_FLIGHT_CHECKLIST.md
