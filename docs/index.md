@@ -4,7 +4,7 @@ description: |-
   The MuleSoft provider lets you manage MuleSoft Anypoint Platform resources — API instances, API policies, environments, organizations, gateways, secrets, and more — using Terraform.
 ---
 
-# Mulesoft Provider
+# MuleSoft Provider
 
 The `anypoint` provider lets you manage [MuleSoft Anypoint Platform](https://anypoint.mulesoft.com) resources using Terraform — API instances, policies, environments, organizations, CloudHub 2.0 private spaces, Omni Gateway deployments, secrets, and Agent / MCP tools.
 
