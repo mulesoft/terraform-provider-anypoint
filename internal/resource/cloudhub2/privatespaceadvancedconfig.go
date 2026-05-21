@@ -290,6 +290,9 @@ func (r *PrivateSpaceAdvancedConfigResource) Update(ctx context.Context, req res
 	// Map response to state
 	r.mapPrivateSpaceToState(ctx, privateSpace, &data)
 
+	data.ID = data.PrivateSpaceID
+	data.OrganizationID = types.StringValue(orgID)
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
