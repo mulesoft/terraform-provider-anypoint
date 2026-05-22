@@ -9,6 +9,8 @@ description: |-
 
 Manages a CloudHub 2.0 Managed Omni Gateway instance in Anypoint Platform.
 
+-> **Connected App:** This resource requires a **standard connected app** (client credentials). An admin connected app is not needed. The connected app must have relevant scopes.
+
 -> **Tracing note:** The Gateway Manager API does not echo back `configuration.tracing` in POST/PUT responses. The provider retains the plan-requested value in state after create/update so that `tracing.enabled = true` works correctly. On the next `terraform refresh` or `plan`, the provider reads the live value from the API for accurate drift detection.
 
 ## Example Usage
@@ -99,3 +101,40 @@ Optional:
 Optional:
 
 - `enabled` (Boolean) Whether distributed tracing is enabled. Defaults to `false`.
+
+## Import
+
+An existing Managed Omni Gateway can be imported using its composite ID: `organization_id/environment_id/gateway_id`.
+
+The `gateway_id` is the UUID of the gateway visible in Runtime Manager or the Gateway Manager API.
+
+### Using an import block (Terraform ≥ 1.5 — recommended)
+
+```terraform
+import {
+  to = anypoint_managed_omni_gateway.imported
+  id = "<organization_id>/<environment_id>/<gateway_id>"
+}
+
+resource "anypoint_managed_omni_gateway" "imported" {
+  name           = "<gateway_name>"
+  environment_id = "<environment_id>"
+  target_id      = "<target_id>"
+}
+```
+
+After adding the import block, run:
+
+```shell
+# Let Terraform generate the full resource configuration automatically:
+terraform plan -generate-config-out=generated.tf
+
+# Or apply the import directly if you have an existing resource block:
+terraform apply
+```
+
+### Using the CLI (deprecated, Terraform < 1.5)
+
+```shell
+terraform import anypoint_managed_omni_gateway.imported <organization_id>/<environment_id>/<gateway_id>
+```

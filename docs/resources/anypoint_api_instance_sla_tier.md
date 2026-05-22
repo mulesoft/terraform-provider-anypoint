@@ -9,6 +9,8 @@ description: |-
 
 Manages an SLA tier for an API instance in Anypoint API Manager.
 
+-> **Connected App:** This resource requires a **standard connected app** (client credentials). An admin connected app is not needed. The connected app must have relevant scopes.
+
 ## Example Usage
 
 ```terraform
@@ -71,8 +73,44 @@ Optional:
 
 ## Import
 
-Import is supported using the following format:
+An existing SLA tier can be imported using its composite ID: `organization_id/environment_id/api_instance_id/tier_name_or_tier_id`.
+
+The last segment accepts either the **tier name** (as shown in the Anypoint UI, e.g. `Gold`) or the numeric tier ID. Using the name is recommended — it is visible without API calls.
+
+### Using an import block (Terraform ≥ 1.5 — recommended)
+
+```terraform
+import {
+  to = anypoint_api_instance_sla_tier.imported
+  id = "<organization_id>/<environment_id>/<api_instance_id>/<tier_name>"
+}
+
+resource "anypoint_api_instance_sla_tier" "imported" {
+  organization_id = "<organization_id>"
+  environment_id  = "<environment_id>"
+  api_instance_id = "<api_instance_id>"
+  name            = "<tier_name>"
+  limits = [
+    {
+      time_period_in_milliseconds = 60000
+      maximum_requests            = 100
+    }
+  ]
+}
+```
+
+After adding the import block, run:
 
 ```shell
-terraform import anypoint_api_instance_sla_tier.example organization_id/environment_id/api_instance_id/tier_id
+# Let Terraform generate the full resource configuration automatically:
+terraform plan -generate-config-out=generated.tf
+
+# Or apply the import directly if you have an existing resource block:
+terraform apply
+```
+
+### Using the CLI (deprecated, Terraform < 1.5)
+
+```shell
+terraform import anypoint_api_instance_sla_tier.imported <organization_id>/<environment_id>/<api_instance_id>/<tier_name>
 ```

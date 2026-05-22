@@ -274,7 +274,7 @@ resource "anypoint_managed_omni_gateway" "main" {
 # Deploy API instance to gateway
 resource "anypoint_api_instance" "api" {
   environment_id = var.environment_id
-  technology     = "flexGateway"
+  technology     = "omniGateway"
   gateway_id     = anypoint_managed_omni_gateway.main.id
 
   spec = {

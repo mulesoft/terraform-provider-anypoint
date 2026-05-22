@@ -33,7 +33,7 @@
 # resource "anypoint_agent_instance" "customer_support_agent" {
 #   organization_id = var.organization_id
 #   environment_id  = var.environment_id
-#   technology      = "flexGateway"
+#   technology      = "omniGateway"
 #   instance_label  = "customer-support-agent"
 
 #   # Exchange asset specification for the agent
@@ -67,7 +67,7 @@
 # resource "anypoint_agent_instance" "sales_agent" {
 #   organization_id = var.organization_id
 #   environment_id  = var.environment_id
-#   technology      = "flexGateway"
+#   technology      = "omniGateway"
 #   instance_label  = "sales-agent"
 
 #   spec = {

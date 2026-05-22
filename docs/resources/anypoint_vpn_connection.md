@@ -9,6 +9,8 @@ description: |-
 
 Creates a VPN connection in a CloudHub 2.0 private space.
 
+-> **Connected App:** This resource requires a **standard connected app** (client credentials). An admin connected app is not needed. The connected app must have relevant scopes.
+
 ## Example Usage
 
 ```terraform
@@ -96,8 +98,39 @@ Read-Only:
 
 ## Import
 
-Import is supported using the following syntax:
+An existing VPN connection can be imported using its composite ID: `private_space_id/connection_id`.
+
+- `private_space_id` — UUID of the private space (e.g. `849c361b-da3e-4c7d-9c68-a5784bb4dc58`)
+- `connection_id` — UUID of the VPN connection
+
+### Using an import block (Terraform ≥ 1.5 — recommended)
+
+```terraform
+import {
+  to = anypoint_vpn_connection.imported
+  id = "<private_space_id>/<connection_id>"
+}
+
+resource "anypoint_vpn_connection" "imported" {
+  private_space_id = "<private_space_id>"
+  organization_id  = "<organization_id>"
+  name             = "<connection_name>"
+  vpns             = []
+}
+```
+
+After adding the import block, run:
 
 ```shell
-terraform import anypoint_vpn_connection.example <private_space_id>/<connection_id>
+# Let Terraform generate the full resource configuration automatically:
+terraform plan -generate-config-out=generated.tf
+
+# Or apply the import directly if you have an existing resource block:
+terraform apply
+```
+
+### Using the CLI (deprecated, Terraform < 1.5)
+
+```shell
+terraform import anypoint_vpn_connection.imported <private_space_id>/<connection_id>
 ```

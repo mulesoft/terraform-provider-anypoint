@@ -9,6 +9,8 @@ description: |-
 
 Manages an API instance in Anypoint API Manager. An API instance represents an API specification deployed to a Omni Gateway target with routing rules and upstream backends.
 
+-> **Connected App:** This resource requires a **standard connected app** (client credentials). An admin connected app is not needed. The connected app must have relevant scopes.
+
 ## Example Usage
 
 ### Minimal configuration using `upstream_uri` shorthand
@@ -80,10 +82,10 @@ resource "anypoint_api_instance" "weighted_routing" {
 ### Optional
 
 - `organization_id` (String) The organization ID. If not provided, the organization ID will be inferred from the connected app credentials.
-- `technology` (String) The gateway technology. Valid values: `omniGateway`, `mule4`, `serviceMesh`. Defaults to `omniGateway`.
+- `technology` (String) The gateway technology. Only `omniGateway` is currently supported. Defaults to `omniGateway`.
 - `provider_id` (String) The identity provider ID for the API.
 - `instance_label` (String) A human-readable label for this API instance.
-- `approval_method` (String) Client approval method. Valid values: `manual`, `automatic`. Defaults to null (no approval required).
+- `approval_method` (String) Client approval method. Valid values: `manual`. Defaults to null (no approval required). **Note:** `automatic` approval is no longer supported.
 - `consumer_endpoint` (String) Consumer-facing endpoint URI (the public URL clients use to reach the API). Maps to top-level endpointUri in the API.
 - `upstream_uri` (String) Shorthand for a single-upstream routing configuration. When set, the provider constructs routing as `[{upstreams: [{weight: 100, uri: <value>}]}]`. Mutually exclusive with the `routing` block.
 - `gateway_id` (String) The Omni Gateway UUID. When provided, the deployment block is auto-populated by fetching gateway details (target_id, target_name, gateway_version) from the Gateway Manager API. Mutually exclusive with specifying a full deployment block.
@@ -115,8 +117,8 @@ Optional:
 
 - `deployment_type` (String) Deployment type. Valid values: `HY` (hybrid), `CH` (CloudHub), `CH2`, `RF` (Runtime Fabric). Defaults to `HY`.
 - `type` (String) Endpoint protocol type. Valid values: `http`, `rest`, `raml`. Defaults to `http`.
-- `base_path` (String) API base path for OmniGateway (e.g. 'my-api'). The provider constructs the full proxy URI as `http://0.0.0.0:8081/<base_path>`. Required when technology='omniGateway'. Mutually exclusive with `uri`.
-- `uri` (String) Direct implementation URI for Mule4 or other technologies (e.g. 'http://www.google.com'). Required when technology='mule4'. Mutually exclusive with `base_path`.
+- `base_path` (String) API base path for OmniGateway (e.g. 'my-api'). The provider constructs the full proxy URI as `http://0.0.0.0:8081/<base_path>`.
+- `uri` (String) Direct implementation URI (e.g. 'http://www.google.com'). Mutually exclusive with `base_path`.
 - `response_timeout` (Number) Response timeout in milliseconds.
 
 <a id="nestedschema--deployment"></a>
@@ -166,3 +168,43 @@ Optional:
 - `weight` (Number) Traffic weight percentage (0-100). Weights across upstreams should sum to 100. Defaults to `100`.
 - `label` (String) A label for this upstream.
 - `tls_context_id` (String) TLS context for upstream connections. Format: 'secretGroupId/tlsContextId'.
+
+## Import
+
+An existing API instance can be imported using its composite ID: `organization_id/environment_id/api_instance_id`.
+
+The `api_instance_id` is the numeric ID visible in the Anypoint API Manager URL (e.g. `16563478`).
+
+### Using an import block (Terraform ≥ 1.5 — recommended)
+
+```terraform
+import {
+  to = anypoint_api_instance.imported
+  id = "<organization_id>/<environment_id>/<api_instance_id>"
+}
+
+resource "anypoint_api_instance" "imported" {
+  environment_id = "<environment_id>"
+  spec = {
+    asset_id = "<api_asset_id>"
+    group_id = "<organization_id>"
+    version  = "1.0.0"
+  }
+}
+```
+
+After adding the import block, run:
+
+```shell
+# Let Terraform generate the full resource configuration automatically:
+terraform plan -generate-config-out=generated.tf
+
+# Or apply the import directly if you have an existing resource block:
+terraform apply
+```
+
+### Using the CLI (deprecated, Terraform < 1.5)
+
+```shell
+terraform import anypoint_api_instance.imported <organization_id>/<environment_id>/<api_instance_id>
+```

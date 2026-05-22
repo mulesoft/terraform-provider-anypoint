@@ -97,12 +97,12 @@ func (r *MCPServerResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				},
 			},
 			"technology": schema.StringAttribute{
-				Description: "The gateway technology. Valid values: 'omniGateway', 'mule4', 'serviceMesh'.",
+				Description: "The gateway technology. Only 'omniGateway' is currently supported.",
 				Optional:    true,
 				Computed:    true,
 				Default:     stringdefault.StaticString("omniGateway"),
 				Validators: []validator.String{
-					stringvalidator.OneOf("omniGateway", "mule4", "serviceMesh"),
+					stringvalidator.OneOf("omniGateway"),
 				},
 			},
 			"provider_id": schema.StringAttribute{
@@ -114,10 +114,10 @@ func (r *MCPServerResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				Optional:    true,
 			},
 			"approval_method": schema.StringAttribute{
-				Description: "Client approval method. Valid values: 'manual', 'automatic'. Defaults to null (no approval required).",
+				Description: "Client approval method. Valid values: 'manual'. Defaults to null (no approval required).",
 				Optional:    true,
 				Validators: []validator.String{
-					stringvalidator.OneOf("manual", "automatic"),
+					stringvalidator.OneOf("manual"),
 				},
 			},
 			"status": schema.StringAttribute{
@@ -193,11 +193,11 @@ func (r *MCPServerResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 						},
 					},
 					"base_path": schema.StringAttribute{
-						Description: "MCP server base path for Omni Gateway (e.g. 'my-mcp-server'). The provider constructs the full proxy URI as http://0.0.0.0:8081/<base_path>. Required when technology='omniGateway'. Mutually exclusive with 'uri'.",
+						Description: "MCP server base path for Omni Gateway (e.g. 'my-mcp-server'). The provider constructs the full proxy URI as http://0.0.0.0:8081/<base_path>.",
 						Optional:    true,
 					},
 					"uri": schema.StringAttribute{
-						Description: "Direct implementation URI for Mule4 or other technologies (e.g. 'http://www.google.com'). Required when technology='mule4'. Mutually exclusive with 'base_path'.",
+						Description: "Direct implementation URI (e.g. 'http://www.google.com'). Mutually exclusive with 'base_path'.",
 						Optional:    true,
 					},
 					"response_timeout": schema.Int64Attribute{
@@ -371,6 +371,25 @@ func (r *MCPServerResource) Configure(_ context.Context, req resource.ConfigureR
 func (r *MCPServerResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
 	var data MCPServerResourceModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	tech := data.Technology.ValueString()
+	if tech == "" {
+		tech = "omniGateway"
+	}
+	if tech == "omniGateway" {
+		if ep := endpointFromObject(data.Endpoint); ep != nil {
+			if !ep.ResponseTimeout.IsNull() && !ep.ResponseTimeout.IsUnknown() {
+				resp.Diagnostics.AddAttributeError(
+					path.Root("endpoint").AtName("response_timeout"),
+					"Invalid attribute for technology",
+					"'response_timeout' is not supported for technology 'omniGateway'.",
+				)
+			}
+		}
+	}
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -652,7 +671,15 @@ func (r *MCPServerResource) Delete(ctx context.Context, req resource.DeleteReque
 }
 
 func (r *MCPServerResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	parts := strings.Split(req.ID, "/")
+	if len(parts) != 3 {
+		resp.Diagnostics.AddError("Invalid import ID",
+			"Expected format: organization_id/environment_id/mcp_server_id")
+		return
+	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("organization_id"), parts[0])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("environment_id"), parts[1])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[2])...)
 }
 
 // --- Helpers ---
@@ -704,37 +731,16 @@ func (r *MCPServerResource) expandCreateRequest(ctx context.Context, data MCPSer
 			Type:           "mcp", // MCP Server type
 		}
 
-		technology := data.Technology.ValueString()
-		switch technology {
-		case "omniGateway", "flexGateway", "":
-			if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
-				basePath := strings.TrimPrefix(ep.BasePath.ValueString(), "/")
-				proxyURI := "http://0.0.0.0:8081/" + basePath
-				req.Endpoint.ProxyURI = &proxyURI
-			} else {
-				proxyURI := "http://0.0.0.0:8081/"
-				req.Endpoint.ProxyURI = &proxyURI
-			}
-
-			req.Endpoint.TLSContexts = &agentstools.MCPServerTLSContexts{}
-		case "mule4":
-			mule4 := true
-			req.Endpoint.MuleVersion4OrAbove = &mule4
-			req.Endpoint.ProxyURI = nil
-
-			if !ep.URI.IsNull() && !ep.URI.IsUnknown() {
-				uri := ep.URI.ValueString()
-				req.Endpoint.ProxyURI = &uri
-			}
-
-			req.Endpoint.IsCloudHub = nil
-			req.Endpoint.ReferencesUserDomain = nil
+		if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
+			basePath := strings.TrimPrefix(ep.BasePath.ValueString(), "/")
+			proxyURI := "http://0.0.0.0:8081/" + basePath
+			req.Endpoint.ProxyURI = &proxyURI
+		} else {
+			proxyURI := "http://0.0.0.0:8081/"
+			req.Endpoint.ProxyURI = &proxyURI
 		}
 
-		if !ep.ResponseTimeout.IsNull() && !ep.ResponseTimeout.IsUnknown() {
-			rt := int(ep.ResponseTimeout.ValueInt64())
-			req.Endpoint.ResponseTimeout = &rt
-		}
+		req.Endpoint.TLSContexts = &agentstools.MCPServerTLSContexts{}
 	}
 
 	if !data.ConsumerEndpoint.IsNull() && !data.ConsumerEndpoint.IsUnknown() {
@@ -786,37 +792,16 @@ func (r *MCPServerResource) expandUpdateRequest(ctx context.Context, data MCPSer
 			Type:           "mcp", // MCP Server type
 		}
 
-		technology := data.Technology.ValueString()
-		switch technology {
-		case "omniGateway", "flexGateway", "":
-			if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
-				basePath := strings.TrimPrefix(ep.BasePath.ValueString(), "/")
-				proxyURI := "http://0.0.0.0:8081/" + basePath
-				req.Endpoint.ProxyURI = &proxyURI
-			} else {
-				proxyURI := "http://0.0.0.0:8081/"
-				req.Endpoint.ProxyURI = &proxyURI
-			}
-
-			req.Endpoint.TLSContexts = &agentstools.MCPServerTLSContexts{}
-		case "mule4":
-			mule4 := true
-			req.Endpoint.MuleVersion4OrAbove = &mule4
-			req.Endpoint.ProxyURI = nil
-
-			if !ep.URI.IsNull() && !ep.URI.IsUnknown() {
-				uri := ep.URI.ValueString()
-				req.Endpoint.ProxyURI = &uri
-			}
-
-			req.Endpoint.IsCloudHub = nil
-			req.Endpoint.ReferencesUserDomain = nil
+		if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
+			basePath := strings.TrimPrefix(ep.BasePath.ValueString(), "/")
+			proxyURI := "http://0.0.0.0:8081/" + basePath
+			req.Endpoint.ProxyURI = &proxyURI
+		} else {
+			proxyURI := "http://0.0.0.0:8081/"
+			req.Endpoint.ProxyURI = &proxyURI
 		}
 
-		if !ep.ResponseTimeout.IsNull() && !ep.ResponseTimeout.IsUnknown() {
-			rt := int(ep.ResponseTimeout.ValueInt64())
-			req.Endpoint.ResponseTimeout = &rt
-		}
+		req.Endpoint.TLSContexts = &agentstools.MCPServerTLSContexts{}
 	}
 
 	if !data.ConsumerEndpoint.IsNull() && !data.ConsumerEndpoint.IsUnknown() {
@@ -996,26 +981,12 @@ func (r *MCPServerResource) flattenInstance(_ context.Context, inst *agentstools
 			Type:           types.StringValue(inst.Endpoint.Type),
 		}
 
-		technology := inst.Technology
-		switch technology {
-		case "omniGateway", "flexGateway", "":
-			if inst.Endpoint.ProxyURI != nil && *inst.Endpoint.ProxyURI != "" {
-				ep.BasePath = types.StringValue(strings.TrimPrefix(*inst.Endpoint.ProxyURI, "http://0.0.0.0:8081/"))
-			} else {
-				ep.BasePath = types.StringNull()
-			}
-			ep.URI = types.StringNull()
-		case "mule4":
-			if inst.Endpoint.ProxyURI != nil && *inst.Endpoint.ProxyURI != "" {
-				ep.URI = types.StringValue(*inst.Endpoint.ProxyURI)
-			} else {
-				ep.URI = types.StringNull()
-			}
+		if inst.Endpoint.ProxyURI != nil && *inst.Endpoint.ProxyURI != "" {
+			ep.BasePath = types.StringValue(strings.TrimPrefix(*inst.Endpoint.ProxyURI, "http://0.0.0.0:8081/"))
+		} else {
 			ep.BasePath = types.StringNull()
-		default:
-			ep.BasePath = types.StringNull()
-			ep.URI = types.StringNull()
 		}
+		ep.URI = types.StringNull()
 
 		if inst.Endpoint.ResponseTimeout != nil {
 			ep.ResponseTimeout = types.Int64Value(int64(*inst.Endpoint.ResponseTimeout))

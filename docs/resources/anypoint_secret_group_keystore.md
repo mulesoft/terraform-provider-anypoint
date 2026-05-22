@@ -11,6 +11,8 @@ Manages a keystore within a secret group in Anypoint Secrets Manager. Supports P
 
 ~> **Delete behaviour:** The Anypoint Secrets Manager API does not expose individual DELETE endpoints for sub-resources. `terraform destroy` removes this resource from Terraform state only — the keystore is deleted on the Platform when the parent `anypoint_secret_group` is destroyed.
 
+-> **Connected App:** This resource requires a **standard connected app** (client credentials). An admin connected app is not needed. The connected app must have relevant scopes.
+
 ## Example Usage
 
 ### PEM Keystore
@@ -86,6 +88,44 @@ resource "anypoint_secret_group_keystore" "jks" {
 
 ## Import
 
+An existing `anypoint_secret_group_keystore` can be imported using its composite ID: `organization_id/environment_id/secret_group_id/keystore_id`.
+
+- `organization_id` — UUID of the organization
+- `environment_id` — UUID of the environment
+- `secret_group_id` — UUID of the secret group
+- `keystore_id` — UUID of the keystore
+
+~> **Note:** File content fields (`certificate_base64`, `key_base64`, etc.) are write-only and will not be populated after import. Set them manually to avoid drift.
+
+### Using an import block (Terraform ≥ 1.5 — recommended)
+
+```terraform
+import {
+  to = anypoint_secret_group_keystore.imported
+  id = "<organization_id>/<environment_id>/<secret_group_id>/<keystore_id>"
+}
+
+resource "anypoint_secret_group_keystore" "imported" {
+  organization_id = "<organization_id>"
+  environment_id  = "<environment_id>"
+  secret_group_id = "<secret_group_id>"
+  name            = "<keystore_name>"
+  type            = "PEM"
+}
+```
+
+After adding the import block, run:
+
 ```shell
-terraform import anypoint_secret_group_keystore.example organization_id/environment_id/secret_group_id/keystore_id
+# Let Terraform generate the full resource configuration automatically:
+terraform plan -generate-config-out=generated.tf
+
+# Or apply the import directly if you have an existing resource block:
+terraform apply
+```
+
+### Using the CLI (deprecated, Terraform < 1.5)
+
+```shell
+terraform import anypoint_secret_group_keystore.imported <organization_id>/<environment_id>/<secret_group_id>/<keystore_id>
 ```

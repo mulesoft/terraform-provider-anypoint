@@ -51,7 +51,7 @@ Before running this example, you need:
 ```hcl
 resource "anypoint_api_instance" "example" {
   environment_id  = var.environment_id
-  technology      = "flexGateway"
+  technology      = "omniGateway"
   instance_label  = "my-api"
   approval_method = "manual"  # or "automatic"
 
@@ -91,7 +91,7 @@ resource "anypoint_api_instance" "example" {
 ## Key Configuration Options
 
 ### Technology
-- `flexGateway` - Omni Gateway runtime
+- `omniGateway` - Omni Gateway runtime
 - `mule4` - Mule 4 runtime
 - `mule3` - Mule 3 runtime
 

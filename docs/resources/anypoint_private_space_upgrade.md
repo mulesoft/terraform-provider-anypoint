@@ -9,6 +9,8 @@ description: |-
 
 Schedules an upgrade for a CloudHub 2.0 private space. Scheduled upgrades can be cancelled by deleting this resource.
 
+-> **Connected App:** This resource requires a **standard connected app** (client credentials). An admin connected app is not needed. The connected app must have relevant scopes.
+
 ## Example Usage
 
 ```terraform
@@ -40,8 +42,39 @@ resource "anypoint_private_space_upgrade" "example" {
 
 ## Import
 
-Import is supported using the following syntax:
+An existing scheduled upgrade can be imported using its composite ID: `private_space_id:date:opt_in`.
+
+- `private_space_id` — UUID of the private space (e.g. `849c361b-da3e-4c7d-9c68-a5784bb4dc58`)
+- `date` — scheduled upgrade date in `YYYY-MM-DD` format (e.g. `2025-08-12`)
+- `opt_in` — `true` or `false`
+
+### Using an import block (Terraform ≥ 1.5 — recommended)
+
+```terraform
+import {
+  to = anypoint_private_space_upgrade.imported
+  id = "<private_space_id>:<date>:<opt_in>"
+}
+
+resource "anypoint_private_space_upgrade" "imported" {
+  private_space_id = "<private_space_id>"
+  date             = "<date>"
+  opt_in           = true
+}
+```
+
+After adding the import block, run:
 
 ```shell
-terraform import anypoint_private_space_upgrade.example <private_space_id>:<date>:<opt_in>
+# Let Terraform generate the full resource configuration automatically:
+terraform plan -generate-config-out=generated.tf
+
+# Or apply the import directly if you have an existing resource block:
+terraform apply
+```
+
+### Using the CLI (deprecated, Terraform < 1.5)
+
+```shell
+terraform import anypoint_private_space_upgrade.imported <private_space_id>:<date>:<opt_in>
 ```

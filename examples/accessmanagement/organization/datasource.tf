@@ -75,7 +75,7 @@ output "existing_organization_session_timeout" {
 
 locals {
   entitlements = jsondecode(data.anypoint_organization.example.entitlements)
-  flex_gateway_enabled = local.entitlements.flexGateway.enabled
+  flex_gateway_enabled = local.entitlements.omniGateway.enabled
 }
 
 output "flex_gateway_enabled" {

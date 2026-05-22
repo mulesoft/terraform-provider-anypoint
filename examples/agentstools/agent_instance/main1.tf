@@ -16,7 +16,7 @@ provider "anypoint" {
 resource "anypoint_agent_instance" "bedrock" {
   organization_id = var.organization_id
   environment_id  = var.environment_id
-  technology      = "flexGateway"
+  technology      = "omniGateway"
   instance_label  = "sparq-agt-01-bedrock"
   gateway_id      = var.gateway_id
 

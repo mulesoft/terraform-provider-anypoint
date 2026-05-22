@@ -9,6 +9,8 @@ description: |-
 
 Manages an Anypoint Private Space together with its network configuration and firewall rules as a single composite resource. This resource combines private space creation, network provisioning, and firewall rule management into a unified workflow.
 
+-> **Connected App:** This resource requires a **standard connected app** (client credentials). An admin connected app is not needed. The connected app must have relevant scopes.
+
 ## Example Usage
 
 ### Minimal (space only, no network)
@@ -120,10 +122,35 @@ output "inbound_static_ips" {
 
 ## Import
 
-Private space configurations can be imported using the private space ID:
+An existing private space configuration can be imported using its private space ID (UUID).
+
+### Using an import block (Terraform ≥ 1.5 — recommended)
+
+```terraform
+import {
+  to = anypoint_private_space_config.imported
+  id = "<private_space_id>"
+}
+
+resource "anypoint_private_space_config" "imported" {
+  name = "<private_space_name>"
+}
+```
+
+After adding the import block, run:
 
 ```shell
-terraform import anypoint_private_space_config.example <private_space_id>
+# Let Terraform generate the full resource configuration automatically:
+terraform plan -generate-config-out=generated.tf
+
+# Or apply the import directly if you have an existing resource block:
+terraform apply
 ```
 
 After import, run `terraform plan` to verify the state matches the actual configuration. The imported state will capture all network and firewall settings from the platform.
+
+### Using the CLI (deprecated, Terraform < 1.5)
+
+```shell
+terraform import anypoint_private_space_config.imported <private_space_id>
+```

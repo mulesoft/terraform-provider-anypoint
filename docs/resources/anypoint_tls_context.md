@@ -9,6 +9,8 @@ description: |-
 
 Manages a CloudHub 2.0 TLS Context with support for both PEM and JKS keystores.
 
+-> **Connected App:** This resource requires a **standard connected app** (client credentials). An admin connected app is not needed. The connected app must have relevant scopes.
+
 ## Example Usage
 
 ### PEM Keystore
@@ -156,8 +158,39 @@ Read-Only:
 
 ## Import
 
-Import is supported using the following syntax:
+An existing TLS context can be imported using its composite ID: `private_space_id:tls_context_id`.
+
+- `private_space_id` — UUID of the private space (e.g. `849c361b-da3e-4c7d-9c68-a5784bb4dc58`)
+- `tls_context_id` — UUID of the TLS context
+
+### Using an import block (Terraform ≥ 1.5 — recommended)
+
+```terraform
+import {
+  to = anypoint_tls_context.imported
+  id = "<private_space_id>:<tls_context_id>"
+}
+
+resource "anypoint_tls_context" "imported" {
+  private_space_id = "<private_space_id>"
+  organization_id  = "<organization_id>"
+  name             = "<tls_context_name>"
+  keystore_type    = "PEM"
+}
+```
+
+After adding the import block, run:
 
 ```shell
-terraform import anypoint_tls_context.example <private_space_id>:<tls_context_id>
+# Let Terraform generate the full resource configuration automatically:
+terraform plan -generate-config-out=generated.tf
+
+# Or apply the import directly if you have an existing resource block:
+terraform apply
+```
+
+### Using the CLI (deprecated, Terraform < 1.5)
+
+```shell
+terraform import anypoint_tls_context.imported <private_space_id>:<tls_context_id>
 ```

@@ -11,6 +11,8 @@ Manages a Omni Gateway TLS context within a secret group in Anypoint Secrets Man
 
 ~> **Delete behaviour:** The Anypoint Secrets Manager API does not expose individual DELETE endpoints for sub-resources. `terraform destroy` removes this resource from Terraform state only — the TLS context is deleted on the Platform when the parent `anypoint_secret_group` is destroyed.
 
+-> **Connected App:** This resource requires a **standard connected app** (client credentials). An admin connected app is not needed. The connected app must have relevant scopes.
+
 ## Example Usage
 
 ### Basic TLS Context
@@ -81,8 +83,42 @@ resource "anypoint_secret_group_tls_context" "mtls" {
 
 ## Import
 
-Import is supported using the following syntax:
+An existing `anypoint_secret_group_tls_context` can be imported using its composite ID: `organization_id/environment_id/secret_group_id/tls_context_id`.
+
+- `organization_id` — UUID of the organization
+- `environment_id` — UUID of the environment
+- `secret_group_id` — UUID of the secret group
+- `tls_context_id` — UUID of the TLS context
+
+### Using an import block (Terraform ≥ 1.5 — recommended)
+
+```terraform
+import {
+  to = anypoint_secret_group_tls_context.imported
+  id = "<organization_id>/<environment_id>/<secret_group_id>/<tls_context_id>"
+}
+
+resource "anypoint_secret_group_tls_context" "imported" {
+  organization_id = "<organization_id>"
+  environment_id  = "<environment_id>"
+  secret_group_id = "<secret_group_id>"
+  name            = "<tls_context_name>"
+  keystore_id     = "<keystore_id>"
+}
+```
+
+After adding the import block, run:
 
 ```shell
-terraform import anypoint_secret_group_tls_context.example organization_id/environment_id/secret_group_id/tls_context_id
+# Let Terraform generate the full resource configuration automatically:
+terraform plan -generate-config-out=generated.tf
+
+# Or apply the import directly if you have an existing resource block:
+terraform apply
+```
+
+### Using the CLI (deprecated, Terraform < 1.5)
+
+```shell
+terraform import anypoint_secret_group_tls_context.imported <organization_id>/<environment_id>/<secret_group_id>/<tls_context_id>
 ```

@@ -11,6 +11,8 @@ Manages scopes for an Anypoint Connected Application using user authentication.
 
 ~> **Note:** This is an Access Management resource and requires the **admin provider** (`anypoint.admin`), which uses admin user credentials along with the `client_id` and `client_secret` of a connected app to authenticate on behalf of the user (`auth_type = "user"`). You must set `provider = anypoint.admin` on this resource. The default provider (connected app credentials only) does not have sufficient privileges for Access Management operations.
 
+-> **Connected App:** This resource requires an **admin connected app** configured with `auth_type = "user"` (user credentials + connected app client credentials). Use the `anypoint.admin` provider alias. A standard connected app (client credentials only) does not have sufficient privileges for Access Management operations.
+
 ## Example Usage
 
 ```terraform
@@ -71,8 +73,36 @@ Optional:
 
 ## Import
 
-Import is supported using the following syntax:
+An existing Connected App's scopes can be imported using its connected app ID (UUID).
+
+### Using an import block (Terraform ≥ 1.5 — recommended)
+
+```terraform
+import {
+  provider = anypoint.admin
+  to       = anypoint_connected_app_scopes.imported
+  id       = "<connected_app_id>"
+}
+
+resource "anypoint_connected_app_scopes" "imported" {
+  provider         = anypoint.admin
+  connected_app_id = "<connected_app_id>"
+  scopes = []
+}
+```
+
+After adding the import block, run:
 
 ```shell
-terraform import anypoint_connected_app_scopes.example <connected_app_id>
+# Let Terraform generate the full resource configuration automatically:
+terraform plan -generate-config-out=generated.tf
+
+# Or apply the import directly if you have an existing resource block:
+terraform apply
+```
+
+### Using the CLI (deprecated, Terraform < 1.5)
+
+```shell
+terraform import anypoint_connected_app_scopes.imported <connected_app_id>
 ```

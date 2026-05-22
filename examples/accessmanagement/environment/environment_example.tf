@@ -17,6 +17,9 @@ provider "anypoint" {
   auth_type     = "user"
 }
 
+
+
+
 # Create a design environment
 resource "anypoint_environment" "my_env" {
   provider = anypoint.admin

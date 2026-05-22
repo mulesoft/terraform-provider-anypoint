@@ -11,6 +11,8 @@ Creates and manages an Anypoint Platform organization (business group).
 
 ~> **Note:** This is an Access Management resource and requires the **admin provider** (`anypoint.admin`), which uses admin user credentials along with the `client_id` and `client_secret` of a connected app to authenticate on behalf of the user (`auth_type = "user"`). You must set `provider = anypoint.admin` on this resource. The default provider (connected app credentials only) does not have sufficient privileges for Access Management operations.
 
+-> **Connected App:** This resource requires an **admin connected app** configured with `auth_type = "user"` (user credentials + connected app client credentials). Use the `anypoint.admin` provider alias. A standard connected app (client credentials only) does not have sufficient privileges for Access Management operations.
+
 ## Entitlement State Behaviour
 
 The provider honours **user-defined state** for entitlements, not Platform defaults.
@@ -214,12 +216,41 @@ Optional:
 
 ## Import
 
-Existing Anypoint organizations can be imported using their organization ID:
+An existing organization can be imported using its organization ID (UUID).
 
-```shell
-terraform import anypoint_organization.example_org 00000000-0000-0000-0000-000000000000
+Your HCL must declare `name`, `parent_organization_id`, and `owner_id` before importing — those are Required attributes. The first `terraform plan` after import refreshes all Read-Only and Optional attributes (including entitlements) from the Anypoint API.
+
+### Using an import block (Terraform ≥ 1.5 — recommended)
+
+```terraform
+import {
+  provider = anypoint.admin
+  to       = anypoint_organization.imported
+  id       = "<organization_id>"
+}
+
+resource "anypoint_organization" "imported" {
+  provider              = anypoint.admin
+  name                  = "<org_name>"
+  parent_organization_id = "<parent_org_id>"
+  owner_id              = "<owner_user_id>"
+}
 ```
 
-Your HCL must declare `name`, `parent_organization_id`, and `owner_id` before you import — those are Required attributes on the resource. The first `terraform plan` after import refreshes all Read-Only and Optional attributes (including entitlements) from the Anypoint API.
+After adding the import block, run:
+
+```shell
+# Let Terraform generate the full resource configuration automatically:
+terraform plan -generate-config-out=generated.tf
+
+# Or apply the import directly if you have an existing resource block:
+terraform apply
+```
+
+### Using the CLI (deprecated, Terraform < 1.5)
+
+```shell
+terraform import anypoint_organization.imported <organization_id>
+```
 
 `parent_organization_id` is derived from the server-returned ancestor chain (`parent_organization_ids`) on the first refresh. If the derivation doesn't match what you wrote in HCL, update the HCL to match — changing `parent_organization_id` triggers a destroy+recreate because it has the `RequiresReplace` plan modifier.
