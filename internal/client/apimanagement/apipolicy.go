@@ -1101,12 +1101,12 @@ var KnownPolicySchemas = map[string]map[string]PolicySchemaField{
 		"modelMapper": {Required: false, Type: "array"},
 	},
 	"gemini-transcoding-policy": {},
-	// A2A (Agent-to-Agent) policies
-	"a2a-pii-detector": {
+	// A2A (Agent-to-Agent) policies — keys must match PolicyInfo.AssetID in KnownPolicies
+	"a-two-a-pii-detector": {
 		"entities": {Required: true, Type: "string_array", ElemEnum: []string{"Email", "Credit Card", "Phone Number", "US SSN"}},
 		"action":   {Required: false, Type: "string"},
 	},
-	"a2a-agent-card": {
+	"a-two-a-agent-card": {
 		"consumerUrl":  {Required: false, Type: "string"},
 		"cardPath":     {Required: false, Type: "string"},
 		"fileName":     {Required: false, Type: "string"},
@@ -1114,13 +1114,13 @@ var KnownPolicySchemas = map[string]map[string]PolicySchemaField{
 		"fileSource":   {Required: false, Type: "string"},
 		"content":      {Required: true, Type: "string"},
 	},
-	"a2a-schema-validation": {},
-	"a2a-token-rate-limit": {
+	"a-two-a-schema-validation": {},
+	"a-two-a-token-rate-limit": {
 		"maximumTokens":            {Required: true, Type: "int"},
 		"timePeriodInMilliseconds": {Required: true, Type: "int"},
 		"keySelector":              {Required: false, Type: "string"},
 	},
-	"a2a-prompt-decorator": {
+	"a-two-a-prompt-decorator": {
 		"textDecorators": {Required: false, Type: "array"},
 		"fileDecorators": {Required: false, Type: "array"},
 	},

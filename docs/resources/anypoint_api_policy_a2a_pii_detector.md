@@ -20,8 +20,8 @@ resource "anypoint_api_policy_a2a_pii_detector" "example" {
   api_instance_id = anypoint_api_instance.example.id
 
   configuration = {
-    entities = ["EMAIL", "PHONE_NUMBER", "CREDIT_CARD"]
-    action   = "mask"
+    entities = ["Email", "US SSN", "Credit Card", "Phone Number"]
+    action   = "Reject"
   }
 
   order = 1
@@ -55,11 +55,11 @@ resource "anypoint_api_policy_a2a_pii_detector" "example" {
 
 Required:
 
-- `entities` (Dynamic) Array of PII entity types to detect (e.g. `EMAIL`, `PHONE_NUMBER`).
+- `entities` (List of String) Array of PII entity types to detect. Valid values: `Email`, `Credit Card`, `Phone Number`, `US SSN`.
 
 Optional:
 
-- `action` (String) Action to take when PII is detected (e.g. `mask`, `block`).
+- `action` (String) Action to take when PII is detected (e.g. `Reject`).
 
 ## Import
 
