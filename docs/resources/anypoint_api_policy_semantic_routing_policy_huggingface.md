@@ -9,6 +9,8 @@ description: |-
 
 Manages a Semantic Routing (HuggingFace) policy on an Anypoint API instance.
 
+-> **Connected App:** This resource requires a **standard connected app** (client credentials). An admin connected app is not needed. The connected app must have relevant scopes.
+
 ## Example Usage
 
 ```terraform
@@ -72,8 +74,37 @@ Optional:
 
 ## Import
 
-Import is supported using the following syntax:
+An existing `anypoint_api_policy_semantic_routing_policy_huggingface` policy can be imported using its composite ID: `organization_id/environment_id/api_instance_id/policy_id`.
+
+The `policy_id` is the numeric ID of the policy (visible in Anypoint API Manager or from the API response).
+
+### Using an import block (Terraform ≥ 1.5 — recommended)
+
+```terraform
+import {
+  to = anypoint_api_policy_semantic_routing_policy_huggingface.imported
+  id = "<organization_id>/<environment_id>/<api_instance_id>/<policy_id>"
+}
+
+resource "anypoint_api_policy_semantic_routing_policy_huggingface" "imported" {
+  organization_id = "<organization_id>"
+  environment_id  = "<environment_id>"
+  api_instance_id = "<api_instance_id>"
+}
+```
+
+After adding the import block, run:
 
 ```shell
-terraform import anypoint_api_policy_semantic_routing_policy_huggingface.example {organization_id}/{environment_id}/{api_instance_id}/{policy_id}
+# Let Terraform generate the full resource configuration automatically:
+terraform plan -generate-config-out=generated.tf
+
+# Or apply the import directly if you have an existing resource block:
+terraform apply
+```
+
+### Using the CLI (deprecated, Terraform < 1.5)
+
+```shell
+terraform import anypoint_api_policy_semantic_routing_policy_huggingface.imported <organization_id>/<environment_id>/<api_instance_id>/<policy_id>
 ```

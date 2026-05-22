@@ -355,14 +355,32 @@ func (r *SLATierResource) ImportState(ctx context.Context, req resource.ImportSt
 	parts := strings.Split(req.ID, "/")
 	if len(parts) != 4 {
 		resp.Diagnostics.AddError("Invalid import ID",
-			"Expected format: organization_id/environment_id/api_instance_id/tier_id")
+			"Expected format: organization_id/environment_id/api_instance_id/tier_id_or_name")
 		return
 	}
 
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("organization_id"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("environment_id"), parts[1])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("api_instance_id"), parts[2])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[3])...)
+	orgID, envID, apiInstanceID, tierRef := parts[0], parts[1], parts[2], parts[3]
+
+	// If the last segment is not a number, resolve the tier name to its numeric ID.
+	if _, err := strconv.Atoi(tierRef); err != nil {
+		apiID, err := strconv.Atoi(apiInstanceID)
+		if err != nil {
+			resp.Diagnostics.AddError("Invalid api_instance_id", "Must be a numeric ID: "+apiInstanceID)
+			return
+		}
+		tier, err := r.client.GetSLATierByName(ctx, orgID, envID, apiID, tierRef)
+		if err != nil {
+			resp.Diagnostics.AddError("Error resolving SLA tier name",
+				fmt.Sprintf("Could not find SLA tier named %q: %s", tierRef, err.Error()))
+			return
+		}
+		tierRef = strconv.Itoa(tier.ID)
+	}
+
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("organization_id"), orgID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("environment_id"), envID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("api_instance_id"), apiInstanceID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), tierRef)...)
 }
 
 // --- Helpers ---

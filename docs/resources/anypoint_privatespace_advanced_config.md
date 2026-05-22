@@ -9,6 +9,8 @@ description: |-
 
 Manages advanced configuration for an Anypoint Private Space.
 
+-> **Connected App:** This resource requires a **standard connected app** (client credentials). An admin connected app is not needed. The connected app must have relevant scopes.
+
 ## Example Usage
 
 ```terraform
@@ -86,8 +88,34 @@ Optional:
 
 ## Import
 
-Import is supported using the following syntax:
+An existing private space advanced configuration can be imported using its private space ID (UUID).
+
+### Using an import block (Terraform ≥ 1.5 — recommended)
+
+```terraform
+import {
+  to = anypoint_privatespace_advanced_config.imported
+  id = "<private_space_id>"
+}
+
+resource "anypoint_privatespace_advanced_config" "imported" {
+  private_space_id = "<private_space_id>"
+  organization_id  = "<organization_id>"
+}
+```
+
+After adding the import block, run:
 
 ```shell
-terraform import anypoint_privatespace_advanced_config.example <private_space_id>
+# Let Terraform generate the full resource configuration automatically:
+terraform plan -generate-config-out=generated.tf
+
+# Or apply the import directly if you have an existing resource block:
+terraform apply
+```
+
+### Using the CLI (deprecated, Terraform < 1.5)
+
+```shell
+terraform import anypoint_privatespace_advanced_config.imported <private_space_id>
 ```

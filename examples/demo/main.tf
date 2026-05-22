@@ -196,7 +196,7 @@ resource "anypoint_managed_omni_gateway" "commerce-gateway" {
 resource "anypoint_api_instance" "orders_api" {
   organization_id = var.parent_organization_id
   environment_id  = var.environment_id
-  technology      = "flexGateway"
+  technology      = "omniGateway"
   instance_label  = "orders-api"
 
   spec = {
@@ -228,7 +228,7 @@ resource "anypoint_api_instance" "orders_api" {
 resource "anypoint_api_instance" "inventory_api_canary" {
   organization_id = var.parent_organization_id
   environment_id  = var.environment_id
-  technology      = "flexGateway"
+  technology      = "omniGateway"
   instance_label  = "inventory-api-canary"
 
   spec = {
@@ -412,7 +412,7 @@ resource "anypoint_api_instance_sla_tier" "trial" {
 resource "anypoint_api_instance" "payments_api" {
   organization_id = var.parent_organization_id
   environment_id  = var.environment_id
-  technology      = "flexGateway"
+  technology      = "omniGateway"
   instance_label  = "payments-api"
 
   spec = {

@@ -174,6 +174,23 @@ func (c *SLATierClient) GetSLATier(ctx context.Context, orgID, envID string, api
 	return nil, client.NewNotFoundError("SLA tier")
 }
 
+// GetSLATierByName fetches a single SLA tier by name. Returns NotFoundError if no
+// tier with that name exists. Names are visible in the UI, unlike numeric IDs.
+func (c *SLATierClient) GetSLATierByName(ctx context.Context, orgID, envID string, apiID int, name string) (*SLATier, error) {
+	tiers, err := c.ListSLATiers(ctx, orgID, envID, apiID)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range tiers {
+		if tiers[i].Name == name {
+			return &tiers[i], nil
+		}
+	}
+
+	return nil, client.NewNotFoundError("SLA tier")
+}
+
 func (c *SLATierClient) UpdateSLATier(ctx context.Context, orgID, envID string, apiID, tierID int, request *UpdateSLATierRequest) (*SLATier, error) {
 	url := fmt.Sprintf("%s/%d", c.basePath(orgID, envID, apiID), tierID)
 

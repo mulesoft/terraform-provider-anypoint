@@ -157,7 +157,7 @@ provider "anypoint" {
 
 resource "anypoint_api_instance" "main" {
   environment_id  = var.environment_id
-  technology      = "flexGateway"
+  technology      = "omniGateway"
   instance_label  = "main-api-6"
   approval_method = "manual"
   spec = {
@@ -230,7 +230,7 @@ resource "anypoint_api_policy_credential_injection_oauth2" "oauth2" {
 
 # resource "anypoint_api_instance" "main_4" {
 #   environment_id  = var.environment_id
-#   technology      = "flexGateway"
+#   technology      = "omniGateway"
 #   instance_label  = "main-api-6"
 #   approval_method = "manual"
 

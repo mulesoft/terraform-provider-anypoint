@@ -34,7 +34,7 @@ provider "anypoint" {
 resource "anypoint_mcp_server" "atlassian_mcp" {
   organization_id = var.organization_id
   environment_id  = var.environment_id
-  technology      = "flexGateway"
+  technology      = "omniGateway"
   instance_label  = "atlassian-mcp-server"
 
   # Exchange asset specification for the MCP server
@@ -66,7 +66,7 @@ resource "anypoint_mcp_server" "atlassian_mcp" {
 resource "anypoint_mcp_server" "salesforce_mcp" {
   organization_id = var.organization_id
   environment_id  = var.environment_id
-  technology      = "flexGateway"
+  technology      = "omniGateway"
   instance_label  = "salesforce-mcp-server"
 
   spec = {
@@ -96,7 +96,7 @@ resource "anypoint_mcp_server" "salesforce_mcp" {
 resource "anypoint_mcp_server" "enterprise_tools_mcp" {
   organization_id = var.organization_id
   environment_id  = var.environment_id
-  technology      = "flexGateway"
+  technology      = "omniGateway"
   instance_label  = "enterprise-tools-mcp"
 
   spec = {

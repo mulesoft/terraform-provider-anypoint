@@ -47,7 +47,7 @@ Read-Only:
 - `asset_version` (String) The Exchange asset version.
 - `product_version` (String) The product version.
 - `group_id` (String) The Exchange group (organization) ID.
-- `technology` (String) The gateway technology (e.g., `omniGateway`, `mule4`).
+- `technology` (String) The gateway technology (e.g., `omniGateway`).
 - `instance_label` (String) The label of the API instance.
 - `status` (String) The current status of the API instance.
 - `endpoint_uri` (String) The endpoint URI for the API instance.

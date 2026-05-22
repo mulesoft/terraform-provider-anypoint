@@ -171,6 +171,134 @@ func TestAgentInstanceResource_Read(t *testing.T) {
 	}
 }
 
+func TestAgentInstanceResource_ValidateConfig_ResponseTimeoutOmniGateway(t *testing.T) {
+	res := NewAgentInstanceResource().(*AgentInstanceResource)
+	ctx := context.Background()
+
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+	objType := stateType.(tftypes.Object)
+	endpointObjType := objType.AttributeTypes["endpoint"].(tftypes.Object)
+	deploymentObjType := objType.AttributeTypes["deployment"].(tftypes.Object)
+	routingElemType := objType.AttributeTypes["routing"].(tftypes.List).ElementType
+	specObjType := objType.AttributeTypes["spec"].(tftypes.Object)
+
+	configRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"id":                tftypes.NewValue(tftypes.String, nil),
+		"organization_id":   tftypes.NewValue(tftypes.String, nil),
+		"environment_id":    tftypes.NewValue(tftypes.String, "test-env-id"),
+		"technology":        tftypes.NewValue(tftypes.String, "omniGateway"),
+		"provider_id":       tftypes.NewValue(tftypes.String, nil),
+		"instance_label":    tftypes.NewValue(tftypes.String, nil),
+		"approval_method":   tftypes.NewValue(tftypes.String, nil),
+		"status":            tftypes.NewValue(tftypes.String, nil),
+		"asset_id":          tftypes.NewValue(tftypes.String, nil),
+		"asset_version":     tftypes.NewValue(tftypes.String, nil),
+		"product_version":   tftypes.NewValue(tftypes.String, nil),
+		"consumer_endpoint": tftypes.NewValue(tftypes.String, nil),
+		"upstream_uri":      tftypes.NewValue(tftypes.String, nil),
+		"gateway_id":        tftypes.NewValue(tftypes.String, nil),
+		"spec":              tftypes.NewValue(specObjType, nil),
+		"endpoint": tftypes.NewValue(endpointObjType, map[string]tftypes.Value{
+			"deployment_type":  tftypes.NewValue(tftypes.String, "HY"),
+			"type":             tftypes.NewValue(tftypes.String, "a2a"),
+			"base_path":        tftypes.NewValue(tftypes.String, nil),
+			"uri":              tftypes.NewValue(tftypes.String, nil),
+			"response_timeout": tftypes.NewValue(tftypes.Number, 3000),
+		}),
+		"deployment": tftypes.NewValue(deploymentObjType, nil),
+		"routing":    tftypes.NewValue(tftypes.List{ElementType: routingElemType}, nil),
+	})
+
+	req := resource.ValidateConfigRequest{Config: tfsdk.Config{Schema: schemaResp.Schema, Raw: configRaw}}
+	resp := &resource.ValidateConfigResponse{}
+	res.ValidateConfig(ctx, req, resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Error("ValidateConfig() should error when response_timeout is set with technology='omniGateway'")
+	}
+}
+
+
+func TestAgentInstanceResource_ImportState_Valid(t *testing.T) {
+	res := NewAgentInstanceResource().(*AgentInstanceResource)
+	ctx := context.Background()
+
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+	objType := stateType.(tftypes.Object)
+	endpointObjType := objType.AttributeTypes["endpoint"].(tftypes.Object)
+	deploymentObjType := objType.AttributeTypes["deployment"].(tftypes.Object)
+	routingElemType := objType.AttributeTypes["routing"].(tftypes.List).ElementType
+	specObjType := objType.AttributeTypes["spec"].(tftypes.Object)
+
+	emptyStateRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"id":                tftypes.NewValue(tftypes.String, nil),
+		"organization_id":   tftypes.NewValue(tftypes.String, nil),
+		"environment_id":    tftypes.NewValue(tftypes.String, nil),
+		"technology":        tftypes.NewValue(tftypes.String, nil),
+		"provider_id":       tftypes.NewValue(tftypes.String, nil),
+		"instance_label":    tftypes.NewValue(tftypes.String, nil),
+		"approval_method":   tftypes.NewValue(tftypes.String, nil),
+		"status":            tftypes.NewValue(tftypes.String, nil),
+		"asset_id":          tftypes.NewValue(tftypes.String, nil),
+		"asset_version":     tftypes.NewValue(tftypes.String, nil),
+		"product_version":   tftypes.NewValue(tftypes.String, nil),
+		"consumer_endpoint": tftypes.NewValue(tftypes.String, nil),
+		"upstream_uri":      tftypes.NewValue(tftypes.String, nil),
+		"gateway_id":        tftypes.NewValue(tftypes.String, nil),
+		"spec":              tftypes.NewValue(specObjType, nil),
+		"endpoint":          tftypes.NewValue(endpointObjType, nil),
+		"deployment":        tftypes.NewValue(deploymentObjType, nil),
+		"routing":           tftypes.NewValue(tftypes.List{ElementType: routingElemType}, nil),
+	})
+
+	req := resource.ImportStateRequest{ID: "test-org/test-env/42"}
+	resp := &resource.ImportStateResponse{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: emptyStateRaw},
+	}
+	res.ImportState(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("ImportState() reported errors: %v", resp.Diagnostics.Errors())
+	}
+
+	var got AgentInstanceResourceModel
+	if diags := resp.State.Get(ctx, &got); diags.HasError() {
+		t.Fatalf("State.Get errors: %v", diags.Errors())
+	}
+	if got.OrganizationID.ValueString() != "test-org" {
+		t.Errorf("expected organization_id 'test-org', got '%s'", got.OrganizationID.ValueString())
+	}
+	if got.EnvironmentID.ValueString() != "test-env" {
+		t.Errorf("expected environment_id 'test-env', got '%s'", got.EnvironmentID.ValueString())
+	}
+	if got.ID.ValueString() != "42" {
+		t.Errorf("expected id '42', got '%s'", got.ID.ValueString())
+	}
+}
+
+func TestAgentInstanceResource_ImportState_Invalid(t *testing.T) {
+	res := NewAgentInstanceResource().(*AgentInstanceResource)
+	ctx := context.Background()
+
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+
+	for _, id := range []string{"only-one-part", "two/parts"} {
+		req := resource.ImportStateRequest{ID: id}
+		resp := &resource.ImportStateResponse{
+			State: tfsdk.State{Schema: schemaResp.Schema},
+		}
+		res.ImportState(ctx, req, resp)
+		if !resp.Diagnostics.HasError() {
+			t.Errorf("ImportState() with ID %q should produce errors", id)
+		}
+	}
+}
+
 func TestAgentInstanceResource_Read_NotFound(t *testing.T) {
 	basePath := "/apimanager/api/v1/organizations/test-org-id/environments/test-env-id/apis/100"
 

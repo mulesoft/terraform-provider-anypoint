@@ -39,7 +39,7 @@ provider "anypoint" {
 resource "anypoint_mcp_server" "atlassian" {
   organization_id = var.organization_id
   environment_id  = var.environment_id
-  technology      = "flexGateway"
+  technology      = "omniGateway"
   instance_label  = "atlassian-mcp"
 
   spec = {
@@ -61,7 +61,7 @@ resource "anypoint_mcp_server" "atlassian" {
 resource "anypoint_mcp_server" "salesforce" {
   organization_id = var.organization_id
   environment_id  = var.environment_id
-  technology      = "flexGateway"
+  technology      = "omniGateway"
   instance_label  = "salesforce-mcp"
 
   spec = {
@@ -83,7 +83,7 @@ resource "anypoint_mcp_server" "salesforce" {
 resource "anypoint_mcp_server" "database" {
   organization_id = var.organization_id
   environment_id  = var.environment_id
-  technology      = "flexGateway"
+  technology      = "omniGateway"
   instance_label  = "database-mcp"
 
   spec = {
@@ -111,7 +111,7 @@ resource "anypoint_mcp_server" "database" {
 resource "anypoint_agent_instance" "customer_support" {
   organization_id = var.organization_id
   environment_id  = var.environment_id
-  technology      = "flexGateway"
+  technology      = "omniGateway"
   instance_label  = "customer-support-agent"
 
   spec = {
@@ -138,7 +138,7 @@ resource "anypoint_agent_instance" "customer_support" {
 resource "anypoint_agent_instance" "sales" {
   organization_id = var.organization_id
   environment_id  = var.environment_id
-  technology      = "flexGateway"
+  technology      = "omniGateway"
   instance_label  = "sales-agent"
 
   spec = {
@@ -183,7 +183,7 @@ resource "anypoint_agent_instance" "sales" {
 resource "anypoint_agent_instance" "analytics" {
   organization_id = var.organization_id
   environment_id  = var.environment_id
-  technology      = "flexGateway"
+  technology      = "omniGateway"
   instance_label  = "analytics-agent"
 
   spec = {

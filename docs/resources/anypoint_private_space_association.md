@@ -9,6 +9,8 @@ description: |-
 
 Creates and manages associations between a CloudHub 2.0 private space and environments.
 
+-> **Connected App:** This resource requires a **standard connected app** (client credentials). An admin connected app is not needed. The connected app must have relevant scopes.
+
 ## Example Usage
 
 ```terraform
@@ -59,8 +61,35 @@ Read-Only:
 
 ## Import
 
-Import is supported using the following syntax:
+An existing private space association can be imported using the private space ID (UUID).
+
+### Using an import block (Terraform ≥ 1.5 — recommended)
+
+```terraform
+import {
+  to = anypoint_private_space_association.imported
+  id = "<private_space_id>"
+}
+
+resource "anypoint_private_space_association" "imported" {
+  private_space_id = "<private_space_id>"
+  organization_id  = "<organization_id>"
+  associations     = []
+}
+```
+
+After adding the import block, run:
 
 ```shell
-terraform import anypoint_private_space_association.example <private_space_id>
+# Let Terraform generate the full resource configuration automatically:
+terraform plan -generate-config-out=generated.tf
+
+# Or apply the import directly if you have an existing resource block:
+terraform apply
+```
+
+### Using the CLI (deprecated, Terraform < 1.5)
+
+```shell
+terraform import anypoint_private_space_association.imported <private_space_id>
 ```

@@ -9,6 +9,8 @@ description: |-
 
 Manages an MCP server in Anypoint API Manager. An MCP server represents an MCP server specification deployed to a Omni Gateway target with routing rules and upstream backends.
 
+-> **Connected App:** This resource requires a **standard connected app** (client credentials). An admin connected app is not needed. The connected app must have relevant scopes.
+
 -> **Status after create:** After a successful `terraform apply` the `status` field is populated from a GET request made immediately after the POST. The Platform typically returns `status = "active"` right away.
 
 -> **upstream_uri vs routing:** `upstream_uri` and `routing` are mutually exclusive. Use `upstream_uri` for a single upstream. Only **one upstream per route** is supported for MCP servers — multi-upstream weighted routing is not available.
@@ -87,7 +89,7 @@ resource "anypoint_mcp_server" "advanced" {
 ### Optional
 
 - `organization_id` (String) The organization ID. If not provided, the organization ID will be inferred from the connected app credentials.
-- `technology` (String) The gateway technology. Valid values: `omniGateway`, `mule4`, `serviceMesh`. Defaults to `omniGateway`.
+- `technology` (String) The gateway technology. Only `omniGateway` is currently supported. Defaults to `omniGateway`.
 - `provider_id` (String) The identity provider ID for the MCP server.
 - `instance_label` (String) A human-readable label for this MCP server.
 - `approval_method` (String) Client approval method. Valid values: `manual`, `automatic`. Defaults to null (no approval required).
@@ -123,8 +125,8 @@ Optional:
 
 - `deployment_type` (String) Deployment type. Valid values: `HY` (hybrid), `CH` (CloudHub), `RF` (Runtime Fabric). Defaults to `HY`.
 - `type` (String) Endpoint protocol type. For MCP servers, this is `mcp`. Defaults to `mcp`.
-- `base_path` (String) MCP server base path for Omni Gateway (e.g. `my-mcp-server`). The provider constructs the full proxy URI as `http://0.0.0.0:8081/<base_path>`. Required when technology=`omniGateway`. Mutually exclusive with `uri`.
-- `uri` (String) Direct implementation URI for Mule4 or other technologies (e.g. `http://www.google.com`). Required when technology=`mule4`. Mutually exclusive with `base_path`.
+- `base_path` (String) MCP server base path for Omni Gateway (e.g. `my-mcp-server`). The provider constructs the full proxy URI as `http://0.0.0.0:8081/<base_path>`.
+- `uri` (String) Direct implementation URI (e.g. `http://www.google.com`). Mutually exclusive with `base_path`.
 - `response_timeout` (Number) Response timeout in milliseconds.
 
 <a id="nestedschema--deployment"></a>
@@ -174,3 +176,44 @@ Optional:
 - `weight` (Number) Traffic weight percentage (0-100). Weights across upstreams should sum to 100. Defaults to `100`.
 - `label` (String) A label for this upstream.
 - `tls_context_id` (String) TLS context for upstream connections. Format: `secretGroupId/tlsContextId`.
+
+## Import
+
+An existing MCP server can be imported using its composite ID: `organization_id/environment_id/mcp_server_id`.
+
+The `mcp_server_id` is the numeric ID visible in the Anypoint API Manager URL (e.g. `16563478`).
+
+### Using an import block (Terraform ≥ 1.5 — recommended)
+
+```terraform
+import {
+  to = anypoint_mcp_server.imported
+  id = "<organization_id>/<environment_id>/<mcp_server_id>"
+}
+
+resource "anypoint_mcp_server" "imported" {
+  organization_id = "<organization_id>"
+  environment_id  = "<environment_id>"
+  spec = {
+    asset_id = "<mcp_server_asset_id>"
+    group_id = "<organization_id>"
+    version  = "1.0.0"
+  }
+}
+```
+
+After adding the import block, run:
+
+```shell
+# Let Terraform generate the full resource configuration automatically:
+terraform plan -generate-config-out=generated.tf
+
+# Or apply the import directly if you have an existing resource block:
+terraform apply
+```
+
+### Using the CLI (deprecated, Terraform < 1.5)
+
+```shell
+terraform import anypoint_mcp_server.imported <organization_id>/<environment_id>/<mcp_server_id>
+```

@@ -9,6 +9,8 @@ description: |-
 
 Manages a policy applied to an API instance in Anypoint API Manager. Use `policy_type` for known policies (auto-resolves group_id, asset_id, and default version), or provide `group_id` + `asset_id` + `asset_version` directly for custom policies.
 
+-> **Connected App:** This resource requires a **standard connected app** (client credentials). An admin connected app is not needed. The connected app must have relevant scopes.
+
 ## Example Usage
 
 ### Using policy_type for a known policy
@@ -83,8 +85,39 @@ resource "anypoint_api_policy" "custom" {
 
 ## Import
 
-Import is supported using the following format:
+An existing API policy can be imported using its composite ID: `organization_id/environment_id/api_instance_id/policy_id`.
+
+The `policy_id` is the numeric ID of the policy (visible in the Anypoint API Manager or from the API response).
+
+### Using an import block (Terraform ≥ 1.5 — recommended)
+
+```terraform
+import {
+  to = anypoint_api_policy.imported
+  id = "<organization_id>/<environment_id>/<api_instance_id>/<policy_id>"
+}
+
+resource "anypoint_api_policy" "imported" {
+  organization_id = "<organization_id>"
+  environment_id  = "<environment_id>"
+  api_instance_id = "<api_instance_id>"
+  policy_type     = "<policy_type>"
+  configuration_data = jsonencode({})
+}
+```
+
+After adding the import block, run:
 
 ```shell
-terraform import anypoint_api_policy.example organization_id/environment_id/api_instance_id/policy_id
+# Let Terraform generate the full resource configuration automatically:
+terraform plan -generate-config-out=generated.tf
+
+# Or apply the import directly if you have an existing resource block:
+terraform apply
+```
+
+### Using the CLI (deprecated, Terraform < 1.5)
+
+```shell
+terraform import anypoint_api_policy.imported <organization_id>/<environment_id>/<api_instance_id>/<policy_id>
 ```
