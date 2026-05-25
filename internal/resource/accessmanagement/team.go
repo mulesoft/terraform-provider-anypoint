@@ -110,7 +110,16 @@ func (r *TeamResource) Configure(_ context.Context, req resource.ConfigureReques
 		return
 	}
 
-	teamClient, err := accessmanagement.NewTeamClient(config)
+	userConfig := &client.UserClientConfig{
+		BaseURL:      config.BaseURL,
+		ClientID:     config.ClientID,
+		ClientSecret: config.ClientSecret,
+		Username:     config.Username,
+		Password:     config.Password,
+		Timeout:      config.Timeout,
+	}
+
+	teamClient, err := accessmanagement.NewTeamClient(userConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Team Client",

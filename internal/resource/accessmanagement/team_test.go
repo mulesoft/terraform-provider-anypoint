@@ -52,6 +52,8 @@ func TestTeamResource_Configure(t *testing.T) {
 		BaseURL:      server.URL,
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
+		Username:     "test-user",
+		Password:     "test-password",
 	}
 
 	testutil.TestResourceConfigure(t, res, providerData)
@@ -112,7 +114,7 @@ func TestTeamResource_Read(t *testing.T) {
 
 	res := NewTeamResource().(*TeamResource)
 	res.client = &accessmanagement.TeamClient{
-		AnypointClient: &client.AnypointClient{
+		UserAnypointClient: &client.UserAnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -163,7 +165,7 @@ func TestTeamResource_Read_NotFound(t *testing.T) {
 
 	res := NewTeamResource().(*TeamResource)
 	res.client = &accessmanagement.TeamClient{
-		AnypointClient: &client.AnypointClient{
+		UserAnypointClient: &client.UserAnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},

@@ -91,6 +91,8 @@ func TestTeamDataSource_Configure(t *testing.T) {
 		BaseURL:      server.URL,
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
+		Username:     "test-user",
+		Password:     "test-password",
 	}
 
 	ctx := context.Background()
@@ -223,7 +225,7 @@ func TestTeamDataSource_Read(t *testing.T) {
 
 			// Create client with mock server
 			teamClient := &accessmanagement.TeamClient{
-				AnypointClient: &client.AnypointClient{
+				UserAnypointClient: &client.UserAnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},
@@ -287,7 +289,7 @@ func TestTeamDataSource_Read_Direct(t *testing.T) {
 
 	ds := NewTeamDataSource().(*TeamDataSource)
 	ds.client = &accessmanagement.TeamClient{
-		AnypointClient: &client.AnypointClient{
+		UserAnypointClient: &client.UserAnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -341,7 +343,7 @@ func TestTeamDataSource_Read_Direct_Error(t *testing.T) {
 
 	ds := NewTeamDataSource().(*TeamDataSource)
 	ds.client = &accessmanagement.TeamClient{
-		AnypointClient: &client.AnypointClient{
+		UserAnypointClient: &client.UserAnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
