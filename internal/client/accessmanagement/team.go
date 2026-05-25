@@ -11,18 +11,19 @@ import (
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 )
 
-// TeamClient wraps the AnypointClient for team operations
+// TeamClient wraps the UserAnypointClient for team operations.
+// The Anypoint Teams API requires user-level (password grant) authentication.
 type TeamClient struct {
-	*client.AnypointClient
+	*client.UserAnypointClient
 }
 
 // NewTeamClient creates a new TeamClient
-func NewTeamClient(config *client.Config) (*TeamClient, error) {
-	anypointClient, err := client.NewAnypointClient(config)
+func NewTeamClient(config *client.UserClientConfig) (*TeamClient, error) {
+	userAnypointClient, err := client.NewUserAnypointClient(config)
 	if err != nil {
 		return nil, err
 	}
-	return &TeamClient{AnypointClient: anypointClient}, nil
+	return &TeamClient{UserAnypointClient: userAnypointClient}, nil
 }
 
 // Team represents an Anypoint team

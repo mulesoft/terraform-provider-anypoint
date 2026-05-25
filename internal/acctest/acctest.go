@@ -63,21 +63,31 @@ func CreateTestClient(t *testing.T) *client.AnypointClient {
 
 // CreateUserTestClient creates a user-based client for testing purposes using environment variables.
 func CreateUserTestClient(t *testing.T) *client.UserAnypointClient {
-	t.Helper()
+	if t != nil {
+		t.Helper()
+	}
 
 	config := &client.UserClientConfig{
-		Username: os.Getenv("ANYPOINT_USERNAME"),
-		Password: os.Getenv("ANYPOINT_PASSWORD"),
-		BaseURL:  os.Getenv("ANYPOINT_BASE_URL"),
+		ClientID:     os.Getenv("ANYPOINT_CLIENT_ID"),
+		ClientSecret: os.Getenv("ANYPOINT_CLIENT_SECRET"),
+		Username:     os.Getenv("ANYPOINT_USERNAME"),
+		Password:     os.Getenv("ANYPOINT_PASSWORD"),
+		BaseURL:      os.Getenv("ANYPOINT_BASE_URL"),
 	}
 
 	if config.Username == "" || config.Password == "" || config.BaseURL == "" {
-		t.Skip("Skipping test due to missing environment variables")
+		if t != nil {
+			t.Skip("Skipping test due to missing environment variables")
+		}
+		return nil
 	}
 
 	userClient, err := client.NewUserAnypointClient(config)
 	if err != nil {
-		t.Fatalf("Failed to create user test client: %v", err)
+		if t != nil {
+			t.Fatalf("Failed to create user test client: %v", err)
+		}
+		return nil
 	}
 
 	return userClient

@@ -112,8 +112,17 @@ func (d *TeamDataSource) Configure(_ context.Context, req datasource.ConfigureRe
 		return
 	}
 
+	userConfig := &client.UserClientConfig{
+		BaseURL:      config.BaseURL,
+		ClientID:     config.ClientID,
+		ClientSecret: config.ClientSecret,
+		Username:     config.Username,
+		Password:     config.Password,
+		Timeout:      config.Timeout,
+	}
+
 	// Create the team client
-	teamClient, err := accessmanagement.NewTeamClient(config)
+	teamClient, err := accessmanagement.NewTeamClient(userConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Anypoint Team API Client",

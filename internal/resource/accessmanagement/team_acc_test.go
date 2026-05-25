@@ -137,9 +137,9 @@ func TestAccTeamResource_disappears(t *testing.T) {
 }
 
 func testAccCheckTeamDestroy(s *terraform.State) error {
-	anypointClient := acctest.CreateTestClient(nil) // This will use env vars
+	userClient := acctest.CreateUserTestClient(nil) // This will use env vars
 	teamClient := &accessmanagement.TeamClient{
-		AnypointClient: anypointClient,
+		UserAnypointClient: userClient,
 	}
 
 	for _, rs := range s.RootModule().Resources {
@@ -171,9 +171,9 @@ func testAccCheckTeamExists(resourceName string) resource.TestCheckFunc {
 			return fmt.Errorf("resource ID is not set")
 		}
 
-		anypointClient := acctest.CreateTestClient(nil) // This will use env vars
+		userClient := acctest.CreateUserTestClient(nil) // This will use env vars
 		teamClient := &accessmanagement.TeamClient{
-			AnypointClient: anypointClient,
+			UserAnypointClient: userClient,
 		}
 
 		_, err := teamClient.GetTeam(context.Background(), rs.Primary.Attributes["organization_id"], rs.Primary.ID)
@@ -192,9 +192,9 @@ func testAccCheckTeamResourceDisappears(resourceName string) resource.TestCheckF
 			return fmt.Errorf("resource not found: %s", resourceName)
 		}
 
-		anypointClient := acctest.CreateTestClient(nil) // This will use env vars
+		userClient := acctest.CreateUserTestClient(nil) // This will use env vars
 		teamClient := &accessmanagement.TeamClient{
-			AnypointClient: anypointClient,
+			UserAnypointClient: userClient,
 		}
 
 		return teamClient.DeleteTeam(context.Background(), rs.Primary.Attributes["organization_id"], rs.Primary.ID)
