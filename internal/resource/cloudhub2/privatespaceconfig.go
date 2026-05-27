@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -571,8 +572,17 @@ func (r *PrivateSpaceConfigResource) Delete(ctx context.Context, req resource.De
 	}
 }
 
+// ImportState supports two import ID formats:
+//   - "<privateSpaceID>"           — falls back to root org (backwards compatible)
+//   - "<orgID>/<privateSpaceID>"   — required when the private space lives in a sub-org
 func (r *PrivateSpaceConfigResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	parts := strings.SplitN(req.ID, "/", 2)
+	if len(parts) == 2 {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("organization_id"), parts[0])...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[1])...)
+	} else {
+		resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	}
 }
 
 // mapSpaceConfigToModel populates model fields from API responses.

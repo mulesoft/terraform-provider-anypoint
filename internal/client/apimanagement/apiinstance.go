@@ -373,6 +373,38 @@ type APIInstanceListResponse struct {
 	Total     int           `json:"total"`
 }
 
+// ListUpstreams fetches all named upstreams for the given API instance.
+func (c *APIInstanceClient) ListUpstreams(ctx context.Context, orgID, envID string, apiID int) ([]APIUpstream, error) {
+	url := fmt.Sprintf("%s/apimanager/api/v1/organizations/%s/environments/%s/apis/%d/upstreams",
+		c.BaseURL, orgID, envID, apiID)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	req.Header.Set("X-ANYPNT-ORG-ID", orgID)
+	req.Header.Set("X-ANYPNT-ENV-ID", envID)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to list upstreams with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var envelope apiUpstreamsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
+		return nil, fmt.Errorf("failed to decode upstreams response: %w", err)
+	}
+
+	return envelope.Upstreams, nil
+}
+
 // ListAPIInstances returns all API instances for the given org/environment.
 func (c *APIInstanceClient) ListAPIInstances(ctx context.Context, orgID, envID string) ([]APIInstance, error) {
 	url := fmt.Sprintf("%s/apimanager/xapi/v1/organizations/%s/environments/%s/apis", c.BaseURL, orgID, envID)

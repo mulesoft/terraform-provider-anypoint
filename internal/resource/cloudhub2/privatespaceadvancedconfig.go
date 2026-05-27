@@ -3,6 +3,7 @@ package cloudhub2
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -332,11 +333,20 @@ func (r *PrivateSpaceAdvancedConfigResource) Delete(ctx context.Context, req res
 	}
 }
 
-// ImportState imports the resource.
+// ImportState supports two import ID formats:
+//   - "<privateSpaceID>"           — falls back to root org (backwards compatible)
+//   - "<orgID>/<privateSpaceID>"   — required when the private space lives in a sub-org
 func (r *PrivateSpaceAdvancedConfigResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	// Use the private space ID as both the ID and private_space_id
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), req.ID)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("private_space_id"), req.ID)...)
+	parts := strings.SplitN(req.ID, "/", 2)
+	if len(parts) == 2 {
+		orgID, spaceID := parts[0], parts[1]
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("organization_id"), orgID)...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), spaceID)...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("private_space_id"), spaceID)...)
+	} else {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), req.ID)...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("private_space_id"), req.ID)...)
+	}
 }
 
 // Helper functions
