@@ -90,7 +90,16 @@ Optional:
 
 An existing private space advanced configuration can be imported using its private space ID (UUID).
 
+Two import ID formats are supported:
+
+| Format | When to use |
+|--------|-------------|
+| `<private_space_id>` | Private space belongs to the root organization |
+| `<org_id>/<private_space_id>` | Private space belongs to a Business Group (sub-org) |
+
 ### Using an import block (Terraform ≥ 1.5 — recommended)
+
+**Root org:**
 
 ```terraform
 import {
@@ -100,7 +109,20 @@ import {
 
 resource "anypoint_privatespace_advanced_config" "imported" {
   private_space_id = "<private_space_id>"
-  organization_id  = "<organization_id>"
+}
+```
+
+**Sub-org (Business Group):**
+
+```terraform
+import {
+  to = anypoint_privatespace_advanced_config.imported
+  id = "<org_id>/<private_space_id>"
+}
+
+resource "anypoint_privatespace_advanced_config" "imported" {
+  private_space_id = "<private_space_id>"
+  organization_id  = "<org_id>"
 }
 ```
 
@@ -117,5 +139,9 @@ terraform apply
 ### Using the CLI (deprecated, Terraform < 1.5)
 
 ```shell
+# Root org:
 terraform import anypoint_privatespace_advanced_config.imported <private_space_id>
+
+# Sub-org:
+terraform import anypoint_privatespace_advanced_config.imported <org_id>/<private_space_id>
 ```

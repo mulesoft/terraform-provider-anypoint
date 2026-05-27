@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
@@ -102,6 +104,62 @@ func TestPrivateSpaceConfigResource_ImportState(t *testing.T) {
 	r := NewPrivateSpaceConfigResource()
 	if _, ok := r.(resource.ResourceWithImportState); !ok {
 		t.Error("resource does not implement ImportState")
+	}
+}
+
+func TestPrivateSpaceConfigResource_ImportState_SimpleID(t *testing.T) {
+	res := NewPrivateSpaceConfigResource()
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+
+	req := resource.ImportStateRequest{ID: "test-space-id"}
+	resp := &resource.ImportStateResponse{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: tftypes.NewValue(stateType, nil)},
+	}
+
+	res.(resource.ResourceWithImportState).ImportState(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("ImportState() with simple ID reported errors: %v", resp.Diagnostics.Errors())
+	}
+
+	var model PrivateSpaceConfigResourceModel
+	resp.State.Get(ctx, &model)
+	if model.ID.ValueString() != "test-space-id" {
+		t.Errorf("expected id = %q, got %q", "test-space-id", model.ID.ValueString())
+	}
+	if !model.OrganizationID.IsNull() {
+		t.Errorf("expected organization_id to be null for simple import, got %q", model.OrganizationID.ValueString())
+	}
+}
+
+func TestPrivateSpaceConfigResource_ImportState_CompositeID(t *testing.T) {
+	res := NewPrivateSpaceConfigResource()
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+
+	req := resource.ImportStateRequest{ID: "test-org-id/test-space-id"}
+	resp := &resource.ImportStateResponse{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: tftypes.NewValue(stateType, nil)},
+	}
+
+	res.(resource.ResourceWithImportState).ImportState(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("ImportState() with composite ID reported errors: %v", resp.Diagnostics.Errors())
+	}
+
+	var model PrivateSpaceConfigResourceModel
+	resp.State.Get(ctx, &model)
+	if model.ID.ValueString() != "test-space-id" {
+		t.Errorf("expected id = %q, got %q", "test-space-id", model.ID.ValueString())
+	}
+	if model.OrganizationID.ValueString() != "test-org-id" {
+		t.Errorf("expected organization_id = %q, got %q", "test-org-id", model.OrganizationID.ValueString())
 	}
 }
 

@@ -335,8 +335,13 @@ func (r *APIInstanceResource) Schema(_ context.Context, _ resource.SchemaRequest
 				},
 			},
 			"spec": schema.SingleNestedAttribute{
-				Description: "The Exchange asset specification backing this API instance.",
-				Required:    true,
+				Description: "The Exchange asset specification backing this API instance. " +
+					"Required when creating an instance; populated from state when importing.",
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.Object{
+					objectplanmodifier.UseStateForUnknown(),
+				},
 				Attributes: map[string]schema.Attribute{
 					"asset_id": schema.StringAttribute{
 						Description: "The Exchange asset ID.",
@@ -498,8 +503,8 @@ func (r *APIInstanceResource) Schema(_ context.Context, _ resource.SchemaRequest
 										Default:     int64default.StaticInt64(100),
 									},
 									"uri": schema.StringAttribute{
-										Description: "The upstream backend URI.",
-										Required:    true,
+										Description: "The upstream backend URI. Required when creating; omit only for label-based Flex Gateway upstreams.",
+										Optional:    true,
 									},
 									"label": schema.StringAttribute{
 										Description: "A label for this upstream.",
@@ -602,6 +607,17 @@ func (r *APIInstanceResource) ValidateConfig(ctx context.Context, req resource.V
 		resp.Diagnostics.Append(route.Upstreams.ElementsAs(ctx, &upstreams, false)...)
 		if resp.Diagnostics.HasError() {
 			return
+		}
+
+		for j, us := range upstreams {
+			if (us.URI.IsNull() || us.URI.ValueString() == "") &&
+				(us.Label.IsNull() || us.Label.ValueString() == "") {
+				routeLabel := fmt.Sprintf("routing[%d].upstreams[%d]", i, j)
+				resp.Diagnostics.AddError(
+					"Invalid upstream",
+					fmt.Sprintf("%s: at least one of 'uri' or 'label' must be set.", routeLabel),
+				)
+			}
 		}
 
 		if len(upstreams) <= 1 {
@@ -735,6 +751,14 @@ func (r *APIInstanceResource) Read(ctx context.Context, req resource.ReadRequest
 	existingRouting := data.Routing
 	existingEndpoint := data.Endpoint
 	existingDeployment := data.Deployment
+
+	// On the import path, existingRouting is null so we have no prior URI data.
+	// Fetch the upstreams endpoint to enrich the instance routing with label+uri
+	// before flattening, so state is fully populated after import.
+	isImportPath := existingRouting.IsNull() || existingRouting.IsUnknown()
+	if isImportPath && len(instance.Routing) > 0 {
+		r.enrichInstanceRouting(ctx, instance, orgID, envID, apiID)
+	}
 
 	r.flattenInstance(ctx, instance, &data, orgID, envID)
 
@@ -1118,6 +1142,34 @@ func (r *APIInstanceResource) expandRouting(ctx context.Context, routingList typ
 	return apiRoutes
 }
 
+// enrichInstanceRouting resolves upstream IDs in instance.Routing to their
+// label and URI by calling the dedicated upstreams endpoint. Used on the
+// import path where the GET /apis/{id} response only carries upstream IDs.
+func (r *APIInstanceResource) enrichInstanceRouting(ctx context.Context, inst *apimanagement.APIInstance, orgID, envID string, apiID int) {
+	upstreams, err := r.client.ListUpstreams(ctx, orgID, envID, apiID)
+	if err != nil {
+		tflog.Warn(ctx, "failed to fetch upstreams for enrichment; routing URIs will be empty", map[string]interface{}{
+			"api_id": apiID,
+			"error":  err.Error(),
+		})
+		return
+	}
+
+	byID := make(map[string]apimanagement.APIUpstream, len(upstreams))
+	for _, us := range upstreams {
+		byID[us.ID] = us
+	}
+
+	for i, route := range inst.Routing {
+		for j, routeUpstream := range route.Upstreams {
+			if named, ok := byID[routeUpstream.ID]; ok {
+				inst.Routing[i].Upstreams[j].URI = named.URI
+				inst.Routing[i].Upstreams[j].Label = named.Label
+			}
+		}
+	}
+}
+
 func (r *APIInstanceResource) flattenInstance(_ context.Context, inst *apimanagement.APIInstance, data *APIInstanceResourceModel, orgID, envID string) {
 	data.ID = types.StringValue(strconv.Itoa(inst.ID))
 	data.Status = types.StringValue(inst.Status)
@@ -1146,6 +1198,12 @@ func (r *APIInstanceResource) flattenInstance(_ context.Context, inst *apimanage
 			AssetID: types.StringValue(inst.Spec.AssetID),
 			GroupID: types.StringValue(inst.Spec.GroupID),
 			Version: types.StringValue(inst.Spec.Version),
+		}
+	} else if inst.AssetID != "" {
+		data.Spec = &SpecModel{
+			AssetID: types.StringValue(inst.AssetID),
+			GroupID: types.StringValue(orgID),
+			Version: types.StringValue(inst.AssetVersion),
 		}
 	}
 
@@ -1231,9 +1289,19 @@ func (r *APIInstanceResource) flattenInstance(_ context.Context, inst *apimanage
 				usObj, usDiags := types.ObjectValue(
 					upstreamObjType.AttrTypes,
 					map[string]attr.Value{
-						"weight":         types.Int64Value(int64(us.Weight)),
-						"uri":            types.StringValue(us.URI),
-						"label":          types.StringValue(us.Label),
+						"weight": types.Int64Value(int64(us.Weight)),
+						"uri": func() attr.Value {
+							if us.URI == "" {
+								return types.StringNull()
+							}
+							return types.StringValue(us.URI)
+						}(),
+						"label": func() attr.Value {
+							if us.Label == "" {
+								return types.StringNull()
+							}
+							return types.StringValue(us.Label)
+						}(),
 						"tls_context_id": tlsCtxVal,
 					},
 				)

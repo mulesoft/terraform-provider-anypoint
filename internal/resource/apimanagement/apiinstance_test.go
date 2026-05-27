@@ -34,8 +34,8 @@ func TestAPIInstanceResource_Metadata(t *testing.T) {
 
 func TestAPIInstanceResource_Schema(t *testing.T) {
 	r := NewAPIInstanceResource()
-	requiredAttrs := []string{"environment_id", "spec"}
-	optionalAttrs := []string{"organization_id", "technology", "instance_label", "approval_method", "gateway_id", "endpoint", "deployment", "routing"}
+	requiredAttrs := []string{"environment_id"}
+	optionalAttrs := []string{"organization_id", "technology", "instance_label", "approval_method", "gateway_id", "spec", "endpoint", "deployment", "routing"}
 	computedAttrs := []string{"id", "organization_id", "status", "product_version", "asset_id", "asset_version"}
 	testutil.TestResourceSchema(t, r, requiredAttrs, optionalAttrs, computedAttrs)
 }
@@ -296,6 +296,127 @@ func TestAPIInstanceResource_ImportState_Invalid(t *testing.T) {
 		if !resp.Diagnostics.HasError() {
 			t.Errorf("ImportState() with ID %q should produce errors", id)
 		}
+	}
+}
+
+func TestAPIInstanceResource_Read_ImportPath_EnrichesRouting(t *testing.T) {
+	basePath := "/apimanager/api/v1/organizations/test-org-id/environments/test-env-id/apis/300"
+	upstreamsPath := basePath + "/upstreams"
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		basePath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"id":           300,
+				"assetId":      "test-api",
+				"assetVersion": "1.0.0",
+				"technology":   "flexGateway",
+				"status":       "active",
+				"routing": []map[string]interface{}{
+					{
+						"label": "read-traffic",
+						"rules": map[string]interface{}{"methods": "GET"},
+						"upstreams": []map[string]interface{}{
+							{"id": "upstream-id-primary", "weight": 90},
+							{"id": "upstream-id-secondary", "weight": 10},
+						},
+					},
+				},
+			})
+		},
+		upstreamsPath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"total": 2,
+				"upstreams": []map[string]interface{}{
+					{"id": "upstream-id-primary", "label": "primary", "uri": "http://backend-primary.internal:8080"},
+					{"id": "upstream-id-secondary", "label": "secondary", "uri": "http://backend-secondary.internal:8080"},
+				},
+			})
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	res := NewAPIInstanceResource().(*APIInstanceResource)
+	res.client = &apimgmtclient.APIInstanceClient{
+		AnypointClient: &anypointclient.AnypointClient{
+			BaseURL:    server.URL,
+			Token:      "mock-token",
+			HTTPClient: &http.Client{},
+			OrgID:      "test-org-id",
+		},
+	}
+
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+	objType := stateType.(tftypes.Object)
+	endpointObjType := objType.AttributeTypes["endpoint"].(tftypes.Object)
+	deploymentObjType := objType.AttributeTypes["deployment"].(tftypes.Object)
+	routingElemType := objType.AttributeTypes["routing"].(tftypes.List).ElementType
+	specObjType := objType.AttributeTypes["spec"].(tftypes.Object)
+
+	// Simulate the import path: routing is null (no prior state).
+	priorStateRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"id":                tftypes.NewValue(tftypes.String, "300"),
+		"organization_id":   tftypes.NewValue(tftypes.String, "test-org-id"),
+		"environment_id":    tftypes.NewValue(tftypes.String, "test-env-id"),
+		"technology":        tftypes.NewValue(tftypes.String, nil),
+		"provider_id":       tftypes.NewValue(tftypes.String, nil),
+		"instance_label":    tftypes.NewValue(tftypes.String, nil),
+		"approval_method":   tftypes.NewValue(tftypes.String, nil),
+		"status":            tftypes.NewValue(tftypes.String, nil),
+		"asset_id":          tftypes.NewValue(tftypes.String, nil),
+		"asset_version":     tftypes.NewValue(tftypes.String, nil),
+		"product_version":   tftypes.NewValue(tftypes.String, nil),
+		"consumer_endpoint": tftypes.NewValue(tftypes.String, nil),
+		"upstream_uri":      tftypes.NewValue(tftypes.String, nil),
+		"gateway_id":        tftypes.NewValue(tftypes.String, nil),
+		"spec":              tftypes.NewValue(specObjType, nil),
+		"endpoint":          tftypes.NewValue(endpointObjType, nil),
+		"deployment":        tftypes.NewValue(deploymentObjType, nil),
+		"routing":           tftypes.NewValue(tftypes.List{ElementType: routingElemType}, nil),
+	})
+
+	req := resource.ReadRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
+	resp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
+	res.Read(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("Read() reported errors: %v", resp.Diagnostics.Errors())
+	}
+
+	var got APIInstanceResourceModel
+	if diags := resp.State.Get(ctx, &got); diags.HasError() {
+		t.Fatalf("State.Get errors: %v", diags.Errors())
+	}
+
+	if got.Routing.IsNull() || got.Routing.IsUnknown() {
+		t.Fatal("Routing should be populated after import-path Read")
+	}
+
+	var routes []RouteModel
+	if diags := got.Routing.ElementsAs(ctx, &routes, false); diags.HasError() {
+		t.Fatalf("ElementsAs errors: %v", diags.Errors())
+	}
+	if len(routes) != 1 {
+		t.Fatalf("Expected 1 route, got %d", len(routes))
+	}
+
+	var upstreams []UpstreamModel
+	if diags := routes[0].Upstreams.ElementsAs(ctx, &upstreams, false); diags.HasError() {
+		t.Fatalf("ElementsAs upstream errors: %v", diags.Errors())
+	}
+	if len(upstreams) != 2 {
+		t.Fatalf("Expected 2 upstreams, got %d", len(upstreams))
+	}
+	if upstreams[0].URI.ValueString() != "http://backend-primary.internal:8080" {
+		t.Errorf("upstream[0].URI = %q, want primary URI", upstreams[0].URI.ValueString())
+	}
+	if upstreams[0].Label.ValueString() != "primary" {
+		t.Errorf("upstream[0].Label = %q, want primary", upstreams[0].Label.ValueString())
+	}
+	if upstreams[1].URI.ValueString() != "http://backend-secondary.internal:8080" {
+		t.Errorf("upstream[1].URI = %q, want secondary URI", upstreams[1].URI.ValueString())
 	}
 }
 

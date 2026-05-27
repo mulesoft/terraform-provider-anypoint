@@ -124,7 +124,16 @@ output "inbound_static_ips" {
 
 An existing private space configuration can be imported using its private space ID (UUID).
 
+Two import ID formats are supported:
+
+| Format | When to use |
+|--------|-------------|
+| `<private_space_id>` | Private space belongs to the root organization |
+| `<org_id>/<private_space_id>` | Private space belongs to a Business Group (sub-org) |
+
 ### Using an import block (Terraform ≥ 1.5 — recommended)
+
+**Root org:**
 
 ```terraform
 import {
@@ -134,6 +143,20 @@ import {
 
 resource "anypoint_private_space_config" "imported" {
   name = "<private_space_name>"
+}
+```
+
+**Sub-org (Business Group):**
+
+```terraform
+import {
+  to = anypoint_private_space_config.imported
+  id = "<org_id>/<private_space_id>"
+}
+
+resource "anypoint_private_space_config" "imported" {
+  name            = "<private_space_name>"
+  organization_id = "<org_id>"
 }
 ```
 
@@ -152,5 +175,9 @@ After import, run `terraform plan` to verify the state matches the actual config
 ### Using the CLI (deprecated, Terraform < 1.5)
 
 ```shell
+# Root org:
 terraform import anypoint_private_space_config.imported <private_space_id>
+
+# Sub-org:
+terraform import anypoint_private_space_config.imported <org_id>/<private_space_id>
 ```
