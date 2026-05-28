@@ -873,16 +873,23 @@ func (r *APIInstanceResource) Delete(ctx context.Context, req resource.DeleteReq
 	}
 }
 
+// ImportState supports two import ID formats:
+//   - "<environmentID>/<apiInstanceID>"                   — falls back to root org (backwards compatible)
+//   - "<organizationID>/<environmentID>/<apiInstanceID>"  — required when the instance lives in a sub-org
 func (r *APIInstanceResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	parts := strings.Split(req.ID, "/")
-	if len(parts) != 3 {
+	switch len(parts) {
+	case 2:
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("environment_id"), parts[0])...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[1])...)
+	case 3:
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("organization_id"), parts[0])...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("environment_id"), parts[1])...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[2])...)
+	default:
 		resp.Diagnostics.AddError("Invalid import ID",
-			"Expected format: organization_id/environment_id/api_instance_id")
-		return
+			"Expected format: environment_id/api_instance_id or organization_id/environment_id/api_instance_id")
 	}
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("organization_id"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("environment_id"), parts[1])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[2])...)
 }
 
 // --- Helpers ---

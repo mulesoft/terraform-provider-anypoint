@@ -280,6 +280,65 @@ func TestAPIInstanceResource_ImportState_Valid(t *testing.T) {
 	}
 }
 
+func TestAPIInstanceResource_ImportState_SimpleID(t *testing.T) {
+	res := NewAPIInstanceResource().(*APIInstanceResource)
+	ctx := context.Background()
+
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+	objType := stateType.(tftypes.Object)
+	endpointObjType := objType.AttributeTypes["endpoint"].(tftypes.Object)
+	deploymentObjType := objType.AttributeTypes["deployment"].(tftypes.Object)
+	routingElemType := objType.AttributeTypes["routing"].(tftypes.List).ElementType
+	specObjType := objType.AttributeTypes["spec"].(tftypes.Object)
+
+	emptyStateRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"id":                tftypes.NewValue(tftypes.String, nil),
+		"organization_id":   tftypes.NewValue(tftypes.String, nil),
+		"environment_id":    tftypes.NewValue(tftypes.String, nil),
+		"technology":        tftypes.NewValue(tftypes.String, nil),
+		"provider_id":       tftypes.NewValue(tftypes.String, nil),
+		"instance_label":    tftypes.NewValue(tftypes.String, nil),
+		"approval_method":   tftypes.NewValue(tftypes.String, nil),
+		"status":            tftypes.NewValue(tftypes.String, nil),
+		"asset_id":          tftypes.NewValue(tftypes.String, nil),
+		"asset_version":     tftypes.NewValue(tftypes.String, nil),
+		"product_version":   tftypes.NewValue(tftypes.String, nil),
+		"consumer_endpoint": tftypes.NewValue(tftypes.String, nil),
+		"upstream_uri":      tftypes.NewValue(tftypes.String, nil),
+		"gateway_id":        tftypes.NewValue(tftypes.String, nil),
+		"spec":              tftypes.NewValue(specObjType, nil),
+		"endpoint":          tftypes.NewValue(endpointObjType, nil),
+		"deployment":        tftypes.NewValue(deploymentObjType, nil),
+		"routing":           tftypes.NewValue(tftypes.List{ElementType: routingElemType}, nil),
+	})
+
+	req := resource.ImportStateRequest{ID: "test-env/300"}
+	resp := &resource.ImportStateResponse{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: emptyStateRaw},
+	}
+	res.ImportState(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("ImportState() with simple ID reported errors: %v", resp.Diagnostics.Errors())
+	}
+
+	var got APIInstanceResourceModel
+	if diags := resp.State.Get(ctx, &got); diags.HasError() {
+		t.Fatalf("State.Get errors: %v", diags.Errors())
+	}
+	if got.EnvironmentID.ValueString() != "test-env" {
+		t.Errorf("expected environment_id 'test-env', got '%s'", got.EnvironmentID.ValueString())
+	}
+	if got.ID.ValueString() != "300" {
+		t.Errorf("expected id '300', got '%s'", got.ID.ValueString())
+	}
+	if !got.OrganizationID.IsNull() {
+		t.Errorf("expected organization_id to be null for simple import, got '%s'", got.OrganizationID.ValueString())
+	}
+}
+
 func TestAPIInstanceResource_ImportState_Invalid(t *testing.T) {
 	res := NewAPIInstanceResource().(*APIInstanceResource)
 	ctx := context.Background()
@@ -287,7 +346,7 @@ func TestAPIInstanceResource_ImportState_Invalid(t *testing.T) {
 	schemaResp := &resource.SchemaResponse{}
 	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
 
-	for _, id := range []string{"only-one-part", "two/parts"} {
+	for _, id := range []string{"only-one-part", "four/parts/too/many"} {
 		req := resource.ImportStateRequest{ID: id}
 		resp := &resource.ImportStateResponse{
 			State: tfsdk.State{Schema: schemaResp.Schema},
