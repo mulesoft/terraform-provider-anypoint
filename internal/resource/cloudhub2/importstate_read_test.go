@@ -247,12 +247,34 @@ func TestTLSContextResource_CloudHub2_ImportState_InvalidFormat(t *testing.T) {
 	ctx := context.Background()
 	schemaResp, rawState := nullStateFor(t, r)
 
-	t.Run("3-part colon ID errors", func(t *testing.T) {
-		req := resource.ImportStateRequest{ID: "ps-1:ctx-1:extra"}
+	t.Run("valid 3-part colon ID sets org, private_space_id and id", func(t *testing.T) {
+		req := resource.ImportStateRequest{ID: "org-1:ps-1:ctx-1"}
+		resp := &resource.ImportStateResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: rawState}}
+		r.ImportState(ctx, req, resp)
+		if resp.Diagnostics.HasError() {
+			t.Fatalf("ImportState() unexpected errors for 3-part ID: %v", resp.Diagnostics.Errors())
+		}
+		var got TLSContextResourceModel
+		if diags := resp.State.Get(ctx, &got); diags.HasError() {
+			t.Fatalf("State.Get errors: %v", diags.Errors())
+		}
+		if got.OrganizationID.ValueString() != "org-1" {
+			t.Errorf("OrganizationID = %q, want org-1", got.OrganizationID.ValueString())
+		}
+		if got.PrivateSpaceID.ValueString() != "ps-1" {
+			t.Errorf("PrivateSpaceID = %q, want ps-1", got.PrivateSpaceID.ValueString())
+		}
+		if got.ID.ValueString() != "ctx-1" {
+			t.Errorf("ID = %q, want ctx-1", got.ID.ValueString())
+		}
+	})
+
+	t.Run("4-part colon ID errors", func(t *testing.T) {
+		req := resource.ImportStateRequest{ID: "org-1:ps-1:ctx-1:extra"}
 		resp := &resource.ImportStateResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: rawState}}
 		r.ImportState(ctx, req, resp)
 		if !resp.Diagnostics.HasError() {
-			t.Error("ImportState() should error for 3-part colon ID")
+			t.Error("ImportState() should error for 4-part colon ID")
 		}
 	})
 

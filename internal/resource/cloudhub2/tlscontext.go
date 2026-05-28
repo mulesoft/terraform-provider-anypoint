@@ -812,18 +812,23 @@ func (r *TLSContextResource) Delete(ctx context.Context, req resource.DeleteRequ
 	tflog.Trace(ctx, "deleted TLS context")
 }
 
-// ImportState imports the resource into Terraform state.
+// ImportState supports two import ID formats:
+//   - "<privateSpaceID>:<tlsContextID>"           — falls back to root org (backwards compatible)
+//   - "<orgID>:<privateSpaceID>:<tlsContextID>"   — required when the private space lives in a sub-org
 func (r *TLSContextResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	// Import format: private_space_id:tls_context_id
 	parts := strings.Split(req.ID, ":")
-	if len(parts) != 2 {
+	switch len(parts) {
+	case 2:
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("private_space_id"), parts[0])...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[1])...)
+	case 3:
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("organization_id"), parts[0])...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("private_space_id"), parts[1])...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[2])...)
+	default:
 		resp.Diagnostics.AddError(
 			"Invalid import ID",
-			"Import ID must be in the format: private_space_id:tls_context_id",
+			"Import ID must be in the format: private_space_id:tls_context_id or org_id:private_space_id:tls_context_id",
 		)
-		return
 	}
-
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("private_space_id"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[1])...)
 }
