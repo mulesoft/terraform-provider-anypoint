@@ -104,11 +104,28 @@ Optional:
 
 ## Import
 
-An existing Managed Omni Gateway can be imported using its composite ID: `organization_id/environment_id/gateway_id`.
+An existing Managed Omni Gateway can be imported using a composite ID. Use the 2-part form for root-org gateways and the 3-part form when the gateway belongs to a Business Group (sub-org).
 
 The `gateway_id` is the UUID of the gateway visible in Runtime Manager or the Gateway Manager API.
 
 ### Using an import block (Terraform ≥ 1.5 — recommended)
+
+**Root org (2-part ID):**
+
+```terraform
+import {
+  to = anypoint_managed_omni_gateway.imported
+  id = "<environment_id>/<gateway_id>"
+}
+
+resource "anypoint_managed_omni_gateway" "imported" {
+  name           = "<gateway_name>"
+  environment_id = "<environment_id>"
+  target_id      = "<target_id>"
+}
+```
+
+**Sub-org (3-part ID):**
 
 ```terraform
 import {
@@ -117,9 +134,10 @@ import {
 }
 
 resource "anypoint_managed_omni_gateway" "imported" {
-  name           = "<gateway_name>"
-  environment_id = "<environment_id>"
-  target_id      = "<target_id>"
+  organization_id = "<organization_id>"
+  name            = "<gateway_name>"
+  environment_id  = "<environment_id>"
+  target_id       = "<target_id>"
 }
 ```
 
@@ -136,5 +154,9 @@ terraform apply
 ### Using the CLI (deprecated, Terraform < 1.5)
 
 ```shell
+# Root org:
+terraform import anypoint_managed_omni_gateway.imported <environment_id>/<gateway_id>
+
+# Sub-org:
 terraform import anypoint_managed_omni_gateway.imported <organization_id>/<environment_id>/<gateway_id>
 ```
