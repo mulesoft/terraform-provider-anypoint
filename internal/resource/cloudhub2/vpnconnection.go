@@ -382,17 +382,39 @@ func (r *VPNConnectionResource) ModifyPlan(ctx context.Context, req resource.Mod
 	}
 }
 
+// ImportState supports two import ID formats:
+//   - "<privateSpaceID>/<connectionID>"           — falls back to root org (backwards compatible)
+//   - "<orgID>/<privateSpaceID>/<connectionID>"   — required when the private space lives in a sub-org
 func (r *VPNConnectionResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	idParts := strings.Split(req.ID, "/")
-	if len(idParts) != 2 || idParts[0] == "" || idParts[1] == "" {
+	switch len(idParts) {
+	case 2:
+		if idParts[0] == "" || idParts[1] == "" {
+			resp.Diagnostics.AddError(
+				"Unexpected Import Identifier",
+				fmt.Sprintf("Expected import identifier with format: private_space_id/connection_id or org_id/private_space_id/connection_id. Got: %q", req.ID),
+			)
+			return
+		}
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("private_space_id"), idParts[0])...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), idParts[1])...)
+	case 3:
+		if idParts[0] == "" || idParts[1] == "" || idParts[2] == "" {
+			resp.Diagnostics.AddError(
+				"Unexpected Import Identifier",
+				fmt.Sprintf("Expected import identifier with format: private_space_id/connection_id or org_id/private_space_id/connection_id. Got: %q", req.ID),
+			)
+			return
+		}
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("organization_id"), idParts[0])...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("private_space_id"), idParts[1])...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), idParts[2])...)
+	default:
 		resp.Diagnostics.AddError(
 			"Unexpected Import Identifier",
-			fmt.Sprintf("Expected import identifier with format: private_space_id/connection_id. Got: %q", req.ID),
+			fmt.Sprintf("Expected import identifier with format: private_space_id/connection_id or org_id/private_space_id/connection_id. Got: %q", req.ID),
 		)
-		return
 	}
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("private_space_id"), idParts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), idParts[1])...)
 }
 
 func vpnConnectionResourceModelToAPIRequest(ctx context.Context, data *VPNConnectionResourceModel) (*cloudhub2.CreateVPNConnectionRequest, diag.Diagnostics) {

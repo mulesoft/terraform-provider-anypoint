@@ -52,12 +52,34 @@ func TestVPNConnectionResource_ImportState_IDParsing(t *testing.T) {
 		}
 	})
 
-	t.Run("invalid ID (3-part) produces error", func(t *testing.T) {
-		req := resource.ImportStateRequest{ID: "ps/conn/extra"}
+	t.Run("valid 3-part ID sets org, private_space_id and id", func(t *testing.T) {
+		req := resource.ImportStateRequest{ID: "org-789/ps-123/vpn-conn-456"}
+		resp := &resource.ImportStateResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: rawState}}
+		r.ImportState(ctx, req, resp)
+		if resp.Diagnostics.HasError() {
+			t.Fatalf("ImportState() unexpected errors: %v", resp.Diagnostics.Errors())
+		}
+		var got VPNConnectionResourceModel
+		if diags := resp.State.Get(ctx, &got); diags.HasError() {
+			t.Fatalf("State.Get errors: %v", diags.Errors())
+		}
+		if got.OrganizationID.ValueString() != "org-789" {
+			t.Errorf("OrganizationID = %q, want org-789", got.OrganizationID.ValueString())
+		}
+		if got.PrivateSpaceID.ValueString() != "ps-123" {
+			t.Errorf("PrivateSpaceID = %q, want ps-123", got.PrivateSpaceID.ValueString())
+		}
+		if got.ID.ValueString() != "vpn-conn-456" {
+			t.Errorf("ID = %q, want vpn-conn-456", got.ID.ValueString())
+		}
+	})
+
+	t.Run("invalid ID (4-part) produces error", func(t *testing.T) {
+		req := resource.ImportStateRequest{ID: "org/ps/conn/extra"}
 		resp := &resource.ImportStateResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: rawState}}
 		r.ImportState(ctx, req, resp)
 		if !resp.Diagnostics.HasError() {
-			t.Error("ImportState() should error for 3-part ID")
+			t.Error("ImportState() should error for 4-part ID")
 		}
 	})
 
