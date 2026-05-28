@@ -111,6 +111,74 @@ func TestPrivateSpaceUpgradeResource_ImportState(t *testing.T) {
 	}
 }
 
+func TestPrivateSpaceUpgradeResource_ImportState_SimpleID(t *testing.T) {
+	res := NewPrivateSpaceUpgradeResource()
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+
+	req := resource.ImportStateRequest{ID: "test-space-id:2025-08-12:true"}
+	resp := &resource.ImportStateResponse{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: tftypes.NewValue(stateType, nil)},
+	}
+
+	res.(resource.ResourceWithImportState).ImportState(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("ImportState() with simple ID reported errors: %v", resp.Diagnostics.Errors())
+	}
+
+	var model PrivateSpaceUpgradeResourceModel
+	resp.State.Get(ctx, &model)
+	if model.PrivateSpaceID.ValueString() != "test-space-id" {
+		t.Errorf("expected private_space_id = %q, got %q", "test-space-id", model.PrivateSpaceID.ValueString())
+	}
+	if model.Date.ValueString() != "2025-08-12" {
+		t.Errorf("expected date = %q, got %q", "2025-08-12", model.Date.ValueString())
+	}
+	if model.OptIn.ValueBool() != true {
+		t.Errorf("expected opt_in = true, got %v", model.OptIn.ValueBool())
+	}
+	if !model.OrganizationID.IsNull() {
+		t.Errorf("expected organization_id to be null for simple import, got %q", model.OrganizationID.ValueString())
+	}
+}
+
+func TestPrivateSpaceUpgradeResource_ImportState_CompositeID(t *testing.T) {
+	res := NewPrivateSpaceUpgradeResource()
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+
+	req := resource.ImportStateRequest{ID: "test-org-id:test-space-id:2025-08-12:false"}
+	resp := &resource.ImportStateResponse{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: tftypes.NewValue(stateType, nil)},
+	}
+
+	res.(resource.ResourceWithImportState).ImportState(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("ImportState() with composite ID reported errors: %v", resp.Diagnostics.Errors())
+	}
+
+	var model PrivateSpaceUpgradeResourceModel
+	resp.State.Get(ctx, &model)
+	if model.OrganizationID.ValueString() != "test-org-id" {
+		t.Errorf("expected organization_id = %q, got %q", "test-org-id", model.OrganizationID.ValueString())
+	}
+	if model.PrivateSpaceID.ValueString() != "test-space-id" {
+		t.Errorf("expected private_space_id = %q, got %q", "test-space-id", model.PrivateSpaceID.ValueString())
+	}
+	if model.Date.ValueString() != "2025-08-12" {
+		t.Errorf("expected date = %q, got %q", "2025-08-12", model.Date.ValueString())
+	}
+	if model.OptIn.ValueBool() != false {
+		t.Errorf("expected opt_in = false, got %v", model.OptIn.ValueBool())
+	}
+}
+
 func TestPrivateSpaceUpgradeResourceModel_Validation(t *testing.T) {
 	model := PrivateSpaceUpgradeResourceModel{}
 	_ = model.ID

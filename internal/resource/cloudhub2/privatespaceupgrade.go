@@ -241,22 +241,25 @@ func (r *PrivateSpaceUpgradeResource) Delete(ctx context.Context, req resource.D
 	tflog.Trace(ctx, "deleted private space upgrade")
 }
 
-// ImportState imports the resource into Terraform state.
+// ImportState supports two import ID formats:
+//   - "<privateSpaceID>:<date>:<optIn>"           — falls back to root org (backwards compatible)
+//   - "<orgID>:<privateSpaceID>:<date>:<optIn>"   — required when the private space lives in a sub-org
 func (r *PrivateSpaceUpgradeResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	// Import format: private_space_id:date:opt_in
-	// Example: my-space-id:2025-08-12:true
 	parts := strings.Split(req.ID, ":")
-	if len(parts) != 3 {
+	switch len(parts) {
+	case 3:
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("private_space_id"), parts[0])...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("date"), parts[1])...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("opt_in"), parts[2] == "true")...)
+	case 4:
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("organization_id"), parts[0])...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("private_space_id"), parts[1])...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("date"), parts[2])...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("opt_in"), parts[3] == "true")...)
+	default:
 		resp.Diagnostics.AddError(
 			"Invalid import ID",
-			"Import ID must be in the format: private_space_id:date:opt_in",
+			"Import ID must be in the format: private_space_id:date:opt_in or org_id:private_space_id:date:opt_in",
 		)
-		return
 	}
-
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("private_space_id"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("date"), parts[1])...)
-
-	optIn := parts[2] == "true"
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("opt_in"), optIn)...)
 }

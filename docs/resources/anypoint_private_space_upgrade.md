@@ -42,13 +42,11 @@ resource "anypoint_private_space_upgrade" "example" {
 
 ## Import
 
-An existing scheduled upgrade can be imported using its composite ID: `private_space_id:date:opt_in`.
-
-- `private_space_id` — UUID of the private space (e.g. `849c361b-da3e-4c7d-9c68-a5784bb4dc58`)
-- `date` — scheduled upgrade date in `YYYY-MM-DD` format (e.g. `2025-08-12`)
-- `opt_in` — `true` or `false`
+An existing scheduled upgrade can be imported using a composite ID. Use the 3-part form for root-org private spaces and the 4-part form when the private space belongs to a Business Group (sub-org).
 
 ### Using an import block (Terraform ≥ 1.5 — recommended)
+
+**Root org (3-part ID):**
 
 ```terraform
 import {
@@ -58,6 +56,22 @@ import {
 
 resource "anypoint_private_space_upgrade" "imported" {
   private_space_id = "<private_space_id>"
+  date             = "<date>"
+  opt_in           = true
+}
+```
+
+**Sub-org (4-part ID):**
+
+```terraform
+import {
+  to = anypoint_private_space_upgrade.imported
+  id = "<org_id>:<private_space_id>:<date>:<opt_in>"
+}
+
+resource "anypoint_private_space_upgrade" "imported" {
+  private_space_id = "<private_space_id>"
+  organization_id  = "<org_id>"
   date             = "<date>"
   opt_in           = true
 }
@@ -76,5 +90,9 @@ terraform apply
 ### Using the CLI (deprecated, Terraform < 1.5)
 
 ```shell
+# Root org:
 terraform import anypoint_private_space_upgrade.imported <private_space_id>:<date>:<opt_in>
+
+# Sub-org:
+terraform import anypoint_private_space_upgrade.imported <org_id>:<private_space_id>:<date>:<opt_in>
 ```
