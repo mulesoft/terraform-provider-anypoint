@@ -24,10 +24,12 @@ func NewAPIUpstreamsClient(config *client.Config) (*APIUpstreamsClient, error) {
 }
 
 // APIUpstream represents a single upstream returned by the API Manager upstreams endpoint.
+// tlsContext appears as a top-level field (connection is always null in practice).
 type APIUpstream struct {
-	ID    string `json:"id"`
-	Label string `json:"label"`
-	URI   string `json:"uri"`
+	ID         string                  `json:"id"`
+	Label      string                  `json:"label"`
+	URI        string                  `json:"uri"`
+	TLSContext *APIInstanceUpstreamTLS `json:"tlsContext,omitempty"`
 }
 
 // apiUpstreamsResponse is the raw JSON envelope from the upstreams endpoint.

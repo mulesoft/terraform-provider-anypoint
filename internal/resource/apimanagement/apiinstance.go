@@ -763,7 +763,15 @@ func (r *APIInstanceResource) Read(ctx context.Context, req resource.ReadRequest
 	r.flattenInstance(ctx, instance, &data, orgID, envID)
 
 	// Restore user-managed fields from state.
-	data.GatewayID = gatewayID
+	// On the import path gateway_id is absent from state; derive it from deployment.target_id
+	// so the generated config is immediately usable without manual fixup.
+	if !gatewayID.IsNull() && !gatewayID.IsUnknown() {
+		data.GatewayID = gatewayID
+	} else if dep := deploymentFromObject(data.Deployment); dep != nil && dep.TargetID.ValueString() != "" {
+		data.GatewayID = dep.TargetID
+	} else {
+		data.GatewayID = gatewayID
+	}
 	if !data.UpstreamURI.IsNull() && !data.UpstreamURI.IsUnknown() {
 		data.Routing = types.ListNull(data.Routing.ElementType(ctx))
 	} else if !existingRouting.IsNull() && !existingRouting.IsUnknown() {
@@ -1172,6 +1180,9 @@ func (r *APIInstanceResource) enrichInstanceRouting(ctx context.Context, inst *a
 			if named, ok := byID[routeUpstream.ID]; ok {
 				inst.Routing[i].Upstreams[j].URI = named.URI
 				inst.Routing[i].Upstreams[j].Label = named.Label
+				if named.TLSContext != nil {
+					inst.Routing[i].Upstreams[j].TLSContext = named.TLSContext
+				}
 			}
 		}
 	}
