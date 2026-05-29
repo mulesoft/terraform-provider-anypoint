@@ -2,13 +2,15 @@ package cloudhub2
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
-	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
+	anypointclient "github.com/mulesoft/terraform-provider-anypoint/internal/client"
+	ch2client "github.com/mulesoft/terraform-provider-anypoint/internal/client/cloudhub2"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
 )
 
@@ -35,9 +37,9 @@ func TestPrivateSpaceAssociationResource_Metadata(t *testing.T) {
 func TestPrivateSpaceAssociationResource_Schema(t *testing.T) {
 	res := NewPrivateSpaceAssociationResource()
 
-	requiredAttrs := []string{"private_space_id", "associations"}
-	optionalAttrs := []string{"organization_id"}
-	computedAttrs := []string{"id"}
+	requiredAttrs := []string{"private_space_id"}
+	optionalAttrs := []string{"organization_id", "associations"}
+	computedAttrs := []string{"id", "associations"}
 
 	testutil.TestResourceSchema(t, res, requiredAttrs, optionalAttrs, computedAttrs)
 }
@@ -46,7 +48,7 @@ func TestPrivateSpaceAssociationResource_Configure(t *testing.T) {
 	res := NewPrivateSpaceAssociationResource().(*PrivateSpaceAssociationResource)
 
 	server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
-	providerData := &client.Config{
+	providerData := &anypointclient.Config{
 		BaseURL:      server.URL,
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
@@ -179,7 +181,27 @@ func TestPrivateSpaceAssociationResourceModel_Validation(t *testing.T) {
 }
 
 func TestPrivateSpaceAssociationResource_Read(t *testing.T) {
+	assocPath := "/runtimefabric/api/organizations/test-org-id/privatespaces/test-ps-id/associations"
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		assocPath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, []map[string]interface{}{
+				{"id": "assoc-1", "organizationId": "test-org-id", "environmentId": "env-a"},
+				{"id": "assoc-2", "organizationId": "test-org-id", "environmentId": "env-b"},
+			})
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
 	res := NewPrivateSpaceAssociationResource().(*PrivateSpaceAssociationResource)
+	res.client = &ch2client.PrivateSpaceAssociationClient{
+		AnypointClient: &anypointclient.AnypointClient{
+			BaseURL:    server.URL,
+			Token:      "mock-token",
+			HTTPClient: &http.Client{},
+			OrgID:      "test-org-id",
+		},
+	}
 
 	ctx := context.Background()
 	schemaResp := &resource.SchemaResponse{}
@@ -190,7 +212,7 @@ func TestPrivateSpaceAssociationResource_Read(t *testing.T) {
 	createdElemType := objType.AttributeTypes["created_associations"].(tftypes.List).ElementType
 
 	priorStateRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
-		"id":                   tftypes.NewValue(tftypes.String, "test-ps-id"),
+		"id":                   tftypes.NewValue(tftypes.String, "test-ps-id-associations"),
 		"private_space_id":     tftypes.NewValue(tftypes.String, "test-ps-id"),
 		"organization_id":      tftypes.NewValue(tftypes.String, "test-org-id"),
 		"associations":         tftypes.NewValue(tftypes.List{ElementType: assocElemType}, nil),
@@ -209,7 +231,39 @@ func TestPrivateSpaceAssociationResource_Read(t *testing.T) {
 		t.Fatalf("State.Get errors: %v", diags.Errors())
 	}
 	if got.PrivateSpaceID.ValueString() != "test-ps-id" {
-		t.Errorf("Expected PrivateSpaceID test-ps-id, got %s", got.PrivateSpaceID.ValueString())
+		t.Errorf("PrivateSpaceID = %q, want test-ps-id", got.PrivateSpaceID.ValueString())
+	}
+
+	var assocs []struct {
+		OrganizationID string `tfsdk:"organization_id"`
+		Environment    string `tfsdk:"environment"`
+	}
+	if diags := got.Associations.ElementsAs(ctx, &assocs, false); diags.HasError() {
+		t.Fatalf("ElementsAs associations errors: %v", diags.Errors())
+	}
+	if len(assocs) != 2 {
+		t.Fatalf("associations len = %d, want 2", len(assocs))
+	}
+	if assocs[0].Environment != "env-a" {
+		t.Errorf("assocs[0].Environment = %q, want env-a", assocs[0].Environment)
+	}
+	if assocs[1].Environment != "env-b" {
+		t.Errorf("assocs[1].Environment = %q, want env-b", assocs[1].Environment)
+	}
+
+	var created []struct {
+		ID             string `tfsdk:"id"`
+		OrganizationID string `tfsdk:"organization_id"`
+		Environment    string `tfsdk:"environment"`
+	}
+	if diags := got.CreatedAssociations.ElementsAs(ctx, &created, false); diags.HasError() {
+		t.Fatalf("ElementsAs created_associations errors: %v", diags.Errors())
+	}
+	if len(created) != 2 {
+		t.Fatalf("created_associations len = %d, want 2", len(created))
+	}
+	if created[0].ID != "assoc-1" {
+		t.Errorf("created[0].ID = %q, want assoc-1", created[0].ID)
 	}
 }
 

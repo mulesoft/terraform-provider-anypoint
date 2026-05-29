@@ -71,7 +71,8 @@ func (r *PrivateSpaceAssociationResource) Schema(_ context.Context, _ resource.S
 			},
 			"associations": schema.ListNestedAttribute{
 				Description: "List of associations to create between the private space and environments.",
-				Required:    true,
+				Optional:    true,
+				Computed:    true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"organization_id": schema.StringAttribute{
@@ -227,16 +228,71 @@ func (r *PrivateSpaceAssociationResource) Create(ctx context.Context, req resour
 func (r *PrivateSpaceAssociationResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var data PrivateSpaceAssociationResourceModel
 
-	// Read Terraform prior state data into the model
 	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Note: No read API available for private space associations
-	// Maintaining existing state as-is
+	orgID := data.OrganizationID.ValueString()
+	if orgID == "" {
+		orgID = r.client.OrgID
+	}
 
-	// Save data into Terraform state
+	associations, err := r.client.GetPrivateSpaceAssociations(ctx, orgID, data.PrivateSpaceID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error reading Private Space Associations",
+			"Could not read Private Space Associations: "+err.Error(),
+		)
+		return
+	}
+
+	assocAttrTypes := map[string]attr.Type{
+		"organization_id": types.StringType,
+		"environment":     types.StringType,
+	}
+	createdAttrTypes := getPSAssociationAttrTypes()
+
+	assocElems := make([]attr.Value, 0, len(associations))
+	createdElems := make([]attr.Value, 0, len(associations))
+	for _, a := range associations {
+		assocObj, diags := types.ObjectValue(assocAttrTypes, map[string]attr.Value{
+			"organization_id": types.StringValue(a.OrganizationID),
+			"environment":     types.StringValue(a.EnvironmentID),
+		})
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		assocElems = append(assocElems, assocObj)
+
+		createdObj, diags := types.ObjectValue(createdAttrTypes, map[string]attr.Value{
+			"id":              types.StringValue(a.ID),
+			"organization_id": types.StringValue(a.OrganizationID),
+			"environment":     types.StringValue(a.EnvironmentID),
+		})
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		createdElems = append(createdElems, createdObj)
+	}
+
+	assocList, diags := types.ListValue(types.ObjectType{AttrTypes: assocAttrTypes}, assocElems)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	createdList, diags := types.ListValue(types.ObjectType{AttrTypes: createdAttrTypes}, createdElems)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	data.Associations = assocList
+	data.CreatedAssociations = createdList
+	data.OrganizationID = types.StringValue(orgID)
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
