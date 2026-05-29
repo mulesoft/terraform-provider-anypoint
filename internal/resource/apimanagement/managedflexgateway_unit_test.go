@@ -295,12 +295,43 @@ func TestManagedOmniGatewayResource_ImportState_IDParsing(t *testing.T) {
 		}
 	})
 
-	t.Run("invalid ID format", func(t *testing.T) {
-		req := resource.ImportStateRequest{ID: "only-two/parts"}
+	t.Run("valid 2-part ID sets environment_id and id", func(t *testing.T) {
+		req := resource.ImportStateRequest{ID: "env-2/gw-abc"}
+		resp := &resource.ImportStateResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: rawState}}
+		r.ImportState(ctx, req, resp)
+		if resp.Diagnostics.HasError() {
+			t.Fatalf("ImportState() unexpected errors for 2-part ID: %v", resp.Diagnostics.Errors())
+		}
+		var got ManagedOmniGatewayResourceModel
+		if diags := resp.State.Get(ctx, &got); diags.HasError() {
+			t.Fatalf("State.Get errors: %v", diags.Errors())
+		}
+		if got.EnvironmentID.ValueString() != "env-2" {
+			t.Errorf("EnvironmentID = %q, want env-2", got.EnvironmentID.ValueString())
+		}
+		if got.ID.ValueString() != "gw-abc" {
+			t.Errorf("ID = %q, want gw-abc", got.ID.ValueString())
+		}
+		if !got.OrganizationID.IsNull() {
+			t.Errorf("OrganizationID should be null for 2-part import, got %q", got.OrganizationID.ValueString())
+		}
+	})
+
+	t.Run("invalid ID format (4-part)", func(t *testing.T) {
+		req := resource.ImportStateRequest{ID: "org/env/gw/extra"}
 		resp := &resource.ImportStateResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: rawState}}
 		r.ImportState(ctx, req, resp)
 		if !resp.Diagnostics.HasError() {
-			t.Error("ImportState() should error for 2-part ID")
+			t.Error("ImportState() should error for 4-part ID")
+		}
+	})
+
+	t.Run("invalid ID format (1-part)", func(t *testing.T) {
+		req := resource.ImportStateRequest{ID: "only-one-part"}
+		resp := &resource.ImportStateResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: rawState}}
+		r.ImportState(ctx, req, resp)
+		if !resp.Diagnostics.HasError() {
+			t.Error("ImportState() should error for 1-part ID")
 		}
 	})
 }

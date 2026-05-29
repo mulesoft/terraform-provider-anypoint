@@ -171,11 +171,31 @@ Optional:
 
 ## Import
 
-An existing API instance can be imported using its composite ID: `organization_id/environment_id/api_instance_id`.
+An existing API instance can be imported using a composite ID. Use the 2-part form for root-org instances and the 3-part form when the instance belongs to a Business Group (sub-org).
 
 The `api_instance_id` is the numeric ID visible in the Anypoint API Manager URL (e.g. `16563478`).
 
 ### Using an import block (Terraform ≥ 1.5 — recommended)
+
+**Root org (2-part ID):**
+
+```terraform
+import {
+  to = anypoint_api_instance.imported
+  id = "<environment_id>/<api_instance_id>"
+}
+
+resource "anypoint_api_instance" "imported" {
+  environment_id = "<environment_id>"
+  spec = {
+    asset_id = "<api_asset_id>"
+    group_id = "<organization_id>"
+    version  = "1.0.0"
+  }
+}
+```
+
+**Sub-org (3-part ID):**
 
 ```terraform
 import {
@@ -184,7 +204,8 @@ import {
 }
 
 resource "anypoint_api_instance" "imported" {
-  environment_id = "<environment_id>"
+  organization_id = "<organization_id>"
+  environment_id  = "<environment_id>"
   spec = {
     asset_id = "<api_asset_id>"
     group_id = "<organization_id>"
@@ -206,5 +227,9 @@ terraform apply
 ### Using the CLI (deprecated, Terraform < 1.5)
 
 ```shell
+# Root org:
+terraform import anypoint_api_instance.imported <environment_id>/<api_instance_id>
+
+# Sub-org:
 terraform import anypoint_api_instance.imported <organization_id>/<environment_id>/<api_instance_id>
 ```

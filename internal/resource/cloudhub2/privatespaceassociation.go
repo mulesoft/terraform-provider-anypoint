@@ -359,11 +359,20 @@ func (r *PrivateSpaceAssociationResource) Delete(ctx context.Context, req resour
 	tflog.Trace(ctx, "deleted Private Space Associations")
 }
 
-// ImportState imports the resource into Terraform state.
+// ImportState supports two import ID formats:
+//   - "<privateSpaceID>"           — falls back to root org (backwards compatible)
+//   - "<orgID>/<privateSpaceID>"   — required when the private space lives in a sub-org
 func (r *PrivateSpaceAssociationResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	// Import format: private_space_id
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("private_space_id"), req.ID)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), req.ID+"-associations")...)
+	parts := strings.SplitN(req.ID, "/", 2)
+	if len(parts) == 2 {
+		orgID, spaceID := parts[0], parts[1]
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("organization_id"), orgID)...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("private_space_id"), spaceID)...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), spaceID+"-associations")...)
+	} else {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("private_space_id"), req.ID)...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), req.ID+"-associations")...)
+	}
 }
 
 func getPSAssociationAttrTypes() map[string]attr.Type {

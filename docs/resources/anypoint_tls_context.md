@@ -158,12 +158,11 @@ Read-Only:
 
 ## Import
 
-An existing TLS context can be imported using its composite ID: `private_space_id:tls_context_id`.
-
-- `private_space_id` — UUID of the private space (e.g. `849c361b-da3e-4c7d-9c68-a5784bb4dc58`)
-- `tls_context_id` — UUID of the TLS context
+An existing TLS context can be imported using a composite ID. Use the 2-part form for root-org private spaces and the 3-part form when the private space belongs to a Business Group (sub-org).
 
 ### Using an import block (Terraform ≥ 1.5 — recommended)
+
+**Root org (2-part ID):**
 
 ```terraform
 import {
@@ -174,6 +173,22 @@ import {
 resource "anypoint_tls_context" "imported" {
   private_space_id = "<private_space_id>"
   organization_id  = "<organization_id>"
+  name             = "<tls_context_name>"
+  keystore_type    = "PEM"
+}
+```
+
+**Sub-org (3-part ID):**
+
+```terraform
+import {
+  to = anypoint_tls_context.imported
+  id = "<org_id>:<private_space_id>:<tls_context_id>"
+}
+
+resource "anypoint_tls_context" "imported" {
+  private_space_id = "<private_space_id>"
+  organization_id  = "<org_id>"
   name             = "<tls_context_name>"
   keystore_type    = "PEM"
 }
@@ -192,5 +207,9 @@ terraform apply
 ### Using the CLI (deprecated, Terraform < 1.5)
 
 ```shell
+# Root org:
 terraform import anypoint_tls_context.imported <private_space_id>:<tls_context_id>
+
+# Sub-org:
+terraform import anypoint_tls_context.imported <org_id>:<private_space_id>:<tls_context_id>
 ```

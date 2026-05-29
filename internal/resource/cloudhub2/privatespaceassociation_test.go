@@ -111,6 +111,68 @@ func TestPrivateSpaceAssociationResource_ImportState(t *testing.T) {
 	}
 }
 
+func TestPrivateSpaceAssociationResource_ImportState_SimpleID(t *testing.T) {
+	res := NewPrivateSpaceAssociationResource()
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+
+	req := resource.ImportStateRequest{ID: "test-space-id"}
+	resp := &resource.ImportStateResponse{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: tftypes.NewValue(stateType, nil)},
+	}
+
+	res.(resource.ResourceWithImportState).ImportState(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("ImportState() with simple ID reported errors: %v", resp.Diagnostics.Errors())
+	}
+
+	var model PrivateSpaceAssociationResourceModel
+	resp.State.Get(ctx, &model)
+	if model.ID.ValueString() != "test-space-id-associations" {
+		t.Errorf("expected id = %q, got %q", "test-space-id-associations", model.ID.ValueString())
+	}
+	if model.PrivateSpaceID.ValueString() != "test-space-id" {
+		t.Errorf("expected private_space_id = %q, got %q", "test-space-id", model.PrivateSpaceID.ValueString())
+	}
+	if !model.OrganizationID.IsNull() {
+		t.Errorf("expected organization_id to be null for simple import, got %q", model.OrganizationID.ValueString())
+	}
+}
+
+func TestPrivateSpaceAssociationResource_ImportState_CompositeID(t *testing.T) {
+	res := NewPrivateSpaceAssociationResource()
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+
+	req := resource.ImportStateRequest{ID: "test-org-id/test-space-id"}
+	resp := &resource.ImportStateResponse{
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: tftypes.NewValue(stateType, nil)},
+	}
+
+	res.(resource.ResourceWithImportState).ImportState(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("ImportState() with composite ID reported errors: %v", resp.Diagnostics.Errors())
+	}
+
+	var model PrivateSpaceAssociationResourceModel
+	resp.State.Get(ctx, &model)
+	if model.ID.ValueString() != "test-space-id-associations" {
+		t.Errorf("expected id = %q, got %q", "test-space-id-associations", model.ID.ValueString())
+	}
+	if model.PrivateSpaceID.ValueString() != "test-space-id" {
+		t.Errorf("expected private_space_id = %q, got %q", "test-space-id", model.PrivateSpaceID.ValueString())
+	}
+	if model.OrganizationID.ValueString() != "test-org-id" {
+		t.Errorf("expected organization_id = %q, got %q", "test-org-id", model.OrganizationID.ValueString())
+	}
+}
+
 func TestPrivateSpaceAssociationResourceModel_Validation(t *testing.T) {
 	model := PrivateSpaceAssociationResourceModel{}
 	_ = model.ID

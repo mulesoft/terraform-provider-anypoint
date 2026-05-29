@@ -196,3 +196,35 @@ func TestAPIUpstream_JSONSerialization(t *testing.T) {
 		t.Errorf("URI = %v, want %v", decoded.URI, upstream.URI)
 	}
 }
+
+func TestAPIUpstream_JSONDeserialization_WithTLSContext(t *testing.T) {
+	// The real upstreams API returns tlsContext as a top-level field; connection is null.
+	raw := `{
+		"id": "up-tls",
+		"label": "secure-backend",
+		"uri": "https://secure.example.com",
+		"connection": null,
+		"tlsContext": {
+			"secretGroupId": "sg-abc123",
+			"tlsContextId": "tls-def456"
+		}
+	}`
+
+	var upstream APIUpstream
+	if err := json.Unmarshal([]byte(raw), &upstream); err != nil {
+		t.Fatalf("Unmarshal error: %v", err)
+	}
+
+	if upstream.ID != "up-tls" {
+		t.Errorf("ID = %q, want up-tls", upstream.ID)
+	}
+	if upstream.TLSContext == nil {
+		t.Fatal("TLSContext is nil, want non-nil")
+	}
+	if upstream.TLSContext.SecretGroupID != "sg-abc123" {
+		t.Errorf("SecretGroupID = %q, want sg-abc123", upstream.TLSContext.SecretGroupID)
+	}
+	if upstream.TLSContext.TLSContextID != "tls-def456" {
+		t.Errorf("TLSContextID = %q, want tls-def456", upstream.TLSContext.TLSContextID)
+	}
+}

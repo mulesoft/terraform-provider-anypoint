@@ -16,24 +16,39 @@
 # Import an existing API instance into Terraform state.
 #
 # Steps:
-#   1. Uncomment all blocks below.
+#   1. Uncomment the relevant block below.
 #   2. Replace the placeholder values in the locals block.
 #   3. Run: terraform init && terraform apply
 #      OR use the CLI import command (Terraform < 1.5):
 #        terraform import anypoint_api_instance.imported \
-#          <org_id>/<env_id>/<api_instance_id>
+#          <env_id>/<api_instance_id>
 #   4. Run: terraform plan — review the diff and adjust the resource block.
 #
 # Import ID format:
-#   anypoint_api_instance -> organization_id/environment_id/api_instance_id
+#   Root org:  anypoint_api_instance -> <env_id>/<api_instance_id>
+#   Sub-org:   anypoint_api_instance -> <org_id>/<env_id>/<api_instance_id>
+#
+# Use the sub-org format when the API instance belongs to a Business Group.
 # ---------------------------------------------------------------------------
 
+# --- Root org (2-part ID) ---
+# locals {
+#   env_id          = "<env_id>"
+#   api_instance_id = "<api_instance_id>"  # numeric ID from Anypoint API Manager
+# }
+#
+# import {
+#   to = anypoint_api_instance.imported
+#   id = "${local.env_id}/${local.api_instance_id}"
+# }
+
+# --- Sub-org (3-part ID) ---
 # locals {
 #   org_id          = "<org_id>"
 #   env_id          = "<env_id>"
 #   api_instance_id = "<api_instance_id>"  # numeric ID from Anypoint API Manager
 # }
-
+#
 # import {
 #   to = anypoint_api_instance.imported
 #   id = "${local.org_id}/${local.env_id}/${local.api_instance_id}"

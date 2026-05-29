@@ -98,12 +98,11 @@ Read-Only:
 
 ## Import
 
-An existing VPN connection can be imported using its composite ID: `private_space_id/connection_id`.
-
-- `private_space_id` — UUID of the private space (e.g. `849c361b-da3e-4c7d-9c68-a5784bb4dc58`)
-- `connection_id` — UUID of the VPN connection
+An existing VPN connection can be imported using a composite ID. Use the 2-part form for root-org private spaces and the 3-part form when the private space belongs to a Business Group (sub-org).
 
 ### Using an import block (Terraform ≥ 1.5 — recommended)
+
+**Root org (2-part ID):**
 
 ```terraform
 import {
@@ -114,6 +113,22 @@ import {
 resource "anypoint_vpn_connection" "imported" {
   private_space_id = "<private_space_id>"
   organization_id  = "<organization_id>"
+  name             = "<connection_name>"
+  vpns             = []
+}
+```
+
+**Sub-org (3-part ID):**
+
+```terraform
+import {
+  to = anypoint_vpn_connection.imported
+  id = "<org_id>/<private_space_id>/<connection_id>"
+}
+
+resource "anypoint_vpn_connection" "imported" {
+  private_space_id = "<private_space_id>"
+  organization_id  = "<org_id>"
   name             = "<connection_name>"
   vpns             = []
 }
@@ -132,5 +147,9 @@ terraform apply
 ### Using the CLI (deprecated, Terraform < 1.5)
 
 ```shell
+# Root org:
 terraform import anypoint_vpn_connection.imported <private_space_id>/<connection_id>
+
+# Sub-org:
+terraform import anypoint_vpn_connection.imported <org_id>/<private_space_id>/<connection_id>
 ```

@@ -61,9 +61,11 @@ Read-Only:
 
 ## Import
 
-An existing private space association can be imported using the private space ID (UUID).
+An existing private space association can be imported using the private space ID, or a composite `<org_id>/<private_space_id>` when the private space belongs to a Business Group (sub-org).
 
 ### Using an import block (Terraform ≥ 1.5 — recommended)
+
+**Root org (simple ID):**
 
 ```terraform
 import {
@@ -74,6 +76,21 @@ import {
 resource "anypoint_private_space_association" "imported" {
   private_space_id = "<private_space_id>"
   organization_id  = "<organization_id>"
+  associations     = []
+}
+```
+
+**Sub-org (composite ID):**
+
+```terraform
+import {
+  to = anypoint_private_space_association.imported
+  id = "<org_id>/<private_space_id>"
+}
+
+resource "anypoint_private_space_association" "imported" {
+  private_space_id = "<private_space_id>"
+  organization_id  = "<org_id>"
   associations     = []
 }
 ```
@@ -91,5 +108,9 @@ terraform apply
 ### Using the CLI (deprecated, Terraform < 1.5)
 
 ```shell
+# Root org:
 terraform import anypoint_private_space_association.imported <private_space_id>
+
+# Sub-org:
+terraform import anypoint_private_space_association.imported <org_id>/<private_space_id>
 ```

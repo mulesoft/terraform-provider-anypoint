@@ -16,25 +16,40 @@
 # Import an existing Managed Omni Gateway into Terraform state.
 #
 # Steps:
-#   1. Uncomment all blocks below.
+#   1. Uncomment the relevant block below.
 #   2. Replace the placeholder values with real IDs.
 #      IDs can be found in Anypoint Runtime Manager or via the Anypoint API.
 #   3. Run: terraform init && terraform apply
 #      OR use the CLI import command (Terraform < 1.5):
 #        terraform import anypoint_managed_omni_gateway.imported \
-#          <organization_id>/<environment_id>/<gateway_id>
+#          <environment_id>/<gateway_id>
 #   4. Run: terraform plan — review the diff and adjust the resource block.
 #
 # Import ID format:
-#   anypoint_managed_omni_gateway -> <organization_id>/<environment_id>/<gateway_id>
+#   Root org:  anypoint_managed_omni_gateway -> <env_id>/<gateway_id>
+#   Sub-org:   anypoint_managed_omni_gateway -> <org_id>/<env_id>/<gateway_id>
+#
+# Use the sub-org format when the gateway belongs to a Business Group.
 # ---------------------------------------------------------------------------
 
+# --- Root org (2-part ID) ---
+# locals {
+#   env_id     = "<environment_id>"
+#   gateway_id = "<gateway_id>"
+# }
+#
+# import {
+#   to = anypoint_managed_omni_gateway.imported
+#   id = "${local.env_id}/${local.gateway_id}"
+# }
+
+# --- Sub-org (3-part ID) ---
 # locals {
 #   org_id     = "<organization_id>"
 #   env_id     = "<environment_id>"
 #   gateway_id = "<gateway_id>"
 # }
-
+#
 # import {
 #   to = anypoint_managed_omni_gateway.imported
 #   id = "${local.org_id}/${local.env_id}/${local.gateway_id}"

@@ -763,7 +763,15 @@ func (r *APIInstanceResource) Read(ctx context.Context, req resource.ReadRequest
 	r.flattenInstance(ctx, instance, &data, orgID, envID)
 
 	// Restore user-managed fields from state.
-	data.GatewayID = gatewayID
+	// On the import path gateway_id is absent from state; derive it from deployment.target_id
+	// so the generated config is immediately usable without manual fixup.
+	if !gatewayID.IsNull() && !gatewayID.IsUnknown() {
+		data.GatewayID = gatewayID
+	} else if dep := deploymentFromObject(data.Deployment); dep != nil && dep.TargetID.ValueString() != "" {
+		data.GatewayID = dep.TargetID
+	} else {
+		data.GatewayID = gatewayID
+	}
 	if !data.UpstreamURI.IsNull() && !data.UpstreamURI.IsUnknown() {
 		data.Routing = types.ListNull(data.Routing.ElementType(ctx))
 	} else if !existingRouting.IsNull() && !existingRouting.IsUnknown() {
@@ -873,16 +881,23 @@ func (r *APIInstanceResource) Delete(ctx context.Context, req resource.DeleteReq
 	}
 }
 
+// ImportState supports two import ID formats:
+//   - "<environmentID>/<apiInstanceID>"                   — falls back to root org (backwards compatible)
+//   - "<organizationID>/<environmentID>/<apiInstanceID>"  — required when the instance lives in a sub-org
 func (r *APIInstanceResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	parts := strings.Split(req.ID, "/")
-	if len(parts) != 3 {
+	switch len(parts) {
+	case 2:
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("environment_id"), parts[0])...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[1])...)
+	case 3:
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("organization_id"), parts[0])...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("environment_id"), parts[1])...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[2])...)
+	default:
 		resp.Diagnostics.AddError("Invalid import ID",
-			"Expected format: organization_id/environment_id/api_instance_id")
-		return
+			"Expected format: environment_id/api_instance_id or organization_id/environment_id/api_instance_id")
 	}
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("organization_id"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("environment_id"), parts[1])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[2])...)
 }
 
 // --- Helpers ---
@@ -1165,6 +1180,9 @@ func (r *APIInstanceResource) enrichInstanceRouting(ctx context.Context, inst *a
 			if named, ok := byID[routeUpstream.ID]; ok {
 				inst.Routing[i].Upstreams[j].URI = named.URI
 				inst.Routing[i].Upstreams[j].Label = named.Label
+				if named.TLSContext != nil {
+					inst.Routing[i].Upstreams[j].TLSContext = named.TLSContext
+				}
 			}
 		}
 	}
