@@ -31,11 +31,11 @@ resource "anypoint_private_space_association" "example" {
 ### Required
 
 - `private_space_id` (String) The ID of the private space.
-- `associations` (Block List) List of associations to create between the private space and environments. See [below for nested schema](#nestedschema--associations).
 
 ### Optional
 
 - `organization_id` (String) The organization ID. If not provided, the organization ID will be inferred from the connected app credentials.
+- `associations` (Block List) List of associations to create between the private space and environments. When omitted, the provider reads the existing associations from the API and populates this field automatically. See [below for nested schema](#nestedschema--associations).
 
 ### Read-Only
 
@@ -76,7 +76,6 @@ import {
 resource "anypoint_private_space_association" "imported" {
   private_space_id = "<private_space_id>"
   organization_id  = "<organization_id>"
-  associations     = []
 }
 ```
 
@@ -91,7 +90,6 @@ import {
 resource "anypoint_private_space_association" "imported" {
   private_space_id = "<private_space_id>"
   organization_id  = "<org_id>"
-  associations     = []
 }
 ```
 
