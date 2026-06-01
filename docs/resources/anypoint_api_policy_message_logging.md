@@ -22,12 +22,13 @@ resource "anypoint_api_policy_message_logging" "example" {
   configuration = {
     logging_configuration = [
       {
-        item_name = "request"
-        item_data = {
+        itemName = "request"
+        itemData = {
           message       = "#[payload]"
           conditional   = "#[true]"
           level         = "INFO"
-          first_section = true
+          firstSection  = true
+          secondSection = false
         }
       }
     ]
@@ -64,21 +65,21 @@ resource "anypoint_api_policy_message_logging" "example" {
 
 Required:
 
-- `logging_configuration` (Dynamic) Array of logging rule objects. Each element **must** use the `item_name` + `item_data` wrapper — the Platform rejects any flat field structure with HTTP 400.
+- `logging_configuration` (Dynamic) Array of logging rule objects. Each element **must** use the `itemName` + `itemData` wrapper — the Platform rejects any flat field structure with HTTP 400.
 
 **Required structure per element:**
 
 ```hcl
 logging_configuration = [
   {
-    item_name = "<string>"   # unique label for this logging rule
-    item_data = {
-      message        = "<string>"  # DataWeave expression or literal, e.g. "#[payload]"
-      level          = "<string>"  # Log level: DEBUG, INFO, WARN, ERROR (default: INFO)
-      conditional    = "<string>"  # Optional DataWeave boolean expression, e.g. "#[true]"
-      category       = "<string>"  # Optional logger category name
-      first_section  = <bool>      # Log on request phase (default: true)
-      second_section = <bool>      # Log on response phase (default: false)
+    itemName = "<string>"   # unique label for this logging rule
+    itemData = {
+      message       = "<string>"  # DataWeave expression or literal, e.g. "#[payload]"
+      level         = "<string>"  # Log level: DEBUG, INFO, WARN, ERROR (default: INFO)
+      conditional   = "<string>"  # Optional DataWeave boolean expression, e.g. "#[true]"
+      category      = "<string>"  # Optional logger category name
+      firstSection  = <bool>      # Log on request phase (default: true)
+      secondSection = <bool>      # Log on response phase (default: false)
     }
   }
 ]
