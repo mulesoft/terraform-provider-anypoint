@@ -398,13 +398,13 @@ resource "anypoint_api_policy_http_caching" "http_caching" {
 #   configuration = {
 #     logging_configuration = [
 #       {
-#         itemName = "Default configuration"
-#         itemData = {
-#           message       = "#[attributes.headers['id']]"
-#           conditional   = "#[true]"
-#           level         = "INFO"
-#           firstSection  = true
-#           secondSection = true
+#         item_name = "Default configuration"
+#         item_data = {
+#           message        = "#[attributes.headers['id']]"
+#           conditional    = "#[true]"
+#           level          = "INFO"
+#           first_section  = false
+#           second_section = true
 #         }
 #       }
 #     ]
