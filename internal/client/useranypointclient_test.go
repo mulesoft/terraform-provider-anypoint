@@ -140,9 +140,14 @@ func TestNewUserAnypointClient(t *testing.T) {
 				tt.config.BaseURL = server.URL
 			} else if tt.config != nil && tt.config.BaseURL != "" {
 				// For custom baseURL tests, create new config with mock server
-				testConfig := *tt.config
-				testConfig.BaseURL = server.URL
-				tt.config = &testConfig
+				tt.config = &UserClientConfig{
+					ClientID:     tt.config.ClientID,
+					ClientSecret: tt.config.ClientSecret,
+					Username:     tt.config.Username,
+					Password:     tt.config.Password,
+					Timeout:      tt.config.Timeout,
+					BaseURL:      server.URL,
+				}
 			}
 
 			client, err := NewUserAnypointClient(tt.config)
