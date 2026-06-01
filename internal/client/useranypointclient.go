@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -22,7 +23,10 @@ type UserAnypointClient struct {
 	OrgID        string
 }
 
-// UserClientConfig represents the configuration for the UserAnypointClient
+// UserClientConfig represents the configuration for the UserAnypointClient.
+// Token and OrgID are populated on the first NewUserAnypointClient call and
+// reused by all subsequent calls within the same terraform apply.
+// mu guards Token and OrgID against concurrent writes.
 type UserClientConfig struct {
 	BaseURL      string
 	ClientID     string
@@ -30,6 +34,9 @@ type UserClientConfig struct {
 	Username     string
 	Password     string
 	Timeout      int
+	mu           sync.Mutex
+	Token        string
+	OrgID        string
 }
 
 // NewUserAnypointClient creates a new User-based Anypoint API client using password grant
@@ -71,7 +78,7 @@ func NewUserAnypointClient(config *UserClientConfig) (*UserAnypointClient, error
 		timeout = time.Duration(config.Timeout) * time.Second
 	}
 
-	client := &UserAnypointClient{
+	c := &UserAnypointClient{
 		BaseURL:      baseURL,
 		ClientID:     config.ClientID,
 		ClientSecret: config.ClientSecret,
@@ -82,13 +89,27 @@ func NewUserAnypointClient(config *UserClientConfig) (*UserAnypointClient, error
 		},
 	}
 
-	// Authenticate and get token
-	err := client.authenticate()
-	if err != nil {
+	config.mu.Lock()
+	if config.Token != "" {
+		c.Token = config.Token
+		c.OrgID = config.OrgID
+		config.mu.Unlock()
+		return c, nil
+	}
+	config.mu.Unlock()
+
+	if err := c.authenticate(); err != nil {
 		return nil, fmt.Errorf("failed to authenticate user: %w", err)
 	}
 
-	return client, nil
+	config.mu.Lock()
+	if config.Token == "" {
+		config.Token = c.Token
+		config.OrgID = c.OrgID
+	}
+	config.mu.Unlock()
+
+	return c, nil
 }
 
 // authenticate performs user authentication using password grant and stores the access token

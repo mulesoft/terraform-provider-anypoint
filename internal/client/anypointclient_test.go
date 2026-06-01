@@ -68,9 +68,14 @@ func TestNewAnypointClient(t *testing.T) {
 				tt.config.BaseURL = server.URL
 			} else if tt.config != nil {
 				// Create a new config with server URL for custom baseURL tests
-				testConfig := *tt.config
-				testConfig.BaseURL = server.URL
-				tt.config = &testConfig
+				tt.config = &Config{
+					ClientID:     tt.config.ClientID,
+					ClientSecret: tt.config.ClientSecret,
+					Username:     tt.config.Username,
+					Password:     tt.config.Password,
+					Timeout:      tt.config.Timeout,
+					BaseURL:      server.URL,
+				}
 			}
 
 			client, err := NewAnypointClient(tt.config)
