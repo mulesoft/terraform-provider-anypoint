@@ -316,7 +316,7 @@ func (r *KnownPolicyResource) ValidateConfig(ctx context.Context, req resource.V
 }
 
 // validateMessageLoggingConfig checks that logging_configuration is an array
-// whose elements each contain item_name (string) and item_data (object).
+// whose elements each contain itemName (string) and itemData (object).
 // Catches flat-field configs at plan time instead of failing at apply with HTTP 400.
 func validateMessageLoggingConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
 	var data KnownPolicyResourceModel
@@ -350,7 +350,7 @@ func validateMessageLoggingConfig(ctx context.Context, req resource.ValidateConf
 		resp.Diagnostics.AddAttributeError(
 			path.Root("configuration").AtName("logging_configuration"),
 			"Invalid logging_configuration",
-			"logging_configuration must be a list of objects, each with item_name (string) and item_data (object).",
+			"logging_configuration must be a list of objects, each with itemName (string) and itemData (object).",
 		)
 		return
 	}
@@ -361,23 +361,23 @@ func validateMessageLoggingConfig(ctx context.Context, req resource.ValidateConf
 			resp.Diagnostics.AddAttributeError(
 				path.Root("configuration").AtName("logging_configuration"),
 				fmt.Sprintf("Invalid element at index %d", i),
-				"Each logging_configuration element must be an object with item_name and item_data.",
+				"Each logging_configuration element must be an object with itemName and itemData.",
 			)
 			continue
 		}
 		objAttrs := obj.Attributes()
-		if _, hasName := objAttrs["item_name"]; !hasName {
+		if _, hasName := objAttrs["itemName"]; !hasName {
 			resp.Diagnostics.AddAttributeError(
 				path.Root("configuration").AtName("logging_configuration"),
-				fmt.Sprintf("Missing item_name at index %d", i),
-				"Each logging_configuration element must have item_name (string). Flat fields like message, level, category are not valid at this level.",
+				fmt.Sprintf("Missing itemName at index %d", i),
+				"Each logging_configuration element must have itemName (string). Flat fields like message, level, category are not valid at this level.",
 			)
 		}
-		if _, hasData := objAttrs["item_data"]; !hasData {
+		if _, hasData := objAttrs["itemData"]; !hasData {
 			resp.Diagnostics.AddAttributeError(
 				path.Root("configuration").AtName("logging_configuration"),
-				fmt.Sprintf("Missing item_data at index %d", i),
-				"Each logging_configuration element must have item_data containing message, level, conditional, category, first_section, second_section.",
+				fmt.Sprintf("Missing itemData at index %d", i),
+				"Each logging_configuration element must have itemData containing message, level, conditional, category, firstSection, secondSection.",
 			)
 		}
 	}
