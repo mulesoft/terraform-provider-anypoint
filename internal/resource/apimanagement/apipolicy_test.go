@@ -35,6 +35,7 @@ func TestAPIPolicyResource_Metadata(t *testing.T) {
 func TestAPIPolicyResource_Schema(t *testing.T) {
 	r := NewAPIPolicyResource()
 	requiredAttrs := []string{"environment_id", "api_instance_id", "configuration_data"}
+	_ = requiredAttrs // pointcut_data is optional+computed, not required
 	optionalAttrs := []string{"organization_id", "policy_type", "group_id", "asset_id", "asset_version", "label", "order", "disabled"}
 	computedAttrs := []string{"id", "organization_id", "policy_template_id"}
 	testutil.TestResourceSchema(t, r, requiredAttrs, optionalAttrs, computedAttrs)
@@ -138,6 +139,7 @@ func TestAPIPolicyResource_Read(t *testing.T) {
 		"asset_version":      tftypes.NewValue(tftypes.String, "1.0.0"),
 		"label":              tftypes.NewValue(tftypes.String, "test-label"),
 		"configuration_data": tftypes.NewValue(tftypes.String, "{}"),
+		"pointcut_data":      tftypes.NewValue(tftypes.String, nil),
 		"order":              tftypes.NewValue(tftypes.Number, nil),
 		"disabled":           tftypes.NewValue(tftypes.Bool, false),
 		"policy_template_id": tftypes.NewValue(tftypes.String, nil),
@@ -195,6 +197,7 @@ func TestAPIPolicyResource_Read_NotFound(t *testing.T) {
 		"asset_version":      tftypes.NewValue(tftypes.String, "1.0.0"),
 		"label":              tftypes.NewValue(tftypes.String, nil),
 		"configuration_data": tftypes.NewValue(tftypes.String, "{}"),
+		"pointcut_data":      tftypes.NewValue(tftypes.String, nil),
 		"order":              tftypes.NewValue(tftypes.Number, nil),
 		"disabled":           tftypes.NewValue(tftypes.Bool, false),
 		"policy_template_id": tftypes.NewValue(tftypes.String, nil),
