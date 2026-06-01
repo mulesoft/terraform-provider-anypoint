@@ -43,6 +43,7 @@ type APIPolicyResourceModel struct {
 	AssetVersion      types.String `tfsdk:"asset_version"`
 	Label             types.String `tfsdk:"label"`
 	ConfigurationData types.String `tfsdk:"configuration_data"`
+	PointcutData      types.String `tfsdk:"pointcut_data"`
 	Order             types.Int64  `tfsdk:"order"`
 	Disabled          types.Bool   `tfsdk:"disabled"`
 	PolicyTemplateID  types.String `tfsdk:"policy_template_id"`
@@ -131,6 +132,12 @@ func (r *APIPolicyResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				Description: "Policy configuration as a JSON string. Use jsonencode() to set this. " +
 					"Fields vary by policy type; the provider validates known policies at plan time.",
 				Required: true,
+			},
+			"pointcut_data": schema.StringAttribute{
+				Description: "Pointcut definition as a JSON string. Restricts the policy to specific resources " +
+					"(methods and/or URIs). When null the policy applies to all resources. Use jsonencode() to set this.",
+				Optional: true,
+				Computed: true,
 			},
 			"order": schema.Int64Attribute{
 				Description: "Execution order of the policy. Lower numbers execute first.",
@@ -284,7 +291,7 @@ func (r *APIPolicyResource) Create(ctx context.Context, req resource.CreateReque
 		GroupID:           groupID,
 		AssetID:           assetID,
 		AssetVersion:      assetVersion,
-		PointcutData:      nil,
+		PointcutData:      expandPointcutData(data.PointcutData),
 	}
 
 	if !data.Label.IsNull() && !data.Label.IsUnknown() {
@@ -396,6 +403,7 @@ func (r *APIPolicyResource) Update(ctx context.Context, req resource.UpdateReque
 	updateReq := &apimanagement.UpdateAPIPolicyRequest{
 		ConfigurationData: configData,
 		AssetVersion:      assetVersion,
+		PointcutData:      expandPointcutData(plan.PointcutData),
 	}
 
 	if !plan.Label.IsNull() && !plan.Label.IsUnknown() {
@@ -501,4 +509,26 @@ func (r *APIPolicyResource) flattenPolicy(policy *apimanagement.APIPolicy, data 
 			data.ConfigurationData = types.StringValue(string(cfgJSON))
 		}
 	}
+
+	if policy.PointcutData != nil {
+		pcJSON, err := json.Marshal(policy.PointcutData)
+		if err == nil {
+			data.PointcutData = types.StringValue(string(pcJSON))
+		}
+	} else {
+		data.PointcutData = types.StringNull()
+	}
+}
+
+// expandPointcutData parses a JSON string into a native interface{} for the API request.
+// Returns nil when the value is null, unknown, or empty.
+func expandPointcutData(v types.String) interface{} {
+	if v.IsNull() || v.IsUnknown() || v.ValueString() == "" {
+		return nil
+	}
+	var parsed interface{}
+	if err := json.Unmarshal([]byte(v.ValueString()), &parsed); err != nil {
+		return nil
+	}
+	return parsed
 }
