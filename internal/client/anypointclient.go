@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -27,6 +28,31 @@ type Config struct {
 	Username     string
 	Password     string
 	Timeout      int
+	// Token and OrgID are populated on the first NewAnypointClient call and
+	// reused by all subsequent calls within the same terraform apply, so that
+	// N resources sharing this Config do not each make a parallel auth request.
+	// mu guards Token and OrgID against concurrent writes.
+	mu    sync.Mutex
+	Token string
+	OrgID string
+}
+
+// ToUserClientConfig converts a Config into a UserClientConfig, propagating
+// any cached token so the user client can skip re-authentication.
+func (c *Config) ToUserClientConfig() *UserClientConfig {
+	c.mu.Lock()
+	token, orgID := c.Token, c.OrgID
+	c.mu.Unlock()
+	return &UserClientConfig{
+		BaseURL:      c.BaseURL,
+		ClientID:     c.ClientID,
+		ClientSecret: c.ClientSecret,
+		Username:     c.Username,
+		Password:     c.Password,
+		Timeout:      c.Timeout,
+		Token:        token,
+		OrgID:        orgID,
+	}
 }
 
 // NewAnypointClient creates a new Anypoint API client
@@ -49,7 +75,7 @@ func NewAnypointClient(config *Config) (*AnypointClient, error) {
 		timeout = time.Duration(config.Timeout) * time.Second
 	}
 
-	client := &AnypointClient{
+	c := &AnypointClient{
 		BaseURL:      baseURL,
 		ClientID:     config.ClientID,
 		ClientSecret: config.ClientSecret,
@@ -58,13 +84,28 @@ func NewAnypointClient(config *Config) (*AnypointClient, error) {
 		},
 	}
 
-	// Authenticate and get token
-	err := client.authenticate()
-	if err != nil {
+	config.mu.Lock()
+	if config.Token != "" {
+		c.Token = config.Token
+		c.OrgID = config.OrgID
+		config.mu.Unlock()
+		return c, nil
+	}
+	config.mu.Unlock()
+
+	if err := c.authenticate(); err != nil {
 		return nil, fmt.Errorf("failed to authenticate: %w", err)
 	}
 
-	return client, nil
+	// Cache token so subsequent parallel NewAnypointClient calls skip auth.
+	config.mu.Lock()
+	if config.Token == "" {
+		config.Token = c.Token
+		config.OrgID = c.OrgID
+	}
+	config.mu.Unlock()
+
+	return c, nil
 }
 
 // authenticate performs authentication and stores the access token
