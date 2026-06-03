@@ -629,7 +629,7 @@ var KnownPolicies = map[string]PolicyInfo{
 	"script-evaluation-transformation":         {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "script-evaluation-transformation", DefaultVersion: "1.0.0-20260127.133315", InboundPolicy: true},
 	"spec-validation":                          {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "spec-validation", DefaultVersion: "1.0.1", InboundPolicy: true},
 	"external-oauth2-access-token-enforcement": {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "external-oauth2-access-token-enforcement", DefaultVersion: "1.6.0", InboundPolicy: true, SupportedTechnologies: []string{"mule4"}},
-	"message-logging-outbound":                 {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "message-logging-outbound", DefaultVersion: "2.0.3", OutboundPolicy: true},
+	"message-logging-outbound":                 {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "message-logging-outbound", DefaultVersion: "2.0.2", OutboundPolicy: true},
 	"intask-authorization-code-policy":         {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "intask-authorization-code-policy", DefaultVersion: "1.0.0", OutboundPolicy: true},
 	"credential-injection-oauth2":              {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "credential-injection-oauth2", DefaultVersion: "1.0.1", OutboundPolicy: true},
 	"credential-injection-basic-auth":          {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "credential-injection-basic-auth", DefaultVersion: "1.0.1", OutboundPolicy: true},
