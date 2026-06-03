@@ -50,7 +50,8 @@ type APIInstanceResourceModel struct {
 	AssetVersion     types.String `tfsdk:"asset_version"`
 	ProductVersion   types.String `tfsdk:"product_version"`
 	ConsumerEndpoint types.String `tfsdk:"consumer_endpoint"`
-	UpstreamURI      types.String `tfsdk:"upstream_uri"`
+	UpstreamURI           types.String `tfsdk:"upstream_uri"`
+	UpstreamTLSContextID  types.String `tfsdk:"upstream_tls_context_id"`
 
 	GatewayID types.String `tfsdk:"gateway_id"`
 
@@ -407,6 +408,11 @@ func (r *APIInstanceResource) Schema(_ context.Context, _ resource.SchemaRequest
 					"Mutually exclusive with the 'routing' block.",
 				Optional: true,
 			},
+			"upstream_tls_context_id": schema.StringAttribute{
+				Description: "TLS context for the single-upstream defined by 'upstream_uri'. " +
+					"Format: 'secretGroupId/tlsContextId'. Only valid when 'upstream_uri' is set.",
+				Optional: true,
+			},
 			"gateway_id": schema.StringAttribute{
 				Description: "The Omni Gateway UUID. When provided, the deployment block is auto-populated " +
 					"by fetching gateway details (target_id, target_name, gateway_version) from the Gateway Manager API. " +
@@ -588,6 +594,25 @@ func (r *APIInstanceResource) ValidateConfig(ctx context.Context, req resource.V
 		return
 	}
 
+	hasTLSContextID := !data.UpstreamTLSContextID.IsNull() && !data.UpstreamTLSContextID.IsUnknown()
+	if hasTLSContextID {
+		if !hasUpstreamURI {
+			resp.Diagnostics.AddAttributeError(
+				path.Root("upstream_tls_context_id"),
+				"Invalid attribute",
+				"'upstream_tls_context_id' can only be set when 'upstream_uri' is also set.",
+			)
+		}
+		parts := strings.Split(data.UpstreamTLSContextID.ValueString(), "/")
+		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+			resp.Diagnostics.AddAttributeError(
+				path.Root("upstream_tls_context_id"),
+				"Invalid format",
+				"'upstream_tls_context_id' must be in the format 'secretGroupId/tlsContextId'.",
+			)
+		}
+	}
+
 	if !hasRouting {
 		return
 	}
@@ -693,10 +718,12 @@ func (r *APIInstanceResource) Create(ctx context.Context, req resource.CreateReq
 	plannedDeployment := data.Deployment
 	plannedConsumerEndpoint := data.ConsumerEndpoint
 	plannedUpstreamURI := data.UpstreamURI
+	plannedUpstreamTLSContextID := data.UpstreamTLSContextID
 	r.flattenInstance(ctx, instance, &data, orgID, envID)
 	data.GatewayID = gatewayID
 	if !plannedUpstreamURI.IsNull() && !plannedUpstreamURI.IsUnknown() {
 		data.UpstreamURI = plannedUpstreamURI
+		data.UpstreamTLSContextID = plannedUpstreamTLSContextID
 		data.Routing = types.ListNull(data.Routing.ElementType(ctx))
 	} else if !plannedRouting.IsNull() {
 		data.Routing = plannedRouting
@@ -843,10 +870,12 @@ func (r *APIInstanceResource) Update(ctx context.Context, req resource.UpdateReq
 	plannedRouting := plan.Routing
 	plannedEndpoint := plan.Endpoint
 	plannedUpstreamURI := plan.UpstreamURI
+	plannedUpstreamTLSContextID := plan.UpstreamTLSContextID
 	r.flattenInstance(ctx, instance, &plan, orgID, envID)
 	plan.GatewayID = gatewayID
 	if !plannedUpstreamURI.IsNull() && !plannedUpstreamURI.IsUnknown() {
 		plan.UpstreamURI = plannedUpstreamURI
+		plan.UpstreamTLSContextID = plannedUpstreamTLSContextID
 		plan.Routing = types.ListNull(plan.Routing.ElementType(ctx))
 	} else if !plannedRouting.IsNull() {
 		plan.Routing = plannedRouting
@@ -993,12 +1022,18 @@ func (r *APIInstanceResource) expandCreateRequest(ctx context.Context, data APII
 	}
 
 	if !data.UpstreamURI.IsNull() && !data.UpstreamURI.IsUnknown() {
+		upstream := apimanagement.APIInstanceUpstream{Weight: 100, URI: data.UpstreamURI.ValueString()}
+		if !data.UpstreamTLSContextID.IsNull() && !data.UpstreamTLSContextID.IsUnknown() {
+			parts := strings.Split(data.UpstreamTLSContextID.ValueString(), "/")
+			if len(parts) == 2 {
+				upstream.TLSContext = &apimanagement.APIInstanceUpstreamTLS{
+					SecretGroupID: parts[0],
+					TLSContextID:  parts[1],
+				}
+			}
+		}
 		req.Routing = []apimanagement.APIInstanceRoute{
-			{
-				Upstreams: []apimanagement.APIInstanceUpstream{
-					{Weight: 100, URI: data.UpstreamURI.ValueString()},
-				},
-			},
+			{Upstreams: []apimanagement.APIInstanceUpstream{upstream}},
 		}
 	} else {
 		req.Routing = r.expandRouting(ctx, data.Routing)
@@ -1062,12 +1097,18 @@ func (r *APIInstanceResource) expandUpdateRequest(ctx context.Context, data APII
 	}
 
 	if !data.UpstreamURI.IsNull() && !data.UpstreamURI.IsUnknown() {
+		upstream := apimanagement.APIInstanceUpstream{Weight: 100, URI: data.UpstreamURI.ValueString()}
+		if !data.UpstreamTLSContextID.IsNull() && !data.UpstreamTLSContextID.IsUnknown() {
+			parts := strings.Split(data.UpstreamTLSContextID.ValueString(), "/")
+			if len(parts) == 2 {
+				upstream.TLSContext = &apimanagement.APIInstanceUpstreamTLS{
+					SecretGroupID: parts[0],
+					TLSContextID:  parts[1],
+				}
+			}
+		}
 		req.Routing = []apimanagement.APIInstanceRoute{
-			{
-				Upstreams: []apimanagement.APIInstanceUpstream{
-					{Weight: 100, URI: data.UpstreamURI.ValueString()},
-				},
-			},
+			{Upstreams: []apimanagement.APIInstanceUpstream{upstream}},
 		}
 	} else {
 		req.Routing = r.expandRouting(ctx, data.Routing)
