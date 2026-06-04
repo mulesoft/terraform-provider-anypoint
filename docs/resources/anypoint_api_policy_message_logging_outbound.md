@@ -51,7 +51,7 @@ resource "anypoint_api_policy_message_logging_outbound" "example" {
 
 - `organization_id` (String) The organization ID. If not provided, the organization ID will be inferred from the connected app credentials.
 - `label` (String) A human-readable label for this policy instance.
-- `asset_version` (String) The policy asset version. Defaults to `2.0.3`.
+- `asset_version` (String) The policy asset version. Defaults to `2.0.2`.
 
 ### Read-Only
 
