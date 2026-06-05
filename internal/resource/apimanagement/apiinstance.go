@@ -388,12 +388,14 @@ func (r *APIInstanceResource) Schema(_ context.Context, _ resource.SchemaRequest
 						},
 					},
 					"base_path": schema.StringAttribute{
-						Description: "API base path for Omni Gateway (e.g. 'my-api'). The provider constructs the full proxy URI as http://0.0.0.0:8081/<base_path>.",
-						Optional:    true,
+						Description: "API base path appended to the proxy URI (e.g. 'my-api'). " +
+							"Combined with 'uri' (or the default 'http://0.0.0.0:8081/') to form the full proxyUri: (uri ?? 'http://0.0.0.0:8081/') + base_path.",
+						Optional: true,
 					},
 					"uri": schema.StringAttribute{
-						Description: "Direct implementation URI (e.g. 'http://www.google.com'). Mutually exclusive with 'base_path'.",
-						Optional:    true,
+						Description: "Base URI for the proxy (e.g. 'http://my-host:8081/'). " +
+							"When set, replaces the default 'http://0.0.0.0:8081/' prefix. 'base_path' is appended to this value.",
+						Optional: true,
 					},
 					"response_timeout": schema.Int64Attribute{
 						Description: "Response timeout in milliseconds.",
@@ -971,17 +973,17 @@ func (r *APIInstanceResource) expandCreateRequest(ctx context.Context, data APII
 			Type:           ep.Type.ValueString(),
 		}
 
+		// proxyUri = (uri ?? "http://0.0.0.0:8081/") + base_path
+		base := "http://0.0.0.0:8081/"
 		if !ep.URI.IsNull() && !ep.URI.IsUnknown() && ep.URI.ValueString() != "" {
-			uri := ep.URI.ValueString()
-			req.Endpoint.URI = &uri
-		} else if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
-			basePath := strings.TrimPrefix(ep.BasePath.ValueString(), "/")
-			proxyURI := "http://0.0.0.0:8081/" + basePath
-			req.Endpoint.ProxyURI = &proxyURI
-		} else {
-			proxyURI := "http://0.0.0.0:8081/"
-			req.Endpoint.ProxyURI = &proxyURI
+			base = strings.TrimSuffix(ep.URI.ValueString(), "/") + "/"
 		}
+		basePath := ""
+		if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
+			basePath = strings.TrimPrefix(ep.BasePath.ValueString(), "/")
+		}
+		proxyURI := base + basePath
+		req.Endpoint.ProxyURI = &proxyURI
 
 		tlsContexts := &apimanagement.APIInstanceTLSContexts{}
 		if !ep.TLSContextID.IsNull() && !ep.TLSContextID.IsUnknown() {
@@ -1045,17 +1047,17 @@ func (r *APIInstanceResource) expandUpdateRequest(ctx context.Context, data APII
 			Type:           ep.Type.ValueString(),
 		}
 
+		// proxyUri = (uri ?? "http://0.0.0.0:8081/") + base_path
+		base := "http://0.0.0.0:8081/"
 		if !ep.URI.IsNull() && !ep.URI.IsUnknown() && ep.URI.ValueString() != "" {
-			proxyURI := ep.URI.ValueString()
-			req.Endpoint.ProxyURI = &proxyURI
-		} else if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
-			basePath := strings.TrimPrefix(ep.BasePath.ValueString(), "/")
-			proxyURI := "http://0.0.0.0:8081/" + basePath
-			req.Endpoint.ProxyURI = &proxyURI
-		} else {
-			proxyURI := "http://0.0.0.0:8081/"
-			req.Endpoint.ProxyURI = &proxyURI
+			base = strings.TrimSuffix(ep.URI.ValueString(), "/") + "/"
 		}
+		basePath := ""
+		if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
+			basePath = strings.TrimPrefix(ep.BasePath.ValueString(), "/")
+		}
+		proxyURI := base + basePath
+		req.Endpoint.ProxyURI = &proxyURI
 
 		tlsContexts := &apimanagement.APIInstanceTLSContexts{}
 		if !ep.TLSContextID.IsNull() && !ep.TLSContextID.IsUnknown() {
@@ -1265,13 +1267,17 @@ func (r *APIInstanceResource) flattenInstance(_ context.Context, inst *apimanage
 			Type:           types.StringValue(inst.Endpoint.Type),
 		}
 
-		// proxyUri from API: if it starts with the Omni Gateway default prefix it was
-		// built from base_path; otherwise the user supplied a direct uri.
+		// Reverse-engineer uri and base_path from proxyUri.
+		// proxyUri was constructed as: (uri ?? "http://0.0.0.0:8081/") + base_path
+		// If it starts with the default prefix, uri was not set — extract base_path only.
+		// Otherwise the user set a custom uri; we can only recover base_path as empty
+		// since we cannot split the uri from the path without the original values.
 		if inst.Endpoint.ProxyURI != nil && *inst.Endpoint.ProxyURI != "" {
 			if strings.HasPrefix(*inst.Endpoint.ProxyURI, "http://0.0.0.0:8081/") {
 				ep.BasePath = types.StringValue(strings.TrimPrefix(*inst.Endpoint.ProxyURI, "http://0.0.0.0:8081/"))
 				ep.URI = types.StringNull()
 			} else {
+				// Custom uri — store the full proxyUri in uri; base_path is unknown on read
 				ep.URI = types.StringValue(*inst.Endpoint.ProxyURI)
 				ep.BasePath = types.StringNull()
 			}
