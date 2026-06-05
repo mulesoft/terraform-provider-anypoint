@@ -71,7 +71,7 @@ resource "anypoint_secret_group_tls_context" "mtls" {
 - `min_tls_version` (String) Minimum TLS version. Valid values: `TLSv1.1`, `TLSv1.2`, `TLSv1.3`. Defaults to `TLSv1.3`.
 - `max_tls_version` (String) Maximum TLS version. Valid values: `TLSv1.1`, `TLSv1.2`, `TLSv1.3`. Defaults to `TLSv1.3`.
 - `alpn_protocols` (List of String) ALPN protocol negotiation list. Valid element values: `h2`, `http/1.1`. Order determines preference: `["h2", "http/1.1"]` prefers H2, `["http/1.1", "h2"]` prefers HTTP/1.1.
-- `cipher_suites` (List of String) Allowed cipher suites. Empty list means use defaults.
+- `cipher_suites` (List of String) Allowed cipher suites. **Required (must be non-empty) when `min_tls_version` is `TLSv1.2`** — the platform returns HTTP 400 if omitted. Can be omitted for `TLSv1.3`.
 - `enable_client_cert_validation` (Boolean) Enable mutual TLS client certificate validation (inbound). Defaults to `false`.
 - `skip_server_cert_validation` (Boolean) Skip server certificate validation (outbound). Defaults to `false`.
 
