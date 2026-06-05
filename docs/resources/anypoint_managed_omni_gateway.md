@@ -9,6 +9,8 @@ description: |-
 
 Manages a CloudHub 2.0 Managed Omni Gateway instance in Anypoint Platform.
 
+-> **Supported gateway type:** This provider currently supports **MuleSoft Managed Omni Gateway** (CloudHub 2.0) only. Self-managed Omni Gateway will be supported in a future release.
+
 -> **Connected App:** This resource requires a **standard connected app** (client credentials). An admin connected app is not needed. The connected app must have relevant scopes.
 
 -> **Tracing note:** The Gateway Manager API does not echo back `configuration.tracing` in POST/PUT responses. The provider retains the plan-requested value in state after create/update so that `tracing.enabled = true` works correctly. On the next `terraform refresh` or `plan`, the provider reads the live value from the API for accurate drift detection.

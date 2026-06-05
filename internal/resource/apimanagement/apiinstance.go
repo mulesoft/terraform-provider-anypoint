@@ -3,7 +3,6 @@ package apimanagement
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"strconv"
 	"strings"
 
@@ -72,7 +71,6 @@ type EndpointModel struct {
 	Type            types.String `tfsdk:"type"`
 	BasePath        types.String `tfsdk:"base_path"`
 	ResponseTimeout types.Int64  `tfsdk:"response_timeout"`
-	TLSContextID    types.String `tfsdk:"tls_context_id"`
 }
 
 type DeploymentModel struct {
@@ -94,7 +92,6 @@ var endpointAttrTypes = map[string]attr.Type{
 	"type":             types.StringType,
 	"base_path":        types.StringType,
 	"response_timeout": types.Int64Type,
-	"tls_context_id":   types.StringType,
 }
 
 // endpointFromObject extracts an EndpointModel from a types.Object.
@@ -109,7 +106,6 @@ func endpointFromObject(obj types.Object) *EndpointModel {
 		Type:            attrs["type"].(types.String),
 		BasePath:        attrs["base_path"].(types.String),
 		ResponseTimeout: attrs["response_timeout"].(types.Int64),
-		TLSContextID:    attrs["tls_context_id"].(types.String),
 	}
 }
 
@@ -124,7 +120,6 @@ func endpointToObject(ep *EndpointModel) types.Object {
 		"type":             ep.Type,
 		"base_path":        ep.BasePath,
 		"response_timeout": ep.ResponseTimeout,
-		"tls_context_id":   ep.TLSContextID,
 	})
 	if diags.HasError() {
 		return types.ObjectNull(endpointAttrTypes)
@@ -385,19 +380,13 @@ func (r *APIInstanceResource) Schema(_ context.Context, _ resource.SchemaRequest
 						},
 					},
 					"base_path": schema.StringAttribute{
-						Description: "API base path for the proxy listener (e.g. 'my-api'). " +
-							"When tls_context is set the proxy URI becomes https://0.0.0.0:443/<base_path>, " +
-							"otherwise http://0.0.0.0:8081/<base_path>.",
+						Description: "API base path for the Omni Gateway proxy listener (e.g. 'my-api'). " +
+							"The provider constructs the full proxy URI as http://0.0.0.0:8081/<base_path>.",
 						Optional: true,
 					},
 					"response_timeout": schema.Int64Attribute{
 						Description: "Response timeout in milliseconds.",
 						Optional:    true,
-					},
-					"tls_context_id": schema.StringAttribute{
-						Description: "Inbound TLS context for the endpoint listener. Format: 'secretGroupId/tlsContextId'. " +
-							"When set, the proxy URI is constructed as https://0.0.0.0:443/<base_path>.",
-						Optional: true,
 					},
 				},
 			},
@@ -967,29 +956,13 @@ func (r *APIInstanceResource) expandCreateRequest(ctx context.Context, data APII
 			Type:           ep.Type.ValueString(),
 		}
 
-		tlsContexts := &apimanagement.APIInstanceTLSContexts{}
-		hasTLS := !ep.TLSContextID.IsNull() && !ep.TLSContextID.IsUnknown() && ep.TLSContextID.ValueString() != ""
-		if hasTLS {
-			parts := strings.Split(ep.TLSContextID.ValueString(), "/")
-			if len(parts) == 2 {
-				tlsContexts.Inbound = &apimanagement.APIInstanceTLSContext{
-					SecretGroupID: parts[0],
-					TLSID:         parts[1],
-				}
-			}
-		}
-		req.Endpoint.TLSContexts = tlsContexts
+		req.Endpoint.TLSContexts = &apimanagement.APIInstanceTLSContexts{}
 
-		// proxyUri: https://0.0.0.0:443/ when tls_context_id is set, http://0.0.0.0:8081/ otherwise
-		base := "http://0.0.0.0:8081/"
-		if hasTLS {
-			base = "https://0.0.0.0:443/"
-		}
 		basePath := ""
 		if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
 			basePath = strings.TrimPrefix(ep.BasePath.ValueString(), "/")
 		}
-		proxyURI := base + basePath
+		proxyURI := "http://0.0.0.0:8081/" + basePath
 		req.Endpoint.ProxyURI = &proxyURI
 	}
 
@@ -1042,29 +1015,13 @@ func (r *APIInstanceResource) expandUpdateRequest(ctx context.Context, data APII
 			Type:           ep.Type.ValueString(),
 		}
 
-		tlsContexts := &apimanagement.APIInstanceTLSContexts{}
-		hasTLS := !ep.TLSContextID.IsNull() && !ep.TLSContextID.IsUnknown() && ep.TLSContextID.ValueString() != ""
-		if hasTLS {
-			parts := strings.Split(ep.TLSContextID.ValueString(), "/")
-			if len(parts) == 2 {
-				tlsContexts.Inbound = &apimanagement.APIInstanceTLSContext{
-					SecretGroupID: parts[0],
-					TLSID:         parts[1],
-				}
-			}
-		}
-		req.Endpoint.TLSContexts = tlsContexts
+		req.Endpoint.TLSContexts = &apimanagement.APIInstanceTLSContexts{}
 
-		// proxyUri: https://0.0.0.0:443/ when tls_context_id is set, http://0.0.0.0:8081/ otherwise
-		base := "http://0.0.0.0:8081/"
-		if hasTLS {
-			base = "https://0.0.0.0:443/"
-		}
 		basePath := ""
 		if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
 			basePath = strings.TrimPrefix(ep.BasePath.ValueString(), "/")
 		}
-		proxyURI := base + basePath
+		proxyURI := "http://0.0.0.0:8081/" + basePath
 		req.Endpoint.ProxyURI = &proxyURI
 	}
 
@@ -1263,18 +1220,8 @@ func (r *APIInstanceResource) flattenInstance(_ context.Context, inst *apimanage
 			Type:           types.StringValue(inst.Endpoint.Type),
 		}
 
-		// Extract base_path from proxyUri by stripping the scheme://host/ prefix.
 		if inst.Endpoint.ProxyURI != nil && *inst.Endpoint.ProxyURI != "" {
-			if parsed, err := url.Parse(*inst.Endpoint.ProxyURI); err == nil {
-				basePath := strings.TrimPrefix(parsed.Path, "/")
-				if basePath == "" {
-					ep.BasePath = types.StringNull()
-				} else {
-					ep.BasePath = types.StringValue(basePath)
-				}
-			} else {
-				ep.BasePath = types.StringNull()
-			}
+			ep.BasePath = types.StringValue(strings.TrimPrefix(*inst.Endpoint.ProxyURI, "http://0.0.0.0:8081/"))
 		} else {
 			ep.BasePath = types.StringNull()
 		}
@@ -1283,15 +1230,6 @@ func (r *APIInstanceResource) flattenInstance(_ context.Context, inst *apimanage
 			ep.ResponseTimeout = types.Int64Value(int64(*inst.Endpoint.ResponseTimeout))
 		} else {
 			ep.ResponseTimeout = types.Int64Null()
-		}
-
-		if inst.Endpoint.TLSContexts != nil && inst.Endpoint.TLSContexts.Inbound != nil &&
-			inst.Endpoint.TLSContexts.Inbound.SecretGroupID != "" && inst.Endpoint.TLSContexts.Inbound.TLSID != "" {
-			ep.TLSContextID = types.StringValue(fmt.Sprintf("%s/%s",
-				inst.Endpoint.TLSContexts.Inbound.SecretGroupID,
-				inst.Endpoint.TLSContexts.Inbound.TLSID))
-		} else {
-			ep.TLSContextID = types.StringNull()
 		}
 
 		data.Endpoint = endpointToObject(ep)

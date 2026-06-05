@@ -9,6 +9,8 @@ description: |-
 
 Manages an API instance in Anypoint API Manager. An API instance represents an API specification deployed to a Omni Gateway target with routing rules and upstream backends.
 
+-> **Supported gateway type:** This provider currently supports **MuleSoft Managed Omni Gateway** (CloudHub 2.0) only. Self-managed Omni Gateway will be supported in a future release.
+
 -> **Connected App:** This resource requires a **standard connected app** (client credentials). An admin connected app is not needed. The connected app must have relevant scopes.
 
 ## Example Usage
@@ -117,8 +119,7 @@ Optional:
 
 - `deployment_type` (String) Deployment type. Valid values: `HY` (hybrid), `CH` (CloudHub), `CH2`, `RF` (Runtime Fabric). Defaults to `HY`.
 - `type` (String) Endpoint protocol type. Valid values: `http`, `rest`, `raml`. Defaults to `http`.
-- `base_path` (String) API base path for OmniGateway (e.g. 'my-api'). The provider constructs the full proxy URI as `http://0.0.0.0:8081/<base_path>`.
-- `uri` (String) Direct implementation URI (e.g. 'http://www.google.com'). Mutually exclusive with `base_path`.
+- `base_path` (String) API base path for the Omni Gateway proxy listener (e.g. `my-api`). The provider constructs the proxy URI as `http://0.0.0.0:8081/<base_path>`.
 - `response_timeout` (Number) Response timeout in milliseconds.
 
 <a id="nestedschema--deployment"></a>
