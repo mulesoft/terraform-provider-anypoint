@@ -3,6 +3,7 @@ package apimanagement
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -1268,16 +1269,24 @@ func (r *APIInstanceResource) flattenInstance(_ context.Context, inst *apimanage
 		}
 
 		// Reverse-engineer uri and base_path from proxyUri.
-		// proxyUri was constructed as: (uri ?? "http://0.0.0.0:8081/") + base_path
-		// If it starts with the default prefix, uri was not set — extract base_path only.
-		// Otherwise the user set a custom uri; we can only recover base_path as empty
-		// since we cannot split the uri from the path without the original values.
+		// proxyUri = (uri ?? "http://0.0.0.0:8081/") + base_path
+		// uri = scheme://host/ (everything up to and including the first / after host)
+		// base_path = the remaining path after that first /
 		if inst.Endpoint.ProxyURI != nil && *inst.Endpoint.ProxyURI != "" {
-			if strings.HasPrefix(*inst.Endpoint.ProxyURI, "http://0.0.0.0:8081/") {
-				ep.BasePath = types.StringValue(strings.TrimPrefix(*inst.Endpoint.ProxyURI, "http://0.0.0.0:8081/"))
-				ep.URI = types.StringNull()
+			if parsed, err := url.Parse(*inst.Endpoint.ProxyURI); err == nil {
+				hostBase := parsed.Scheme + "://" + parsed.Host + "/"
+				basePath := strings.TrimPrefix(parsed.Path, "/")
+				if hostBase == "http://0.0.0.0:8081/" {
+					ep.URI = types.StringNull()
+				} else {
+					ep.URI = types.StringValue(hostBase)
+				}
+				if basePath == "" {
+					ep.BasePath = types.StringNull()
+				} else {
+					ep.BasePath = types.StringValue(basePath)
+				}
 			} else {
-				// Custom uri — store the full proxyUri in uri; base_path is unknown on read
 				ep.URI = types.StringValue(*inst.Endpoint.ProxyURI)
 				ep.BasePath = types.StringNull()
 			}
