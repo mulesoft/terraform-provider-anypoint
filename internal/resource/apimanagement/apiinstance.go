@@ -72,6 +72,7 @@ type EndpointModel struct {
 	BasePath        types.String `tfsdk:"base_path"`
 	URI             types.String `tfsdk:"uri"`
 	ResponseTimeout types.Int64  `tfsdk:"response_timeout"`
+	TLSContextID    types.String `tfsdk:"tls_context_id"`
 }
 
 type DeploymentModel struct {
@@ -94,6 +95,7 @@ var endpointAttrTypes = map[string]attr.Type{
 	"base_path":        types.StringType,
 	"uri":              types.StringType,
 	"response_timeout": types.Int64Type,
+	"tls_context_id":   types.StringType,
 }
 
 // endpointFromObject extracts an EndpointModel from a types.Object.
@@ -109,6 +111,7 @@ func endpointFromObject(obj types.Object) *EndpointModel {
 		BasePath:        attrs["base_path"].(types.String),
 		URI:             attrs["uri"].(types.String),
 		ResponseTimeout: attrs["response_timeout"].(types.Int64),
+		TLSContextID:    attrs["tls_context_id"].(types.String),
 	}
 }
 
@@ -124,6 +127,7 @@ func endpointToObject(ep *EndpointModel) types.Object {
 		"base_path":        ep.BasePath,
 		"uri":              ep.URI,
 		"response_timeout": ep.ResponseTimeout,
+		"tls_context_id":   ep.TLSContextID,
 	})
 	if diags.HasError() {
 		return types.ObjectNull(endpointAttrTypes)
@@ -393,6 +397,10 @@ func (r *APIInstanceResource) Schema(_ context.Context, _ resource.SchemaRequest
 					},
 					"response_timeout": schema.Int64Attribute{
 						Description: "Response timeout in milliseconds.",
+						Optional:    true,
+					},
+					"tls_context_id": schema.StringAttribute{
+						Description: "Inbound TLS context for the endpoint. Format: 'secretGroupId/tlsContextId'.",
 						Optional:    true,
 					},
 				},
@@ -963,7 +971,10 @@ func (r *APIInstanceResource) expandCreateRequest(ctx context.Context, data APII
 			Type:           ep.Type.ValueString(),
 		}
 
-		if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
+		if !ep.URI.IsNull() && !ep.URI.IsUnknown() && ep.URI.ValueString() != "" {
+			uri := ep.URI.ValueString()
+			req.Endpoint.URI = &uri
+		} else if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
 			basePath := strings.TrimPrefix(ep.BasePath.ValueString(), "/")
 			proxyURI := "http://0.0.0.0:8081/" + basePath
 			req.Endpoint.ProxyURI = &proxyURI
@@ -972,7 +983,17 @@ func (r *APIInstanceResource) expandCreateRequest(ctx context.Context, data APII
 			req.Endpoint.ProxyURI = &proxyURI
 		}
 
-		req.Endpoint.TLSContexts = &apimanagement.APIInstanceTLSContexts{}
+		tlsContexts := &apimanagement.APIInstanceTLSContexts{}
+		if !ep.TLSContextID.IsNull() && !ep.TLSContextID.IsUnknown() {
+			parts := strings.Split(ep.TLSContextID.ValueString(), "/")
+			if len(parts) == 2 {
+				tlsContexts.Inbound = &apimanagement.APIInstanceTLSContext{
+					SecretGroupID: parts[0],
+					TLSID:         parts[1],
+				}
+			}
+		}
+		req.Endpoint.TLSContexts = tlsContexts
 	}
 
 	if !data.ConsumerEndpoint.IsNull() && !data.ConsumerEndpoint.IsUnknown() {
@@ -1024,7 +1045,10 @@ func (r *APIInstanceResource) expandUpdateRequest(ctx context.Context, data APII
 			Type:           ep.Type.ValueString(),
 		}
 
-		if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
+		if !ep.URI.IsNull() && !ep.URI.IsUnknown() && ep.URI.ValueString() != "" {
+			uri := ep.URI.ValueString()
+			req.Endpoint.URI = &uri
+		} else if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
 			basePath := strings.TrimPrefix(ep.BasePath.ValueString(), "/")
 			proxyURI := "http://0.0.0.0:8081/" + basePath
 			req.Endpoint.ProxyURI = &proxyURI
@@ -1033,7 +1057,17 @@ func (r *APIInstanceResource) expandUpdateRequest(ctx context.Context, data APII
 			req.Endpoint.ProxyURI = &proxyURI
 		}
 
-		req.Endpoint.TLSContexts = &apimanagement.APIInstanceTLSContexts{}
+		tlsContexts := &apimanagement.APIInstanceTLSContexts{}
+		if !ep.TLSContextID.IsNull() && !ep.TLSContextID.IsUnknown() {
+			parts := strings.Split(ep.TLSContextID.ValueString(), "/")
+			if len(parts) == 2 {
+				tlsContexts.Inbound = &apimanagement.APIInstanceTLSContext{
+					SecretGroupID: parts[0],
+					TLSID:         parts[1],
+				}
+			}
+		}
+		req.Endpoint.TLSContexts = tlsContexts
 	}
 
 	if !data.ConsumerEndpoint.IsNull() && !data.ConsumerEndpoint.IsUnknown() {
@@ -1236,13 +1270,28 @@ func (r *APIInstanceResource) flattenInstance(_ context.Context, inst *apimanage
 		} else {
 			ep.BasePath = types.StringNull()
 		}
-		ep.URI = types.StringNull()
+
+		if inst.Endpoint.URI != nil && *inst.Endpoint.URI != "" {
+			ep.URI = types.StringValue(*inst.Endpoint.URI)
+		} else {
+			ep.URI = types.StringNull()
+		}
 
 		if inst.Endpoint.ResponseTimeout != nil {
 			ep.ResponseTimeout = types.Int64Value(int64(*inst.Endpoint.ResponseTimeout))
 		} else {
 			ep.ResponseTimeout = types.Int64Null()
 		}
+
+		if inst.Endpoint.TLSContexts != nil && inst.Endpoint.TLSContexts.Inbound != nil &&
+			inst.Endpoint.TLSContexts.Inbound.SecretGroupID != "" && inst.Endpoint.TLSContexts.Inbound.TLSID != "" {
+			ep.TLSContextID = types.StringValue(fmt.Sprintf("%s/%s",
+				inst.Endpoint.TLSContexts.Inbound.SecretGroupID,
+				inst.Endpoint.TLSContexts.Inbound.TLSID))
+		} else {
+			ep.TLSContextID = types.StringNull()
+		}
+
 		data.Endpoint = endpointToObject(ep)
 	} else {
 		data.Endpoint = types.ObjectNull(endpointAttrTypes)

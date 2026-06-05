@@ -206,6 +206,7 @@ func TestAPIInstanceResource_ValidateConfig_ResponseTimeoutOmniGateway(t *testin
 			"base_path":        tftypes.NewValue(tftypes.String, nil),
 			"uri":              tftypes.NewValue(tftypes.String, nil),
 			"response_timeout": tftypes.NewValue(tftypes.Number, 3000),
+			"tls_context_id":   tftypes.NewValue(tftypes.String, nil),
 		}),
 		"deployment": tftypes.NewValue(deploymentObjType, nil),
 		"routing":    tftypes.NewValue(tftypes.List{ElementType: routingElemType}, nil),
