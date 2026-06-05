@@ -1046,8 +1046,8 @@ func (r *APIInstanceResource) expandUpdateRequest(ctx context.Context, data APII
 		}
 
 		if !ep.URI.IsNull() && !ep.URI.IsUnknown() && ep.URI.ValueString() != "" {
-			uri := ep.URI.ValueString()
-			req.Endpoint.URI = &uri
+			proxyURI := ep.URI.ValueString()
+			req.Endpoint.ProxyURI = &proxyURI
 		} else if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
 			basePath := strings.TrimPrefix(ep.BasePath.ValueString(), "/")
 			proxyURI := "http://0.0.0.0:8081/" + basePath
@@ -1265,15 +1265,18 @@ func (r *APIInstanceResource) flattenInstance(_ context.Context, inst *apimanage
 			Type:           types.StringValue(inst.Endpoint.Type),
 		}
 
+		// proxyUri from API: if it starts with the Omni Gateway default prefix it was
+		// built from base_path; otherwise the user supplied a direct uri.
 		if inst.Endpoint.ProxyURI != nil && *inst.Endpoint.ProxyURI != "" {
-			ep.BasePath = types.StringValue(strings.TrimPrefix(*inst.Endpoint.ProxyURI, "http://0.0.0.0:8081/"))
+			if strings.HasPrefix(*inst.Endpoint.ProxyURI, "http://0.0.0.0:8081/") {
+				ep.BasePath = types.StringValue(strings.TrimPrefix(*inst.Endpoint.ProxyURI, "http://0.0.0.0:8081/"))
+				ep.URI = types.StringNull()
+			} else {
+				ep.URI = types.StringValue(*inst.Endpoint.ProxyURI)
+				ep.BasePath = types.StringNull()
+			}
 		} else {
 			ep.BasePath = types.StringNull()
-		}
-
-		if inst.Endpoint.URI != nil && *inst.Endpoint.URI != "" {
-			ep.URI = types.StringValue(*inst.Endpoint.URI)
-		} else {
 			ep.URI = types.StringNull()
 		}
 
