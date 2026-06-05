@@ -9,13 +9,13 @@ description: |-
 
 Manages an API instance in Anypoint API Manager. An API instance represents an API specification deployed to a Omni Gateway target with routing rules and upstream backends.
 
+-> **Supported gateway type:** This provider currently supports **MuleSoft Managed Omni Gateway** (CloudHub 2.0) only. Self-managed Omni Gateway will be supported in a future release.
+
 -> **Connected App:** This resource requires a **standard connected app** (client credentials). An admin connected app is not needed. The connected app must have relevant scopes.
 
 ## Example Usage
 
 ### Minimal configuration using `upstream_uri` shorthand
-
-> **Note:** `upstream_uri` and `upstream_tls_context_id` are only suitable when the API instance has **exactly one route and one upstream**. For multi-route or multi-upstream configurations use the `routing` block instead. These fields are **never populated on import** — imported instances always use the full `routing` block in state.
 
 ```terraform
 resource "anypoint_api_instance" "minimal" {
@@ -32,28 +32,6 @@ resource "anypoint_api_instance" "minimal" {
 
   endpoint = {
     base_path = "minimal"
-  }
-}
-```
-
-### Single upstream with TLS using `upstream_uri` + `upstream_tls_context_id`
-
-```terraform
-resource "anypoint_api_instance" "tls_upstream" {
-  environment_id          = var.environment_id
-  gateway_id              = var.gateway_id
-  instance_label          = "tls-demo"
-  upstream_uri            = "https://secure-backend.internal:8443"
-  upstream_tls_context_id = "<secret_group_id>/<tls_context_id>"
-
-  spec = {
-    asset_id = "my-api"
-    group_id = var.organization_id
-    version  = "1.0.0"
-  }
-
-  endpoint = {
-    base_path = "tlsDemo"
   }
 }
 ```
@@ -111,8 +89,7 @@ resource "anypoint_api_instance" "weighted_routing" {
 - `instance_label` (String) A human-readable label for this API instance.
 - `approval_method` (String) Client approval method. Valid values: `manual`. Defaults to null (no approval required). **Note:** `automatic` approval is no longer supported.
 - `consumer_endpoint` (String) Consumer-facing endpoint URI (the public URL clients use to reach the API). Maps to top-level endpointUri in the API.
-- `upstream_uri` (String) Shorthand for a single-upstream routing configuration. When set, the provider constructs routing as `[{upstreams: [{weight: 100, uri: <value>}]}]`. **Only use when the API instance has exactly one route and one upstream.** Mutually exclusive with the `routing` block. **Never populated on import** — imported instances always use the `routing` block.
-- `upstream_tls_context_id` (String) TLS context for the single upstream defined by `upstream_uri`. Format: `secretGroupId/tlsContextId`. Can only be set when `upstream_uri` is also set. **Never populated on import.**
+- `upstream_uri` (String) Shorthand for a single-upstream routing configuration. When set, the provider constructs routing as `[{upstreams: [{weight: 100, uri: <value>}]}]`. Mutually exclusive with the `routing` block.
 - `gateway_id` (String) The Omni Gateway UUID. When provided, the deployment block is auto-populated by fetching gateway details (target_id, target_name, gateway_version) from the Gateway Manager API. Mutually exclusive with specifying a full deployment block.
 - `endpoint` (Block) Endpoint / proxy configuration for the API instance. See [below for nested schema](#nestedschema--endpoint).
 - `deployment` (Block) Deployment target configuration. Auto-populated when gateway_id is set. See [below for nested schema](#nestedschema--deployment).
@@ -142,8 +119,7 @@ Optional:
 
 - `deployment_type` (String) Deployment type. Valid values: `HY` (hybrid), `CH` (CloudHub), `CH2`, `RF` (Runtime Fabric). Defaults to `HY`.
 - `type` (String) Endpoint protocol type. Valid values: `http`, `rest`, `raml`. Defaults to `http`.
-- `base_path` (String) API base path for OmniGateway (e.g. 'my-api'). The provider constructs the full proxy URI as `http://0.0.0.0:8081/<base_path>`.
-- `uri` (String) Direct implementation URI (e.g. 'http://www.google.com'). Mutually exclusive with `base_path`.
+- `base_path` (String) API base path for the Omni Gateway proxy listener (e.g. `my-api`). The provider constructs the proxy URI as `http://0.0.0.0:8081/<base_path>`.
 - `response_timeout` (Number) Response timeout in milliseconds.
 
 <a id="nestedschema--deployment"></a>
