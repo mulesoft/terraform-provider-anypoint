@@ -7,7 +7,9 @@ description: |-
 
 # anypoint_secret_group_tls_context (Resource)
 
-Manages a Omni Gateway TLS context within a secret group in Anypoint Secrets Manager. The target is automatically set to `OmniGateway`. References keystore and truststore resources by their IDs — the provider automatically builds the internal path references (`keystores/{id}`, `truststores/{id}`).
+Manages an Omni Gateway TLS context within a secret group in Anypoint Secrets Manager. The target is fixed to `OmniGateway` in this provider. References keystore and truststore resources by their IDs — the provider automatically builds the internal path references (`keystores/{id}`, `truststores/{id}`).
+
+-> **Target mapping:** The Anypoint Secrets Manager API requires `target: "FlexGateway"` for Omni Gateway TLS contexts. The provider accepts `OmniGateway` in HCL and automatically maps it to `FlexGateway` before calling the API. If you create TLS contexts directly via the API or CLI, use `"FlexGateway"` as the target value.
 
 ~> **Delete behaviour:** The Anypoint Secrets Manager API does not expose individual DELETE endpoints for sub-resources. `terraform destroy` removes this resource from Terraform state only — the TLS context is deleted on the Platform when the parent `anypoint_secret_group` is destroyed.
 
@@ -78,7 +80,7 @@ resource "anypoint_secret_group_tls_context" "mtls" {
 ### Read-Only
 
 - `id` (String) Unique identifier of the TLS context.
-- `target` (String) Target runtime for the TLS context. Always `OmniGateway` for this resource.
+- `target` (String) Target runtime for the TLS context. Always `OmniGateway` in Terraform. The provider maps this to `FlexGateway` when calling the Secrets Manager API.
 - `expiration_date` (String) Expiration date of the TLS context.
 
 ## Import
