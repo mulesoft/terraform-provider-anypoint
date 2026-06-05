@@ -67,17 +67,12 @@ type SpecModel struct {
 	Version types.String `tfsdk:"version"`
 }
 
-type EndpointTLSContextModel struct {
-	SecretGroupID types.String `tfsdk:"secret_group_id"`
-	TLSContextID  types.String `tfsdk:"tls_context_id"`
-}
-
 type EndpointModel struct {
-	DeploymentType  types.String             `tfsdk:"deployment_type"`
-	Type            types.String             `tfsdk:"type"`
-	BasePath        types.String             `tfsdk:"base_path"`
-	ResponseTimeout types.Int64              `tfsdk:"response_timeout"`
-	TLSContext      *EndpointTLSContextModel `tfsdk:"tls_context"`
+	DeploymentType  types.String `tfsdk:"deployment_type"`
+	Type            types.String `tfsdk:"type"`
+	BasePath        types.String `tfsdk:"base_path"`
+	ResponseTimeout types.Int64  `tfsdk:"response_timeout"`
+	TLSContextID    types.String `tfsdk:"tls_context_id"`
 }
 
 type DeploymentModel struct {
@@ -94,17 +89,12 @@ type DeploymentModel struct {
 // endpoint is Optional+Computed; when omitted from config with no prior state the
 // framework marks the planned value as unknown. types.Object can hold an unknown
 // value — *EndpointModel cannot, which causes a Value Conversion Error at apply.
-var endpointTLSContextAttrTypes = map[string]attr.Type{
-	"secret_group_id": types.StringType,
-	"tls_context_id":  types.StringType,
-}
-
 var endpointAttrTypes = map[string]attr.Type{
 	"deployment_type":  types.StringType,
 	"type":             types.StringType,
 	"base_path":        types.StringType,
 	"response_timeout": types.Int64Type,
-	"tls_context":      types.ObjectType{AttrTypes: endpointTLSContextAttrTypes},
+	"tls_context_id":   types.StringType,
 }
 
 // endpointFromObject extracts an EndpointModel from a types.Object.
@@ -114,20 +104,13 @@ func endpointFromObject(obj types.Object) *EndpointModel {
 		return nil
 	}
 	attrs := obj.Attributes()
-	ep := &EndpointModel{
+	return &EndpointModel{
 		DeploymentType:  attrs["deployment_type"].(types.String),
 		Type:            attrs["type"].(types.String),
 		BasePath:        attrs["base_path"].(types.String),
 		ResponseTimeout: attrs["response_timeout"].(types.Int64),
+		TLSContextID:    attrs["tls_context_id"].(types.String),
 	}
-	if tlsObj, ok := attrs["tls_context"].(types.Object); ok && !tlsObj.IsNull() && !tlsObj.IsUnknown() {
-		tlsAttrs := tlsObj.Attributes()
-		ep.TLSContext = &EndpointTLSContextModel{
-			SecretGroupID: tlsAttrs["secret_group_id"].(types.String),
-			TLSContextID:  tlsAttrs["tls_context_id"].(types.String),
-		}
-	}
-	return ep
 }
 
 // endpointToObject converts an EndpointModel into a types.Object for state storage.
@@ -136,26 +119,12 @@ func endpointToObject(ep *EndpointModel) types.Object {
 	if ep == nil {
 		return types.ObjectNull(endpointAttrTypes)
 	}
-	var tlsCtxVal attr.Value
-	if ep.TLSContext != nil {
-		tlsObj, tlsDiags := types.ObjectValue(endpointTLSContextAttrTypes, map[string]attr.Value{
-			"secret_group_id": ep.TLSContext.SecretGroupID,
-			"tls_context_id":  ep.TLSContext.TLSContextID,
-		})
-		if tlsDiags.HasError() {
-			tlsCtxVal = types.ObjectNull(endpointTLSContextAttrTypes)
-		} else {
-			tlsCtxVal = tlsObj
-		}
-	} else {
-		tlsCtxVal = types.ObjectNull(endpointTLSContextAttrTypes)
-	}
 	obj, diags := types.ObjectValue(endpointAttrTypes, map[string]attr.Value{
 		"deployment_type":  ep.DeploymentType,
 		"type":             ep.Type,
 		"base_path":        ep.BasePath,
 		"response_timeout": ep.ResponseTimeout,
-		"tls_context":      tlsCtxVal,
+		"tls_context_id":   ep.TLSContextID,
 	})
 	if diags.HasError() {
 		return types.ObjectNull(endpointAttrTypes)
@@ -425,20 +394,10 @@ func (r *APIInstanceResource) Schema(_ context.Context, _ resource.SchemaRequest
 						Description: "Response timeout in milliseconds.",
 						Optional:    true,
 					},
-					"tls_context": schema.SingleNestedAttribute{
-						Description: "Inbound TLS context for the endpoint listener. " +
-							"When set, the proxy URI is constructed with https://0.0.0.0:443/<base_path>.",
+					"tls_context_id": schema.StringAttribute{
+						Description: "Inbound TLS context for the endpoint listener. Format: 'secretGroupId/tlsContextId'. " +
+							"When set, the proxy URI is constructed as https://0.0.0.0:443/<base_path>.",
 						Optional: true,
-						Attributes: map[string]schema.Attribute{
-							"secret_group_id": schema.StringAttribute{
-								Description: "The Secrets Manager secret group ID.",
-								Required:    true,
-							},
-							"tls_context_id": schema.StringAttribute{
-								Description: "The TLS context ID within the secret group.",
-								Required:    true,
-							},
-						},
 					},
 				},
 			},
@@ -1009,17 +968,21 @@ func (r *APIInstanceResource) expandCreateRequest(ctx context.Context, data APII
 		}
 
 		tlsContexts := &apimanagement.APIInstanceTLSContexts{}
-		if ep.TLSContext != nil {
-			tlsContexts.Inbound = &apimanagement.APIInstanceTLSContext{
-				SecretGroupID: ep.TLSContext.SecretGroupID.ValueString(),
-				TLSID:         ep.TLSContext.TLSContextID.ValueString(),
+		hasTLS := !ep.TLSContextID.IsNull() && !ep.TLSContextID.IsUnknown() && ep.TLSContextID.ValueString() != ""
+		if hasTLS {
+			parts := strings.Split(ep.TLSContextID.ValueString(), "/")
+			if len(parts) == 2 {
+				tlsContexts.Inbound = &apimanagement.APIInstanceTLSContext{
+					SecretGroupID: parts[0],
+					TLSID:         parts[1],
+				}
 			}
 		}
 		req.Endpoint.TLSContexts = tlsContexts
 
-		// proxyUri: https://0.0.0.0:443/ when tls_context is set, http://0.0.0.0:8081/ otherwise
+		// proxyUri: https://0.0.0.0:443/ when tls_context_id is set, http://0.0.0.0:8081/ otherwise
 		base := "http://0.0.0.0:8081/"
-		if ep.TLSContext != nil {
+		if hasTLS {
 			base = "https://0.0.0.0:443/"
 		}
 		basePath := ""
@@ -1080,17 +1043,21 @@ func (r *APIInstanceResource) expandUpdateRequest(ctx context.Context, data APII
 		}
 
 		tlsContexts := &apimanagement.APIInstanceTLSContexts{}
-		if ep.TLSContext != nil {
-			tlsContexts.Inbound = &apimanagement.APIInstanceTLSContext{
-				SecretGroupID: ep.TLSContext.SecretGroupID.ValueString(),
-				TLSID:         ep.TLSContext.TLSContextID.ValueString(),
+		hasTLS := !ep.TLSContextID.IsNull() && !ep.TLSContextID.IsUnknown() && ep.TLSContextID.ValueString() != ""
+		if hasTLS {
+			parts := strings.Split(ep.TLSContextID.ValueString(), "/")
+			if len(parts) == 2 {
+				tlsContexts.Inbound = &apimanagement.APIInstanceTLSContext{
+					SecretGroupID: parts[0],
+					TLSID:         parts[1],
+				}
 			}
 		}
 		req.Endpoint.TLSContexts = tlsContexts
 
-		// proxyUri: https://0.0.0.0:443/ when tls_context is set, http://0.0.0.0:8081/ otherwise
+		// proxyUri: https://0.0.0.0:443/ when tls_context_id is set, http://0.0.0.0:8081/ otherwise
 		base := "http://0.0.0.0:8081/"
-		if ep.TLSContext != nil {
+		if hasTLS {
 			base = "https://0.0.0.0:443/"
 		}
 		basePath := ""
@@ -1320,10 +1287,11 @@ func (r *APIInstanceResource) flattenInstance(_ context.Context, inst *apimanage
 
 		if inst.Endpoint.TLSContexts != nil && inst.Endpoint.TLSContexts.Inbound != nil &&
 			inst.Endpoint.TLSContexts.Inbound.SecretGroupID != "" && inst.Endpoint.TLSContexts.Inbound.TLSID != "" {
-			ep.TLSContext = &EndpointTLSContextModel{
-				SecretGroupID: types.StringValue(inst.Endpoint.TLSContexts.Inbound.SecretGroupID),
-				TLSContextID:  types.StringValue(inst.Endpoint.TLSContexts.Inbound.TLSID),
-			}
+			ep.TLSContextID = types.StringValue(fmt.Sprintf("%s/%s",
+				inst.Endpoint.TLSContexts.Inbound.SecretGroupID,
+				inst.Endpoint.TLSContexts.Inbound.TLSID))
+		} else {
+			ep.TLSContextID = types.StringNull()
 		}
 
 		data.Endpoint = endpointToObject(ep)
