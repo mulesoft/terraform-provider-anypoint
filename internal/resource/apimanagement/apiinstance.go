@@ -50,8 +50,7 @@ type APIInstanceResourceModel struct {
 	AssetVersion     types.String `tfsdk:"asset_version"`
 	ProductVersion   types.String `tfsdk:"product_version"`
 	ConsumerEndpoint types.String `tfsdk:"consumer_endpoint"`
-	UpstreamURI           types.String `tfsdk:"upstream_uri"`
-	UpstreamTLSContextID  types.String `tfsdk:"upstream_tls_context_id"`
+	UpstreamURI      types.String `tfsdk:"upstream_uri"`
 
 	GatewayID types.String `tfsdk:"gateway_id"`
 
@@ -71,7 +70,6 @@ type EndpointModel struct {
 	DeploymentType  types.String `tfsdk:"deployment_type"`
 	Type            types.String `tfsdk:"type"`
 	BasePath        types.String `tfsdk:"base_path"`
-	URI             types.String `tfsdk:"uri"`
 	ResponseTimeout types.Int64  `tfsdk:"response_timeout"`
 }
 
@@ -93,7 +91,6 @@ var endpointAttrTypes = map[string]attr.Type{
 	"deployment_type":  types.StringType,
 	"type":             types.StringType,
 	"base_path":        types.StringType,
-	"uri":              types.StringType,
 	"response_timeout": types.Int64Type,
 }
 
@@ -108,7 +105,6 @@ func endpointFromObject(obj types.Object) *EndpointModel {
 		DeploymentType:  attrs["deployment_type"].(types.String),
 		Type:            attrs["type"].(types.String),
 		BasePath:        attrs["base_path"].(types.String),
-		URI:             attrs["uri"].(types.String),
 		ResponseTimeout: attrs["response_timeout"].(types.Int64),
 	}
 }
@@ -123,7 +119,6 @@ func endpointToObject(ep *EndpointModel) types.Object {
 		"deployment_type":  ep.DeploymentType,
 		"type":             ep.Type,
 		"base_path":        ep.BasePath,
-		"uri":              ep.URI,
 		"response_timeout": ep.ResponseTimeout,
 	})
 	if diags.HasError() {
@@ -385,12 +380,9 @@ func (r *APIInstanceResource) Schema(_ context.Context, _ resource.SchemaRequest
 						},
 					},
 					"base_path": schema.StringAttribute{
-						Description: "API base path for Omni Gateway (e.g. 'my-api'). The provider constructs the full proxy URI as http://0.0.0.0:8081/<base_path>.",
-						Optional:    true,
-					},
-					"uri": schema.StringAttribute{
-						Description: "Direct implementation URI (e.g. 'http://www.google.com'). Mutually exclusive with 'base_path'.",
-						Optional:    true,
+						Description: "API base path for the Omni Gateway proxy listener (e.g. 'my-api'). " +
+							"The provider constructs the full proxy URI as http://0.0.0.0:8081/<base_path>.",
+						Optional: true,
 					},
 					"response_timeout": schema.Int64Attribute{
 						Description: "Response timeout in milliseconds.",
@@ -406,11 +398,6 @@ func (r *APIInstanceResource) Schema(_ context.Context, _ resource.SchemaRequest
 				Description: "Shorthand for a single-upstream routing configuration. " +
 					"When set, the provider constructs routing as [{upstreams: [{weight: 100, uri: <value>}]}]. " +
 					"Mutually exclusive with the 'routing' block.",
-				Optional: true,
-			},
-			"upstream_tls_context_id": schema.StringAttribute{
-				Description: "TLS context for the single-upstream defined by 'upstream_uri'. " +
-					"Format: 'secretGroupId/tlsContextId'. Only valid when 'upstream_uri' is set.",
 				Optional: true,
 			},
 			"gateway_id": schema.StringAttribute{
@@ -594,25 +581,6 @@ func (r *APIInstanceResource) ValidateConfig(ctx context.Context, req resource.V
 		return
 	}
 
-	hasTLSContextID := !data.UpstreamTLSContextID.IsNull() && !data.UpstreamTLSContextID.IsUnknown()
-	if hasTLSContextID {
-		if !hasUpstreamURI {
-			resp.Diagnostics.AddAttributeError(
-				path.Root("upstream_tls_context_id"),
-				"Invalid attribute",
-				"'upstream_tls_context_id' can only be set when 'upstream_uri' is also set.",
-			)
-		}
-		parts := strings.Split(data.UpstreamTLSContextID.ValueString(), "/")
-		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-			resp.Diagnostics.AddAttributeError(
-				path.Root("upstream_tls_context_id"),
-				"Invalid format",
-				"'upstream_tls_context_id' must be in the format 'secretGroupId/tlsContextId'.",
-			)
-		}
-	}
-
 	if !hasRouting {
 		return
 	}
@@ -718,12 +686,10 @@ func (r *APIInstanceResource) Create(ctx context.Context, req resource.CreateReq
 	plannedDeployment := data.Deployment
 	plannedConsumerEndpoint := data.ConsumerEndpoint
 	plannedUpstreamURI := data.UpstreamURI
-	plannedUpstreamTLSContextID := data.UpstreamTLSContextID
 	r.flattenInstance(ctx, instance, &data, orgID, envID)
 	data.GatewayID = gatewayID
 	if !plannedUpstreamURI.IsNull() && !plannedUpstreamURI.IsUnknown() {
 		data.UpstreamURI = plannedUpstreamURI
-		data.UpstreamTLSContextID = plannedUpstreamTLSContextID
 		data.Routing = types.ListNull(data.Routing.ElementType(ctx))
 	} else if !plannedRouting.IsNull() {
 		data.Routing = plannedRouting
@@ -870,12 +836,10 @@ func (r *APIInstanceResource) Update(ctx context.Context, req resource.UpdateReq
 	plannedRouting := plan.Routing
 	plannedEndpoint := plan.Endpoint
 	plannedUpstreamURI := plan.UpstreamURI
-	plannedUpstreamTLSContextID := plan.UpstreamTLSContextID
 	r.flattenInstance(ctx, instance, &plan, orgID, envID)
 	plan.GatewayID = gatewayID
 	if !plannedUpstreamURI.IsNull() && !plannedUpstreamURI.IsUnknown() {
 		plan.UpstreamURI = plannedUpstreamURI
-		plan.UpstreamTLSContextID = plannedUpstreamTLSContextID
 		plan.Routing = types.ListNull(plan.Routing.ElementType(ctx))
 	} else if !plannedRouting.IsNull() {
 		plan.Routing = plannedRouting
@@ -992,16 +956,14 @@ func (r *APIInstanceResource) expandCreateRequest(ctx context.Context, data APII
 			Type:           ep.Type.ValueString(),
 		}
 
-		if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
-			basePath := strings.TrimPrefix(ep.BasePath.ValueString(), "/")
-			proxyURI := "http://0.0.0.0:8081/" + basePath
-			req.Endpoint.ProxyURI = &proxyURI
-		} else {
-			proxyURI := "http://0.0.0.0:8081/"
-			req.Endpoint.ProxyURI = &proxyURI
-		}
-
 		req.Endpoint.TLSContexts = &apimanagement.APIInstanceTLSContexts{}
+
+		basePath := ""
+		if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
+			basePath = strings.TrimPrefix(ep.BasePath.ValueString(), "/")
+		}
+		proxyURI := "http://0.0.0.0:8081/" + basePath
+		req.Endpoint.ProxyURI = &proxyURI
 	}
 
 	if !data.ConsumerEndpoint.IsNull() && !data.ConsumerEndpoint.IsUnknown() {
@@ -1022,18 +984,12 @@ func (r *APIInstanceResource) expandCreateRequest(ctx context.Context, data APII
 	}
 
 	if !data.UpstreamURI.IsNull() && !data.UpstreamURI.IsUnknown() {
-		upstream := apimanagement.APIInstanceUpstream{Weight: 100, URI: data.UpstreamURI.ValueString()}
-		if !data.UpstreamTLSContextID.IsNull() && !data.UpstreamTLSContextID.IsUnknown() {
-			parts := strings.Split(data.UpstreamTLSContextID.ValueString(), "/")
-			if len(parts) == 2 {
-				upstream.TLSContext = &apimanagement.APIInstanceUpstreamTLS{
-					SecretGroupID: parts[0],
-					TLSContextID:  parts[1],
-				}
-			}
-		}
 		req.Routing = []apimanagement.APIInstanceRoute{
-			{Upstreams: []apimanagement.APIInstanceUpstream{upstream}},
+			{
+				Upstreams: []apimanagement.APIInstanceUpstream{
+					{Weight: 100, URI: data.UpstreamURI.ValueString()},
+				},
+			},
 		}
 	} else {
 		req.Routing = r.expandRouting(ctx, data.Routing)
@@ -1059,16 +1015,14 @@ func (r *APIInstanceResource) expandUpdateRequest(ctx context.Context, data APII
 			Type:           ep.Type.ValueString(),
 		}
 
-		if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
-			basePath := strings.TrimPrefix(ep.BasePath.ValueString(), "/")
-			proxyURI := "http://0.0.0.0:8081/" + basePath
-			req.Endpoint.ProxyURI = &proxyURI
-		} else {
-			proxyURI := "http://0.0.0.0:8081/"
-			req.Endpoint.ProxyURI = &proxyURI
-		}
-
 		req.Endpoint.TLSContexts = &apimanagement.APIInstanceTLSContexts{}
+
+		basePath := ""
+		if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
+			basePath = strings.TrimPrefix(ep.BasePath.ValueString(), "/")
+		}
+		proxyURI := "http://0.0.0.0:8081/" + basePath
+		req.Endpoint.ProxyURI = &proxyURI
 	}
 
 	if !data.ConsumerEndpoint.IsNull() && !data.ConsumerEndpoint.IsUnknown() {
@@ -1097,18 +1051,12 @@ func (r *APIInstanceResource) expandUpdateRequest(ctx context.Context, data APII
 	}
 
 	if !data.UpstreamURI.IsNull() && !data.UpstreamURI.IsUnknown() {
-		upstream := apimanagement.APIInstanceUpstream{Weight: 100, URI: data.UpstreamURI.ValueString()}
-		if !data.UpstreamTLSContextID.IsNull() && !data.UpstreamTLSContextID.IsUnknown() {
-			parts := strings.Split(data.UpstreamTLSContextID.ValueString(), "/")
-			if len(parts) == 2 {
-				upstream.TLSContext = &apimanagement.APIInstanceUpstreamTLS{
-					SecretGroupID: parts[0],
-					TLSContextID:  parts[1],
-				}
-			}
-		}
 		req.Routing = []apimanagement.APIInstanceRoute{
-			{Upstreams: []apimanagement.APIInstanceUpstream{upstream}},
+			{
+				Upstreams: []apimanagement.APIInstanceUpstream{
+					{Weight: 100, URI: data.UpstreamURI.ValueString()},
+				},
+			},
 		}
 	} else {
 		req.Routing = r.expandRouting(ctx, data.Routing)
@@ -1277,13 +1225,13 @@ func (r *APIInstanceResource) flattenInstance(_ context.Context, inst *apimanage
 		} else {
 			ep.BasePath = types.StringNull()
 		}
-		ep.URI = types.StringNull()
 
 		if inst.Endpoint.ResponseTimeout != nil {
 			ep.ResponseTimeout = types.Int64Value(int64(*inst.Endpoint.ResponseTimeout))
 		} else {
 			ep.ResponseTimeout = types.Int64Null()
 		}
+
 		data.Endpoint = endpointToObject(ep)
 	} else {
 		data.Endpoint = types.ObjectNull(endpointAttrTypes)
