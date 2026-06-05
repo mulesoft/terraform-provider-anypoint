@@ -24,9 +24,10 @@ import (
 )
 
 var (
-	_ resource.Resource                = &TLSContextResource{}
-	_ resource.ResourceWithConfigure   = &TLSContextResource{}
-	_ resource.ResourceWithImportState = &TLSContextResource{}
+	_ resource.Resource                   = &TLSContextResource{}
+	_ resource.ResourceWithConfigure      = &TLSContextResource{}
+	_ resource.ResourceWithImportState    = &TLSContextResource{}
+	_ resource.ResourceWithValidateConfig = &TLSContextResource{}
 )
 
 type TLSContextResource struct {
@@ -145,7 +146,9 @@ func (r *TLSContextResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				},
 			},
 			"cipher_suites": schema.ListAttribute{
-				Description: "Allowed cipher suites. Empty list means use defaults.",
+				Description: "Allowed cipher suites. " +
+					"Required (must contain at least one value) when min_tls_version is 'TLSv1.2' — " +
+					"the platform returns HTTP 400 if omitted in that case.",
 				Optional:    true,
 				ElementType: types.StringType,
 			},
@@ -192,6 +195,28 @@ func (r *TLSContextResource) Configure(_ context.Context, req resource.Configure
 		return
 	}
 	r.client = tlsClient
+}
+
+func (r *TLSContextResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var data TLSContextResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if data.MinTLSVersion.IsUnknown() || data.CipherSuites.IsUnknown() {
+		return
+	}
+
+	if data.MinTLSVersion.ValueString() == "TLSv1.2" &&
+		(data.CipherSuites.IsNull() || len(data.CipherSuites.Elements()) == 0) {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("cipher_suites"),
+			"cipher_suites required for TLSv1.2",
+			"The platform requires at least one cipher suite when min_tls_version is 'TLSv1.2'. "+
+				"Set cipher_suites to a non-empty list of supported cipher suites.",
+		)
+	}
 }
 
 func (r *TLSContextResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {

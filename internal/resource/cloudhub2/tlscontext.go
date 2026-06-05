@@ -96,10 +96,12 @@ func (r *TLSContextResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Required:    true,
 			},
 			"keystore_type": schema.StringAttribute{
-				Description: "The type of keystore: 'PEM' or 'JKS'.",
-				Required:    true,
+				Description: "The type of keystore: 'PEM' or 'JKS'. Populated automatically on import from the API response.",
+				Optional:    true,
+				Computed:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			// PEM-specific fields
@@ -721,6 +723,12 @@ func (r *TLSContextResource) Read(ctx context.Context, req resource.ReadRequest,
 			},
 		)
 		data.KeyStore = keyStoreObj
+
+		// Populate keystore_type from the API response so import generates valid config.
+		// key_store.type returns "PEM" or "JKS" — same values the schema accepts.
+		if data.KeyStoreType.IsNull() || data.KeyStoreType.IsUnknown() {
+			data.KeyStoreType = types.StringValue(tlsContext.KeyStore.Type)
+		}
 	}
 
 	// Save updated data into Terraform state
