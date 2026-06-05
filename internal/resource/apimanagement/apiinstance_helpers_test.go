@@ -428,9 +428,8 @@ func TestAPIInstanceResource_expandCreateRequest(t *testing.T) {
 			"deployment_type":  types.StringValue("CH"),
 			"type":             types.StringValue("http"),
 			"base_path":        types.StringValue("/api/v1"),
-			"uri":              types.StringNull(),
 			"response_timeout": types.Int64Null(),
-			"tls_context_id":   types.StringNull(),
+			"tls_context":      types.ObjectNull(endpointTLSContextAttrTypes),
 		})
 		data := APIInstanceResourceModel{
 			Technology:           types.StringValue("mule4"),
