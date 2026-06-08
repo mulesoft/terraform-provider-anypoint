@@ -48,72 +48,52 @@ func TestTechnologyFromAPI(t *testing.T) {
 	}
 }
 
-// --- mergeUpstreamIDs ---
+// --- stampUpstreamIDs ---
 
-func TestAPIInstanceResource_mergeUpstreamIDs(t *testing.T) {
+func TestAPIInstanceResource_stampUpstreamIDs(t *testing.T) {
 	r := &APIInstanceResource{}
 
-	t.Run("copies IDs by URI match", func(t *testing.T) {
-		current := []apimgmtclient.APIInstanceRoute{
-			{
-				Upstreams: []apimgmtclient.APIInstanceUpstream{
-					{ID: "server-id-1", URI: "https://upstream1.example.com"},
-					{ID: "server-id-2", URI: "https://upstream2.example.com"},
-				},
-			},
+	t.Run("stamps server IDs into matching top-level upstreams", func(t *testing.T) {
+		existing := []apimgmtclient.APIUpstream{
+			{ID: "server-id-1", URI: "https://upstream1.example.com"},
+			{ID: "server-id-2", URI: "https://upstream2.example.com"},
 		}
-		update := []apimgmtclient.APIInstanceRoute{
-			{
-				Upstreams: []apimgmtclient.APIInstanceUpstream{
-					{URI: "https://upstream1.example.com"},
-					{URI: "https://upstream2.example.com"},
-				},
-			},
+		upstreams := []apimgmtclient.APIInstanceUpstream{
+			{URI: "https://upstream1.example.com", Weight: 60},
+			{URI: "https://upstream2.example.com", Weight: 40},
 		}
-		r.mergeUpstreamIDs(current, update)
-		if update[0].Upstreams[0].ID != "server-id-1" {
-			t.Errorf("Upstream[0].ID = %q, want server-id-1", update[0].Upstreams[0].ID)
+		r.stampUpstreamIDs(existing, upstreams)
+		if upstreams[0].ID != "server-id-1" {
+			t.Errorf("upstreams[0].ID = %q, want server-id-1", upstreams[0].ID)
 		}
-		if update[0].Upstreams[1].ID != "server-id-2" {
-			t.Errorf("Upstream[1].ID = %q, want server-id-2", update[0].Upstreams[1].ID)
+		if upstreams[1].ID != "server-id-2" {
+			t.Errorf("upstreams[1].ID = %q, want server-id-2", upstreams[1].ID)
+		}
+		if upstreams[0].URI != "https://upstream1.example.com" {
+			t.Errorf("URI should be preserved, got %q", upstreams[0].URI)
 		}
 	})
 
-	t.Run("no match leaves ID empty", func(t *testing.T) {
-		current := []apimgmtclient.APIInstanceRoute{
-			{Upstreams: []apimgmtclient.APIInstanceUpstream{{ID: "id-1", URI: "https://old.example.com"}}},
+	t.Run("new upstream with no match gets no ID", func(t *testing.T) {
+		existing := []apimgmtclient.APIUpstream{
+			{ID: "id-1", URI: "https://old.example.com"},
 		}
-		update := []apimgmtclient.APIInstanceRoute{
-			{Upstreams: []apimgmtclient.APIInstanceUpstream{{URI: "https://new.example.com"}}},
+		upstreams := []apimgmtclient.APIInstanceUpstream{
+			{URI: "https://new.example.com", Weight: 100},
 		}
-		r.mergeUpstreamIDs(current, update)
-		if update[0].Upstreams[0].ID != "" {
-			t.Errorf("Upstream[0].ID = %q, want empty", update[0].Upstreams[0].ID)
-		}
-	})
-
-	t.Run("update has more routes than current", func(t *testing.T) {
-		current := []apimgmtclient.APIInstanceRoute{
-			{Upstreams: []apimgmtclient.APIInstanceUpstream{{ID: "id-1", URI: "https://a.example.com"}}},
-		}
-		update := []apimgmtclient.APIInstanceRoute{
-			{Upstreams: []apimgmtclient.APIInstanceUpstream{{URI: "https://a.example.com"}}},
-			{Upstreams: []apimgmtclient.APIInstanceUpstream{{URI: "https://b.example.com"}}},
-		}
-		// Should not panic even when update has more routes
-		r.mergeUpstreamIDs(current, update)
-		if update[0].Upstreams[0].ID != "id-1" {
-			t.Errorf("First route ID = %q, want id-1", update[0].Upstreams[0].ID)
+		r.stampUpstreamIDs(existing, upstreams)
+		if upstreams[0].ID != "" {
+			t.Errorf("new upstream ID = %q, want empty (API assigns it)", upstreams[0].ID)
 		}
 	})
 
-	t.Run("empty current does nothing", func(t *testing.T) {
-		update := []apimgmtclient.APIInstanceRoute{
-			{Upstreams: []apimgmtclient.APIInstanceUpstream{{URI: "https://a.example.com"}}},
+	t.Run("empty existing leaves IDs unchanged", func(t *testing.T) {
+		upstreams := []apimgmtclient.APIInstanceUpstream{
+			{URI: "https://a.example.com", Weight: 100},
 		}
-		r.mergeUpstreamIDs(nil, update)
-		if update[0].Upstreams[0].ID != "" {
-			t.Errorf("Expected empty ID, got %q", update[0].Upstreams[0].ID)
+		r.stampUpstreamIDs(nil, upstreams)
+		if upstreams[0].ID != "" {
+			t.Errorf("expected empty ID, got %q", upstreams[0].ID)
 		}
 	})
 }

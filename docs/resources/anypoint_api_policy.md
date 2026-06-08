@@ -77,11 +77,44 @@ resource "anypoint_api_policy" "custom" {
 - `label` (String) A human-readable label for this policy instance.
 - `order` (Number) Execution order of the policy. Lower numbers execute first.
 - `disabled` (Boolean) Whether the policy is disabled. Defaults to `false`.
+- `pointcut_data` (String) Pointcut definition as a JSON string. Restricts the policy to specific resources (methods and/or URIs). When null the policy applies to all resources. Use `jsonencode()` to set this. See [Pointcut Data](#pointcut-data) below.
 
 ### Read-Only
 
 - `id` (String) Unique identifier of the applied policy.
 - `policy_template_id` (String) Policy template ID assigned by the server.
+
+
+## Pointcut Data
+
+The optional `pointcut_data` attribute restricts the policy to specific HTTP methods and/or URI patterns, matching what is configured under "Apply configurations to specific methods & resources" in the Anypoint Platform UI.
+
+Each element in the array maps to one condition row in the UI:
+
+- `methodRegex` — pipe-separated HTTP methods (e.g. `GET`, `GET|POST`). Omit or set to `.*` to match all methods.
+- `uriTemplateRegex` — regex for the URI path (e.g. `/api/v1/.*`). Omit or set to `.*` to match all paths.
+
+```hcl
+# Apply policy to GET and POST requests on /api/v1/* only
+pointcut_data = jsonencode([
+  {
+    methodRegex      = "GET|POST"
+    uriTemplateRegex = "/api/v1/.*"
+  }
+])
+
+# Multiple conditions (logical OR — policy applies if any condition matches)
+pointcut_data = jsonencode([
+  {
+    methodRegex      = "GET"
+    uriTemplateRegex = "/api/v1/read/.*"
+  },
+  {
+    methodRegex      = "POST|PUT"
+    uriTemplateRegex = "/api/v1/write/.*"
+  }
+])
+```
 
 ## Import
 

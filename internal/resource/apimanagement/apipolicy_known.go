@@ -50,6 +50,7 @@ type KnownPolicyResourceModel struct {
 	APIInstanceID    types.String `tfsdk:"api_instance_id"`
 	Label            types.String `tfsdk:"label"`
 	Configuration    types.Object `tfsdk:"configuration"`
+	PointcutData     types.String `tfsdk:"pointcut_data"`
 	Order            types.Int64  `tfsdk:"order"`
 	Disabled         types.Bool   `tfsdk:"disabled"`
 	PolicyTemplateID types.String `tfsdk:"policy_template_id"`
@@ -301,6 +302,13 @@ func (r *KnownPolicyResource) Schema(_ context.Context, _ resource.SchemaRequest
 				Optional:    true,
 				Computed:    true,
 				ElementType: types.StringType,
+			},
+			"pointcut_data": schema.StringAttribute{
+				Description: "Pointcut definition as a JSON string. Restricts the policy to specific resources " +
+					"(methods and/or URIs). When null the policy applies to all resources. Use jsonencode() to set this. " +
+					"Not applicable to outbound policies.",
+				Optional: true,
+				Computed: true,
 			},
 		},
 	}
@@ -762,7 +770,7 @@ func (r *KnownPolicyResource) Create(ctx context.Context, req resource.CreateReq
 			GroupID:           r.policyInfo.GroupID,
 			AssetID:           r.policyInfo.AssetID,
 			AssetVersion:      assetVersion,
-			PointcutData:      nil,
+			PointcutData:      expandPointcutData(data.PointcutData),
 		}
 		if !data.Label.IsNull() && !data.Label.IsUnknown() {
 			createReq.Label = data.Label.ValueString()
@@ -922,6 +930,7 @@ func (r *KnownPolicyResource) Update(ctx context.Context, req resource.UpdateReq
 		updateReq := &apimanagement.UpdateAPIPolicyRequest{
 			ConfigurationData: configData,
 			AssetVersion:      assetVersion,
+			PointcutData:      expandPointcutData(plan.PointcutData),
 		}
 		if !plan.Label.IsNull() && !plan.Label.IsUnknown() {
 			updateReq.Label = plan.Label.ValueString()
@@ -1081,6 +1090,15 @@ func (r *KnownPolicyResource) flatten(ctx context.Context, policy *apimanagement
 		data.UpstreamIDs = listVal
 	} else if data.UpstreamIDs.IsNull() || data.UpstreamIDs.IsUnknown() {
 		data.UpstreamIDs = types.ListValueMust(types.StringType, []attr.Value{})
+	}
+
+	if policy.PointcutData != nil {
+		pcJSON, err := json.Marshal(policy.PointcutData)
+		if err == nil {
+			data.PointcutData = types.StringValue(string(pcJSON))
+		}
+	} else {
+		data.PointcutData = types.StringNull()
 	}
 }
 
