@@ -37,9 +37,9 @@ func TestTLSContextResource_Metadata(t *testing.T) {
 func TestTLSContextResource_Schema(t *testing.T) {
 	res := NewTLSContextResource()
 
-	requiredAttrs := []string{"private_space_id", "name", "ciphers"}
-	optionalAttrs := []string{"organization_id", "keystore_type"}
-	computedAttrs := []string{"id", "type", "keystore_type"}
+	requiredAttrs := []string{"private_space_id", "name", "keystore_type", "ciphers"}
+	optionalAttrs := []string{"organization_id"}
+	computedAttrs := []string{"id", "type"}
 
 	testutil.TestResourceSchema(t, res, requiredAttrs, optionalAttrs, computedAttrs)
 }
