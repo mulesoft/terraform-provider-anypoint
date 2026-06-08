@@ -613,30 +613,6 @@ func (r *APIInstanceResource) ValidateConfig(ctx context.Context, req resource.V
 			}
 		}
 
-		if len(upstreams) <= 1 {
-			continue
-		}
-
-		var totalWeight int64
-		allKnown := true
-		for _, us := range upstreams {
-			if us.Weight.IsUnknown() {
-				allKnown = false
-				break
-			}
-			totalWeight += us.Weight.ValueInt64()
-		}
-
-		if allKnown && totalWeight != 100 {
-			routeLabel := fmt.Sprintf("routing[%d]", i)
-			if !route.Label.IsNull() && !route.Label.IsUnknown() && route.Label.ValueString() != "" {
-				routeLabel = fmt.Sprintf("routing[%d] (label=%q)", i, route.Label.ValueString())
-			}
-			resp.Diagnostics.AddError(
-				"Invalid upstream weights",
-				fmt.Sprintf("%s: upstream weights must sum to 100 when there are multiple upstreams, got %d.", routeLabel, totalWeight),
-			)
-		}
 	}
 }
 
@@ -817,18 +793,34 @@ func (r *APIInstanceResource) Update(ctx context.Context, req resource.UpdateReq
 
 	updateReq := r.expandUpdateRequest(ctx, plan)
 
-	if len(updateReq.Routing) > 0 {
-		var current *apimanagement.APIInstance
-		current, err = r.client.GetAPIInstance(ctx, orgID, envID, apiID)
-		if err == nil && len(current.Routing) > 0 {
-			r.mergeUpstreamIDs(current.Routing, updateReq.Routing)
+	// Fetch current state to build the PATCH upstreams list correctly.
+	// The PATCH upstreams must include ALL existing upstreams (not just those in the plan),
+	// with plan-specified changes applied on top. Routing is immutable and sent unchanged.
+	if current, fetchErr := r.client.GetAPIInstance(ctx, orgID, envID, apiID); fetchErr == nil {
+		// Routing is immutable — send current server routing unchanged
+		updateReq.Routing = current.Routing
+
+		// Stamp IDs by position: routing ref (route_i, upstream_j) → plan upstream (i, j).
+		// This handles URI changes correctly — the position determines which server ID
+		// belongs to which plan upstream, regardless of whether the URI changed.
+		// URI-based matching is used as fallback for upstreams not referenced by routing.
+		if existingUpstreams, listErr := r.client.ListUpstreams(ctx, orgID, envID, apiID); listErr == nil {
+			r.stampUpstreamIDsByPosition(current.Routing, existingUpstreams, updateReq.Upstreams)
 		}
 	}
 
-	var instance *apimanagement.APIInstance
-	instance, err = r.client.UpdateAPIInstance(ctx, orgID, envID, apiID, updateReq)
+	_, err = r.client.UpdateAPIInstance(ctx, orgID, envID, apiID, updateReq)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating API instance", "Could not update API instance: "+err.Error())
+		return
+	}
+
+	// The PATCH response is a partial object missing computed fields (assetId, status, etc.).
+	// Re-fetch the full instance so flattenInstance has complete data.
+	var instance *apimanagement.APIInstance
+	instance, err = r.client.GetAPIInstance(ctx, orgID, envID, apiID)
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading API instance after update", "Could not read API instance: "+err.Error())
 		return
 	}
 
@@ -1050,38 +1042,94 @@ func (r *APIInstanceResource) expandUpdateRequest(ctx context.Context, data APII
 		}
 	}
 
+	// Routing is immutable after creation — the PATCH payload carries the current
+	// server routing (id+weight refs) unchanged. Only the top-level upstreams change.
+	// Routing and Upstreams are populated by the Update function after fetching
+	// current state from the API; leave them nil here.
 	if !data.UpstreamURI.IsNull() && !data.UpstreamURI.IsUnknown() {
-		req.Routing = []apimanagement.APIInstanceRoute{
-			{
-				Upstreams: []apimanagement.APIInstanceUpstream{
-					{Weight: 100, URI: data.UpstreamURI.ValueString()},
-				},
-			},
-		}
+		upstream := apimanagement.APIInstanceUpstream{URI: data.UpstreamURI.ValueString()}
+		req.Upstreams = []apimanagement.APIInstanceUpstream{upstream}
 	} else {
-		req.Routing = r.expandRouting(ctx, data.Routing)
+		req.Upstreams = collectUpstreams(r.expandRouting(ctx, data.Routing))
 	}
 
 	return req
 }
 
-// mergeUpstreamIDs copies server-assigned upstream IDs from the current
-// instance into the update payload. Matches by route index and upstream URI.
-func (r *APIInstanceResource) mergeUpstreamIDs(current, update []apimanagement.APIInstanceRoute) {
-	for i := range update {
-		if i >= len(current) {
-			break
-		}
-		currentByURI := make(map[string]string)
-		for _, us := range current[i].Upstreams {
+// collectUpstreams flattens all upstreams across all routes into the top-level
+// upstreams array required by the PATCH API. Deduplicates by ID when available.
+func collectUpstreams(routes []apimanagement.APIInstanceRoute) []apimanagement.APIInstanceUpstream {
+	seen := make(map[string]bool)
+	var result []apimanagement.APIInstanceUpstream
+	for _, route := range routes {
+		for _, us := range route.Upstreams {
+			key := us.URI
 			if us.ID != "" {
-				currentByURI[us.URI] = us.ID
+				key = us.ID
+			}
+			if !seen[key] {
+				seen[key] = true
+				result = append(result, us)
 			}
 		}
-		for j := range update[i].Upstreams {
-			if id, ok := currentByURI[update[i].Upstreams[j].URI]; ok {
-				update[i].Upstreams[j].ID = id
+	}
+	return result
+}
+
+// stampUpstreamIDsByPosition assigns server IDs to plan upstreams by matching
+// the position of each routing ref to the corresponding plan upstream.
+// routing[i].upstreams[j] → planUpstreams[flatIndex] where flatIndex increments
+// across all routes and upstream positions.
+// Any plan upstreams beyond the routing positions fall back to URI matching.
+func (r *APIInstanceResource) stampUpstreamIDsByPosition(
+	routing []apimanagement.APIInstanceRoute,
+	existing []apimanagement.APIUpstream,
+	planUpstreams []apimanagement.APIInstanceUpstream,
+) {
+	// Build position→serverID from the current routing refs
+	var positionIDs []string
+	for _, route := range routing {
+		for _, us := range route.Upstreams {
+			positionIDs = append(positionIDs, us.ID)
+		}
+	}
+
+	// Stamp IDs by position for routing-referenced upstreams
+	for i := range planUpstreams {
+		if i < len(positionIDs) && positionIDs[i] != "" {
+			planUpstreams[i].ID = positionIDs[i]
+		}
+	}
+
+	// For any remaining plan upstreams (beyond routing positions), fall back to URI match
+	if len(planUpstreams) > len(positionIDs) {
+		byURI := make(map[string]string, len(existing))
+		for _, us := range existing {
+			if us.ID != "" && us.URI != "" {
+				byURI[us.URI] = us.ID
 			}
+		}
+		for i := len(positionIDs); i < len(planUpstreams); i++ {
+			if id, ok := byURI[planUpstreams[i].URI]; ok {
+				planUpstreams[i].ID = id
+			}
+		}
+	}
+}
+
+// stampUpstreamIDs fills in server-assigned IDs on the top-level upstreams list
+// by matching on URI. Upstreams with no match (new upstreams) are left without an ID —
+// the API assigns one when it creates them.
+func (r *APIInstanceResource) stampUpstreamIDs(existing []apimanagement.APIUpstream, upstreams []apimanagement.APIInstanceUpstream) {
+	byURI := make(map[string]string, len(existing))
+	for _, us := range existing {
+		if us.ID != "" && us.URI != "" {
+			byURI[us.URI] = us.ID
+		}
+	}
+	for i := range upstreams {
+		if id, ok := byURI[upstreams[i].URI]; ok {
+			upstreams[i].ID = id
 		}
 	}
 }

@@ -94,7 +94,7 @@ type APIInstanceRoute struct {
 type APIInstanceUpstream struct {
 	ID         string                  `json:"id,omitempty"`
 	Weight     int                     `json:"weight"`
-	URI        string                  `json:"uri"`
+	URI        string                  `json:"uri,omitempty"`
 	Label      string                  `json:"label,omitempty"`
 	TLSContext *APIInstanceUpstreamTLS `json:"tlsContext,omitempty"`
 }
@@ -142,6 +142,9 @@ type CreateAPIInstanceRequest struct {
 
 // UpdateAPIInstanceRequest uses pointer fields so the caller can distinguish
 // "not provided" from the zero value.
+// The PATCH endpoint requires a split structure:
+//   - Upstreams: top-level full upstream definitions (id, label, uri, tlsContext)
+//   - Routing[].Upstreams: weight + id references into the top-level array
 type UpdateAPIInstanceRequest struct {
 	Technology    *string                `json:"technology,omitempty"`
 	EndpointURI   *string                `json:"endpointUri,omitempty"`
@@ -149,6 +152,7 @@ type UpdateAPIInstanceRequest struct {
 	Endpoint      *APIInstanceEndpoint   `json:"endpoint,omitempty"`
 	Spec          *APIInstanceSpec       `json:"spec,omitempty"`
 	Routing       []APIInstanceRoute     `json:"routing,omitempty"`
+	Upstreams     []APIInstanceUpstream  `json:"upstreams,omitempty"`
 	Deployment    *APIInstanceDeployment `json:"deployment,omitempty"`
 }
 

@@ -211,6 +211,7 @@ func TestKnownPolicyResource_Read(t *testing.T) {
 		"policy_template_id": tftypes.NewValue(tftypes.String, nil),
 		"asset_version":      tftypes.NewValue(tftypes.String, "1.3.1"),
 		"upstream_ids":       tftypes.NewValue(tftypes.List{ElementType: upstreamIDsElemType}, nil),
+		"pointcut_data":      tftypes.NewValue(tftypes.String, nil),
 	})
 
 	req := resource.ReadRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
@@ -482,6 +483,7 @@ func TestKnownPolicyResource_Read_NotFound(t *testing.T) {
 		"policy_template_id": tftypes.NewValue(tftypes.String, nil),
 		"asset_version":      tftypes.NewValue(tftypes.String, "1.3.1"),
 		"upstream_ids":       tftypes.NewValue(tftypes.List{ElementType: upstreamIDsElemType}, nil),
+		"pointcut_data":      tftypes.NewValue(tftypes.String, nil),
 	})
 
 	req := resource.ReadRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}

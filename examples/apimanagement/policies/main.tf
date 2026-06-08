@@ -432,6 +432,70 @@ resource "anypoint_api_policy_http_caching" "http_caching" {
 # }
 
 # ═════════════════════════════════════════════════════════════
+# POINTCUT DATA EXAMPLES
+# ═════════════════════════════════════════════════════════════
+# pointcut_data restricts a policy to specific methods and/or
+# URI patterns — equivalent to "Apply configurations to specific
+# methods & resources" in the Anypoint Platform UI.
+
+# ─── Rate limiting on GET /api/v1/* only ─────────────────────
+resource "anypoint_api_policy_rate_limiting" "rate_limiting_scoped" {
+  organization_id = local.org_id
+  environment_id  = local.env_id
+  api_instance_id = local.api_id
+  label           = "rate-limit-reads-only"
+  order           = 20
+
+  # Restrict to GET requests on /api/v1/* — all other paths bypass this policy
+  pointcut_data = jsonencode([
+    {
+      methodRegex      = "GET"
+      uriTemplateRegex = "/api/v1/.*"
+    }
+  ])
+
+  configuration = {
+    key_selector = "#[attributes.queryParams['identifier']]"
+    rate_limits = [
+      {
+        maximum_requests            = 50
+        time_period_in_milliseconds = 60000
+      }
+    ]
+    expose_headers = true
+    clusterizable  = true
+  }
+}
+
+# ─── JWT Validation with multiple conditions (OR logic) ───────
+resource "anypoint_api_policy_jwt_validation" "jwt_scoped" {
+  organization_id = local.org_id
+  environment_id  = local.env_id
+  api_instance_id = local.api_id
+  label           = "jwt-write-ops"
+  order           = 21
+
+  # Apply JWT validation only on write operations — reads are open
+  pointcut_data = jsonencode([
+    {
+      methodRegex      = "POST|PUT|PATCH|DELETE"
+      uriTemplateRegex = "/api/.*"
+    }
+  ])
+
+  configuration = {
+    jwt_origin                = "httpBearerAuthenticationHeader"
+    signing_method            = "rsa"
+    signing_key_length        = 256
+    jwt_key_origin            = "jwks"
+    jwks_url                  = "https://example.com/.well-known/jwks.json"
+    skip_client_id_validation = true
+    validate_aud_claim        = true
+    mandatory_exp_claim       = true
+  }
+}
+
+# ═════════════════════════════════════════════════════════════
 # OUTPUTS
 # ═════════════════════════════════════════════════════════════
 

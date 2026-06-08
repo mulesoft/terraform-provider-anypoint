@@ -320,7 +320,7 @@ func TestAPIInstanceResource_expandUpdateRequest(t *testing.T) {
 		}
 	})
 
-	t.Run("upstream_uri creates single-upstream routing", func(t *testing.T) {
+	t.Run("upstream_uri sets top-level upstream (routing set by Update from server)", func(t *testing.T) {
 		data := APIInstanceResourceModel{
 			Technology:       types.StringValue("omniGateway"),
 			UpstreamURI:      types.StringValue("https://backend.example.com"),
@@ -331,11 +331,13 @@ func TestAPIInstanceResource_expandUpdateRequest(t *testing.T) {
 			ConsumerEndpoint: types.StringNull(),
 		}
 		req := r.expandUpdateRequest(ctx, data)
-		if len(req.Routing) != 1 {
-			t.Fatalf("Routing len = %d, want 1", len(req.Routing))
+		// Routing is NOT set by expandUpdateRequest — it is fetched from the server
+		// and injected by the Update function. Only Upstreams is set here.
+		if len(req.Routing) != 0 {
+			t.Errorf("Routing should be empty from expandUpdateRequest, got len=%d", len(req.Routing))
 		}
-		if req.Routing[0].Upstreams[0].URI != "https://backend.example.com" {
-			t.Errorf("Upstream URI = %q", req.Routing[0].Upstreams[0].URI)
+		if len(req.Upstreams) != 1 || req.Upstreams[0].URI != "https://backend.example.com" {
+			t.Errorf("Upstreams[0].URI = %q, want https://backend.example.com", req.Upstreams[0].URI)
 		}
 	})
 
