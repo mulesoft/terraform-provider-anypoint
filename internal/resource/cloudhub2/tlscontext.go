@@ -96,10 +96,12 @@ func (r *TLSContextResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Required:    true,
 			},
 			"keystore_type": schema.StringAttribute{
-				Description: "The type of keystore: 'PEM' or 'JKS'.",
-				Required:    true,
+				Description: "The type of keystore: 'PEM' or 'JKS'. Populated automatically on import from the API response.",
+				Optional:    true,
+				Computed:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			// PEM-specific fields
