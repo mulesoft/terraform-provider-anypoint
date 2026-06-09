@@ -181,32 +181,40 @@ func TestTLSContextResourceModel_Validation(t *testing.T) {
 }
 
 func TestTLSContextResource_Read(t *testing.T) {
-	basePath := "/runtimefabric/api/organizations/test-org-id/privatespaces/test-ps-id/tlsContexts/test-tls-id"
+	// GetTLSContext uses the list endpoint — mock /tlsContexts (no ID suffix)
+	basePath := "/runtimefabric/api/organizations/test-org-id/privatespaces/test-ps-id/tlsContexts"
 
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 		basePath: func(w http.ResponseWriter, r *http.Request) {
-			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
-				"id":   "test-tls-id",
-				"name": "test-tls",
-				"type": "PEM",
-				"ciphers": map[string]interface{}{
-					"AES128-GCM-SHA256":             false,
-					"AES128-SHA256":                 false,
-					"AES256-GCM-SHA384":             false,
-					"AES256-SHA256":                 false,
-					"DHE-RSA-AES128-SHA256":         false,
-					"DHE-RSA-AES256-GCM-SHA384":     false,
-					"DHE-RSA-AES256-SHA256":         false,
-					"ECDHE-ECDSA-AES128-GCM-SHA256": false,
-					"ECDHE-ECDSA-AES256-GCM-SHA384": false,
-					"ECDHE-RSA-AES128-GCM-SHA256":   false,
-					"ECDHE-RSA-AES256-GCM-SHA384":   false,
-					"ECDHE-ECDSA-CHACHA20-POLY1305": false,
-					"ECDHE-RSA-CHACHA20-POLY1305":   false,
-					"DHE-RSA-CHACHA20-POLY1305":     false,
-					"TLS-AES256-GCM-SHA384":         false,
-					"TLS-CHACHA20-POLY1305-SHA256":  false,
-					"TLS-AES128-GCM-SHA256":         false,
+			testutil.JSONResponse(w, http.StatusOK, []map[string]interface{}{
+				{
+					"id":   "test-tls-id",
+					"name": "test-tls",
+					"type": "PEM",
+					"keyStore": map[string]interface{}{
+						"type": "PEM",
+						"cn":   "test.example.com",
+						"san":  []string{},
+					},
+					"ciphers": map[string]interface{}{
+						"aes128GcmSha256":            false,
+						"aes128Sha256":               false,
+						"aes256GcmSha384":            false,
+						"aes256Sha256":               false,
+						"dheRsaAes128Sha256":         false,
+						"dheRsaAes256GcmSha384":      false,
+						"dheRsaAes256Sha256":         false,
+						"ecdheEcdsaAes128GcmSha256":  false,
+						"ecdheEcdsaAes256GcmSha384":  false,
+						"ecdheRsaAes128GcmSha256":    false,
+						"ecdheRsaAes256GcmSha384":    false,
+						"ecdheEcdsaChacha20Poly1305":  false,
+						"ecdheRsaChacha20Poly1305":   false,
+						"dheRsaChacha20Poly1305":     false,
+						"tlsAes256GcmSha384":         false,
+						"tlsChacha20Poly1305Sha256":  false,
+						"tlsAes128GcmSha256":         false,
+					},
 				},
 			})
 		},
@@ -270,11 +278,12 @@ func TestTLSContextResource_Read(t *testing.T) {
 }
 
 func TestTLSContextResource_Read_NotFound(t *testing.T) {
-	basePath := "/runtimefabric/api/organizations/test-org-id/privatespaces/test-ps-id/tlsContexts/test-tls-id"
+	// GetTLSContext uses the list endpoint; return an empty list to simulate not found
+	basePath := "/runtimefabric/api/organizations/test-org-id/privatespaces/test-ps-id/tlsContexts"
 
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 		basePath: func(w http.ResponseWriter, r *http.Request) {
-			testutil.ErrorResponse(w, http.StatusNotFound, "not found")
+			testutil.JSONResponse(w, http.StatusOK, []map[string]interface{}{})
 		},
 	}
 	server := testutil.MockHTTPServer(t, handlers)
