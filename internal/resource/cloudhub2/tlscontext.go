@@ -723,6 +723,11 @@ func (r *TLSContextResource) Read(ctx context.Context, req resource.ReadRequest,
 			},
 		)
 		data.KeyStore = keyStoreObj
+
+		// Populate keystore_type from key_store.type when not already set (import path).
+		if data.KeyStoreType.IsNull() || data.KeyStoreType.IsUnknown() || data.KeyStoreType.ValueString() == "" {
+			data.KeyStoreType = types.StringValue(tlsContext.KeyStore.Type)
+		}
 	}
 
 	// Save updated data into Terraform state
