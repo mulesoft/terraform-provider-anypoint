@@ -140,49 +140,39 @@ func TestTLSContextClient_CreateTLSContext(t *testing.T) {
 }
 
 func TestTLSContextClient_GetTLSContext(t *testing.T) {
-	mockTLSContext := &TLSContext{
-		ID: "test-tls-id",
-	}
+	// GetTLSContext uses the list endpoint and filters by ID — no single-item GET exists.
+	orgID := "test-org-id"
+	privateSpaceID := "test-space-id"
+	listPath := fmt.Sprintf("/runtimefabric/api/organizations/%s/privatespaces/%s/tlsContexts", orgID, privateSpaceID)
 
 	tests := []struct {
-		name           string
-		orgID          string
-		privateSpaceID string
-		tlsContextID   string
-		mockHandler    func(w http.ResponseWriter, r *http.Request)
-		wantErr        bool
-		errContains    string
+		name         string
+		tlsContextID string
+		listResponse interface{}
+		wantErr      bool
+		errContains  string
 	}{
 		{
-			name:           "successful get",
-			orgID:          "test-org-id",
-			privateSpaceID: "test-space-id",
-			tlsContextID:   "test-tls-id",
-			mockHandler: func(w http.ResponseWriter, r *http.Request) {
-				if r.Method != "GET" {
-					t.Errorf("Expected GET request, got %s", r.Method)
-				}
-				testutil.JSONResponse(w, http.StatusOK, mockTLSContext)
-			},
-			wantErr: false,
+			name:         "successful get",
+			tlsContextID: "test-tls-id",
+			listResponse: []TLSContext{{ID: "test-tls-id", Name: "my-tls"}},
+			wantErr:      false,
 		},
 		{
-			name:           "not found",
-			orgID:          "test-org-id",
-			privateSpaceID: "test-space-id",
-			tlsContextID:   "nonexistent-id",
-			mockHandler: func(w http.ResponseWriter, r *http.Request) {
-				testutil.ErrorResponse(w, http.StatusNotFound, "Not found")
-			},
-			wantErr:     true,
-			errContains: "not found",
+			name:         "not found — ID absent from list",
+			tlsContextID: "nonexistent-id",
+			listResponse: []TLSContext{{ID: "other-id", Name: "other"}},
+			wantErr:      true,
+			errContains:  "not found",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			handlers := map[string]func(w http.ResponseWriter, r *http.Request){
-				fmt.Sprintf("/runtimefabric/api/organizations/%s/privatespaces/%s/tlsContexts/%s", tt.orgID, tt.privateSpaceID, tt.tlsContextID): tt.mockHandler,
+				listPath: func(w http.ResponseWriter, r *http.Request) {
+					testutil.JSONResponse(w, http.StatusOK, tt.listResponse)
+				},
 			}
 			server := testutil.MockHTTPServer(t, handlers)
 
@@ -194,7 +184,7 @@ func TestTLSContextClient_GetTLSContext(t *testing.T) {
 				},
 			}
 
-			result, err := client.GetTLSContext(context.Background(), tt.orgID, tt.privateSpaceID, tt.tlsContextID)
+			result, err := client.GetTLSContext(context.Background(), orgID, privateSpaceID, tt.tlsContextID)
 
 			if tt.wantErr {
 				if err == nil {
