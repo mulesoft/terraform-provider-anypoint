@@ -281,6 +281,83 @@ func TestPrivateSpaceAdvancedConfigResource_Read_NotFound(t *testing.T) {
 	}
 }
 
+func TestPrivateSpaceAdvancedConfigResource_Update_SetsIDAndOrgID(t *testing.T) {
+	updatePath := "/runtimefabric/api/organizations/test-org-id/privatespaces/test-ps-id/advancedconfig"
+	getPath := "/runtimefabric/api/organizations/test-org-id/privatespaces/test-ps-id"
+
+	privateSpaceResponse := map[string]interface{}{
+		"id":            "test-ps-id",
+		"name":          "test-private-space",
+		"enableIAMRole": false,
+		"ingressConfiguration": map[string]interface{}{
+			"readResponseTimeout": 300,
+			"protocol":            "https-redirect",
+			"logs": map[string]interface{}{
+				"filters":      []interface{}{},
+				"portLogLevel": "ERROR",
+			},
+			"deployment": map[string]interface{}{},
+		},
+	}
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		updatePath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, privateSpaceResponse)
+		},
+		getPath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, privateSpaceResponse)
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	res := NewPrivateSpaceAdvancedConfigResource().(*PrivateSpaceAdvancedConfigResource)
+	res.client = &ch2client.PrivateSpaceAdvancedConfigClient{
+		AnypointClient: &anypointclient.AnypointClient{
+			BaseURL:    server.URL,
+			Token:      "mock-token",
+			HTTPClient: &http.Client{},
+			OrgID:      "test-org-id",
+		},
+	}
+
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+	objType := stateType.(tftypes.Object)
+	ingressObjType := objType.AttributeTypes["ingress_configuration"].(tftypes.Object)
+
+	planRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"id":                    tftypes.NewValue(tftypes.String, "test-ps-id"),
+		"private_space_id":      tftypes.NewValue(tftypes.String, "test-ps-id"),
+		"organization_id":       tftypes.NewValue(tftypes.String, "test-org-id"),
+		"ingress_configuration": tftypes.NewValue(ingressObjType, nil),
+		"enable_iam_role":       tftypes.NewValue(tftypes.Bool, false),
+	})
+
+	req := resource.UpdateRequest{
+		Plan:  tfsdk.Plan{Schema: schemaResp.Schema, Raw: planRaw},
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: planRaw},
+	}
+	resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: planRaw}}
+	res.Update(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("Update() reported errors: %v", resp.Diagnostics.Errors())
+	}
+
+	var model PrivateSpaceAdvancedConfigResourceModel
+	if diags := resp.State.Get(ctx, &model); diags.HasError() {
+		t.Fatalf("State.Get errors: %v", diags.Errors())
+	}
+	if model.ID.IsUnknown() || model.ID.IsNull() || model.ID.ValueString() == "" {
+		t.Errorf("Update() left id unknown/null/empty: %v", model.ID)
+	}
+	if model.OrganizationID.IsUnknown() || model.OrganizationID.IsNull() || model.OrganizationID.ValueString() == "" {
+		t.Errorf("Update() left organization_id unknown/null/empty: %v", model.OrganizationID)
+	}
+}
+
 func BenchmarkPrivateSpaceAdvancedConfigResource_Schema(b *testing.B) {
 	res := NewPrivateSpaceAdvancedConfigResource()
 	ctx := context.Background()
