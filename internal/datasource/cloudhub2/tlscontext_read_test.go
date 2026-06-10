@@ -15,9 +15,10 @@ import (
 )
 
 func TestTLSContextDataSource_Read(t *testing.T) {
-	basePath := "/runtimefabric/api/organizations/test-org-id/privatespaces/test-ps-id/tlsContexts/tls-ctx-1"
+	// GetTLSContext uses the list endpoint — mock /tlsContexts (no ID suffix)
+	basePath := "/runtimefabric/api/organizations/test-org-id/privatespaces/test-ps-id/tlsContexts"
 
-	mockTLS := &ch2client.TLSContext{
+	mockTLS := ch2client.TLSContext{
 		ID:   "tls-ctx-1",
 		Name: "my-tls-context",
 		Type: "PEM",
@@ -29,7 +30,7 @@ func TestTLSContextDataSource_Read(t *testing.T) {
 
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 		basePath: func(w http.ResponseWriter, r *http.Request) {
-			testutil.JSONResponse(w, http.StatusOK, mockTLS)
+			testutil.JSONResponse(w, http.StatusOK, []ch2client.TLSContext{mockTLS})
 		},
 	}
 	server := testutil.MockHTTPServer(t, handlers)
@@ -80,7 +81,8 @@ func TestTLSContextDataSource_Read(t *testing.T) {
 }
 
 func TestTLSContextDataSource_Read_Error(t *testing.T) {
-	basePath := "/runtimefabric/api/organizations/test-org-id/privatespaces/test-ps-id/tlsContexts/tls-ctx-1"
+	// GetTLSContext uses the list endpoint — return server error on list call
+	basePath := "/runtimefabric/api/organizations/test-org-id/privatespaces/test-ps-id/tlsContexts"
 
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 		basePath: func(w http.ResponseWriter, r *http.Request) {

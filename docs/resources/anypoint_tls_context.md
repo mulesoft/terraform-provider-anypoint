@@ -90,12 +90,12 @@ resource "anypoint_tls_context" "jks_example" {
 
 - `private_space_id` (String) The ID of the private space this TLS context belongs to.
 - `name` (String) The name of the TLS context.
-- `keystore_type` (String) The type of keystore: 'PEM' or 'JKS'.
 - `ciphers` (Block) Cipher configuration for the TLS context. See [below for nested schema](#nestedschema--ciphers).
 
 ### Optional
 
 - `organization_id` (String) The organization ID where the private space is located. If not provided, the organization ID will be inferred from the connected app credentials.
+- `keystore_type` (String) The type of keystore: `PEM` or `JKS`. Required when creating a new TLS context. **Populated automatically on import** from the API response — no need to set it manually when importing.
 - `certificate` (String, Sensitive) PEM certificate content (required for PEM keystore).
 - `key` (String, Sensitive) PEM private key content (required for PEM keystore).
 - `key_filename` (String) Filename for the private key (PEM keystore).
@@ -174,7 +174,7 @@ resource "anypoint_tls_context" "imported" {
   private_space_id = "<private_space_id>"
   organization_id  = "<organization_id>"
   name             = "<tls_context_name>"
-  keystore_type    = "PEM"
+  # keystore_type is populated automatically from the API response on import
 }
 ```
 

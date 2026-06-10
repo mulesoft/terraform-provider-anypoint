@@ -209,37 +209,20 @@ func (c *TLSContextClient) ListTLSContexts(ctx context.Context, orgID, privateSp
 }
 
 // GetTLSContext retrieves a TLS context by ID
+// GetTLSContext retrieves a single TLS context by ID by listing all contexts and filtering.
+// The API only exposes a list endpoint — there is no single-item GET endpoint.
 func (c *TLSContextClient) GetTLSContext(ctx context.Context, orgID, privateSpaceID, tlsContextID string) (*TLSContext, error) {
-	url := fmt.Sprintf("%s/runtimefabric/api/organizations/%s/privatespaces/%s/tlsContexts/%s", c.BaseURL, orgID, privateSpaceID, tlsContextID)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	all, err := c.ListTLSContexts(ctx, orgID, privateSpaceID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, err
 	}
-
-	req.Header.Set("Authorization", "Bearer "+c.Token)
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+	for _, tlsContext := range all {
+		if tlsContext.ID == tlsContextID {
+			t := tlsContext
+			return &t, nil
+		}
 	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, client.NewNotFoundError("TLS context")
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to get TLS context with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var tlsContext TLSContext
-	if err := json.NewDecoder(resp.Body).Decode(&tlsContext); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &tlsContext, nil
+	return nil, client.NewNotFoundError(fmt.Sprintf("TLS context %s", tlsContextID))
 }
 
 // UpdateTLSContext updates an existing TLS context
