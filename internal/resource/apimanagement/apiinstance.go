@@ -395,10 +395,13 @@ func (r *APIInstanceResource) Schema(_ context.Context, _ resource.SchemaRequest
 				Optional:    true,
 			},
 			"upstream_uri": schema.StringAttribute{
-				Description: "Shorthand for a single-upstream routing configuration. " +
+				Description: "**Deprecated.** Shorthand for a single-upstream routing configuration. " +
 					"When set, the provider constructs routing as [{upstreams: [{weight: 100, uri: <value>}]}]. " +
-					"Mutually exclusive with the 'routing' block.",
-				Optional: true,
+					"Mutually exclusive with the 'routing' block. " +
+					"Use the 'routing' block instead — it supports TLS, labels, multiple upstreams, and weighted routing. " +
+					"This field will be removed in the next major version.",
+				Optional:           true,
+				DeprecationMessage: "upstream_uri is deprecated and will be removed in the next major version. Use the 'routing' block instead: routing = [{ upstreams = [{ uri = \"<value>\" }] }]. The routing block also supports TLS via tls_context_id, multiple upstreams, weights, and per-route rules.",
 			},
 			"gateway_id": schema.StringAttribute{
 				Description: "The Omni Gateway UUID. When provided, the deployment block is auto-populated " +
@@ -793,20 +796,23 @@ func (r *APIInstanceResource) Update(ctx context.Context, req resource.UpdateReq
 
 	updateReq := r.expandUpdateRequest(ctx, plan)
 
-	// Fetch current state to build the PATCH upstreams list correctly.
-	// The PATCH upstreams must include ALL existing upstreams (not just those in the plan),
-	// with plan-specified changes applied on top. Routing is immutable and sent unchanged.
-	if current, fetchErr := r.client.GetAPIInstance(ctx, orgID, envID, apiID); fetchErr == nil {
-		// Routing is immutable — send current server routing unchanged
-		updateReq.Routing = current.Routing
+	// The PATCH endpoint requires routing[].upstreams[] to be strict {id, weight}
+	// references. Inline new upstreams (with uri/label/tls) are rejected on PATCH
+	// even though Create accepts them. So when the plan introduces upstreams that
+	// don't exist server-side yet, we register them in two steps:
+	//   1. Pre-PATCH: extend the catalog with new {label, uri, tls} entries (no id);
+	//      keep the server's current routing untouched so the request validates.
+	//   2. Re-list upstreams to learn the server-assigned ids.
+	//   3. Main PATCH below: routing as id refs + catalog with all ids resolved.
+	if err = r.registerNewUpstreams(ctx, plan, orgID, envID, apiID); err != nil {
+		resp.Diagnostics.AddError("Error registering new upstreams", err.Error())
+		return
+	}
 
-		// Stamp IDs by position: routing ref (route_i, upstream_j) → plan upstream (i, j).
-		// This handles URI changes correctly — the position determines which server ID
-		// belongs to which plan upstream, regardless of whether the URI changed.
-		// URI-based matching is used as fallback for upstreams not referenced by routing.
-		if existingUpstreams, listErr := r.client.ListUpstreams(ctx, orgID, envID, apiID); listErr == nil {
-			r.stampUpstreamIDsByPosition(current.Routing, existingUpstreams, updateReq.Upstreams)
-		}
+	if existingUpstreams, listErr := r.client.ListUpstreams(ctx, orgID, envID, apiID); listErr == nil {
+		routing, catalog := r.buildUpdateRoutingAndCatalog(ctx, plan, existingUpstreams)
+		updateReq.Routing = routing
+		updateReq.Upstreams = catalog
 	}
 
 	_, err = r.client.UpdateAPIInstance(ctx, orgID, envID, apiID, updateReq)
@@ -1076,45 +1082,178 @@ func collectUpstreams(routes []apimanagement.APIInstanceRoute) []apimanagement.A
 	return result
 }
 
-// stampUpstreamIDsByPosition assigns server IDs to plan upstreams by matching
-// the position of each routing ref to the corresponding plan upstream.
-// routing[i].upstreams[j] → planUpstreams[flatIndex] where flatIndex increments
-// across all routes and upstream positions.
-// Any plan upstreams beyond the routing positions fall back to URI matching.
-func (r *APIInstanceResource) stampUpstreamIDsByPosition(
-	routing []apimanagement.APIInstanceRoute,
+// buildUpdateRoutingAndCatalog constructs the PATCH routing[] and upstreams[]
+// from the plan, resolving server-side upstream IDs by label first, URI second.
+//
+// The Anypoint PATCH endpoint requires routing[].upstreams[] to be strict
+// {id, weight} references — inline {uri, label, tls} entries are rejected.
+// Callers MUST register any new upstreams via registerNewUpstreams before
+// calling this; otherwise resolveID will fail and the upstream will be skipped.
+//
+// The top-level upstreams catalog carries every referenced upstream (by id)
+// with its current label/uri/tls so field changes propagate in the same PATCH.
+func (r *APIInstanceResource) buildUpdateRoutingAndCatalog(
+	ctx context.Context,
+	plan APIInstanceResourceModel,
 	existing []apimanagement.APIUpstream,
-	planUpstreams []apimanagement.APIInstanceUpstream,
-) {
-	// Build position→serverID from the current routing refs
-	var positionIDs []string
-	for _, route := range routing {
+) ([]apimanagement.APIInstanceRoute, []apimanagement.APIInstanceUpstream) {
+	planRoutes := r.planRoutesForPATCH(ctx, plan)
+	if len(planRoutes) == 0 {
+		return nil, nil
+	}
+
+	resolveID := upstreamIDResolver(existing)
+
+	routing := make([]apimanagement.APIInstanceRoute, 0, len(planRoutes))
+	catalog := make([]apimanagement.APIInstanceUpstream, 0)
+	seenCatalog := make(map[string]bool)
+
+	for _, route := range planRoutes {
+		newRoute := apimanagement.APIInstanceRoute{
+			Label: route.Label,
+			Rules: route.Rules,
+		}
 		for _, us := range route.Upstreams {
-			positionIDs = append(positionIDs, us.ID)
-		}
-	}
-
-	// Stamp IDs by position for routing-referenced upstreams
-	for i := range planUpstreams {
-		if i < len(positionIDs) && positionIDs[i] != "" {
-			planUpstreams[i].ID = positionIDs[i]
-		}
-	}
-
-	// For any remaining plan upstreams (beyond routing positions), fall back to URI match
-	if len(planUpstreams) > len(positionIDs) {
-		byURI := make(map[string]string, len(existing))
-		for _, us := range existing {
-			if us.ID != "" && us.URI != "" {
-				byURI[us.URI] = us.ID
+			id := resolveID(us)
+			if id == "" {
+				// Should have been registered already. Skip rather than send an
+				// inline entry the API will reject.
+				continue
+			}
+			newRoute.Upstreams = append(newRoute.Upstreams, apimanagement.APIInstanceUpstream{
+				ID:     id,
+				Weight: us.Weight,
+			})
+			if !seenCatalog[id] {
+				seenCatalog[id] = true
+				catalog = append(catalog, apimanagement.APIInstanceUpstream{
+					ID:         id,
+					Label:      us.Label,
+					URI:        us.URI,
+					TLSContext: us.TLSContext,
+				})
 			}
 		}
-		for i := len(positionIDs); i < len(planUpstreams); i++ {
-			if id, ok := byURI[planUpstreams[i].URI]; ok {
-				planUpstreams[i].ID = id
-			}
+		routing = append(routing, newRoute)
+	}
+
+	return routing, catalog
+}
+
+// planRoutesForPATCH expands plan.Routing, falling back to the upstream_uri
+// shortcut shape when the user used that instead of a full routing block.
+func (r *APIInstanceResource) planRoutesForPATCH(ctx context.Context, plan APIInstanceResourceModel) []apimanagement.APIInstanceRoute {
+	planRoutes := r.expandRouting(ctx, plan.Routing)
+	if len(planRoutes) > 0 {
+		return planRoutes
+	}
+	if !plan.UpstreamURI.IsNull() && !plan.UpstreamURI.IsUnknown() {
+		return []apimanagement.APIInstanceRoute{{
+			Upstreams: []apimanagement.APIInstanceUpstream{
+				{Weight: 100, URI: plan.UpstreamURI.ValueString()},
+			},
+		}}
+	}
+	return nil
+}
+
+// upstreamIDResolver returns a function that maps a plan upstream to its
+// server-assigned id by label (preferred) or URI (fallback).
+func upstreamIDResolver(existing []apimanagement.APIUpstream) func(apimanagement.APIInstanceUpstream) string {
+	idByLabel := make(map[string]string, len(existing))
+	idByURI := make(map[string]string, len(existing))
+	for _, us := range existing {
+		if us.ID == "" {
+			continue
+		}
+		if us.Label != "" {
+			idByLabel[us.Label] = us.ID
+		}
+		if us.URI != "" {
+			idByURI[us.URI] = us.ID
 		}
 	}
+	return func(us apimanagement.APIInstanceUpstream) string {
+		if us.Label != "" {
+			if id, ok := idByLabel[us.Label]; ok {
+				return id
+			}
+		}
+		if us.URI != "" {
+			if id, ok := idByURI[us.URI]; ok {
+				return id
+			}
+		}
+		return ""
+	}
+}
+
+// registerNewUpstreams handles the first leg of the two-step PATCH dance:
+// any plan upstream with no matching server upstream (by label or URI) is
+// added to the top-level catalog while the server's current routing is left
+// untouched. The server assigns ids, which the caller picks up via a fresh
+// ListUpstreams. Returns nil if there is nothing to register.
+func (r *APIInstanceResource) registerNewUpstreams(ctx context.Context, plan APIInstanceResourceModel, orgID, envID string, apiID int) error {
+	planRoutes := r.planRoutesForPATCH(ctx, plan)
+	if len(planRoutes) == 0 {
+		return nil
+	}
+
+	existing, err := r.client.ListUpstreams(ctx, orgID, envID, apiID)
+	if err != nil {
+		// If we can't list, the main PATCH will surface a better error.
+		return nil
+	}
+	resolveID := upstreamIDResolver(existing)
+
+	// Start the new catalog from the existing upstreams (preserved as-is by id),
+	// then append any plan upstream that doesn't resolve.
+	newCatalog := make([]apimanagement.APIInstanceUpstream, 0, len(existing))
+	for _, us := range existing {
+		newCatalog = append(newCatalog, apimanagement.APIInstanceUpstream{ID: us.ID})
+	}
+
+	seen := make(map[string]bool)
+	added := 0
+	for _, route := range planRoutes {
+		for _, us := range route.Upstreams {
+			if resolveID(us) != "" {
+				continue
+			}
+			// Dedup by (label,uri) so two routes referencing the same new
+			// upstream only register it once.
+			key := us.Label + "|" + us.URI
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			newCatalog = append(newCatalog, apimanagement.APIInstanceUpstream{
+				Label:      us.Label,
+				URI:        us.URI,
+				TLSContext: us.TLSContext,
+			})
+			added++
+		}
+	}
+	if added == 0 {
+		return nil
+	}
+
+	current, err := r.client.GetAPIInstance(ctx, orgID, envID, apiID)
+	if err != nil {
+		return fmt.Errorf("fetch current instance: %w", err)
+	}
+
+	// Routing is sent unchanged (id+weight refs) so the server only validates
+	// the catalog change. The new entries land with server-assigned ids.
+	preReq := &apimanagement.UpdateAPIInstanceRequest{
+		Routing:   current.Routing,
+		Upstreams: newCatalog,
+	}
+	if _, err := r.client.UpdateAPIInstance(ctx, orgID, envID, apiID, preReq); err != nil {
+		return fmt.Errorf("register new upstreams: %w", err)
+	}
+	return nil
 }
 
 // stampUpstreamIDs fills in server-assigned IDs on the top-level upstreams list

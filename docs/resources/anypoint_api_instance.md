@@ -15,14 +15,15 @@ Manages an API instance in Anypoint API Manager. An API instance represents an A
 
 ## Example Usage
 
-### Minimal configuration using `upstream_uri` shorthand
+~> **Deprecation notice:** the top-level `upstream_uri` field is deprecated and will be removed in the next major version. New configurations should use the `routing` block, which supports TLS, labels, multiple upstreams, and weighted routing. See the migration note below.
+
+### Minimal configuration
 
 ```terraform
 resource "anypoint_api_instance" "minimal" {
   environment_id = var.environment_id
   gateway_id     = var.gateway_id
   instance_label = "minimal-demo"
-  upstream_uri   = "http://backend.internal:8080"
 
   spec = {
     asset_id = "my-api"
@@ -33,8 +34,42 @@ resource "anypoint_api_instance" "minimal" {
   endpoint = {
     base_path = "minimal"
   }
+
+  routing = [
+    {
+      upstreams = [
+        { uri = "http://backend.internal:8080" }
+      ]
+    }
+  ]
 }
 ```
+
+### Migrating from `upstream_uri`
+
+If you are using the deprecated `upstream_uri` field, replace it with an equivalent single-upstream `routing` block:
+
+```terraform
+# Before (deprecated)
+resource "anypoint_api_instance" "example" {
+  # ...
+  upstream_uri = "http://backend.internal:8080"
+}
+
+# After
+resource "anypoint_api_instance" "example" {
+  # ...
+  routing = [
+    {
+      upstreams = [
+        { uri = "http://backend.internal:8080" }
+      ]
+    }
+  ]
+}
+```
+
+The two forms are semantically identical — `upstream_uri` was always shorthand for `routing = [{ upstreams = [{ weight = 100, uri = <value> }] }]`.
 
 ### Weighted multi-upstream routing (canary / blue-green)
 
@@ -74,6 +109,179 @@ resource "anypoint_api_instance" "weighted_routing" {
 }
 ```
 
+## How routing & upstreams sync to the backend
+
+The API Manager backend models routing and upstreams as **two separate concepts**, but this Terraform resource exposes a single, denormalized `routing` block that nests upstreams inside each route. Understanding the mapping is important when you add, remove, or change routes — especially because the backend's PATCH semantics are stricter than its POST semantics.
+
+### Backend model
+
+For an API instance the API Manager keeps:
+
+- **Upstreams catalog** — a flat list of upstream backends, each with a server-assigned `id`, plus `label`, `uri`, and optional `tlsContext`.
+- **Routing** — an ordered list of routes, where each route's `upstreams` array references the catalog **by `id` and `weight`**. The reference does **not** carry `uri`, `label`, or `tls`.
+
+Example backend payload:
+
+```json
+{
+  "upstreams": [
+    { "id": "abc-123", "label": "stable", "uri": "https://stable.internal:8081" },
+    { "id": "def-456", "label": "canary", "uri": "https://canary.internal:8081" }
+  ],
+  "routing": [
+    { "label": "main", "upstreams": [{ "id": "abc-123", "weight": 90 }, { "id": "def-456", "weight": 10 }] }
+  ]
+}
+```
+
+### Provider model
+
+In Terraform the upstream definition is written **inline** inside `routing[].upstreams[]`:
+
+```hcl
+routing = [
+  {
+    label = "main"
+    upstreams = [
+      { weight = 90, uri = "https://stable.internal:8081", label = "stable" },
+      { weight = 10, uri = "https://canary.internal:8081", label = "canary" },
+    ]
+  }
+]
+```
+
+The provider takes care of translating between the two shapes. You never manage upstream `id`s yourself — they live in state.
+
+### Identity matching
+
+When the provider needs to map a plan upstream to a backend upstream (during Update), it matches in this order:
+
+1. **`label`** — if the plan upstream has a label, the provider looks for a backend upstream with the same label.
+2. **`uri`** — falls back to URI match if there's no label match.
+3. If neither matches, the upstream is treated as **new**.
+
+> **Recommendation:** always set `label` on every upstream. Labels are stable across URI changes and across reordering. Without a label, changing a URI looks like "delete + add" instead of "edit".
+
+### What happens on `terraform apply`
+
+#### Create (`POST /apis`)
+
+A single API call. Inline upstreams in `routing[].upstreams[]` are accepted by the create endpoint, so the provider sends the routing block as-is. The backend creates the catalog entries and the routing references in one shot.
+
+#### Update (`PATCH /apis/{id}`) — stricter
+
+The PATCH endpoint **rejects** inline upstreams in `routing[].upstreams[]` — it requires every routing reference to be a strict `{ id, weight }` against an upstream that already exists in the catalog. To honor that constraint, the provider runs Update as up to two PATCHes:
+
+1. **Pre-PATCH (only if the plan introduces brand-new upstreams)**
+   - Body: `routing` = unchanged (the server's current routing), `upstreams` = existing catalog (id-only) + new entries with `{ label, uri, tls }` and no `id`.
+   - The backend assigns ids to the new entries. Existing routing keeps validating because nothing it references has changed.
+2. **Re-list** (`GET /upstreams`) to capture the newly assigned ids.
+3. **Main PATCH**
+   - Body: `routing` = the new routing built from the plan with `{ id, weight }` refs only; `upstreams` = full catalog with all ids resolved, so any `uri`/`label`/`tls` change on an existing upstream propagates in this same call.
+
+When the plan only changes weights, rules, or fields on existing upstreams (no genuinely new upstream), the pre-PATCH is skipped and Update is a single PATCH.
+
+### Worked example: adding a new route to an existing instance
+
+Starting state — one route, one upstream:
+
+```hcl
+resource "anypoint_api_instance" "demo" {
+  # ...
+  routing = [
+    {
+      label = "stable"
+      rules = { methods = "GET", path = "/stable/.*" }
+      upstreams = [
+        { weight = 100, uri = "https://stable.internal:8081", label = "stable" }
+      ]
+    }
+  ]
+}
+```
+
+Backend after Create:
+
+```json
+{
+  "upstreams": [{ "id": "abc-123", "label": "stable", "uri": "https://stable.internal:8081" }],
+  "routing": [{ "label": "stable", "upstreams": [{ "id": "abc-123", "weight": 100 }] }]
+}
+```
+
+Now add a canary route with a brand-new upstream:
+
+```hcl
+resource "anypoint_api_instance" "demo" {
+  # ...
+  routing = [
+    {
+      label = "stable"
+      rules = { methods = "GET", path = "/stable/.*" }
+      upstreams = [
+        { weight = 100, uri = "https://stable.internal:8081", label = "stable" }
+      ]
+    },
+    {
+      label = "canary"
+      rules = { methods = "GET", path = "/canary/.*" }
+      upstreams = [
+        { weight = 100, uri = "https://canary.internal:8081", label = "canary" }
+      ]
+    },
+  ]
+}
+```
+
+What the provider sends:
+
+**Pre-PATCH (registers the new `canary` upstream):**
+
+```json
+{
+  "routing": [{ "label": "stable", "upstreams": [{ "id": "abc-123", "weight": 100 }] }],
+  "upstreams": [
+    { "id": "abc-123" },
+    { "label": "canary", "uri": "https://canary.internal:8081" }
+  ]
+}
+```
+
+The backend assigns `def-456` to the canary entry.
+
+**Main PATCH (uses the new id in routing):**
+
+```json
+{
+  "routing": [
+    { "label": "stable", "rules": {"methods":"GET","path":"/stable/.*"}, "upstreams": [{ "id": "abc-123", "weight": 100 }] },
+    { "label": "canary", "rules": {"methods":"GET","path":"/canary/.*"}, "upstreams": [{ "id": "def-456", "weight": 100 }] }
+  ],
+  "upstreams": [
+    { "id": "abc-123", "label": "stable", "uri": "https://stable.internal:8081" },
+    { "id": "def-456", "label": "canary", "uri": "https://canary.internal:8081" }
+  ]
+}
+```
+
+### Other Update scenarios
+
+| HCL change | Backend calls |
+|---|---|
+| Tweak a `weight` on an existing upstream | 1 PATCH (no new upstreams) |
+| Change `uri`/`label`/`tls_context_id` on an existing upstream | 1 PATCH (catalog entry updated by id) |
+| Insert a new route in the middle, referencing an existing upstream | 1 PATCH (no new upstream needed) |
+| Reorder routes | 1 PATCH (routing array reordered) |
+| Add a route with a brand-new upstream | 2 PATCHes (pre-register + main) |
+| Add multiple new upstreams across multiple routes | 2 PATCHes (all new upstreams registered together in the pre-PATCH) |
+| Remove a route | 1 PATCH (routing array shortened; orphaned upstreams remain in the catalog and are harmless) |
+
+### Caveats
+
+- **Orphan upstreams**: removing a route does not remove its upstreams from the catalog. The backend keeps them; they are inert because no route references them. Cleanup (if desired) is a manual API call today.
+- **Reused upstreams**: if two routes reference the same backend (same `label` or `uri`), write the upstream definition in both routes — the provider deduplicates them into a single catalog entry. The dedup key is the resolved `id` (or `label` / `uri` for new upstreams).
+- **Drop the `label` field at your own risk**: identity matching falls back to URI, so changing a URI without a label looks like "delete one upstream, create another" — fine for stateless backends, surprising for stateful ones (cookies, sticky sessions, etc.).
+
 ## Schema
 
 ### Required
@@ -89,7 +297,7 @@ resource "anypoint_api_instance" "weighted_routing" {
 - `instance_label` (String) A human-readable label for this API instance.
 - `approval_method` (String) Client approval method. Valid values: `manual`. Defaults to null (no approval required). **Note:** `automatic` approval is no longer supported.
 - `consumer_endpoint` (String) Consumer-facing endpoint URI (the public URL clients use to reach the API). Maps to top-level endpointUri in the API.
-- `upstream_uri` (String) Shorthand for a single-upstream routing configuration. When set, the provider constructs routing as `[{upstreams: [{weight: 100, uri: <value>}]}]`. Mutually exclusive with the `routing` block.
+- `upstream_uri` (String, **Deprecated**) Shorthand for a single-upstream routing configuration. When set, the provider constructs routing as `[{upstreams: [{weight: 100, uri: <value>}]}]`. Mutually exclusive with the `routing` block. **This field will be removed in the next major version.** Use the `routing` block instead — it supports TLS via `tls_context_id`, labels, multiple upstreams, and weighted routing.
 - `gateway_id` (String) The Omni Gateway UUID. When provided, the deployment block is auto-populated by fetching gateway details (target_id, target_name, gateway_version) from the Gateway Manager API. Mutually exclusive with specifying a full deployment block.
 - `endpoint` (Block) Endpoint / proxy configuration for the API instance. See [below for nested schema](#nestedschema--endpoint).
 - `deployment` (Block) Deployment target configuration. Auto-populated when gateway_id is set. See [below for nested schema](#nestedschema--deployment).
