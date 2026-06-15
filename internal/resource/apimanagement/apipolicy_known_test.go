@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
@@ -492,5 +493,79 @@ func TestKnownPolicyResource_Read_NotFound(t *testing.T) {
 
 	if !resp.State.Raw.IsNull() {
 		t.Error("Read() for 404 should remove resource (state should be null)")
+	}
+}
+
+func oboConfigAttrs(t *testing.T) map[string]schema.Attribute {
+	t.Helper()
+	r := NewKnownPolicyResourceFunc("credential-injection-oauth2-obo")()
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	r.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	if schemaResp.Diagnostics.HasError() {
+		t.Fatalf("Schema() has errors: %v", schemaResp.Diagnostics.Errors())
+	}
+	configAttr, ok := schemaResp.Schema.Attributes["configuration"]
+	if !ok {
+		t.Fatal("Schema() missing 'configuration' attribute")
+	}
+	nested, ok := configAttr.(schema.SingleNestedAttribute)
+	if !ok {
+		t.Fatalf("'configuration' is not a SingleNestedAttribute, got %T", configAttr)
+	}
+	return nested.Attributes
+}
+
+func TestOBOSchema_ContainsCIBAAndDistributedFields(t *testing.T) {
+	attrs := oboConfigAttrs(t)
+
+	expectedFields := []string{
+		"flow", "client_id", "client_secret", "token_endpoint",
+		"scope", "timeout",
+		"distributed",
+		"ciba_enabled", "ciba_endpoint", "ciba_binding_message", "ciba_login_hint_claim",
+		"subject_token_type", "requested_token_type",
+		"target_value", "target_type",
+	}
+	for _, field := range expectedFields {
+		if _, exists := attrs[field]; !exists {
+			t.Errorf("OBO policy schema missing expected field %q", field)
+		}
+	}
+}
+
+func TestOBOSchema_NewFieldsAreOptional(t *testing.T) {
+	attrs := oboConfigAttrs(t)
+
+	optionalFields := []string{
+		"distributed", "ciba_enabled", "ciba_endpoint",
+		"ciba_binding_message", "ciba_login_hint_claim",
+		"subject_token_type", "requested_token_type",
+	}
+	for _, field := range optionalFields {
+		a, ok := attrs[field]
+		if !ok {
+			t.Errorf("OBO policy schema missing field %q", field)
+			continue
+		}
+		if a.IsRequired() {
+			t.Errorf("OBO policy field %q should be optional, not required", field)
+		}
+	}
+}
+
+func TestOBOSchema_RequiredFieldsStillRequired(t *testing.T) {
+	attrs := oboConfigAttrs(t)
+
+	requiredFields := []string{"flow", "client_id", "client_secret", "token_endpoint"}
+	for _, field := range requiredFields {
+		a, ok := attrs[field]
+		if !ok {
+			t.Errorf("OBO policy schema missing required field %q", field)
+			continue
+		}
+		if !a.IsRequired() {
+			t.Errorf("OBO policy field %q should still be required", field)
+		}
 	}
 }

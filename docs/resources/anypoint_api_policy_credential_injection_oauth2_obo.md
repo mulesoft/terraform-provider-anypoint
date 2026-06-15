@@ -66,7 +66,13 @@ Required:
 Optional:
 
 - `ciba_enabled` (Boolean) Whether CIBA (Client-Initiated Backchannel Authentication) is enabled.
+- `ciba_endpoint` (String) The backchannel authentication endpoint URL (used when `ciba_enabled` is true).
+- `ciba_binding_message` (String) A human-readable binding message sent to the user's authentication device (used when `ciba_enabled` is true).
+- `ciba_login_hint_claim` (String) The claim used to identify the end user in the CIBA flow (used when `ciba_enabled` is true).
+- `distributed` (Boolean) Whether to use distributed token caching across cluster nodes.
+- `requested_token_type` (String) The type of the token to be returned by the token endpoint.
 - `scope` (String) Array or string of OAuth 2.0 scopes.
+- `subject_token_type` (String) The type of the subject token (e.g. `urn:ietf:params:oauth:token-type:access_token`).
 - `target_type` (String) The target resource type for on-behalf-of flow.
 - `target_value` (String) The target resource value for on-behalf-of flow.
 - `timeout` (Number) Timeout value in milliseconds.
