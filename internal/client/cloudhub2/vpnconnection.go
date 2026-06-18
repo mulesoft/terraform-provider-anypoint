@@ -65,6 +65,7 @@ type VPNResponse struct {
 	RemoteASN           int                           `json:"remoteAsn"`
 	LocalASN            int                           `json:"localAsn"`
 	RemoteIPAddress     string                        `json:"remoteIpAddress"`
+	StaticRoutes        []string                      `json:"staticRoutes,omitempty"`
 	VPNTunnels          []VPNConnectionTunnelResponse `json:"vpnTunnels"`
 }
 

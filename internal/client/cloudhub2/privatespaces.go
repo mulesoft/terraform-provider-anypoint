@@ -70,9 +70,10 @@ type PrivateSpaceLogForwarding struct {
 
 // PrivateSpaceIngressConfig represents the ingress configuration
 type PrivateSpaceIngressConfig struct {
-	ReadResponseTimeout int                     `json:"readResponseTimeout"`
-	Logs                PrivateSpaceIngressLogs `json:"logs"`
-	Protocol            string                  `json:"protocol"`
+	ReadResponseTimeout int                       `json:"readResponseTimeout"`
+	Logs                PrivateSpaceIngressLogs   `json:"logs"`
+	Protocol            string                    `json:"protocol"`
+	Deployment          PrivateSpaceIngressDeployment `json:"deployment"`
 }
 
 // PrivateSpaceIngressLogs represents the ingress logs configuration
@@ -85,6 +86,12 @@ type PrivateSpaceIngressLogs struct {
 type PrivateSpaceLogFilter struct {
 	IP    string `json:"ip"`
 	Level string `json:"level"`
+}
+
+// PrivateSpaceIngressDeployment represents the ingress deployment status
+type PrivateSpaceIngressDeployment struct {
+	Status            string `json:"status"`
+	LastSeenTimestamp int64  `json:"lastSeenTimestamp"`
 }
 
 // FirewallRule represents a firewall rule

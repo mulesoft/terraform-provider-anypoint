@@ -241,23 +241,34 @@ func (p *AnypointProvider) Resources(_ context.Context) []func() resource.Resour
 }
 
 func (p *AnypointProvider) DataSources(_ context.Context) []func() datasource.DataSource {
-	return []func() datasource.DataSource{
+	dataSources := []func() datasource.DataSource{
 		// Access Management data sources
 		dsAccessManagement.NewEnvironmentDataSource,
 		dsAccessManagement.NewOrganizationDataSource,
 		dsAccessManagement.NewTeamDataSource,
+		dsAccessManagement.NewConnectedAppScopesDataSource,
 		// CloudHub 2.0 data sources
 		dsCloudHub2.NewTLSContextDataSource,
 		dsCloudHub2.NewPrivateSpaceAssociationDataSource,
 		dsCloudHub2.NewPrivateSpaceUpgradeDataSource,
+		dsCloudHub2.NewPrivateSpaceConfigDataSource,
+		dsCloudHub2.NewVPNConnectionDataSource,
+		dsCloudHub2.NewPrivateSpaceAdvancedConfigDataSource,
 		// API Management data sources
 		dsApiManagement.NewManagedOmniGatewayDataSource,
 		dsApiManagement.NewManagedOmniGatewaySingleDataSource,
 		dsApiManagement.NewAPIInstanceDataSource,
+		dsApiManagement.NewAPIInstanceSingleDataSource,
 		dsApiManagement.NewAPIUpstreamsDataSource,
+		dsApiManagement.NewAPIPolicyDataSource,
+		dsApiManagement.NewAPIPoliciesDataSource,
+		dsApiManagement.NewSLATierDataSource,
+		dsApiManagement.NewSLATiersDataSource,
 		// Agents Tools data sources
 		dsAgentsTools.NewAgentInstanceDataSource,
+		dsAgentsTools.NewAgentInstanceSingleDataSource,
 		dsAgentsTools.NewMCPServerDataSource,
+		dsAgentsTools.NewMCPServerSingleDataSource,
 		// Secrets Management data sources
 		dsSecretsManagement.NewSecretGroupDataSource,
 		dsSecretsManagement.NewKeystoreDataSource,
@@ -267,6 +278,13 @@ func (p *AnypointProvider) DataSources(_ context.Context) []func() datasource.Da
 		dsSecretsManagement.NewSharedSecretDataSource,
 		dsSecretsManagement.NewTLSContextDataSource,
 	}
+
+	// Register known policy data sources (one per known policy type)
+	for _, policyType := range dsApiManagement.KnownPolicyDataSourceTypes() {
+		dataSources = append(dataSources, dsApiManagement.NewKnownPolicyDataSourceFunc(policyType))
+	}
+
+	return dataSources
 }
 
 func New(version string) func() provider.Provider {
