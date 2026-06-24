@@ -51,6 +51,9 @@ go.work
 *.swo
 *~
 
+# Claude Code local config (contains credentials and machine-specific paths)
+.claude/
+
 # OS files
 .DS_Store
 .DS_Store?
