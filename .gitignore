@@ -54,6 +54,9 @@ go.work
 # Claude Code local config (contains credentials and machine-specific paths)
 .claude/
 
+# AI agent artifacts (research notes, analysis docs — not source code)
+.agents/
+
 # OS files
 .DS_Store
 .DS_Store?
