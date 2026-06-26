@@ -73,8 +73,9 @@ func (r *TeamResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 				},
 			},
 			"parent_team_id": schema.StringAttribute{
-				Description: "The ID of the parent team.",
-				Required:    true,
+				Description: "The ID of the parent team. If not specified, the team is created under the org's root team.",
+				Optional:    true,
+				Computed:    true,
 			},
 			"team_type": schema.StringAttribute{
 				Description: "The type of the team.",

@@ -3,7 +3,10 @@ package accessmanagement
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
@@ -18,8 +21,9 @@ import (
 
 // Ensure the implementation satisfies the expected interfaces
 var (
-	_ resource.Resource              = &RolePermissionResource{}
-	_ resource.ResourceWithConfigure = &RolePermissionResource{}
+	_ resource.Resource                = &RolePermissionResource{}
+	_ resource.ResourceWithConfigure   = &RolePermissionResource{}
+	_ resource.ResourceWithImportState = &RolePermissionResource{}
 )
 
 // RolePermissionResource is the resource implementation.
@@ -222,10 +226,19 @@ func (r *RolePermissionResource) Read(ctx context.Context, req resource.ReadRequ
 		orgID = r.client.OrgID
 	}
 
-	// Get the assignment by looking it up via role_id + context_params
-	contextParams := r.extractContextParams(ctx, data.ContextParams)
+	var assignment *accessmanagement.RoleAssignment
+	var err error
 
-	assignment, err := r.client.GetRoleAssignment(ctx, orgID, data.RoleGroupID.ValueString(), data.RoleID.ValueString(), contextParams)
+	// If role_id is set, look up by role_id + context_params (normal case).
+	// If role_id is empty (import case), look up by assignment_id.
+	if data.RoleID.ValueString() != "" && !data.ContextParams.IsNull() && !data.ContextParams.IsUnknown() {
+		contextParams := r.extractContextParams(ctx, data.ContextParams)
+		assignment, err = r.client.GetRoleAssignment(ctx, orgID, data.RoleGroupID.ValueString(), data.RoleID.ValueString(), contextParams)
+	} else {
+		// Import path: we only have role_group_id + assignment_id
+		assignment, err = r.client.GetRoleAssignmentByID(ctx, orgID, data.RoleGroupID.ValueString(), data.ID.ValueString())
+	}
+
 	if err != nil {
 		if client.IsNotFound(err) {
 			// Assignment was removed outside of Terraform
@@ -241,9 +254,24 @@ func (r *RolePermissionResource) Read(ctx context.Context, req resource.ReadRequ
 
 	// Update state with API response
 	data.ID = types.StringValue(assignment.RoleGroupAssignmentID)
+	data.RoleID = types.StringValue(assignment.RoleID)
 	data.RoleName = types.StringValue(assignment.Name)
 	data.CreatedAt = types.StringValue(assignment.CreatedAt)
 	data.OrganizationID = types.StringValue(orgID)
+
+	// Populate context_params from the API response
+	if len(assignment.ContextParams) > 0 {
+		elements := make(map[string]types.String, len(assignment.ContextParams))
+		for k, v := range assignment.ContextParams {
+			elements[k] = types.StringValue(v)
+		}
+		// Convert map[string]types.String to map[string]attr.Value for MapValueFrom
+		attrElements := make(map[string]attr.Value, len(elements))
+		for k, v := range elements {
+			attrElements[k] = v
+		}
+		data.ContextParams = types.MapValueMust(types.StringType, attrElements)
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -296,6 +324,26 @@ func (r *RolePermissionResource) Delete(ctx context.Context, req resource.Delete
 	}
 
 	tflog.Trace(ctx, "unassigned role from role group")
+}
+
+// ImportState imports a role permission assignment by composite ID.
+// Format: {role_group_id}:{role_group_assignment_id}
+//
+// After import, Terraform will call Read which looks up the assignment by
+// role_id + context_params. Since we only have the assignment_id at import time,
+// we set it as the resource ID and let Read populate the full state.
+func (r *RolePermissionResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	parts := strings.SplitN(req.ID, ":", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		resp.Diagnostics.AddError(
+			"Invalid Import ID",
+			fmt.Sprintf("Expected import ID format: {role_group_id}:{role_group_assignment_id}, got: %s", req.ID),
+		)
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("role_group_id"), parts[0])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[1])...)
 }
 
 // extractContextParams converts a types.Map to map[string]string
