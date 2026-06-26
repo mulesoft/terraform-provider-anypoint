@@ -205,6 +205,69 @@ func (c *TeamClient) UpdateTeamParent(ctx context.Context, orgID, teamID string,
 	return nil
 }
 
+// TeamListItem represents a team in the list response (has more fields than the single-team GET)
+type TeamListItem struct {
+	ID              string   `json:"team_id"`
+	TeamName        string   `json:"team_name"`
+	OrgID           string   `json:"org_id"`
+	TeamType        string   `json:"team_type"`
+	AncestorTeamIDs []string `json:"ancestor_team_ids"`
+	CreatedAt       string   `json:"created_at"`
+	UpdatedAt       string   `json:"updated_at"`
+}
+
+// ListTeamsResponse wraps the GET /teams response
+type ListTeamsResponse struct {
+	Data  []TeamListItem `json:"data"`
+	Total int            `json:"total"`
+}
+
+// ListTeams lists all teams in the organization with pagination.
+// API: GET /accounts/api/organizations/{orgId}/teams
+func (c *TeamClient) ListTeams(ctx context.Context, orgID string) ([]TeamListItem, error) {
+	var allTeams []TeamListItem
+	limit := 100
+	offset := 0
+
+	for {
+		url := fmt.Sprintf("%s/accounts/api/organizations/%s/teams?limit=%d&offset=%d", c.BaseURL, orgID, limit, offset)
+
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+
+		req.Header.Set("Authorization", "Bearer "+c.Token)
+
+		resp, err := c.HTTPClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to send request: %w", err)
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			return nil, fmt.Errorf("failed to list teams with status %d: %s", resp.StatusCode, string(body))
+		}
+
+		var listResp ListTeamsResponse
+		if err := json.NewDecoder(resp.Body).Decode(&listResp); err != nil {
+			_ = resp.Body.Close()
+			return nil, fmt.Errorf("failed to decode response: %w", err)
+		}
+		_ = resp.Body.Close()
+
+		allTeams = append(allTeams, listResp.Data...)
+
+		if len(listResp.Data) < limit || len(allTeams) >= listResp.Total {
+			break
+		}
+		offset += limit
+	}
+
+	return allTeams, nil
+}
+
 // DeleteTeam deletes a team by ID
 func (c *TeamClient) DeleteTeam(ctx context.Context, orgID, teamID string) error {
 	url := fmt.Sprintf("%s/accounts/api/organizations/%s/teams/%s", c.BaseURL, orgID, teamID)
