@@ -216,6 +216,7 @@ func (p *AnypointProvider) Resources(_ context.Context) []func() resource.Resour
 		resourceAccessManagement.NewTeamResource,
 		resourceAccessManagement.NewRoleResource,
 		resourceAccessManagement.NewRolePermissionResource,
+		resourceAccessManagement.NewRoleUsersResource,
 		resourceAccessManagement.NewConnectedAppScopesResource,
 		// API Management resources
 		resourceApiManagement.NewManagedOmniGatewayResource,
@@ -252,6 +253,7 @@ func (p *AnypointProvider) DataSources(_ context.Context) []func() datasource.Da
 		dsAccessManagement.NewRolesDataSource,
 		dsAccessManagement.NewRolePermissionsDataSource,
 		dsAccessManagement.NewAvailableRolesDataSource,
+		dsAccessManagement.NewUsersDataSource,
 		dsAccessManagement.NewConnectedAppScopesDataSource,
 		// CloudHub 2.0 data sources
 		dsCloudHub2.NewTLSContextDataSource,
