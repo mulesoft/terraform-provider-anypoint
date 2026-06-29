@@ -263,6 +263,7 @@ func (p *AnypointProvider) DataSources(_ context.Context) []func() datasource.Da
 		dsAccessManagement.NewTeamRolesDataSource,
 		dsAccessManagement.NewConnectedAppsDataSource,
 		dsAccessManagement.NewConnectedAppScopesDataSource,
+		dsAccessManagement.NewScopesCatalogDataSource,
 		// CloudHub 2.0 data sources
 		dsCloudHub2.NewTLSContextDataSource,
 		dsCloudHub2.NewPrivateSpaceAssociationDataSource,
