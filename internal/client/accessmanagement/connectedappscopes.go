@@ -31,9 +31,11 @@ type Scope struct {
 	ContextParams map[string]interface{} `json:"context_params,omitempty"`
 }
 
-// ConnectedAppScopes represents the full scope configuration for a connected app
+// ConnectedAppScopes represents the full scope configuration for a connected app.
+// The GET API returns a paginated response with "data" and "total" keys.
 type ConnectedAppScopes struct {
-	Scopes []Scope `json:"scopes"`
+	Scopes []Scope `json:"data"`
+	Total  int     `json:"total"`
 }
 
 // UpdateConnectedAppScopesRequest represents the request to update connected app scopes
