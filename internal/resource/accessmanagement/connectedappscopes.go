@@ -206,18 +206,13 @@ func (r *ConnectedAppScopesResource) Read(ctx context.Context, req resource.Read
 		return
 	}
 
-	// Only update scopes from API if the response actually contains scopes.
-	// The GET endpoint may return an empty list even when scopes exist
-	// (e.g., different response envelope). In that case, preserve the
-	// existing state to avoid spurious plan diffs.
-	if len(scopes.Scopes) > 0 {
-		if err := r.updateStateFromAPI(ctx, &data, scopes); err != nil {
-			resp.Diagnostics.AddError(
-				"Error updating state",
-				"Could not update state from API response: "+err.Error(),
-			)
-			return
-		}
+	// Update state from API response. Now correctly reads from the "data" key.
+	if err := r.updateStateFromAPI(ctx, &data, scopes); err != nil {
+		resp.Diagnostics.AddError(
+			"Error updating state",
+			"Could not update state from API response: "+err.Error(),
+		)
+		return
 	}
 
 	// Save updated data into Terraform state

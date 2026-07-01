@@ -44,9 +44,11 @@ type CreateTeamRequest struct {
 }
 
 // UpdateTeamRequest represents the request to update a team (partial update)
-// Note: The PATCH API currently only supports updating team_name
+// The PATCH API supports updating team_name and team_type.
+// Note: team_type changes require the target type to be enabled in the organization.
 type UpdateTeamRequest struct {
 	TeamName *string `json:"team_name,omitempty"`
+	TeamType *string `json:"team_type,omitempty"`
 }
 
 // UpdateTeamParentRequest represents the request to update a team's parent

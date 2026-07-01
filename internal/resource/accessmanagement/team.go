@@ -266,7 +266,11 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		hasChanges = true
 	}
 
-	// Note: team_type cannot be updated via the API, so we ignore changes to it
+	if !plan.TeamType.Equal(state.TeamType) {
+		teamType := plan.TeamType.ValueString()
+		updateRequest.TeamType = &teamType
+		hasChanges = true
+	}
 
 	if hasChanges {
 		team, err := r.client.UpdateTeam(ctx, orgID, plan.ID.ValueString(), updateRequest)
