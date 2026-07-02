@@ -1,16 +1,16 @@
 terraform {
   required_providers {
     anypoint = {
-      source = "mulesoft/anypoint"
+      source  = "mulesoft/anypoint"
       version = "~> 1.0.0"
     }
   }
 }
 
 provider "anypoint" {
-  client_id = var.anypoint_client_id
+  client_id     = var.anypoint_client_id
   client_secret = var.anypoint_client_secret
-  base_url = var.anypoint_base_url
+  base_url      = var.anypoint_base_url
 }
 
 # Create a QA team (top-level)
@@ -22,7 +22,7 @@ resource "anypoint_team" "qa" {
 
 # # Create a development team (top-level)
 resource "anypoint_team" "development" {
-  team_name      = "Development Team With Child teams"  
+  team_name      = "Development Team With Child teams"
   parent_team_id = var.parent_team_id
   team_type      = "internal"
 }
@@ -30,7 +30,7 @@ resource "anypoint_team" "development" {
 # Create a development team with no child teams(top-level)
 resource "anypoint_team" "development_without_child_teams" {
   team_name      = "Development Team With No Child teams changed"
-  parent_team_id = var.parent_team_id  
+  parent_team_id = var.parent_team_id
   team_type      = "internal"
 }
 
