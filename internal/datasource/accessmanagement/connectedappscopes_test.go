@@ -138,7 +138,7 @@ func TestConnectedAppScopesDataSource_ReadClientTests(t *testing.T) {
 			mockHandler: func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertHTTPRequest(t, r, "GET", "/accounts/api/connectedApplications/test-app-id/scopes")
 				testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
-					"scopes": []map[string]interface{}{
+					"data": []map[string]interface{}{
 						{
 							"scope": "admin:cloudhub",
 							"context_params": map[string]interface{}{
@@ -150,6 +150,7 @@ func TestConnectedAppScopesDataSource_ReadClientTests(t *testing.T) {
 							"context_params": map[string]interface{}{},
 						},
 					},
+					"total": 2,
 				})
 			},
 			wantErr:        false,
@@ -161,7 +162,8 @@ func TestConnectedAppScopesDataSource_ReadClientTests(t *testing.T) {
 			mockHandler: func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertHTTPRequest(t, r, "GET", "/accounts/api/connectedApplications/test-app-id-no-scopes/scopes")
 				testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
-					"scopes": []map[string]interface{}{},
+					"data":  []map[string]interface{}{},
+					"total": 0,
 				})
 			},
 			wantErr:        false,
@@ -255,7 +257,7 @@ func TestConnectedAppScopesDataSource_Read(t *testing.T) {
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 		basePath: func(w http.ResponseWriter, r *http.Request) {
 			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
-				"scopes": []map[string]interface{}{
+				"data": []map[string]interface{}{
 					{
 						"scope": "admin:cloudhub",
 						"context_params": map[string]interface{}{
@@ -263,6 +265,7 @@ func TestConnectedAppScopesDataSource_Read(t *testing.T) {
 						},
 					},
 				},
+				"total": 1,
 			})
 		},
 	}

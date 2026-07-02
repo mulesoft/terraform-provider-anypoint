@@ -37,8 +37,8 @@ func TestTeamResource_Metadata(t *testing.T) {
 func TestTeamResource_Schema(t *testing.T) {
 	res := NewTeamResource()
 
-	requiredAttrs := []string{"team_name", "parent_team_id", "team_type"}
-	optionalAttrs := []string{"organization_id"}
+	requiredAttrs := []string{"team_name", "team_type"}
+	optionalAttrs := []string{"organization_id", "parent_team_id"}
 	computedAttrs := []string{"id", "created_at", "updated_at"}
 
 	testutil.TestResourceSchema(t, res, requiredAttrs, optionalAttrs, computedAttrs)

@@ -1,13 +1,13 @@
 ---
-page_title: "anypoint_team Resource - terraform-provider-anypoint"
+page_title: "anypoint_role_users Resource - terraform-provider-anypoint"
 subcategory: "Access Management"
 description: |-
-  Manages an Anypoint Platform team.
+  Assigns a user to a role group.
 ---
 
-# anypoint_team (Resource)
+# anypoint_role_users (Resource)
 
-Manages an Anypoint Platform team.
+Assigns a user to a role group. This creates a membership between a user and a role group, granting the user all permissions assigned to that role group.
 
 ~> **Note:** This is an Access Management resource and requires the **admin provider** (`anypoint.admin`), which uses admin user credentials along with the `client_id` and `client_secret` of a connected app to authenticate on behalf of the user (`auth_type = "user"`). You must set `provider = anypoint.admin` on this resource. The default provider (connected app credentials only) does not have sufficient privileges for Access Management operations.
 
@@ -27,18 +27,16 @@ provider "anypoint" {
   base_url      = var.anypoint_base_url
 }
 
-resource "anypoint_team" "example" {
-  provider  = anypoint.admin
-  team_name = "Development Team"
-  team_type = "internal"
-  # parent_team_id is optional — omit to create under the org root team
+# Look up user by username
+data "anypoint_users" "developer" {
+  provider = anypoint.admin
+  username = "john.doe@example.com"
 }
 
-resource "anypoint_team" "sub_team" {
-  provider       = anypoint.admin
-  team_name      = "Frontend Team"
-  parent_team_id = anypoint_team.example.id
-  team_type      = "internal"
+resource "anypoint_role_users" "example" {
+  provider      = anypoint.admin
+  role_group_id = anypoint_role.example.id
+  user_id       = data.anypoint_users.developer.users[0].id
 }
 ```
 
@@ -46,38 +44,38 @@ resource "anypoint_team" "sub_team" {
 
 ### Required
 
-- `team_name` (String) The name of the team.
-- `team_type` (String) The type of the team. Valid values: `internal`, `external`.
+- `role_group_id` (String) The ID of the role group to add the user to.
+- `user_id` (String) The ID of the user to add to the role group. Use the anypoint_users data source to look up by username.
 
 ### Optional
 
-- `organization_id` (String) The organization ID where the team will be created. If not provided, the organization ID will be inferred from the connected app credentials.
-- `parent_team_id` (String) The ID of the parent team. If not specified, the team is created under the org's root team.
+- `organization_id` (String) The organization ID. Defaults to the provider's org.
 
 ### Read-Only
 
-- `created_at` (String) The timestamp when the team was created.
-- `id` (String) The unique identifier for the team.
-- `updated_at` (String) The timestamp when the team was last updated.
+- `email` (String) The email of the assigned user.
+- `first_name` (String) The first name of the assigned user.
+- `id` (String) Unique identifier for this user-role-group assignment (format: {role_group_id}:{user_id}).
+- `last_name` (String) The last name of the assigned user.
+- `username` (String) The username of the assigned user (computed after creation).
 
 ## Import
 
-An existing team can be imported using its team ID (UUID).
+An existing role-user assignment can be imported using a composite ID format: `{role_group_id}:{user_id}`.
 
 ### Using an import block (Terraform ≥ 1.5 — recommended)
 
 ```terraform
 import {
   provider = anypoint.admin
-  to       = anypoint_team.imported
-  id       = "<team_id>"
+  to       = anypoint_role_users.imported
+  id       = "<role_group_id>:<user_id>"
 }
 
-resource "anypoint_team" "imported" {
-  provider        = anypoint.admin
-  organization_id = "<organization_id>"
-  team_name       = "<team_name>"
-  team_type       = "internal"
+resource "anypoint_role_users" "imported" {
+  provider      = anypoint.admin
+  role_group_id = "<role_group_id>"
+  user_id       = "<user_id>"
 }
 ```
 
@@ -94,5 +92,5 @@ terraform apply
 ### Using the CLI (deprecated, Terraform < 1.5)
 
 ```shell
-terraform import anypoint_team.imported <team_id>
+terraform import anypoint_role_users.imported <role_group_id>:<user_id>
 ```
