@@ -219,6 +219,11 @@ func (r *TeamResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	data.CreatedAt = types.StringValue(team.CreatedAt)
 	data.UpdatedAt = types.StringValue(team.UpdatedAt)
 
+	// Set parent_team_id from ancestor_team_ids (first ancestor is the direct parent)
+	if len(team.AncestorTeamIDs) > 0 {
+		data.ParentTeamID = types.StringValue(team.AncestorTeamIDs[0])
+	}
+
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }

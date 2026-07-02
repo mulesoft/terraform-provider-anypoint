@@ -302,17 +302,42 @@ func (r *TeamRolesResource) Delete(ctx context.Context, req resource.DeleteReque
 	}
 }
 
-// ImportState imports a team role assignment by composite ID (format: {team_id}:{assignment_id}).
+// ImportState imports a team role assignment by composite ID.
+// Format: {team_id}:{role_id}:{key1=val1,key2=val2}
+// Example: abc123:d74ef94a-...:org=6c3c4eb3-...
+// For environment-scoped roles: abc123:fa6b43ac-...:org=6c3c4eb3-...,envId=0f64e47f-...
 func (r *TeamRolesResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	parts := strings.SplitN(req.ID, ":", 2)
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+	parts := strings.SplitN(req.ID, ":", 3)
+	if len(parts) < 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
 		resp.Diagnostics.AddError(
 			"Invalid Import ID",
-			fmt.Sprintf("Expected import ID format: {team_id}:{assignment_id}, got: %s", req.ID),
+			fmt.Sprintf("Expected import ID format: {team_id}:{role_id}:{key1=val1,key2=val2}, got: %s", req.ID),
 		)
 		return
 	}
 
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("team_id"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[1])...)
+	teamID := parts[0]
+	roleID := parts[1]
+	contextParamsStr := parts[2]
+
+	// Parse context_params from "key1=val1,key2=val2" format
+	contextParams := make(map[string]string)
+	pairs := strings.Split(contextParamsStr, ",")
+	for _, pair := range pairs {
+		kv := strings.SplitN(pair, "=", 2)
+		if len(kv) != 2 || kv[0] == "" {
+			resp.Diagnostics.AddError(
+				"Invalid Import ID",
+				fmt.Sprintf("Invalid context_params format in import ID. Expected key=value pairs separated by commas, got: %s", contextParamsStr),
+			)
+			return
+		}
+		contextParams[kv[0]] = kv[1]
+	}
+
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("team_id"), teamID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("role_id"), roleID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("context_params"), contextParams)...)
+	// Set a composite ID for state
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), teamID+":"+roleID)...)
 }
