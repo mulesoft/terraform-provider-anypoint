@@ -28,12 +28,13 @@ func NewTeamClient(config *client.UserClientConfig) (*TeamClient, error) {
 
 // Team represents an Anypoint team
 type Team struct {
-	ID        string `json:"team_id"`
-	TeamName  string `json:"team_name"`
-	OrgID     string `json:"org_id"`
-	TeamType  string `json:"team_type"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
+	ID              string   `json:"team_id"`
+	TeamName        string   `json:"team_name"`
+	OrgID           string   `json:"org_id"`
+	TeamType        string   `json:"team_type"`
+	AncestorTeamIDs []string `json:"ancestor_team_ids"`
+	CreatedAt       string   `json:"created_at"`
+	UpdatedAt       string   `json:"updated_at"`
 }
 
 // CreateTeamRequest represents the request to create a team

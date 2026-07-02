@@ -77,6 +77,9 @@ func (c *TeamRolesClient) AssignTeamRole(ctx context.Context, orgID, teamID stri
 
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.Token)
+	// The team roles endpoint requires Origin header to pass CSRF protection
+	httpReq.Header.Set("Origin", c.BaseURL)
+	httpReq.Header.Set("Referer", c.BaseURL+"/")
 
 	resp, err := c.HTTPClient.Do(httpReq)
 	if err != nil {
@@ -140,6 +143,9 @@ func (c *TeamRolesClient) UnassignTeamRole(ctx context.Context, orgID, teamID st
 
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.Token)
+	// The team roles endpoint requires Origin header to pass CSRF protection
+	httpReq.Header.Set("Origin", c.BaseURL)
+	httpReq.Header.Set("Referer", c.BaseURL+"/")
 
 	resp, err := c.HTTPClient.Do(httpReq)
 	if err != nil {

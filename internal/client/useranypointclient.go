@@ -112,8 +112,51 @@ func NewUserAnypointClient(config *UserClientConfig) (*UserAnypointClient, error
 	return c, nil
 }
 
-// authenticate performs user authentication using password grant and stores the access token
+// authenticate performs user authentication using password grant and stores the access token.
+// It first tries the OAuth2 password grant endpoint. If the resulting token cannot access
+// /accounts/api/me (production Anypoint returns opaque tokens that lack user context),
+// it falls back to the /accounts/login endpoint which always returns user-context tokens.
 func (c *UserAnypointClient) authenticate() error {
+	// Try OAuth2 password grant first (works on devx and environments that issue JWTs)
+	token, err := c.authenticateOAuth2()
+	if err == nil {
+		c.Token = token
+		me, meErr := c.getMe()
+		if meErr == nil {
+			orgID, orgErr := c.extractOrgID(me)
+			if orgErr == nil {
+				c.OrgID = orgID
+				return nil
+			}
+		}
+		// OAuth2 token didn't work for /me — fall through to login endpoint
+	}
+
+	// Fallback: use /accounts/login (always returns tokens with user context)
+	loginToken, loginErr := c.authenticateLogin()
+	if loginErr != nil {
+		if err != nil {
+			return fmt.Errorf("OAuth2 password grant failed (%v) and login fallback also failed: %w", err, loginErr)
+		}
+		return fmt.Errorf("login authentication failed: %w", loginErr)
+	}
+	c.Token = loginToken
+
+	me, err := c.getMe()
+	if err != nil {
+		return fmt.Errorf("failed to get user info after login: %w", err)
+	}
+	orgID, err := c.extractOrgID(me)
+	if err != nil {
+		return fmt.Errorf("failed to extract organization ID: %w", err)
+	}
+	c.OrgID = orgID
+
+	return nil
+}
+
+// authenticateOAuth2 performs the OAuth2 password grant flow.
+func (c *UserAnypointClient) authenticateOAuth2() (string, error) {
 	authURL := fmt.Sprintf("%s/accounts/api/v2/oauth2/token", c.BaseURL)
 
 	authData := map[string]string{
@@ -126,50 +169,78 @@ func (c *UserAnypointClient) authenticate() error {
 
 	jsonData, err := json.Marshal(authData)
 	if err != nil {
-		return fmt.Errorf("failed to marshal auth data: %w", err)
+		return "", fmt.Errorf("failed to marshal auth data: %w", err)
 	}
 
 	req, err := http.NewRequest("POST", authURL, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return fmt.Errorf("failed to create auth request: %w", err)
+		return "", fmt.Errorf("failed to create auth request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send auth request: %w", err)
+		return "", fmt.Errorf("failed to send auth request: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("user authentication failed with status %d: %s", resp.StatusCode, string(body))
+		return "", fmt.Errorf("user authentication failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Extract token from response
 	var authResp map[string]interface{}
 	if decodeErr := json.NewDecoder(resp.Body).Decode(&authResp); decodeErr != nil {
-		return fmt.Errorf("failed to decode auth response: %w", decodeErr)
+		return "", fmt.Errorf("failed to decode auth response: %w", decodeErr)
 	}
 
 	if token, ok := authResp["access_token"].(string); ok {
-		c.Token = token
-	} else {
-		return fmt.Errorf("no access token found in response")
+		return token, nil
+	}
+	return "", fmt.Errorf("no access token found in response")
+}
+
+// authenticateLogin uses the /accounts/login endpoint as a fallback.
+// This always returns tokens with full user context on all Anypoint environments.
+func (c *UserAnypointClient) authenticateLogin() (string, error) {
+	loginURL := fmt.Sprintf("%s/accounts/login", c.BaseURL)
+
+	loginData := map[string]string{
+		"username": c.Username,
+		"password": c.Password,
 	}
 
-	// Extract OrgID from token - use active organization if available
-	me, err := c.getMe()
+	jsonData, err := json.Marshal(loginData)
 	if err != nil {
-		return fmt.Errorf("failed to get user info: %w", err)
+		return "", fmt.Errorf("failed to marshal login data: %w", err)
 	}
-	orgID, err := c.extractOrgID(me)
-	if err != nil {
-		return fmt.Errorf("failed to extract organization ID: %w", err)
-	}
-	c.OrgID = orgID
 
-	return nil
+	req, err := http.NewRequest("POST", loginURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", fmt.Errorf("failed to create login request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to send login request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("login failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var loginResp map[string]interface{}
+	if decodeErr := json.NewDecoder(resp.Body).Decode(&loginResp); decodeErr != nil {
+		return "", fmt.Errorf("failed to decode login response: %w", decodeErr)
+	}
+
+	if token, ok := loginResp["access_token"].(string); ok {
+		return token, nil
+	}
+	return "", fmt.Errorf("no access token found in login response")
 }
 
 func (c *UserAnypointClient) extractOrgID(me map[string]interface{}) (string, error) {
