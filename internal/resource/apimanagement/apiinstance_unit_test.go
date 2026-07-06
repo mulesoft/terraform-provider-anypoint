@@ -512,3 +512,86 @@ func TestAPIInstanceResource_ImportState_IDParsing(t *testing.T) {
 		}
 	})
 }
+
+// TestExpandUpdateRequest_AssetVersion verifies that asset version is correctly
+// populated at root level in PATCH requests (GUS W-23307847).
+func TestExpandUpdateRequest_AssetVersion(t *testing.T) {
+	mockServer := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
+	client, err := anypointclient.NewAnypointClient(&anypointclient.Config{
+		ClientID:     "test-client-id",
+		ClientSecret: "test-client-secret",
+		BaseURL:      mockServer.URL,
+		Timeout:      30,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	apiClient := &apimgmtclient.APIInstanceClient{AnypointClient: client}
+	r := &APIInstanceResource{client: apiClient}
+	ctx := context.Background()
+
+	t.Run("AssetVersion populated from spec.version", func(t *testing.T) {
+		data := APIInstanceResourceModel{
+			Spec: &SpecModel{
+				AssetID: types.StringValue("test-api"),
+				GroupID: types.StringValue("test-group"),
+				Version: types.StringValue("2.0.0"),
+			},
+		}
+
+		req := r.expandUpdateRequest(ctx, data)
+
+		if req.AssetVersion == nil {
+			t.Fatal("AssetVersion should not be nil when spec.version is provided")
+		}
+
+		if *req.AssetVersion != "2.0.0" {
+			t.Errorf("AssetVersion = %q, want 2.0.0", *req.AssetVersion)
+		}
+	})
+
+	t.Run("AssetVersion not populated when spec is nil", func(t *testing.T) {
+		data := APIInstanceResourceModel{
+			Spec: nil,
+		}
+
+		req := r.expandUpdateRequest(ctx, data)
+
+		if req.AssetVersion != nil {
+			t.Errorf("AssetVersion should be nil when spec is nil, got %v", *req.AssetVersion)
+		}
+	})
+
+	t.Run("AssetVersion not populated when version is null", func(t *testing.T) {
+		data := APIInstanceResourceModel{
+			Spec: &SpecModel{
+				AssetID: types.StringValue("test-api"),
+				GroupID: types.StringValue("test-group"),
+				Version: types.StringNull(),
+			},
+		}
+
+		req := r.expandUpdateRequest(ctx, data)
+
+		if req.AssetVersion != nil {
+			t.Errorf("AssetVersion should be nil when spec.version is null, got %v", *req.AssetVersion)
+		}
+	})
+
+	t.Run("AssetVersion not populated when version is unknown", func(t *testing.T) {
+		data := APIInstanceResourceModel{
+			Spec: &SpecModel{
+				AssetID: types.StringValue("test-api"),
+				GroupID: types.StringValue("test-group"),
+				Version: types.StringUnknown(),
+			},
+		}
+
+		req := r.expandUpdateRequest(ctx, data)
+
+		if req.AssetVersion != nil {
+			t.Errorf("AssetVersion should be nil when spec.version is unknown, got %v", *req.AssetVersion)
+		}
+	})
+}

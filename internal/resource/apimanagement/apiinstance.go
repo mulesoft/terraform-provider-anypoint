@@ -1028,12 +1028,11 @@ func (r *APIInstanceResource) expandUpdateRequest(ctx context.Context, data APII
 		req.EndpointURI = &ce
 	}
 
-	if data.Spec != nil {
-		req.Spec = &apimanagement.APIInstanceSpec{
-			AssetID: data.Spec.AssetID.ValueString(),
-			GroupID: data.Spec.GroupID.ValueString(),
-			Version: data.Spec.Version.ValueString(),
-		}
+	// Asset version can be updated via root-level assetVersion field.
+	// AssetID and GroupID are immutable (changes require resource recreation).
+	if data.Spec != nil && !data.Spec.Version.IsNull() && !data.Spec.Version.IsUnknown() {
+		version := data.Spec.Version.ValueString()
+		req.AssetVersion = &version
 	}
 
 	if dep := deploymentFromObject(data.Deployment); dep != nil {
