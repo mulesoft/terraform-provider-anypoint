@@ -776,6 +776,27 @@ func (r *APIInstanceResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
+	// Validate immutable fields: assetId and groupId cannot be changed via PATCH.
+	// These require resource replacement (destroy + recreate).
+	if state.Spec != nil && plan.Spec != nil {
+		if !state.Spec.AssetID.Equal(plan.Spec.AssetID) {
+			resp.Diagnostics.AddError(
+				"Immutable Attribute Changed",
+				"Attribute 'spec.asset_id' cannot be changed after creation (API Manager does not support this operation). "+
+					"To change the asset ID, destroy and recreate the resource with the new value.",
+			)
+			return
+		}
+		if !state.Spec.GroupID.Equal(plan.Spec.GroupID) {
+			resp.Diagnostics.AddError(
+				"Immutable Attribute Changed",
+				"Attribute 'spec.group_id' cannot be changed after creation (API Manager does not support this operation). "+
+					"To change the group ID, destroy and recreate the resource with the new value.",
+			)
+			return
+		}
+	}
+
 	if !plan.GatewayID.IsNull() && !plan.GatewayID.IsUnknown() && (plan.Deployment.IsNull() || plan.Deployment.IsUnknown()) {
 		var dep *apimanagement.APIInstanceDeployment
 		dep, err = r.resolveGatewayDeployment(ctx, orgID, envID, plan.GatewayID.ValueString())

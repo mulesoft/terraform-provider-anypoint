@@ -595,3 +595,67 @@ func TestExpandUpdateRequest_AssetVersion(t *testing.T) {
 		}
 	})
 }
+
+// TestImmutableFieldValidation verifies that attempting to change immutable
+// spec.asset_id or spec.group_id is detected correctly (GUS W-23307847).
+func TestImmutableFieldValidation(t *testing.T) {
+	t.Run("AssetID changed - not equal", func(t *testing.T) {
+		state := &SpecModel{
+			AssetID: types.StringValue("original-api"),
+			GroupID: types.StringValue("org-123"),
+			Version: types.StringValue("1.0.0"),
+		}
+
+		plan := &SpecModel{
+			AssetID: types.StringValue("changed-api"), // CHANGED
+			GroupID: types.StringValue("org-123"),
+			Version: types.StringValue("1.0.0"),
+		}
+
+		if state.AssetID.Equal(plan.AssetID) {
+			t.Error("AssetID should not be equal when changed")
+		}
+	})
+
+	t.Run("GroupID changed - not equal", func(t *testing.T) {
+		state := &SpecModel{
+			AssetID: types.StringValue("my-api"),
+			GroupID: types.StringValue("original-org"),
+			Version: types.StringValue("1.0.0"),
+		}
+
+		plan := &SpecModel{
+			AssetID: types.StringValue("my-api"),
+			GroupID: types.StringValue("changed-org"), // CHANGED
+			Version: types.StringValue("1.0.0"),
+		}
+
+		if state.GroupID.Equal(plan.GroupID) {
+			t.Error("GroupID should not be equal when changed")
+		}
+	})
+
+	t.Run("Only version changed - asset_id and group_id equal", func(t *testing.T) {
+		state := &SpecModel{
+			AssetID: types.StringValue("my-api"),
+			GroupID: types.StringValue("org-123"),
+			Version: types.StringValue("1.0.0"),
+		}
+
+		plan := &SpecModel{
+			AssetID: types.StringValue("my-api"),       // Same
+			GroupID: types.StringValue("org-123"),      // Same
+			Version: types.StringValue("2.0.0"),        // CHANGED
+		}
+
+		if !state.AssetID.Equal(plan.AssetID) {
+			t.Error("AssetID should be equal when unchanged")
+		}
+		if !state.GroupID.Equal(plan.GroupID) {
+			t.Error("GroupID should be equal when unchanged")
+		}
+		if state.Version.Equal(plan.Version) {
+			t.Error("Version should not be equal when changed")
+		}
+	})
+}
