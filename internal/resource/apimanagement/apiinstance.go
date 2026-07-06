@@ -29,6 +29,7 @@ var (
 	_ resource.ResourceWithConfigure      = &APIInstanceResource{}
 	_ resource.ResourceWithImportState    = &APIInstanceResource{}
 	_ resource.ResourceWithValidateConfig = &APIInstanceResource{}
+	_ resource.ResourceWithModifyPlan     = &APIInstanceResource{}
 )
 
 type APIInstanceResource struct {
@@ -754,6 +755,47 @@ func (r *APIInstanceResource) Read(ctx context.Context, req resource.ReadRequest
 	}
 	data.Deployment = mergeDeploymentObjects(data.Deployment, existingDeployment)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}
+
+// ModifyPlan adjusts the plan to mark computed fields as Unknown when their
+// dependencies change, ensuring Terraform's consistency checks pass.
+func (r *APIInstanceResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	// Nothing to do on destroy.
+	if req.Plan.Raw.IsNull() {
+		return
+	}
+
+	// Nothing to do on create (state is null).
+	if req.State.Raw.IsNull() {
+		return
+	}
+
+	var plan, state APIInstanceResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// When spec.version changes, mark asset_version as Unknown so Terraform knows
+	// it will be recomputed. Without this, the provider gets "inconsistent result
+	// after apply" errors because the plan said asset_version="1.0.0" but after
+	// PATCH it became "1.0.1" (W-23307847).
+	stateVersion := ""
+	planVersion := ""
+	if state.Spec != nil && !state.Spec.Version.IsNull() && !state.Spec.Version.IsUnknown() {
+		stateVersion = state.Spec.Version.ValueString()
+	}
+	if plan.Spec != nil && !plan.Spec.Version.IsNull() && !plan.Spec.Version.IsUnknown() {
+		planVersion = plan.Spec.Version.ValueString()
+	}
+
+	if stateVersion != planVersion && planVersion != "" {
+		// Version is changing — mark asset_version as Unknown so Terraform
+		// expects it to be recomputed during apply.
+		plan.AssetVersion = types.StringUnknown()
+		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+	}
 }
 
 func (r *APIInstanceResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
