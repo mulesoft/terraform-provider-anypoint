@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     anypoint = {
-      source = "mulesoft/anypoint"
+      source  = "mulesoft/anypoint"
       version = "~> 1.0.0"
     }
   }
@@ -20,10 +20,10 @@ resource "anypoint_privatespace_advanced_config" "example" {
   ingress_configuration = {
     read_response_timeout = "600"
     protocol              = "https-redirect"
-    
+
     logs = {
       port_log_level = "INFO"
-      filters = []
+      filters        = []
     }
 
     deployment = {
@@ -38,15 +38,15 @@ resource "anypoint_privatespace_advanced_config" "example" {
 # Example 2: Configure advanced settings in a specific organization
 resource "anypoint_privatespace_advanced_config" "example_custom_org" {
   private_space_id = var.private_space_id_custom_org
-  organization_id  = var.custom_organization_id  # Optional: specify different org
+  organization_id  = var.custom_organization_id # Optional: specify different org
 
   ingress_configuration = {
     read_response_timeout = "800"
     protocol              = "https-redirect"
-    
+
     logs = {
       port_log_level = "INFO"
-      filters = []
+      filters        = []
     }
 
     deployment = {

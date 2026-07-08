@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     anypoint = {
-      source = "mulesoft/anypoint"
+      source  = "mulesoft/anypoint"
       version = "~> 1.0.0"
     }
   }
@@ -15,9 +15,9 @@ provider "anypoint" {
   client_secret = var.anypoint_admin_client_secret
   base_url      = var.anypoint_base_url
   # Optional: Explicitly set username/password, or use environment variables:
-  username      = var.anypoint_admin_username
-  password      = var.anypoint_admin_password
-  auth_type     = "user"
+  username  = var.anypoint_admin_username
+  password  = var.anypoint_admin_password
+  auth_type = "user"
 }
 
 # Manage scopes for a connected application

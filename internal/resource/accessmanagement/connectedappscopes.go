@@ -85,7 +85,7 @@ func (r *ConnectedAppScopesResource) Schema(_ context.Context, _ resource.Schema
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"scope": schema.StringAttribute{
-							Description: "The scope identifier (e.g., 'read:exchange', 'admin:cloudhub') or display name (e.g., 'Exchange Viewer', 'CloudHub Admin'). " +
+							Description: "The scope identifier (e.g., 'read:exchange', 'admin:cloudhub') or display name (e.g., 'Exchange Viewer', 'Cloudhub Organization Admin'). " +
 								"Display names are automatically resolved to identifiers. Use the anypoint_scopes_catalog data source to discover available scopes.",
 							Required: true,
 						},
@@ -469,7 +469,7 @@ func (r *ConnectedAppScopesResource) validateScopes(_ context.Context, scopesSet
 				"Invalid Scope Name",
 				fmt.Sprintf("The scope '%s' at index %d is not a valid Anypoint Platform scope. "+
 					"You can use either the scope identifier (e.g., 'read:exchange', 'admin:cloudhub') "+
-					"or the display name (e.g., 'Exchange Viewer', 'CloudHub Admin'). "+
+					"or the display name (e.g., 'Exchange Viewer', 'Cloudhub Organization Admin'). "+
 					"Use the anypoint_scopes_catalog data source to discover valid scopes and their display names.",
 					scopeName, i),
 			)

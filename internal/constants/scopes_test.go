@@ -116,6 +116,7 @@ func TestValidScopesMapConsistency(t *testing.T) {
 		ScopeCreateExchange,
 		ScopeCreateExchangeGenAI,
 		ScopeCreateGenerations,
+		ScopeCreateOmniGenAI,
 		ScopeCreateOrgClients,
 		ScopeCreateSubOrgs,
 
@@ -130,6 +131,7 @@ func TestValidScopesMapConsistency(t *testing.T) {
 		ScopeEditAPIQuery,
 		ScopeEditDesignCenter,
 		ScopeEditEnvironment,
+		ScopeEditExchange,
 		ScopeEditFlowDesigner,
 		ScopeEditIdentityProviders,
 		ScopeEditMonitoring,
@@ -139,14 +141,22 @@ func TestValidScopesMapConsistency(t *testing.T) {
 		ScopeEditRPA,
 		ScopeEditVisualizer,
 
+		// Email Scopes
+		ScopeEmail,
+
 		// Execute Scopes
 		ScopeExecuteDocumentActions,
+		ScopeExecutionRPA,
+
+		// Full Scopes
+		ScopeFull,
 
 		// Manage Scopes
 		ScopeManageActivity,
 		ScopeManageAPIAlerts,
 		ScopeManageAPIConfiguration,
 		ScopeManageAPIContracts,
+		ScopeManageAPIContractsAllEnvs,
 		ScopeManageAPIGroups,
 		ScopeManageAPIPolicies,
 		ScopeManageAPIProxies,
@@ -159,6 +169,7 @@ func TestValidScopesMapConsistency(t *testing.T) {
 		ScopeManageApplicationSchedules,
 		ScopeManageApplicationSettings,
 		ScopeManageApplicationTenants,
+		ScopeManageClientApplication,
 		ScopeManageClients,
 		ScopeManageCloudHubNetworking,
 		ScopeManageDataGateway,
@@ -166,6 +177,7 @@ func TestValidScopesMapConsistency(t *testing.T) {
 		ScopeManageExchange,
 		ScopeManageHost,
 		ScopeManageIdentityProviders,
+		ScopeManageOrgClientApplications,
 		ScopeManagePartners,
 		ScopeManagePrivateSpaces,
 		ScopeManageRuntimeFabrics,
@@ -182,11 +194,20 @@ func TestValidScopesMapConsistency(t *testing.T) {
 		// Publish Scopes
 		ScopePublishDestinations,
 
+		// Offline/OpenID/Profile Scopes
+		ScopeOfflineAccess,
+		ScopeOpenID,
+		ScopeOpenIDGoogle,
+		ScopeProfile,
+
 		// Read Scopes
 		ScopeReadActivity,
+		ScopeReadAnypointSalesforceSso,
+		ScopeReadAPIAlerts,
 		ScopeReadAPIConfiguration,
 		ScopeReadAPIContracts,
 		ScopeReadAPIPolicies,
+		ScopeReadAPIPoliciesAllEnvs,
 		ScopeReadAPIQuery,
 		ScopeReadApplicationAlerts,
 		ScopeReadApplications,
@@ -195,7 +216,10 @@ func TestValidScopesMapConsistency(t *testing.T) {
 		ScopeReadCloudHubNetworking,
 		ScopeReadDataGateway,
 		ScopeReadExchange,
+		ScopeReadFull,
 		ScopeReadHostPartners,
+		ScopeReadMavenRepository,
+		ScopeReadOrgClientApplications,
 		ScopeReadOrgClientProviderClients,
 		ScopeReadOrgClientProviders,
 		ScopeReadOrgClients,
@@ -221,6 +245,7 @@ func TestValidScopesMapConsistency(t *testing.T) {
 
 		// View Scopes
 		ScopeViewAccessControls,
+		ScopeViewAllEnvs,
 		ScopeViewAngGovernanceProfiles,
 		ScopeViewClients,
 		ScopeViewDesignCenter,
@@ -268,8 +293,8 @@ func TestResolveScopeIdentifier(t *testing.T) {
 			wantFound: true,
 		},
 		{
-			name:      "CloudHub Admin display name",
-			input:     "CloudHub Admin",
+			name:      "Cloudhub Organization Admin display name",
+			input:     "Cloudhub Organization Admin",
 			wantScope: "admin:cloudhub",
 			wantFound: true,
 		},
@@ -326,9 +351,9 @@ func TestGetDisplayName(t *testing.T) {
 			wantFound:   true,
 		},
 		{
-			name:        "admin:cloudhub returns CloudHub Admin",
+			name:        "admin:cloudhub returns Cloudhub Organization Admin",
 			scope:       "admin:cloudhub",
-			wantDisplay: "CloudHub Admin",
+			wantDisplay: "Cloudhub Organization Admin",
 			wantFound:   true,
 		},
 		{
@@ -355,10 +380,10 @@ func TestGetDisplayName(t *testing.T) {
 func TestIsValidScope_AcceptsDisplayNames(t *testing.T) {
 	displayNames := []string{
 		"Exchange Viewer",
-		"CloudHub Admin",
+		"Cloudhub Organization Admin",
 		"Audit Log Viewer",
 		"Manage Runtime Fabrics",
-		"Generative AI User",
+		"Mule Developer Generative AI User",
 	}
 
 	for _, dn := range displayNames {

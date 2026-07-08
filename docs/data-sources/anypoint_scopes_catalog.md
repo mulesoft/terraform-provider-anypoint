@@ -38,16 +38,21 @@ data "anypoint_scopes_catalog" "with_internal" {
   include_internal = true
 }
 
-# Output all available scopes
+# Output all available scopes (display_name is what you use in connected_app scopes)
 output "available_scopes" {
   value = data.anypoint_scopes_catalog.all.scopes
+}
+
+# List all display names — use these directly in anypoint_connected_app scopes blocks
+output "scope_display_names" {
+  value = [for s in data.anypoint_scopes_catalog.all.scopes : s.display_name]
 }
 
 # Filter to CloudHub scopes
 output "cloudhub_scopes" {
   value = [
     for scope in data.anypoint_scopes_catalog.all.scopes :
-    scope if can(regex("cloudhub", scope.scope))
+    scope if can(regex("(?i)cloudhub", scope.display_name))
   ]
 }
 
@@ -80,8 +85,8 @@ output "scopes_by_product" {
 
 Read-Only:
 
-- `scope` (String) The scope identifier (e.g., `admin:cloudhub`, `read:applications`).
-- `display_name` (String) Human-readable name for the scope.
+- `display_name` (String) The scope name as shown in the Anypoint UI (e.g., `Read Applications`, `Cloudhub Organization Admin`). **Use this value in `anypoint_connected_app` scopes blocks.**
+- `scope` (String) The scope identifier (e.g., `admin:cloudhub`, `read:applications`). Also accepted by connected apps but display names are preferred.
 - `description` (String) Description of what the scope permits.
 - `product_label` (String) The product or service this scope applies to.
 - `internal` (Boolean) Whether this is an internal scope (only visible when `include_internal = true`).

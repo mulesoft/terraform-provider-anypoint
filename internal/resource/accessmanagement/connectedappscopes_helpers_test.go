@@ -142,7 +142,7 @@ func TestConnectedAppScopesResource_convertScopesToAPI_DisplayNames(t *testing.T
 			scope  string
 			params map[string]attr.Value
 		}{
-			{"CloudHub Admin", map[string]attr.Value{"org": types.StringValue("org-1")}},
+			{"Cloudhub Organization Admin", map[string]attr.Value{"org": types.StringValue("org-1")}},
 			{"Audit Log Viewer", map[string]attr.Value{"org": types.StringValue("org-1")}},
 			{"Manage Runtime Fabrics", map[string]attr.Value{"org": types.StringValue("org-1")}},
 		})
@@ -169,7 +169,7 @@ func TestConnectedAppScopesResource_convertScopesToAPI_DisplayNames(t *testing.T
 			params map[string]attr.Value
 		}{
 			{"read:exchange", map[string]attr.Value{"org": types.StringValue("org-1")}},
-			{"CloudHub Admin", map[string]attr.Value{"org": types.StringValue("org-1")}},
+			{"Cloudhub Organization Admin", map[string]attr.Value{"org": types.StringValue("org-1")}},
 		})
 		result := r.convertScopesToAPI(ctx, set)
 		if len(result) != 2 {
@@ -183,7 +183,7 @@ func TestConnectedAppScopesResource_convertScopesToAPI_DisplayNames(t *testing.T
 			t.Error("Expected read:exchange in result")
 		}
 		if !found["admin:cloudhub"] {
-			t.Error("Expected admin:cloudhub (resolved from CloudHub Admin) in result")
+			t.Error("Expected admin:cloudhub (resolved from Cloudhub Organization Admin) in result")
 		}
 	})
 
@@ -273,7 +273,7 @@ func TestConnectedAppScopesResource_validateScopes_DisplayNames(t *testing.T) {
 			params map[string]attr.Value
 		}{
 			{"Exchange Viewer", map[string]attr.Value{"org": types.StringValue("org-1")}},
-			{"CloudHub Admin", map[string]attr.Value{"org": types.StringValue("org-1")}},
+			{"Cloudhub Organization Admin", map[string]attr.Value{"org": types.StringValue("org-1")}},
 			{"Audit Log Viewer", map[string]attr.Value{"org": types.StringValue("org-1")}},
 		})
 		diags := r.validateScopes(ctx, set)
@@ -301,7 +301,7 @@ func TestConnectedAppScopesResource_validateScopes_DisplayNames(t *testing.T) {
 			params map[string]attr.Value
 		}{
 			{"read:exchange", map[string]attr.Value{"org": types.StringValue("org-1")}},
-			{"CloudHub Admin", map[string]attr.Value{"org": types.StringValue("org-1")}},
+			{"Cloudhub Organization Admin", map[string]attr.Value{"org": types.StringValue("org-1")}},
 		})
 		diags := r.validateScopes(ctx, set)
 		if diags.HasError() {

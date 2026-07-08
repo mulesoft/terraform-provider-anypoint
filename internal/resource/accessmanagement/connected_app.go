@@ -22,6 +22,7 @@ import (
 
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client/accessmanagement"
+	"github.com/mulesoft/terraform-provider-anypoint/internal/constants"
 )
 
 // Ensure the implementation satisfies the expected interfaces
@@ -136,7 +137,8 @@ func (r *ConnectedAppResource) Schema(_ context.Context, _ resource.SchemaReques
 			},
 			"audience": schema.StringAttribute{
 				Description: "Who can use this application. 'internal' = members of this organization only, " +
-					"'everyone' = all Anypoint Platform users.",
+					"'everyone' = all Anypoint Platform users. Note: client_credentials apps are always " +
+					"'internal' (the platform enforces this).",
 				Optional: true,
 				Computed: true,
 				Default:  stringdefault.StaticString("internal"),
@@ -196,7 +198,7 @@ func (r *ConnectedAppResource) Schema(_ context.Context, _ resource.SchemaReques
 					Attributes: map[string]schema.Attribute{
 						"scope": schema.StringAttribute{
 							Description: "The scope identifier (e.g., 'read:applications', 'admin:cloudhub') or display " +
-								"name (e.g., 'CloudHub Admin'). Display names are resolved to identifiers automatically. " +
+								"name (e.g., 'Cloudhub Organization Admin'). Display names are resolved to identifiers automatically. " +
 								"Use the anypoint_scopes_catalog data source to discover available scopes.",
 							Required: true,
 						},
@@ -338,13 +340,37 @@ func (r *ConnectedAppResource) Create(ctx context.Context, req resource.CreateRe
 	// Always set client_uri to avoid "unknown after apply" errors
 	plan.ClientURI = types.StringValue(app.ClientURI)
 
-	// Apply inline scopes (authoritative) if the block is set. Null => unmanaged, leave as-is.
-	// `scopes` is Optional (not Computed), so state MUST equal config exactly after apply —
-	// plan.Scopes is stored verbatim (which also preserves the user's typed display names/casing).
+	// Apply inline scopes if the block is set. Null => unmanaged.
+	// Per RAML spec: context-aware /scopes endpoint is ONLY for client_credentials.
+	// User-behalf apps use the flat body `scopes` field via PATCH.
 	if !plan.Scopes.IsNull() && !plan.Scopes.IsUnknown() {
-		if diags := r.applyScopes(ctx, app.ClientID, plan.Scopes); diags.HasError() {
-			resp.Diagnostics.Append(diags...)
-			return
+		if isClientCredentials(grantTypes) {
+			// client_credentials: use context-aware PUT /scopes endpoint
+			if diags := r.applyScopes(ctx, app.ClientID, plan.Scopes); diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			}
+		} else {
+			// user-behalf: resolve scopes and PATCH the body field
+			resolved, diags := resolveUserBehalfScopes(plan.Scopes)
+			if diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			}
+			if len(resolved) > 0 {
+				orgIDForUpdate := app.OrgID
+				if orgIDForUpdate == "" {
+					orgIDForUpdate = r.client.OrgID
+				}
+				updateReq := &accessmanagement.UpdateConnectedAppRequest{Scopes: resolved}
+				if _, err := r.client.UpdateConnectedApp(ctx, orgIDForUpdate, app.ClientID, updateReq); err != nil {
+					resp.Diagnostics.AddError(
+						"Error setting connected app scopes",
+						"Could not set scopes via PATCH: "+err.Error(),
+					)
+					return
+				}
+			}
 		}
 	}
 
@@ -398,15 +424,26 @@ func (r *ConnectedAppResource) Read(ctx context.Context, req resource.ReadReques
 		return
 	}
 
-	// Reconcile scopes only when they are being managed (state.Scopes non-null). If the block was
-	// never set, leave it null (unmanaged) so we don't surface scopes the user didn't ask to track.
+	// Reconcile scopes only when they are being managed (state.Scopes non-null).
+	// Per RAML spec: context-aware /scopes is ONLY for client_credentials.
+	// User-behalf apps read from the flat body scopes field.
 	if !state.Scopes.IsNull() {
-		reconciled, diags := r.reconcileScopesIntoState(ctx, state.ID.ValueString(), state.Scopes)
-		resp.Diagnostics.Append(diags...)
-		if resp.Diagnostics.HasError() {
-			return
+		if isClientCredentials(app.GrantTypes) {
+			reconciled, diags := r.reconcileScopesIntoState(ctx, state.ID.ValueString(), state.Scopes)
+			resp.Diagnostics.Append(diags...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+			state.Scopes = reconciled
+		} else {
+			// User-behalf: read from the flat body scopes field (already in app.Scopes)
+			reconciled, diags := reconcileUserBehalfScopesIntoState(app.Scopes, state.Scopes)
+			resp.Diagnostics.Append(diags...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+			state.Scopes = reconciled
 		}
-		state.Scopes = reconciled
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -506,13 +543,35 @@ func (r *ConnectedAppResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 
-	// Reconcile scopes when the plan differs from state. Null plan => stop managing scopes (leave
-	// whatever is live untouched). Non-null => apply authoritatively. `scopes` is Optional (not
-	// Computed) so state is stored verbatim from the plan (preserving the user's typed form).
+	// Reconcile scopes when the plan differs from state. Per RAML spec: context-aware /scopes
+	// is ONLY for client_credentials. User-behalf apps use the flat body scopes field.
 	if !plan.Scopes.Equal(state.Scopes) && !plan.Scopes.IsNull() && !plan.Scopes.IsUnknown() {
-		if diags := r.applyScopes(ctx, state.ID.ValueString(), plan.Scopes); diags.HasError() {
-			resp.Diagnostics.Append(diags...)
+		var planGrantTypes []string
+		resp.Diagnostics.Append(plan.GrantTypes.ElementsAs(ctx, &planGrantTypes, false)...)
+		if resp.Diagnostics.HasError() {
 			return
+		}
+
+		if isClientCredentials(planGrantTypes) {
+			if diags := r.applyScopes(ctx, state.ID.ValueString(), plan.Scopes); diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			}
+		} else {
+			// user-behalf: resolve and PATCH body
+			resolved, diags := resolveUserBehalfScopes(plan.Scopes)
+			if diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			}
+			scopeReq := &accessmanagement.UpdateConnectedAppRequest{Scopes: resolved}
+			if _, err := r.client.UpdateConnectedApp(ctx, orgID, state.ID.ValueString(), scopeReq); err != nil {
+				resp.Diagnostics.AddError(
+					"Error updating connected app scopes",
+					"Could not set scopes via PATCH: "+err.Error(),
+				)
+				return
+			}
 		}
 	}
 
@@ -588,4 +647,100 @@ func (r *ConnectedAppResource) setListsFromAPI(ctx context.Context, model *Conne
 	if !diags.HasError() {
 		model.PublicKeys = publicKeysList
 	}
+}
+
+// isClientCredentials returns true if the grant types include client_credentials.
+// Per RAML spec, the context-aware /scopes subresource is ONLY for client_credentials apps.
+// User-behalf apps (authorization_code, password, jwt-bearer) use the flat body scopes field.
+func isClientCredentials(grantTypes []string) bool {
+	for _, gt := range grantTypes {
+		if gt == "client_credentials" {
+			return true
+		}
+	}
+	return false
+}
+
+// resolveUserBehalfScopes resolves the typed scope set into a flat []string of identifiers
+// for user-behalf apps. These get sent in the body `scopes` field via PATCH.
+// context_params are ignored for user-behalf apps (the platform determines context from the token).
+func resolveUserBehalfScopes(scopeSet types.Set) ([]string, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	if scopeSet.IsNull() || scopeSet.IsUnknown() {
+		return nil, diags
+	}
+
+	out := make([]string, 0, len(scopeSet.Elements()))
+	for i, el := range scopeSet.Elements() {
+		attrs := el.(types.Object).Attributes()
+		typed := attrs["scope"].(types.String).ValueString()
+
+		resolved, ok := constants.ResolveScopeIdentifier(typed)
+		if !ok {
+			diags.AddError(
+				"Invalid Scope Name",
+				fmt.Sprintf("The scope %q at index %d is not a valid Anypoint Platform scope. Use either the scope "+
+					"identifier (e.g. 'read:applications') or the display name (e.g. 'Cloudhub Organization Admin'). Use the "+
+					"anypoint_scopes_catalog data source to discover valid scopes.", typed, i),
+			)
+			continue
+		}
+		out = append(out, resolved)
+	}
+	return out, diags
+}
+
+// reconcileUserBehalfScopesIntoState builds the state set from the flat scopes array in the app body.
+// It preserves the user's typed representation (display name) for matched entries.
+func reconcileUserBehalfScopesIntoState(apiScopes []string, typedSource types.Set) (types.Set, diag.Diagnostics) {
+	var diags diag.Diagnostics
+
+	// Build typed lookup: resolved identifier -> typed scope attrs
+	typedByID := map[string]typedScope{}
+	if !typedSource.IsNull() && !typedSource.IsUnknown() {
+		for _, el := range typedSource.Elements() {
+			attrs := el.(types.Object).Attributes()
+			nameVal := attrs["scope"].(types.String)
+			cpVal := attrs["context_params"].(types.Map)
+			resolved, _ := constants.ResolveScopeIdentifier(nameVal.ValueString())
+			typedByID[resolved] = typedScope{name: nameVal, cp: cpVal}
+		}
+	}
+
+	objs := make([]attr.Value, 0, len(apiScopes))
+	for _, scopeID := range apiScopes {
+		// Skip the platform-injected "profile" scope
+		if systemConnectedAppScopes[scopeID] {
+			continue
+		}
+
+		var nameVal types.String
+		var cpVal types.Map
+		if ts, ok := typedByID[scopeID]; ok {
+			// Preserve the user's typed form (display name/casing)
+			nameVal = ts.name
+			cpVal = ts.cp
+		} else {
+			// Out-of-band scope: emit as identifier with empty context_params
+			nameVal = types.StringValue(scopeID)
+			cpVal = stringMapToTypesMap(nil)
+		}
+
+		obj, d := types.ObjectValue(connectedAppScopeObjectType.AttrTypes, map[string]attr.Value{
+			"scope":          nameVal,
+			"context_params": cpVal,
+		})
+		if d.HasError() {
+			diags.Append(d...)
+			return types.SetNull(connectedAppScopeObjectType), diags
+		}
+		objs = append(objs, obj)
+	}
+
+	set, d := types.SetValue(connectedAppScopeObjectType, objs)
+	if d.HasError() {
+		diags.Append(d...)
+		return types.SetNull(connectedAppScopeObjectType), diags
+	}
+	return set, diags
 }

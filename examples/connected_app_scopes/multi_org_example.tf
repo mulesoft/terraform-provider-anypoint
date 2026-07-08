@@ -35,7 +35,7 @@
 # # Configure scopes for all target organizations
 # resource "anypoint_connected_app_scopes" "multi_org" {
 #   connected_app_id = var.connected_app_id
-  
+
 #   # Use the flattened scope list
 #   scopes = local.all_scopes
 # }

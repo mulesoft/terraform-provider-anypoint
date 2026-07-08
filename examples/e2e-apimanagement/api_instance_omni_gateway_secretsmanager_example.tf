@@ -216,16 +216,16 @@ resource "anypoint_api_policy_credential_injection_oauth2" "oauth2" {
   api_instance_id = var.api_instance_id
 
   configuration = {
-    oauth_service = "https://auth.example.com/oauth2/token"
-    client_id     = "my-client-id"
-    client_secret = "my-client-secret"
-    scope         = ["read", "write"]
-    overwrite     = true
-    token_fetch_timeout = 5000
+    oauth_service                    = "https://auth.example.com/oauth2/token"
+    client_id                        = "my-client-id"
+    client_secret                    = "my-client-secret"
+    scope                            = ["read", "write"]
+    overwrite                        = true
+    token_fetch_timeout              = 5000
     allow_request_without_credential = false
   }
   upstream_ids = [local.upstream_id]
-  
+
 }
 
 # resource "anypoint_api_instance" "main_4" {
@@ -308,7 +308,7 @@ data "anypoint_api_upstreams" "main" {
   environment_id  = var.environment_id
   api_instance_id = var.api_instance_id
 
-  
+
 }
 
 locals {
@@ -324,9 +324,9 @@ locals {
 
 # locals block to reduce repetition
 locals {
-  org_id      = var.organization_id
-  env_id      = var.environment_id
-  api_id      = var.api_instance_id
+  org_id = var.organization_id
+  env_id = var.environment_id
+  api_id = var.api_instance_id
 
   # upstream_id resolves the "primary" upstream from the datasource lookup.
   # Change "primary" to match the label used in the routing configuration above.
@@ -343,7 +343,7 @@ resource "anypoint_api_policy_rate_limiting" "rate_limiting" {
   order           = 1
 
   configuration = {
-    key_selector   = "#[attributes.queryParams['identifier']]"
+    key_selector = "#[attributes.queryParams['identifier']]"
     rate_limits = [
       {
         maximum_requests            = 100
@@ -400,8 +400,8 @@ resource "anypoint_api_policy_client_id_enforcement" "client_id_enforcement" {
 
   configuration = {
     credentials_origin_has_http_basic_authentication_header = "customExpression"
-    client_id_expression     = "#[attributes.headers['client_id']]"
-    client_secret_expression = "#[attributes.headers['client_secret']]"
+    client_id_expression                                    = "#[attributes.headers['client_id']]"
+    client_secret_expression                                = "#[attributes.headers['client_secret']]"
   }
 }
 
@@ -507,7 +507,7 @@ resource "anypoint_api_policy_native_ext_authz" "ext_authz" {
     service_response_upstream_headers_to_append = ["response-header-to-add-1", "response-header-to-add-2"]
     service_response_client_headers             = ["Client-Header-1", "Client-Header-2"]
     service_response_client_headers_on_success  = ["Success-Header-1", "Success-Header-2"]
-    path_prefix = "path"
+    path_prefix                                 = "path"
   }
 }
 
@@ -520,15 +520,15 @@ resource "anypoint_api_policy_native_ext_proc" "ext_proc" {
   order           = 10
 
   configuration = {
-    uri                  = "h2://external.com"
-    message_timeout      = 1000
-    max_message_timeout  = 0
-    failure_mode_allow   = true
-    allow_mode_override  = true
-    request_header_mode  = "send"
-    response_header_mode = "send"
-    request_body_mode    = "none"
-    response_body_mode   = "none"
+    uri                   = "h2://external.com"
+    message_timeout       = 1000
+    max_message_timeout   = 0
+    failure_mode_allow    = true
+    allow_mode_override   = true
+    request_header_mode   = "send"
+    response_header_mode  = "send"
+    request_body_mode     = "none"
+    response_body_mode    = "none"
     request_trailer_mode  = "skip"
     response_trailer_mode = "skip"
   }
@@ -729,15 +729,15 @@ resource "anypoint_api_policy_oauth2_token_introspection" "oauth2_introspection"
   disabled        = true
 
   configuration = {
-    introspection_url        = "http://www.google.com"
-    authorization_value      = "Basic am9obkBleGFtcGxlLmNvbToxMjM0NTY="
-    validated_token_ttl      = 600
+    introspection_url         = "http://www.google.com"
+    authorization_value       = "Basic am9obkBleGFtcGxlLmNvbToxMjM0NTY="
+    validated_token_ttl       = 600
     scope_validation_criteria = "AND"
     skip_client_id_validation = false
-    consumer_by              = "client_id"
-    expose_headers           = false
-    max_cache_entries        = 10000
-    authentication_timeout   = 10000
+    consumer_by               = "client_id"
+    expose_headers            = false
+    max_cache_entries         = 10000
+    authentication_timeout    = 10000
   }
 }
 
@@ -854,7 +854,7 @@ resource "anypoint_api_policy_dataweave_request_filter" "dataweave_request_filte
   order           = 28
 
   configuration = {
-    script = <<-DW
+    script           = <<-DW
       %dw 2.0
       output application/json
       ---
@@ -916,7 +916,7 @@ resource "anypoint_api_policy_dataweave_body_transformation" "dataweave_body_tra
   order           = 31
 
   configuration = {
-    script = <<-DW
+    script       = <<-DW
       %dw 2.0
       output application/json
       ---
@@ -935,7 +935,7 @@ resource "anypoint_api_policy_dataweave_headers_transformation" "dataweave_heade
   order           = 32
 
   configuration = {
-    script = <<-DW
+    script           = <<-DW
       %dw 2.0
       output application/json
       ---
@@ -1063,8 +1063,8 @@ resource "anypoint_api_policy_credential_injection_basic_auth" "cred_inject_basi
   configuration = {
     username = "upstream-svc-user"
     password = var.upstream_basic_auth_password
-  }  
-  
+  }
+
 }
 
 # ─── 39. Idle Timeout ────────────────────────────────────────────────────────
@@ -1090,11 +1090,11 @@ resource "anypoint_api_policy_circuit_breaker" "circuit_breaker" {
 
   configuration = {
     thresholds = {
-      count        = 5
-      time         = 10
-      rtime        = 5
-      erp          = 50
-      mstime       = 30000
+      count  = 5
+      time   = 10
+      rtime  = 5
+      erp    = 50
+      mstime = 30000
     }
   }
 }
@@ -1150,14 +1150,14 @@ resource "anypoint_api_instance_sla_tier" "gold" {
   organization_id = local.org_id
   environment_id  = local.env_id
   api_instance_id = local.api_id
-  name        = "Gold"
-  description = "Gold tier with unlimited API access for premium customers"
+  name            = "Gold"
+  description     = "Gold tier with unlimited API access for premium customers"
 
   # Unlimited access - effectively no rate limits
   limits = [
     {
-      time_period_in_milliseconds = 60000      # 1 minute
-      maximum_requests            = 999999  # Effectively unlimited
+      time_period_in_milliseconds = 60000  # 1 minute
+      maximum_requests            = 999999 # Effectively unlimited
       visible                     = true
     }
   ]

@@ -67,12 +67,20 @@ output "design_center_scopes" {
   ]
 }
 
-# Output scope names only (useful for connected app scope assignments)
-output "all_scope_names" {
-  value = [for scope in data.anypoint_scopes_catalog.public_scopes.scopes : scope.scope]
+# Output display names (use these in anypoint_connected_app scopes blocks)
+output "all_scope_display_names" {
+  value = [for scope in data.anypoint_scopes_catalog.public_scopes.scopes : scope.display_name]
 }
 
-# Example: Find a specific scope by name
+# Example: Find a scope by its display name (as shown in the Anypoint UI)
+output "read_applications_scope" {
+  value = [
+    for scope in data.anypoint_scopes_catalog.public_scopes.scopes :
+    scope if scope.display_name == "Read Applications"
+  ]
+}
+
+# Example: Find a scope by its identifier (for advanced use)
 output "create_generations_scope" {
   value = [
     for scope in data.anypoint_scopes_catalog.public_scopes.scopes :

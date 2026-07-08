@@ -24,13 +24,13 @@ provider "anypoint" {
 # }
 
 resource "anypoint_managed_omni_gateway" "gw" {
-  environment_id = var.environment_id # local.sandbox_env_id  # from remote state — not hardcoded
-  target_id    = var.target_id
-  name      = "test-gw-2389"
-  size      = "small"
+  environment_id  = var.environment_id # local.sandbox_env_id  # from remote state — not hardcoded
+  target_id       = var.target_id
+  name            = "test-gw-2389"
+  size            = "small"
   release_channel = "lts"
   logging = {
-    level    = "info"
+    level        = "info"
     forward_logs = true
   }
   tracing = {

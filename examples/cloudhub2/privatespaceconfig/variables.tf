@@ -19,21 +19,21 @@ variable "anypoint_base_url" {
 }
 
 variable "region_id" {
-    description = "The region id."
-    type = string
-    default = "us-east-2"
-} 
+  description = "The region id."
+  type        = string
+  default     = "us-east-2"
+}
 
 variable "cidr_block" {
   description = "The CIDR block for the private network."
-  type = string
-  default = "10.0.0.0/20"
+  type        = string
+  default     = "10.0.0.0/20"
 }
 
 variable "reserved_cidrs" {
   description = "The reserved CIDRs for the private network."
-  type = list(string)
-  default = ["10.1.0.0/26"]
+  type        = list(string)
+  default     = ["10.1.0.0/26"]
 }
 
 variable "private_space_name" {

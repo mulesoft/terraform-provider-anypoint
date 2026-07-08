@@ -12,10 +12,24 @@ variable "anypoint_client_secret" {
   default     = "<anypoint_connected_app_client_secret>"
 }
 
+variable "anypoint_username" {
+  description = "Anypoint Platform admin username"
+  type        = string
+  sensitive   = true
+  default     = "<anypoint_admin_username>"
+}
+
+variable "anypoint_password" {
+  description = "Anypoint Platform admin password"
+  type        = string
+  sensitive   = true
+  default     = "<anypoint_admin_password>"
+}
+
 variable "anypoint_base_url" {
   description = "Anypoint Platform base URL"
   type        = string
-  default     = "https://stgx.anypoint.mulesoft.com"
+  default     = "https://anypoint.mulesoft.com"
 }
 
 variable "org_id" {

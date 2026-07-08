@@ -204,10 +204,10 @@ func TestConnectedAppScopesDataSource_ReadClientTests(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create handlers for different connected app IDs
 			handlers := map[string]func(w http.ResponseWriter, r *http.Request){
-				"/accounts/api/connectedApplications/test-app-id/scopes":                 tt.mockHandler,
-				"/accounts/api/connectedApplications/test-app-id-no-scopes/scopes":       tt.mockHandler,
-				"/accounts/api/connectedApplications/nonexistent-app-id/scopes":          tt.mockHandler,
-				"/accounts/api/connectedApplications/test-app-id-malformed-json/scopes":  tt.mockHandler,
+				"/accounts/api/connectedApplications/test-app-id/scopes":                tt.mockHandler,
+				"/accounts/api/connectedApplications/test-app-id-no-scopes/scopes":      tt.mockHandler,
+				"/accounts/api/connectedApplications/nonexistent-app-id/scopes":         tt.mockHandler,
+				"/accounts/api/connectedApplications/test-app-id-malformed-json/scopes": tt.mockHandler,
 			}
 			server := testutil.MockHTTPServer(t, handlers)
 
@@ -289,6 +289,7 @@ func TestConnectedAppScopesDataSource_Read(t *testing.T) {
 	scopeObjectType := tftypes.Object{
 		AttributeTypes: map[string]tftypes.Type{
 			"scope":          tftypes.String,
+			"display_name":   tftypes.String,
 			"context_params": tftypes.Map{ElementType: tftypes.String},
 		},
 	}
@@ -346,6 +347,7 @@ func TestConnectedAppScopesDataSource_Read_Error(t *testing.T) {
 	scopeObjectType := tftypes.Object{
 		AttributeTypes: map[string]tftypes.Type{
 			"scope":          tftypes.String,
+			"display_name":   tftypes.String,
 			"context_params": tftypes.Map{ElementType: tftypes.String},
 		},
 	}

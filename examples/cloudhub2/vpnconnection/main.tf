@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     anypoint = {
-      source = "mulesoft/anypoint"
+      source  = "mulesoft/anypoint"
       version = "~> 1.0.0"
     }
     time = {
@@ -31,14 +31,14 @@ provider "anypoint" {
 #   depends_on       = [anypoint_private_space_config.private_space]
 #   private_space_id = anypoint_private_space_config.private_space.id
 #   name             = var.connection_name
-  
+
 #   vpns = [
 #     {
 #       local_asn         = var.local_asn
 #       remote_asn        = var.remote_asn
 #       remote_ip_address = var.remote_ip_address
 #       static_routes     = []
-      
+
 #       vpn_tunnels = [
 #         {
 #           psk           = var.psk_1
@@ -112,25 +112,25 @@ resource "time_sleep" "wait_for_network_custom_org" {
 resource "anypoint_vpn_connection" "example_custom_org" {
   depends_on       = [time_sleep.wait_for_network_custom_org]
   private_space_id = anypoint_private_space_config.private_space_custom_org.id
-  organization_id = var.organization_id
+  organization_id  = var.organization_id
   name             = var.connection_name
-  
+
   vpns = [
     {
       local_asn         = var.local_asn
       remote_asn        = var.remote_asn
       remote_ip_address = var.remote_ip_address
       static_routes     = []
-      
+
       vpn_tunnels = [
         {
-          psk           = var.psk_1
-          ptp_cidr      = var.ptp_cidr_1
+          psk            = var.psk_1
+          ptp_cidr       = var.ptp_cidr_1
           startup_action = var.startup_action
         },
         {
-          psk           = var.psk_2
-          ptp_cidr      = var.ptp_cidr_2
+          psk            = var.psk_2
+          ptp_cidr       = var.ptp_cidr_2
           startup_action = var.startup_action
         }
       ]

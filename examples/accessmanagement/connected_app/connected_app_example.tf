@@ -17,14 +17,31 @@ provider "anypoint" {
 }
 
 # Create a connected app that acts on its own behalf (client_credentials)
+# with inline scopes using display names from the UI.
 resource "anypoint_connected_app" "service_app" {
   client_name = "My Service Application"
   grant_types = ["client_credentials"]
   audience    = "internal"
   enabled     = true
+
+  # Scopes are authoritative: the provider ensures the app has exactly these
+  # scopes. Use the display names you see in the Anypoint UI. Discover them
+  # with: data "anypoint_scopes_catalog" "all" {}
+  scopes = [
+    {
+      scope          = "Read Applications"
+      context_params = { org = var.org_id, envId = var.env_id }
+    },
+    {
+      scope          = "Exchange Viewer"
+      context_params = { org = var.org_id }
+    },
+  ]
 }
 
-# Create a connected app that acts on behalf of a user (authorization_code + password)
+# Create a connected app that acts on behalf of a user (authorization_code + password).
+# For user-behalf apps, scopes are stored in the app body (flat field) — the provider
+# handles this transparently. redirect_uris and client_uri are required by the UI.
 resource "anypoint_connected_app" "user_app" {
   client_name = "My User-Facing Application"
   grant_types = ["authorization_code", "password"]
@@ -37,16 +54,39 @@ resource "anypoint_connected_app" "user_app" {
   ]
 
   client_uri = "https://myapp.example.com"
+
+  # Scopes work the same way regardless of grant type.
+  # For user-behalf apps they are stored in the body field (not the context-aware endpoint).
+  scopes = [
+    {
+      scope          = "Exchange Viewer"
+      context_params = { org = var.org_id }
+    },
+    {
+      scope          = "Audit Log Viewer"
+      context_params = { org = var.org_id }
+    },
+  ]
 }
 
-# Create a connected app with JWT Bearer grant (for service-to-service auth)
+# Create a connected app with JWT Bearer grant (for service-to-service auth).
+# redirect_uris and client_uri are required for user-behalf apps to be editable in the UI.
 resource "anypoint_connected_app" "jwt_app" {
-  client_name = "JWT Bearer Service"
-  grant_types = ["urn:ietf:params:oauth:grant-type:jwt-bearer"]
-  audience    = "internal"
+  client_name   = "JWT Bearer Service"
+  grant_types   = ["urn:ietf:params:oauth:grant-type:jwt-bearer"]
+  redirect_uris = ["https://jwt-service.example.com/callback"]
+  client_uri    = "https://jwt-service.example.com"
+  audience      = "internal"
 
   public_keys = [
     "-----BEGIN PUBLIC KEY-----\n<your_public_key_here>\n-----END PUBLIC KEY-----"
+  ]
+
+  scopes = [
+    {
+      scope          = "Read Applications"
+      context_params = { org = var.org_id, envId = var.env_id }
+    },
   ]
 }
 
