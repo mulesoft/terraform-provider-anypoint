@@ -50,10 +50,12 @@ All resources provided by `terraform-provider-anypoint`, grouped by subcategory.
 
 | Resource | Description |
 |----------|-------------|
-| [anypoint_connected_app_scopes](resources/anypoint_connected_app_scopes.md) | Manages scopes for an Anypoint Connected Application using user authentication. |
+| [anypoint_connected_app](resources/anypoint_connected_app.md) | Creates and manages an Anypoint Connected Application, including its scopes managed inline. |
+| [anypoint_connected_app_scopes](resources/anypoint_connected_app_scopes.md) | _Deprecated._ Manages scopes for an Anypoint Connected Application standalone. Prefer the inline `scopes` attribute on `anypoint_connected_app`. |
 | [anypoint_environment](resources/anypoint_environment.md) | Manages an Anypoint Platform environment. |
 | [anypoint_organization](resources/anypoint_organization.md) | Creates and manages an Anypoint Platform organization. |
-| [anypoint_team](resources/anypoint_team.md) | Manages an Anypoint Platform team. |
+| [anypoint_role](resources/anypoint_role.md) | Manages an Anypoint Platform role group, including its permissions and members managed inline. |
+| [anypoint_team](resources/anypoint_team.md) | Manages an Anypoint Platform team, including its role assignments and members managed inline. |
 
 ### API Management
 

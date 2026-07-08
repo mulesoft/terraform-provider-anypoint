@@ -163,7 +163,7 @@ func TestRolePermissionClient_AssignRole(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]AssignRoleResponse{{
+		_ = json.NewEncoder(w).Encode([]AssignRoleResponse{{
 			RoleGroupID:           "test-rg",
 			RoleID:                "role-123",
 			RoleGroupAssignmentID: "assign-456",
@@ -202,13 +202,13 @@ func TestRolePermissionClient_AssignRole_NullResponse(t *testing.T) {
 		if r.Method == "POST" {
 			// Return null like the real API does for certain roles
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte("null"))
+			_, _ = w.Write([]byte("null"))
 			return
 		}
 		if r.Method == "GET" {
 			// Read-back: return the assignment in the list
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(ListRoleAssignmentsResponse{
+			_ = json.NewEncoder(w).Encode(ListRoleAssignmentsResponse{
 				Data: []RoleAssignment{
 					{
 						RoleGroupAssignmentID: "assign-readback",
@@ -255,14 +255,14 @@ func TestRolePermissionClient_AssignRole_WithEnvID(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		var req []AssignRoleRequest
-		json.Unmarshal(body, &req)
+		_ = json.Unmarshal(body, &req)
 
 		if req[0].ContextParams["envId"] != "env-789" {
 			t.Errorf("Expected context_params.envId 'env-789', got %s", req[0].ContextParams["envId"])
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]AssignRoleResponse{{
+		_ = json.NewEncoder(w).Encode([]AssignRoleResponse{{
 			RoleGroupID:           "test-rg",
 			RoleID:                "role-123",
 			RoleGroupAssignmentID: "assign-789",
@@ -295,7 +295,7 @@ func TestRolePermissionClient_AssignRole_WithEnvID(t *testing.T) {
 func TestRolePermissionClient_AssignRole_ServerError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("internal error"))
+		_, _ = w.Write([]byte("internal error"))
 	}))
 	defer server.Close()
 
@@ -325,14 +325,14 @@ func TestRolePermissionClient_UnassignRole(t *testing.T) {
 
 		body, _ := io.ReadAll(r.Body)
 		var req []AssignRoleRequest
-		json.Unmarshal(body, &req)
+		_ = json.Unmarshal(body, &req)
 
 		if req[0].RoleID != "role-123" {
 			t.Errorf("Expected role_id 'role-123', got %s", req[0].RoleID)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]int{1})
+		_ = json.NewEncoder(w).Encode([]int{1})
 	}))
 	defer server.Close()
 
@@ -357,7 +357,7 @@ func TestRolePermissionClient_UnassignRole(t *testing.T) {
 func TestRolePermissionClient_UnassignRole_NotFound(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte("not found"))
+		_, _ = w.Write([]byte("not found"))
 	}))
 	defer server.Close()
 
@@ -389,7 +389,7 @@ func TestRolePermissionClient_ListRoleAssignments(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ListRoleAssignmentsResponse{
+		_ = json.NewEncoder(w).Encode(ListRoleAssignmentsResponse{
 			Data: []RoleAssignment{
 				{
 					RoleGroupAssignmentID: "assign-1",
@@ -444,7 +444,7 @@ func TestRolePermissionClient_ListRoleAssignments(t *testing.T) {
 func TestRolePermissionClient_ListRoleAssignments_NotFound(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte("Role group not found"))
+		_, _ = w.Write([]byte("Role group not found"))
 	}))
 	defer server.Close()
 
@@ -469,7 +469,7 @@ func TestRolePermissionClient_ListRoleAssignments_NotFound(t *testing.T) {
 func TestRolePermissionClient_GetRoleAssignment(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ListRoleAssignmentsResponse{
+		_ = json.NewEncoder(w).Encode(ListRoleAssignmentsResponse{
 			Data: []RoleAssignment{
 				{
 					RoleGroupAssignmentID: "assign-1",
@@ -520,7 +520,7 @@ func TestRolePermissionClient_GetRoleAssignment(t *testing.T) {
 func TestRolePermissionClient_GetRoleAssignment_NotFound(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ListRoleAssignmentsResponse{
+		_ = json.NewEncoder(w).Encode(ListRoleAssignmentsResponse{
 			Data:  []RoleAssignment{},
 			Total: 0,
 		})
@@ -558,7 +558,7 @@ func TestRolePermissionClient_ListAvailableRoles(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ListAvailableRolesResponse{
+		_ = json.NewEncoder(w).Encode(ListAvailableRolesResponse{
 			Data: []AvailableRole{
 				{RoleID: "role-aaa", Name: "Audit Log Viewer", Description: "View audit logs", Internal: false},
 				{RoleID: "role-bbb", Name: "Read Applications", Description: "Read applications", Internal: false},
@@ -596,7 +596,7 @@ func TestRolePermissionClient_ListAvailableRoles(t *testing.T) {
 func TestRolePermissionClient_ListAvailableRoles_ServerError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("internal error"))
+		_, _ = w.Write([]byte("internal error"))
 	}))
 	defer server.Close()
 

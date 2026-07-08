@@ -43,8 +43,8 @@ func (d *UsersDataSource) Metadata(_ context.Context, req datasource.MetadataReq
 // Schema defines the schema for the data source.
 func (d *UsersDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Lists users in the organization. Use this to look up user IDs by username or email " +
-			"instead of hardcoding UUIDs in anypoint_role_users resources.",
+		Description: "Lists users in the organization. Use this to look up usernames to reference in the " +
+			"members block of the anypoint_role and anypoint_team resources.",
 		Attributes: map[string]schema.Attribute{
 			"organization_id": schema.StringAttribute{
 				Description: "The organization ID. Defaults to the provider's org.",
@@ -62,7 +62,7 @@ func (d *UsersDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"id": schema.StringAttribute{
-							Description: "The unique ID of the user. Use this as the user_id in anypoint_role_users.",
+							Description: "The unique ID of the user. Members are referenced by username in the members block of anypoint_role and anypoint_team, so this ID is informational.",
 							Computed:    true,
 						},
 						"username": schema.StringAttribute{

@@ -151,7 +151,7 @@ func TestUsersDataSource_Read(t *testing.T) {
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 		usersPath: func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(accessmanagement.ListOrgUsersResponse{
+			_ = json.NewEncoder(w).Encode(accessmanagement.ListOrgUsersResponse{
 				Data: []accessmanagement.OrgUser{
 					{ID: "user-aaa", Username: "alice", FirstName: "Alice", LastName: "Smith", Email: "alice@example.com", Enabled: true},
 					{ID: "user-bbb", Username: "bob", FirstName: "Bob", LastName: "Jones", Email: "bob@example.com", Enabled: true},
@@ -218,7 +218,7 @@ func TestUsersDataSource_Read_WithFilter(t *testing.T) {
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 		usersPath: func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(accessmanagement.ListOrgUsersResponse{
+			_ = json.NewEncoder(w).Encode(accessmanagement.ListOrgUsersResponse{
 				Data: []accessmanagement.OrgUser{
 					{ID: "user-aaa", Username: "alice", FirstName: "Alice", LastName: "Smith", Email: "alice@example.com", Enabled: true},
 					{ID: "user-bbb", Username: "bob", FirstName: "Bob", LastName: "Jones", Email: "bob@example.com", Enabled: true},
@@ -285,7 +285,7 @@ func TestUsersDataSource_Read_CaseInsensitiveFilter(t *testing.T) {
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 		usersPath: func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(accessmanagement.ListOrgUsersResponse{
+			_ = json.NewEncoder(w).Encode(accessmanagement.ListOrgUsersResponse{
 				Data: []accessmanagement.OrgUser{
 					{ID: "user-aaa", Username: "alice", FirstName: "Alice", LastName: "Smith", Email: "alice@example.com", Enabled: true},
 					{ID: "user-bbb", Username: "bob", FirstName: "Bob", LastName: "Jones", Email: "bob@example.com", Enabled: true},
@@ -351,7 +351,7 @@ func TestUsersDataSource_Read_FilterByEmail(t *testing.T) {
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 		usersPath: func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(accessmanagement.ListOrgUsersResponse{
+			_ = json.NewEncoder(w).Encode(accessmanagement.ListOrgUsersResponse{
 				Data: []accessmanagement.OrgUser{
 					{ID: "user-aaa", Username: "alice", FirstName: "Alice", LastName: "Smith", Email: "alice@salesforce.com", Enabled: true},
 					{ID: "user-bbb", Username: "bob", FirstName: "Bob", LastName: "Jones", Email: "bob@mulesoft.com", Enabled: true},
@@ -417,7 +417,7 @@ func TestUsersDataSource_Read_Error(t *testing.T) {
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 		usersPath: func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Internal server error"))
+			_, _ = w.Write([]byte("Internal server error"))
 		},
 	}
 	server := testutil.MockHTTPServer(t, handlers)

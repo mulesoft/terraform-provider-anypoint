@@ -56,7 +56,7 @@ func (d *AvailableRolesDataSource) Schema(_ context.Context, _ datasource.Schema
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"role_id": schema.StringAttribute{
-							Description: "The unique ID of the role. Use this as the role_id in anypoint_role_permission.",
+							Description: "The unique ID of the role. Permissions are referenced by name in the permissions block of anypoint_role, so this ID is informational.",
 							Computed:    true,
 						},
 						"name": schema.StringAttribute{

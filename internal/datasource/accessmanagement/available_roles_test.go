@@ -142,7 +142,7 @@ func TestAvailableRolesDataSource_Read(t *testing.T) {
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 		rolesPath: func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"data": []map[string]interface{}{
 					{
 						"role_id":     "role-aaa",
@@ -220,7 +220,7 @@ func TestAvailableRolesDataSource_Read_WithFilter(t *testing.T) {
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 		rolesPath: func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"data": []map[string]interface{}{
 					{
 						"role_id":     "role-aaa",
@@ -298,7 +298,7 @@ func TestAvailableRolesDataSource_Read_CaseInsensitiveFilter(t *testing.T) {
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 		rolesPath: func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"data": []map[string]interface{}{
 					{
 						"role_id":     "role-aaa",
@@ -370,7 +370,7 @@ func TestAvailableRolesDataSource_Read_Error(t *testing.T) {
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 		rolesPath: func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Internal server error"))
+			_, _ = w.Write([]byte("Internal server error"))
 		},
 	}
 	server := testutil.MockHTTPServer(t, handlers)
