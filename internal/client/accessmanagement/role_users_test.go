@@ -15,13 +15,13 @@ func TestNewRoleUsersClient(t *testing.T) {
 		switch r.URL.Path {
 		case "/accounts/api/v2/oauth2/token":
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"access_token": "mock-token",
 				"token_type":   "bearer",
 			})
 		case "/accounts/api/me":
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"user": map[string]interface{}{
 					"id":       "user-123",
 					"username": "test-user",
@@ -65,7 +65,7 @@ func TestRoleUsersClient_AddUserToRoleGroup(t *testing.T) {
 			t.Errorf("Expected POST, got %s", r.Method)
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("null"))
+		_, _ = w.Write([]byte("null"))
 	}))
 	defer server.Close()
 
@@ -87,7 +87,7 @@ func TestRoleUsersClient_AddUserToRoleGroup(t *testing.T) {
 func TestRoleUsersClient_AddUserToRoleGroup_NotFound(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte("This resource does not exist"))
+		_, _ = w.Write([]byte("This resource does not exist"))
 	}))
 	defer server.Close()
 
@@ -119,7 +119,7 @@ func TestRoleUsersClient_RemoveUserFromRoleGroup(t *testing.T) {
 			t.Errorf("Expected DELETE, got %s", r.Method)
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("null"))
+		_, _ = w.Write([]byte("null"))
 	}))
 	defer server.Close()
 
@@ -142,7 +142,7 @@ func TestRoleUsersClient_RemoveUserFromRoleGroup_Conflict(t *testing.T) {
 	// 409 means user not in group — should be treated as success (idempotent)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusConflict)
-		w.Write([]byte("Could not unassign role group"))
+		_, _ = w.Write([]byte("Could not unassign role group"))
 	}))
 	defer server.Close()
 
@@ -164,7 +164,7 @@ func TestRoleUsersClient_RemoveUserFromRoleGroup_Conflict(t *testing.T) {
 func TestRoleUsersClient_ListRoleGroupUsers(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ListRoleGroupUsersResponse{
+		_ = json.NewEncoder(w).Encode(ListRoleGroupUsersResponse{
 			Data: []RoleGroupUser{
 				{
 					ID:             "user-aaa",
@@ -216,7 +216,7 @@ func TestRoleUsersClient_ListRoleGroupUsers(t *testing.T) {
 func TestRoleUsersClient_GetRoleGroupUser(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ListRoleGroupUsersResponse{
+		_ = json.NewEncoder(w).Encode(ListRoleGroupUsersResponse{
 			Data: []RoleGroupUser{
 				{ID: "user-aaa", Username: "alice", Email: "alice@example.com"},
 				{ID: "user-bbb", Username: "bob", Email: "bob@example.com"},
@@ -247,7 +247,7 @@ func TestRoleUsersClient_GetRoleGroupUser(t *testing.T) {
 func TestRoleUsersClient_GetRoleGroupUser_NotFound(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ListRoleGroupUsersResponse{
+		_ = json.NewEncoder(w).Encode(ListRoleGroupUsersResponse{
 			Data:  []RoleGroupUser{},
 			Total: 0,
 		})
@@ -275,7 +275,7 @@ func TestRoleUsersClient_GetRoleGroupUser_NotFound(t *testing.T) {
 func TestRoleUsersClient_ListOrgUsers(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ListOrgUsersResponse{
+		_ = json.NewEncoder(w).Encode(ListOrgUsersResponse{
 			Data: []OrgUser{
 				{ID: "user-aaa", Username: "alice", FirstName: "Alice", LastName: "Smith", Email: "alice@example.com", Enabled: true},
 				{ID: "user-bbb", Username: "bob", FirstName: "Bob", LastName: "Jones", Email: "bob@example.com", Enabled: true},
@@ -306,7 +306,7 @@ func TestRoleUsersClient_ListOrgUsers(t *testing.T) {
 func TestRoleUsersClient_ListOrgUsers_ServerError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("internal error"))
+		_, _ = w.Write([]byte("internal error"))
 	}))
 	defer server.Close()
 

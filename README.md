@@ -13,7 +13,7 @@ A comprehensive Terraform provider for managing your Anypoint Platform resources
 - **Improve Collaboration:** Use version control to manage your infrastructure, making it easier for teams to collaborate and review changes
 - **Increase Agility:** Spin up or tear down entire environments in minutes, not hours, allowing you to innovate faster
 - **Enhance Governance:** Enforce standards and policies across all your environments by defining them in code
-- **Complete Coverage:** 23 base resources + 96 typed API policy resources across 6 modules supporting the full Anypoint Platform lifecycle
+- **Complete Coverage:** 25 base resources + 96 typed API policy resources across 6 modules supporting the full Anypoint Platform lifecycle
 
 ## Table of Contents
 
@@ -97,11 +97,11 @@ provider "anypoint" {
 
 ## Resources Overview
 
-The provider supports **23 base resources** plus **96 typed API policy resources** across **6 main categories**:
+The provider supports **25 base resources** plus **96 typed API policy resources** across **6 main categories**:
 
 | Category | Resources | Description |
 |----------|-----------|-------------|
-| **Access Management** | 4 | Organizations, environments, teams, and connected app scopes |
+| **Access Management** | 6 | Organizations, environments, teams, role groups, and connected apps (roles, permissions, members, and scopes managed inline) |
 | **API Management** | 4 + 96 typed policies | API instances, generic policy, SLA tiers, Omni Gateways, and dedicated per-policy-type resources |
 | **CloudHub 2.0** | 6 | Private spaces, VPNs, firewall rules, TLS contexts, and associations |
 | **Agents & Tools** | 2 | Agent instances and MCP servers |
@@ -204,8 +204,10 @@ resource "anypoint_vpn_connection" "on_prem" {
 |----------|-------------|
 | `anypoint_organization` | Manage Anypoint organizations and sub-organizations |
 | `anypoint_environment` | Create and manage environments (sandbox/production) |
-| `anypoint_team` | Create teams for organizing users |
-| `anypoint_connected_app_scopes` | Manage scopes for connected apps |
+| `anypoint_team` | Manage teams, including inline role assignments and members |
+| `anypoint_role` | Manage role groups, including inline permissions and members |
+| `anypoint_connected_app` | Manage connected apps, including inline scopes |
+| `anypoint_connected_app_scopes` | _Deprecated_ — manage connected app scopes standalone (prefer the inline `scopes` on `anypoint_connected_app`) |
 
 **Example:** [Access Management Examples](./examples/accessmanagement)
 
@@ -285,7 +287,15 @@ The provider includes data sources for reading existing resources:
 |-------------|-------------|
 | `anypoint_organization` | Read organization details |
 | `anypoint_environment` | Read environment details |
-| `anypoint_team` | Read team details |
+| `anypoint_team` | Read a team, including its inline roles and members |
+| `anypoint_teams` | List teams in the organization |
+| `anypoint_role` | Read a role group, including its inline permissions and members |
+| `anypoint_roles` | List role groups in the organization |
+| `anypoint_available_roles` | List assignable roles (the permission catalog) to reference by name |
+| `anypoint_users` | List users to reference by username in `members` |
+| `anypoint_connected_apps` | List connected apps in the organization |
+| `anypoint_connected_app_scopes` | Read the scopes of a connected app |
+| `anypoint_scopes_catalog` | List assignable connected app scopes to reference by name |
 
 ### CloudHub 2.0
 | Data Source | Description |
