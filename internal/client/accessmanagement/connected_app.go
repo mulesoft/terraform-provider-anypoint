@@ -27,34 +27,37 @@ func NewConnectedAppClient(config *client.UserClientConfig) (*ConnectedAppClient
 
 // ConnectedApp represents a connected application in Anypoint Platform.
 type ConnectedApp struct {
-	ClientID                   string   `json:"client_id"`
-	ClientSecret               string   `json:"client_secret,omitempty"`
-	ClientName                 string   `json:"client_name"`
-	OrgID                      string   `json:"org_id"`
-	OwnerOrgID                 string   `json:"owner_org_id"`
-	OwnerUserID                string   `json:"owner_user_id"`
-	GrantTypes                 []string `json:"grant_types"`
-	RedirectURIs               []string `json:"redirect_uris"`
-	PublicKeys                 []string `json:"public_keys"`
-	Audience                   string   `json:"audience"`
-	ClientURI                  string   `json:"client_uri"`
-	Enabled                    bool     `json:"enabled"`
-	PolicyURI                  *string  `json:"policy_uri"`
-	TosURI                     *string  `json:"tos_uri"`
-	CertExpiry                 *string  `json:"cert_expiry"`
-	GenerateIssClaimWithoutToken bool   `json:"generate_iss_claim_without_token"`
-	IDProviderID               *string  `json:"idprovider_id"`
-	IsDynamic                  bool     `json:"is_dynamic"`
-	IPAllowlistExcluded        bool     `json:"ip_allowlist_excluded"`
-	PKCEEnforcement            string   `json:"pkce_enforcement"`
-	SkipUserConsent            bool     `json:"skip_user_consent"`
-	CreatedAt                  string   `json:"created_at"`
-	UpdatedAt                  string   `json:"updated_at"`
-	ClientSecretUpdatedAt      string   `json:"client_secret_updated_at"`
+	ClientID                     string   `json:"client_id"`
+	ClientSecret                 string   `json:"client_secret,omitempty"`
+	ClientName                   string   `json:"client_name"`
+	OrgID                        string   `json:"org_id"`
+	OwnerOrgID                   string   `json:"owner_org_id"`
+	OwnerUserID                  string   `json:"owner_user_id"`
+	GrantTypes                   []string `json:"grant_types"`
+	RedirectURIs                 []string `json:"redirect_uris"`
+	PublicKeys                   []string `json:"public_keys"`
+	Audience                     string   `json:"audience"`
+	ClientURI                    string   `json:"client_uri"`
+	Enabled                      bool     `json:"enabled"`
+	PolicyURI                    *string  `json:"policy_uri"`
+	TosURI                       *string  `json:"tos_uri"`
+	CertExpiry                   *string  `json:"cert_expiry"`
+	GenerateIssClaimWithoutToken bool     `json:"generate_iss_claim_without_token"`
+	IDProviderID                 *string  `json:"idprovider_id"`
+	IsDynamic                    bool     `json:"is_dynamic"`
+	IPAllowlistExcluded          bool     `json:"ip_allowlist_excluded"`
+	PKCEEnforcement              string   `json:"pkce_enforcement"`
+	SkipUserConsent              bool     `json:"skip_user_consent"`
+	CreatedAt                    string   `json:"created_at"`
+	UpdatedAt                    string   `json:"updated_at"`
+	ClientSecretUpdatedAt        string   `json:"client_secret_updated_at"`
 }
 
 // CreateConnectedAppRequest represents the request body to create a connected app.
 // Note: redirect_uris MUST always be present (even as []) — the API's RAML validation rejects requests without it.
+// Scopes are NOT set here: the create-body `scopes` field is a context-UNAWARE array of strings, a different
+// concept from the context-aware scopes subresource (`/connectedApplications/{id}/scopes`). Context-aware scopes
+// are managed separately (see ConnectedAppScopesClient) AFTER the app is created.
 type CreateConnectedAppRequest struct {
 	ClientName   string   `json:"client_name"`
 	GrantTypes   []string `json:"grant_types"`
@@ -62,7 +65,6 @@ type CreateConnectedAppRequest struct {
 	PublicKeys   []string `json:"public_keys"`
 	Audience     string   `json:"audience,omitempty"`
 	ClientURI    string   `json:"client_uri,omitempty"`
-	Scopes       []Scope  `json:"scopes,omitempty"`
 }
 
 // UpdateConnectedAppRequest represents the request body to update a connected app.

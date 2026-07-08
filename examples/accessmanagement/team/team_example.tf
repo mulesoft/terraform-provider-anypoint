@@ -20,11 +20,42 @@ resource "anypoint_team" "qa" {
   team_type      = "internal"
 }
 
-# # Create a development team (top-level)
+# # Create a development team (top-level) with inline roles + members.
 resource "anypoint_team" "development" {
   team_name      = "Development Team With Child teams"
   parent_team_id = var.parent_team_id
   team_type      = "internal"
+
+  # Roles are referenced by their UI display name (case-insensitive); the provider
+  # resolves each to a role ID at apply time. Omit `roles` entirely to leave role
+  # assignments unmanaged. System (internal) assignments are never modified.
+  roles = [
+    {
+      name = "Exchange Viewer"
+      context_params = {
+        org = var.org_id
+      }
+    },
+  ]
+
+  # Members are referenced by username (case-insensitive). membership_type is
+  # optional and defaults to "member". Members assigned via external groups
+  # (SAML/SCIM) are never modified.
+  members = [
+    {
+      username        = "dev-lead"
+      membership_type = "maintainer"
+    },
+    {
+      username = "dev-engineer" # membership_type omitted → "member"
+    },
+  ]
+}
+
+# Read the development team back, including its roles and members.
+data "anypoint_team" "development" {
+  id              = anypoint_team.development.id
+  organization_id = var.org_id
 }
 
 # Create a development team with no child teams(top-level)
@@ -83,4 +114,14 @@ output "backend_team_id" {
 output "operations_team_id" {
   description = "ID of the operations team"
   value       = anypoint_team.operations.id
+}
+
+output "development_team_roles" {
+  description = "Roles read back from the development team by the data source"
+  value       = data.anypoint_team.development.roles
+}
+
+output "development_team_members" {
+  description = "Members read back from the development team by the data source"
+  value       = data.anypoint_team.development.members
 }

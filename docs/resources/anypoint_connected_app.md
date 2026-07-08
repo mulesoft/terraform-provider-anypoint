@@ -57,6 +57,33 @@ resource "anypoint_connected_app" "jwt_app" {
   audience = "internal"
   enabled  = true
 }
+
+# Connected app with inline, authoritative scopes (preferred over the
+# deprecated anypoint_connected_app_scopes resource)
+resource "anypoint_connected_app" "with_scopes" {
+  provider    = anypoint.admin
+  client_name = "Automation App"
+  grant_types = ["client_credentials"]
+
+  scopes = [
+    # Org-scoped scope (identifier form)
+    {
+      scope          = "create:generations"
+      context_params = { org = var.org_id }
+    },
+    # Environment-scoped scope (needs envId)
+    {
+      scope          = "read:applications"
+      context_params = { org = var.org_id, envId = var.env_id }
+    },
+    # Display-name form — resolved to its identifier automatically,
+    # and preserved as typed in state (no perpetual diff)
+    {
+      scope          = "Exchange Viewer"
+      context_params = { org = var.org_id }
+    },
+  ]
+}
 ```
 
 ## Schema
@@ -74,6 +101,9 @@ resource "anypoint_connected_app" "jwt_app" {
 - `organization_id` (String) The organization ID. Defaults to the provider's org.
 - `public_keys` (List of String) Public keys for JWT Bearer grant type.
 - `redirect_uris` (List of String) OAuth redirect URIs. Required for 'authorization_code' grant type.
+- `scopes` (Attributes Set) Context-aware scopes assigned to the connected application. **Authoritative when set:** the provider makes the app's scopes match this set exactly — scopes assigned out-of-band are removed on the next apply. Omit the block to leave scopes unmanaged; set it to an empty list (`[]`) to remove all user-assigned scopes. Scopes are orthogonal to grant type (they apply to both `client_credentials` and user-behalf apps). Prefer this over the separate, deprecated `anypoint_connected_app_scopes` resource. (see [below for nested schema](#nestedatt--scopes))
+
+~> **Note:** The platform auto-assigns an undeletable `profile` scope to every connected app. It is managed by the platform, never appears in this set, and must not be listed here — the provider ignores it so that a `plan` immediately after `apply` reports no changes.
 
 ### Read-Only
 
@@ -82,6 +112,17 @@ resource "anypoint_connected_app" "jwt_app" {
 - `id` (String) The client_id of the connected app (unique identifier).
 - `owner_user_id` (String) The user ID of the app owner.
 - `updated_at` (String) When the connected app was last updated.
+
+<a id="nestedatt--scopes"></a>
+### Nested Schema for `scopes`
+
+Required:
+
+- `scope` (String) The scope identifier (e.g. `read:applications`, `admin:cloudhub`) or display name (e.g. `CloudHub Admin`). Display names are resolved to identifiers automatically. Use the `anypoint_scopes_catalog` data source to discover available scopes.
+
+Optional:
+
+- `context_params` (Map of String) Context parameters for the scope. Always include `org`; add `envId` for environment-scoped scopes.
 
 ## Import
 

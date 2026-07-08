@@ -194,36 +194,57 @@ func (c *RolePermissionClient) GetRoleAssignmentByID(ctx context.Context, orgID,
 
 // ListRoleAssignments lists all role assignments for a role group
 func (c *RolePermissionClient) ListRoleAssignments(ctx context.Context, orgID, roleGroupID string) ([]RoleAssignment, error) {
-	url := fmt.Sprintf("%s/accounts/api/organizations/%s/rolegroups/%s/roles", c.BaseURL, orgID, roleGroupID)
+	var allAssignments []RoleAssignment
+	limit := 100
+	offset := 0
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+	// The accounts API enforces a default page size (25) when limit is omitted,
+	// so this MUST paginate: a role group with more than one page of assignments
+	// would otherwise be silently truncated, corrupting the authoritative
+	// reconcile (perpetual diff for assignments past the first page, and
+	// inability to remove them since they're invisible). Mirrors ListAvailableRoles.
+	for {
+		url := fmt.Sprintf("%s/accounts/api/organizations/%s/rolegroups/%s/roles?limit=%d&offset=%d", c.BaseURL, orgID, roleGroupID, limit, offset)
+
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+
+		req.Header.Set("Authorization", "Bearer "+c.Token)
+
+		resp, err := c.HTTPClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to send request: %w", err)
+		}
+
+		if resp.StatusCode == http.StatusNotFound {
+			_ = resp.Body.Close()
+			return nil, client.NewNotFoundError("role group")
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			return nil, fmt.Errorf("failed to list role assignments with status %d: %s", resp.StatusCode, string(body))
+		}
+
+		var listResp ListRoleAssignmentsResponse
+		if err := json.NewDecoder(resp.Body).Decode(&listResp); err != nil {
+			_ = resp.Body.Close()
+			return nil, fmt.Errorf("failed to decode response: %w", err)
+		}
+		_ = resp.Body.Close()
+
+		allAssignments = append(allAssignments, listResp.Data...)
+
+		if len(listResp.Data) < limit || len(allAssignments) >= listResp.Total {
+			break
+		}
+		offset += limit
 	}
 
-	req.Header.Set("Authorization", "Bearer "+c.Token)
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, client.NewNotFoundError("role group")
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to list role assignments with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var listResp ListRoleAssignmentsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&listResp); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return listResp.Data, nil
+	return allAssignments, nil
 }
 
 // AvailableRole represents a role (permission) that can be assigned to a role group

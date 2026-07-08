@@ -16,19 +16,53 @@ provider "anypoint" {
   base_url      = var.anypoint_base_url
 }
 
-# Create a custom role group for API Managers
+# A custom role group with inline permissions and members.
+#
+# `permissions` and `members` are managed directly on the role group — there are
+# no separate resources for them. Each is an authoritative set: entries not
+# listed here are removed on apply. Omit an attribute entirely to leave it
+# unmanaged.
 resource "anypoint_role" "api_managers" {
   name        = "API Managers"
   description = "Custom role group for managing APIs"
+
+  # Permissions are referenced by their UI display name (case-insensitive); the
+  # provider resolves each to a role ID at apply time. Use the
+  # anypoint_available_roles data source to discover valid names.
+  permissions = [
+    {
+      # Organization-scoped permission.
+      name = "Exchange Viewer"
+      context_params = {
+        org = var.org_id
+      }
+    },
+    {
+      # Environment-scoped permission (adds envId). Some permissions can only be
+      # applied to Sandbox/Production environments.
+      name = "Read Applications"
+      context_params = {
+        org   = var.org_id
+        envId = var.env_id
+      }
+    },
+  ]
+
+  # Members are referenced by username (case-insensitive). Use the anypoint_users
+  # data source to discover usernames.
+  members = [
+    "jdoe",
+    "asmith",
+  ]
 }
 
-# Create a custom role group for Data Analysts
+# A role group that leaves permissions and members unmanaged (attributes omitted).
 resource "anypoint_role" "data_analysts" {
   name        = "Data Analysts"
-  description = "Role group for data analytics team"
+  description = "Role group for the data analytics team"
 }
 
-# Create a custom role group with explicit organization_id
+# A role group created in an explicit organization.
 resource "anypoint_role" "devops_team" {
   name            = "DevOps Engineers"
   description     = "Role group for DevOps team members"
@@ -38,6 +72,16 @@ resource "anypoint_role" "devops_team" {
 output "api_managers_role_id" {
   description = "ID of the API Managers role group"
   value       = anypoint_role.api_managers.id
+}
+
+output "api_managers_permissions" {
+  description = "Permissions managed on the API Managers role group"
+  value       = anypoint_role.api_managers.permissions
+}
+
+output "api_managers_members" {
+  description = "Members managed on the API Managers role group"
+  value       = anypoint_role.api_managers.members
 }
 
 output "data_analysts_role_id" {

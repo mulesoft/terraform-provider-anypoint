@@ -129,6 +129,10 @@ func TestRoleResource_Read(t *testing.T) {
 	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
 	stateType := schemaResp.Schema.Type().TerraformType(ctx)
 
+	permObjType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"name":           tftypes.String,
+		"context_params": tftypes.Map{ElementType: tftypes.String},
+	}}
 	priorStateRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
 		"id":              tftypes.NewValue(tftypes.String, "test-role-group-id"),
 		"name":            tftypes.NewValue(tftypes.String, "Test Role Group"),
@@ -136,8 +140,11 @@ func TestRoleResource_Read(t *testing.T) {
 		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
 		"editable":        tftypes.NewValue(tftypes.Bool, true),
 		"external_names":  tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, []tftypes.Value{}),
-		"created_at":      tftypes.NewValue(tftypes.String, "2024-01-01T00:00:00Z"),
-		"updated_at":      tftypes.NewValue(tftypes.String, "2024-01-01T00:00:00Z"),
+		// permissions/members null => Read leaves them unmanaged (no reconcile calls).
+		"permissions": tftypes.NewValue(tftypes.Set{ElementType: permObjType}, nil),
+		"members":     tftypes.NewValue(tftypes.Set{ElementType: tftypes.String}, nil),
+		"created_at":  tftypes.NewValue(tftypes.String, "2024-01-01T00:00:00Z"),
+		"updated_at":  tftypes.NewValue(tftypes.String, "2024-01-01T00:00:00Z"),
 	})
 
 	req := resource.ReadRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
@@ -188,6 +195,10 @@ func TestRoleResource_Read_NotFound(t *testing.T) {
 	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
 	stateType := schemaResp.Schema.Type().TerraformType(ctx)
 
+	permObjType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"name":           tftypes.String,
+		"context_params": tftypes.Map{ElementType: tftypes.String},
+	}}
 	priorStateRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
 		"id":              tftypes.NewValue(tftypes.String, "test-role-group-id"),
 		"name":            tftypes.NewValue(tftypes.String, "Test Role Group"),
@@ -195,6 +206,8 @@ func TestRoleResource_Read_NotFound(t *testing.T) {
 		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
 		"editable":        tftypes.NewValue(tftypes.Bool, true),
 		"external_names":  tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, []tftypes.Value{}),
+		"permissions":     tftypes.NewValue(tftypes.Set{ElementType: permObjType}, nil),
+		"members":         tftypes.NewValue(tftypes.Set{ElementType: tftypes.String}, nil),
 		"created_at":      tftypes.NewValue(tftypes.String, ""),
 		"updated_at":      tftypes.NewValue(tftypes.String, ""),
 	})

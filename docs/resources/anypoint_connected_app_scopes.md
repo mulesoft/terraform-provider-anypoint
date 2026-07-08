@@ -2,10 +2,12 @@
 page_title: "anypoint_connected_app_scopes Resource - terraform-provider-anypoint"
 subcategory: "Access Management"
 description: |-
-  Manages scopes for an Anypoint Connected Application using user authentication.
+  DEPRECATED. Manages scopes for an Anypoint Connected Application using user authentication.
 ---
 
 # anypoint_connected_app_scopes (Resource)
+
+!> **Deprecated:** Use the inline `scopes` attribute on the [`anypoint_connected_app`](anypoint_connected_app.md) resource instead, which manages the app and its scopes as a single authoritative resource. This standalone resource will be removed in a future release. **Migration:** move the `scopes = [...]` block into the corresponding `anypoint_connected_app` resource and remove this resource (a follow-up `terraform apply` reconciles the state — no scope changes occur on the platform since the inline attribute is authoritative over the same list).
 
 Manages scopes for an Anypoint Connected Application using user authentication.
 

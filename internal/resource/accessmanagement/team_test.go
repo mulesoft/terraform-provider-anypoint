@@ -2,6 +2,7 @@ package accessmanagement
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -13,6 +14,232 @@ import (
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client/accessmanagement"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
 )
+
+// teamStateType returns the resource's Terraform type for building raw plan/state.
+func teamStateType(t *testing.T, res *TeamResource) tftypes.Type {
+	t.Helper()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(context.Background(), resource.SchemaRequest{}, schemaResp)
+	return schemaResp.Schema.Type().TerraformType(context.Background())
+}
+
+// teamRawValue builds a raw team object with null roles/members (so Update's
+// role/member reconcile is skipped) and the given id/name/type/parent. Pass
+// parentUnknown=true to make parent_team_id unknown (mimicking an Optional+Computed
+// attribute WITHOUT UseStateForUnknown — the exact condition that caused the bug).
+func teamRawValue(stateType tftypes.Type, id, name, teamType, parent string, parentUnknown bool) tftypes.Value {
+	roleObj := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"name":           tftypes.String,
+		"context_params": tftypes.Map{ElementType: tftypes.String},
+	}}
+	memberObj := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"username":        tftypes.String,
+		"membership_type": tftypes.String,
+	}}
+	parentVal := tftypes.NewValue(tftypes.String, parent)
+	if parentUnknown {
+		parentVal = tftypes.NewValue(tftypes.String, tftypes.UnknownValue)
+	}
+	return tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"id":              tftypes.NewValue(tftypes.String, id),
+		"team_name":       tftypes.NewValue(tftypes.String, name),
+		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
+		"parent_team_id":  parentVal,
+		"team_type":       tftypes.NewValue(tftypes.String, teamType),
+		"roles":           tftypes.NewValue(tftypes.Set{ElementType: roleObj}, nil),
+		"members":         tftypes.NewValue(tftypes.Set{ElementType: memberObj}, nil),
+		"created_at":      tftypes.NewValue(tftypes.String, "2024-01-01T00:00:00Z"),
+		"updated_at":      tftypes.NewValue(tftypes.String, "2024-01-01T00:00:00Z"),
+	})
+}
+
+// TestTeamResource_Update_UnknownParentDoesNotMove reproduces the "400 failed to
+// validate against RAML" bug on the UPDATE path: parent_team_id was Optional+Computed
+// WITHOUT UseStateForUnknown, so on any later plan the already-resolved parent went
+// "(known after apply)". Update then saw plan.parent (unknown) != state.parent and
+// fired UpdateTeamParent with an EMPTY parent (unknown.ValueString() == ""), which the
+// platform rejects with a 400. The guard in Update must NOT move the team when the
+// planned parent is unknown. This test fails (unknown -> empty PUT) without the guard.
+func TestTeamResource_Update_UnknownParentDoesNotMove(t *testing.T) {
+	teamID := "team-1"
+	basePath := "/accounts/api/organizations/test-org-id/teams/" + teamID
+	parentCalled := false
+	var sentParent string
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		basePath + "/parent": func(w http.ResponseWriter, r *http.Request) {
+			parentCalled = true
+			var body accessmanagement.UpdateTeamParentRequest
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			sentParent = body.ParentTeamID
+			// Mimic the platform: an empty parent_team_id is a 400 RAML failure.
+			if body.ParentTeamID == "" {
+				testutil.ErrorResponse(w, http.StatusBadRequest, "Request failed to validate against RAML definition")
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		},
+		basePath: func(w http.ResponseWriter, r *http.Request) {
+			// GetTeam readback (Update reads the team when name/type are unchanged).
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"team_id":           teamID,
+				"team_name":         "madhav-manual-test-team",
+				"team_type":         "internal",
+				"org_id":            "test-org-id",
+				"ancestor_team_ids": []string{"root-team-id"},
+				"created_at":        "2024-01-01T00:00:00Z",
+				"updated_at":        "2024-01-02T00:00:00Z",
+			})
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+	res := newTestTeamResource(server.URL)
+
+	ctx := context.Background()
+	stateType := teamStateType(t, res)
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+
+	// State: parent already resolved to the root. Plan: parent UNKNOWN (the bug trigger).
+	stateRaw := teamRawValue(stateType, teamID, "madhav-manual-test-team", "internal", "root-team-id", false)
+	planRaw := teamRawValue(stateType, teamID, "madhav-manual-test-team", "internal", "", true)
+
+	req := resource.UpdateRequest{
+		Plan:  tfsdk.Plan{Schema: schemaResp.Schema, Raw: planRaw},
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: stateRaw},
+	}
+	resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: stateRaw}}
+	res.Update(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("Update() reported errors (bug: unknown parent triggered an empty-parent move): %v", resp.Diagnostics.Errors())
+	}
+	if parentCalled {
+		t.Errorf("UpdateTeamParent was called with %q; it must NOT be called when the planned parent is unknown", sentParent)
+	}
+}
+
+// TestTeamResource_Update_RealParentChangeMoves confirms the guard doesn't over-block:
+// a genuine parent change (known, non-empty, different) still moves the team.
+func TestTeamResource_Update_RealParentChangeMoves(t *testing.T) {
+	teamID := "team-1"
+	basePath := "/accounts/api/organizations/test-org-id/teams/" + teamID
+	parentCalled := false
+	var sentParent string
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		basePath + "/parent": func(w http.ResponseWriter, r *http.Request) {
+			parentCalled = true
+			var body accessmanagement.UpdateTeamParentRequest
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			sentParent = body.ParentTeamID
+			w.WriteHeader(http.StatusOK)
+		},
+		basePath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"team_id":           teamID,
+				"team_name":         "madhav-manual-test-team",
+				"team_type":         "internal",
+				"org_id":            "test-org-id",
+				"ancestor_team_ids": []string{"new-parent-id"},
+				"created_at":        "2024-01-01T00:00:00Z",
+				"updated_at":        "2024-01-02T00:00:00Z",
+			})
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+	res := newTestTeamResource(server.URL)
+
+	ctx := context.Background()
+	stateType := teamStateType(t, res)
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+
+	stateRaw := teamRawValue(stateType, teamID, "madhav-manual-test-team", "internal", "root-team-id", false)
+	planRaw := teamRawValue(stateType, teamID, "madhav-manual-test-team", "internal", "new-parent-id", false)
+
+	req := resource.UpdateRequest{
+		Plan:  tfsdk.Plan{Schema: schemaResp.Schema, Raw: planRaw},
+		State: tfsdk.State{Schema: schemaResp.Schema, Raw: stateRaw},
+	}
+	resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: stateRaw}}
+	res.Update(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("Update() reported errors on a real parent change: %v", resp.Diagnostics.Errors())
+	}
+	if !parentCalled {
+		t.Error("UpdateTeamParent should have been called for a genuine parent change")
+	}
+	if sentParent != "new-parent-id" {
+		t.Errorf("UpdateTeamParent sent parent %q, want %q", sentParent, "new-parent-id")
+	}
+}
+
+func newTestTeamResource(serverURL string) *TeamResource {
+	res := NewTeamResource().(*TeamResource)
+	res.client = &accessmanagement.TeamClient{
+		UserAnypointClient: &client.UserAnypointClient{
+			BaseURL:    serverURL,
+			Token:      "mock-token",
+			HTTPClient: &http.Client{},
+			OrgID:      "test-org-id",
+		},
+	}
+	return res
+}
+
+// TestTeamResource_resolveRootTeamID proves that when parent_team_id is omitted,
+// the provider can find the org's root team (the one with no ancestors) to use as
+// the required parent — the fix for the "400 failed to validate against RAML"
+// error that a missing parent_team_id caused.
+func TestTeamResource_resolveRootTeamID(t *testing.T) {
+	listPath := "/accounts/api/organizations/test-org-id/teams"
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		listPath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"data": []map[string]interface{}{
+					{"team_id": "child-1", "team_name": "Child A", "ancestor_team_ids": []string{"root-team-id"}},
+					{"team_id": "root-team-id", "team_name": "Everyone", "ancestor_team_ids": []string{}},
+					{"team_id": "child-2", "team_name": "Child B", "ancestor_team_ids": []string{"root-team-id", "child-1"}},
+				},
+				"total": 3,
+			})
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+	res := newTestTeamResource(server.URL)
+
+	got, err := res.resolveRootTeamID(context.Background(), "test-org-id")
+	if err != nil {
+		t.Fatalf("resolveRootTeamID() unexpected error: %v", err)
+	}
+	if got != "root-team-id" {
+		t.Errorf("resolveRootTeamID() = %q, want %q (the ancestor-less team)", got, "root-team-id")
+	}
+}
+
+// TestTeamResource_resolveRootTeamID_NoRoot ensures we return a clear error (rather
+// than silently sending an empty parent) if no ancestor-less team exists.
+func TestTeamResource_resolveRootTeamID_NoRoot(t *testing.T) {
+	listPath := "/accounts/api/organizations/test-org-id/teams"
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		listPath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"data": []map[string]interface{}{
+					{"team_id": "child-1", "team_name": "Child A", "ancestor_team_ids": []string{"some-parent"}},
+				},
+				"total": 1,
+			})
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+	res := newTestTeamResource(server.URL)
+
+	if _, err := res.resolveRootTeamID(context.Background(), "test-org-id"); err == nil {
+		t.Error("resolveRootTeamID() expected an error when no root team exists, got nil")
+	}
+}
 
 func TestNewTeamResource(t *testing.T) {
 	r := NewTeamResource()
@@ -37,8 +264,8 @@ func TestTeamResource_Metadata(t *testing.T) {
 func TestTeamResource_Schema(t *testing.T) {
 	res := NewTeamResource()
 
-	requiredAttrs := []string{"team_name", "team_type"}
-	optionalAttrs := []string{"organization_id", "parent_team_id"}
+	requiredAttrs := []string{"team_name"}
+	optionalAttrs := []string{"team_type", "organization_id", "parent_team_id"}
 	computedAttrs := []string{"id", "created_at", "updated_at"}
 
 	testutil.TestResourceSchema(t, res, requiredAttrs, optionalAttrs, computedAttrs)
@@ -135,6 +362,16 @@ func TestTeamResource_Read(t *testing.T) {
 		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
 		"created_at":      tftypes.NewValue(tftypes.String, ""),
 		"updated_at":      tftypes.NewValue(tftypes.String, ""),
+		// roles/members are null (unmanaged) so Read skips reconciliation and no
+		// role/member endpoints need mocking.
+		"roles": tftypes.NewValue(tftypes.Set{ElementType: tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"name":           tftypes.String,
+			"context_params": tftypes.Map{ElementType: tftypes.String},
+		}}}, nil),
+		"members": tftypes.NewValue(tftypes.Set{ElementType: tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"username":        tftypes.String,
+			"membership_type": tftypes.String,
+		}}}, nil),
 	})
 
 	req := resource.ReadRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
@@ -186,6 +423,16 @@ func TestTeamResource_Read_NotFound(t *testing.T) {
 		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
 		"created_at":      tftypes.NewValue(tftypes.String, ""),
 		"updated_at":      tftypes.NewValue(tftypes.String, ""),
+		// roles/members are null (unmanaged) so Read skips reconciliation and no
+		// role/member endpoints need mocking.
+		"roles": tftypes.NewValue(tftypes.Set{ElementType: tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"name":           tftypes.String,
+			"context_params": tftypes.Map{ElementType: tftypes.String},
+		}}}, nil),
+		"members": tftypes.NewValue(tftypes.Set{ElementType: tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+			"username":        tftypes.String,
+			"membership_type": tftypes.String,
+		}}}, nil),
 	})
 
 	req := resource.ReadRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}

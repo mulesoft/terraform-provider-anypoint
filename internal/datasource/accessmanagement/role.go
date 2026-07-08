@@ -21,7 +21,9 @@ var (
 
 // RoleDataSource is the data source implementation.
 type RoleDataSource struct {
-	client *accessmanagement.RoleClient
+	client      *accessmanagement.RoleClient
+	permClient  *accessmanagement.RolePermissionClient
+	usersClient *accessmanagement.RoleUsersClient
 }
 
 // RoleDataSourceModel describes the data source data model.
@@ -32,8 +34,18 @@ type RoleDataSourceModel struct {
 	OrganizationID types.String `tfsdk:"organization_id"`
 	Editable       types.Bool   `tfsdk:"editable"`
 	ExternalNames  types.List   `tfsdk:"external_names"`
+	Permissions    types.List   `tfsdk:"permissions"`
+	Members        types.List   `tfsdk:"members"`
 	CreatedAt      types.String `tfsdk:"created_at"`
 	UpdatedAt      types.String `tfsdk:"updated_at"`
+}
+
+// roleDSPermissionObjectType is the object type for a permission entry in the data source output.
+var roleDSPermissionObjectType = types.ObjectType{
+	AttrTypes: map[string]attr.Type{
+		"name":           types.StringType,
+		"context_params": types.MapType{ElemType: types.StringType},
+	},
 }
 
 func NewRoleDataSource() datasource.DataSource {
@@ -73,6 +85,28 @@ func (d *RoleDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, r
 			},
 			"external_names": schema.ListAttribute{
 				Description: "External group names mapped to this role group.",
+				Computed:    true,
+				ElementType: types.StringType,
+			},
+			"permissions": schema.ListNestedAttribute{
+				Description: "The permissions (role assignments) granted by this role group. Excludes system/internal assignments.",
+				Computed:    true,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"name": schema.StringAttribute{
+							Description: "The permission's display name.",
+							Computed:    true,
+						},
+						"context_params": schema.MapAttribute{
+							Description: "Context parameters for the permission (e.g., org, envId).",
+							Computed:    true,
+							ElementType: types.StringType,
+						},
+					},
+				},
+			},
+			"members": schema.ListAttribute{
+				Description: "The usernames of members in this role group.",
 				Computed:    true,
 				ElementType: types.StringType,
 			},
@@ -123,7 +157,29 @@ func (d *RoleDataSource) Configure(_ context.Context, req datasource.ConfigureRe
 		return
 	}
 
+	permClient, err := accessmanagement.NewRolePermissionClient(userConfig)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to Create Role Permission Client",
+			"An unexpected error occurred when creating the Role Permission client.\n\n"+
+				"Client Error: "+err.Error(),
+		)
+		return
+	}
+
+	usersClient, err := accessmanagement.NewRoleUsersClient(userConfig)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to Create Role Users Client",
+			"An unexpected error occurred when creating the Role Users client.\n\n"+
+				"Client Error: "+err.Error(),
+		)
+		return
+	}
+
 	d.client = roleClient
+	d.permClient = permClient
+	d.usersClient = usersClient
 }
 
 // Read refreshes the Terraform state with the latest data.
@@ -171,6 +227,66 @@ func (d *RoleDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	} else {
 		data.ExternalNames = types.ListValueMust(types.StringType, []attr.Value{})
 	}
+
+	// Populate permissions (excluding internal/system assignments), labeled by display name.
+	assignments, err := d.permClient.ListRoleAssignments(ctx, orgID, roleGroup.ID)
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading role permissions", "Could not list role assignments: "+err.Error())
+		return
+	}
+	roles, err := d.permClient.ListAvailableRoles(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading available roles", "Could not list available roles: "+err.Error())
+		return
+	}
+	roleIDToName := make(map[string]string, len(roles))
+	for _, role := range roles {
+		roleIDToName[role.RoleID] = role.Name
+	}
+	permValues := make([]attr.Value, 0, len(assignments))
+	for _, a := range assignments {
+		if a.Internal {
+			continue
+		}
+		// Skip platform-injected side-effect grants whose role_id is not in the
+		// assignable catalog (e.g. the org-scoped "Business Group Viewer" the platform
+		// auto-adds alongside an env-scoped role). Mirroring the anypoint_role
+		// resource's reconcile, the data source must not surface them — otherwise they
+		// appear with an empty name and produce a perpetual output diff. (Class A.)
+		if _, inCatalog := roleIDToName[a.RoleID]; !inCatalog {
+			continue
+		}
+		cp := types.MapNull(types.StringType)
+		if len(a.ContextParams) > 0 {
+			cpElems := make(map[string]attr.Value, len(a.ContextParams))
+			for k, v := range a.ContextParams {
+				cpElems[k] = types.StringValue(v)
+			}
+			cp = types.MapValueMust(types.StringType, cpElems)
+		}
+		obj, diags := types.ObjectValue(roleDSPermissionObjectType.AttrTypes, map[string]attr.Value{
+			"name":           types.StringValue(roleIDToName[a.RoleID]),
+			"context_params": cp,
+		})
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		permValues = append(permValues, obj)
+	}
+	data.Permissions = types.ListValueMust(roleDSPermissionObjectType, permValues)
+
+	// Populate members (usernames).
+	members, err := d.usersClient.ListRoleGroupUsers(ctx, orgID, roleGroup.ID)
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading role members", "Could not list role group members: "+err.Error())
+		return
+	}
+	memberValues := make([]attr.Value, 0, len(members))
+	for _, u := range members {
+		memberValues = append(memberValues, types.StringValue(u.Username))
+	}
+	data.Members = types.ListValueMust(types.StringType, memberValues)
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)

@@ -64,6 +64,6 @@ output "read_apps_roles" {
 
 Read-Only:
 
-- `role_id` (String) The unique ID of the role. Use this as the role_id in anypoint_role_permission.
-- `name` (String) The human-readable name of the role.
+- `role_id` (String) The unique ID of the role.
+- `name` (String) The human-readable name of the role. Use this value in the `permissions[].name` field of the `anypoint_role` resource (permissions are referenced by name, case-insensitive; the provider resolves the name to a role ID at apply time).
 - `description` (String) A description of what the role grants.

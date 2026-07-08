@@ -125,24 +125,73 @@ func TestRoleDataSource_Read_Direct(t *testing.T) {
 				"updated_at":     "2024-01-01T00:00:00Z",
 			})
 		},
+		// The data source Read always fetches permissions (assignments + catalog) and members.
+		basePath + "/roles": func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"data": []map[string]interface{}{
+					{
+						"role_group_assignment_id": "assign-1",
+						"role_group_id":            "test-role-group-id",
+						"role_id":                  "role-exchange-viewer",
+						"org_id":                   "test-org-id",
+						"name":                     "Exchange Viewer",
+						"internal":                 false,
+						"context_params":           map[string]string{"org": "test-org-id"},
+					},
+					{
+						"role_group_assignment_id": "assign-internal",
+						"role_group_id":            "test-role-group-id",
+						"role_id":                  "role-internal",
+						"org_id":                   "test-org-id",
+						"name":                     "Internal System Role",
+						"internal":                 true,
+						"context_params":           map[string]string{},
+					},
+				},
+				"total": 2,
+			})
+		},
+		"/accounts/api/roles": func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"data": []map[string]interface{}{
+					{"role_id": "role-exchange-viewer", "name": "Exchange Viewer", "internal": false},
+					{"role_id": "role-internal", "name": "Internal System Role", "internal": true},
+				},
+				"total": 2,
+			})
+		},
+		basePath + "/users": func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"data": []map[string]interface{}{
+					{"id": "user-1", "username": "alice"},
+					{"id": "user-2", "username": "bob"},
+				},
+				"total": 2,
+			})
+		},
 	}
 	server := testutil.MockHTTPServer(t, handlers)
 
-	ds := NewRoleDataSource().(*RoleDataSource)
-	ds.client = &accessmanagement.RoleClient{
-		UserAnypointClient: &client.UserAnypointClient{
-			BaseURL:    server.URL,
-			Token:      "mock-token",
-			HTTPClient: &http.Client{},
-			OrgID:      "test-org-id",
-		},
+	userClient := &client.UserAnypointClient{
+		BaseURL:    server.URL,
+		Token:      "mock-token",
+		HTTPClient: &http.Client{},
+		OrgID:      "test-org-id",
 	}
+	ds := NewRoleDataSource().(*RoleDataSource)
+	ds.client = &accessmanagement.RoleClient{UserAnypointClient: userClient}
+	ds.permClient = &accessmanagement.RolePermissionClient{UserAnypointClient: userClient}
+	ds.usersClient = &accessmanagement.RoleUsersClient{UserAnypointClient: userClient}
 
 	ctx := context.Background()
 	schemaResp := &datasource.SchemaResponse{}
 	ds.Schema(ctx, datasource.SchemaRequest{}, schemaResp)
 	stateType := schemaResp.Schema.Type().TerraformType(ctx)
 
+	permObjType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"name":           tftypes.String,
+		"context_params": tftypes.Map{ElementType: tftypes.String},
+	}}
 	configRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
 		"id":              tftypes.NewValue(tftypes.String, "test-role-group-id"),
 		"name":            tftypes.NewValue(tftypes.String, nil),
@@ -150,6 +199,8 @@ func TestRoleDataSource_Read_Direct(t *testing.T) {
 		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
 		"editable":        tftypes.NewValue(tftypes.Bool, nil),
 		"external_names":  tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, nil),
+		"permissions":     tftypes.NewValue(tftypes.List{ElementType: permObjType}, nil),
+		"members":         tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, nil),
 		"created_at":      tftypes.NewValue(tftypes.String, nil),
 		"updated_at":      tftypes.NewValue(tftypes.String, nil),
 	})
@@ -173,6 +224,21 @@ func TestRoleDataSource_Read_Direct(t *testing.T) {
 	}
 	if !got.Editable.ValueBool() {
 		t.Errorf("Expected Editable true, got false")
+	}
+
+	// Permissions: only the non-internal assignment should surface, labeled by display name.
+	if got.Permissions.IsNull() {
+		t.Fatalf("Expected permissions to be populated, got null")
+	}
+	if n := len(got.Permissions.Elements()); n != 1 {
+		t.Errorf("Expected 1 (non-internal) permission, got %d", n)
+	}
+	// Members: both usernames should surface.
+	if got.Members.IsNull() {
+		t.Fatalf("Expected members to be populated, got null")
+	}
+	if n := len(got.Members.Elements()); n != 2 {
+		t.Errorf("Expected 2 members, got %d", n)
 	}
 }
 
@@ -202,6 +268,10 @@ func TestRoleDataSource_Read_Error(t *testing.T) {
 	ds.Schema(ctx, datasource.SchemaRequest{}, schemaResp)
 	stateType := schemaResp.Schema.Type().TerraformType(ctx)
 
+	permObjType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"name":           tftypes.String,
+		"context_params": tftypes.Map{ElementType: tftypes.String},
+	}}
 	configRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
 		"id":              tftypes.NewValue(tftypes.String, "nonexistent-id"),
 		"name":            tftypes.NewValue(tftypes.String, nil),
@@ -209,6 +279,8 @@ func TestRoleDataSource_Read_Error(t *testing.T) {
 		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
 		"editable":        tftypes.NewValue(tftypes.Bool, nil),
 		"external_names":  tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, nil),
+		"permissions":     tftypes.NewValue(tftypes.List{ElementType: permObjType}, nil),
+		"members":         tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, nil),
 		"created_at":      tftypes.NewValue(tftypes.String, nil),
 		"updated_at":      tftypes.NewValue(tftypes.String, nil),
 	})

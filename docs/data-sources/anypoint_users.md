@@ -7,7 +7,7 @@ description: |-
 
 # anypoint_users (Data Source)
 
-Lists users in the organization. Use this to look up user IDs by username or email instead of hardcoding UUIDs in anypoint_role_users resources.
+Lists users in the organization. Use this to discover usernames for the `members` field of the `anypoint_role` and `anypoint_team` resources (members are referenced by username, case-insensitive).
 
 ~> **Note:** This is an Access Management data source and requires the **admin provider** (`anypoint.admin`), which uses admin user credentials along with the `client_id` and `client_secret` of a connected app to authenticate on behalf of the user (`auth_type = "user"`). You must set `provider = anypoint.admin` on this data source. The default provider (connected app credentials only) does not have sufficient privileges for Access Management operations.
 
@@ -70,8 +70,8 @@ output "user_id_by_email" {
 
 Read-Only:
 
-- `id` (String) The unique ID of the user. Use this as the user_id in anypoint_role_users.
-- `username` (String) The username.
+- `id` (String) The unique ID of the user.
+- `username` (String) The username. Use this value in the `members` field of the `anypoint_role` or `anypoint_team` resource.
 - `first_name` (String) The first name.
 - `last_name` (String) The last name.
 - `email` (String) The email address.

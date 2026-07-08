@@ -248,6 +248,135 @@ func TestValidScopesMapConsistency(t *testing.T) {
 	}
 }
 
+func TestResolveScopeIdentifier(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		wantScope string
+		wantFound bool
+	}{
+		{
+			name:      "Valid identifier passes through",
+			input:     "read:exchange",
+			wantScope: "read:exchange",
+			wantFound: true,
+		},
+		{
+			name:      "Display name resolves to identifier",
+			input:     "Exchange Viewer",
+			wantScope: "read:exchange",
+			wantFound: true,
+		},
+		{
+			name:      "CloudHub Admin display name",
+			input:     "CloudHub Admin",
+			wantScope: "admin:cloudhub",
+			wantFound: true,
+		},
+		{
+			name:      "Audit Log Viewer display name",
+			input:     "Audit Log Viewer",
+			wantScope: "read:audit_logs",
+			wantFound: true,
+		},
+		{
+			name:      "Manage Runtime Fabrics display name",
+			input:     "Manage Runtime Fabrics",
+			wantScope: "manage:runtime_fabrics",
+			wantFound: true,
+		},
+		{
+			name:      "Invalid scope returns false",
+			input:     "Not A Real Scope",
+			wantScope: "Not A Real Scope",
+			wantFound: false,
+		},
+		{
+			name:      "Empty string returns false",
+			input:     "",
+			wantScope: "",
+			wantFound: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, found := ResolveScopeIdentifier(tt.input)
+			if got != tt.wantScope {
+				t.Errorf("ResolveScopeIdentifier(%q) scope = %q, want %q", tt.input, got, tt.wantScope)
+			}
+			if found != tt.wantFound {
+				t.Errorf("ResolveScopeIdentifier(%q) found = %v, want %v", tt.input, found, tt.wantFound)
+			}
+		})
+	}
+}
+
+func TestGetDisplayName(t *testing.T) {
+	tests := []struct {
+		name        string
+		scope       string
+		wantDisplay string
+		wantFound   bool
+	}{
+		{
+			name:        "read:exchange returns Exchange Viewer",
+			scope:       "read:exchange",
+			wantDisplay: "Exchange Viewer",
+			wantFound:   true,
+		},
+		{
+			name:        "admin:cloudhub returns CloudHub Admin",
+			scope:       "admin:cloudhub",
+			wantDisplay: "CloudHub Admin",
+			wantFound:   true,
+		},
+		{
+			name:        "invalid scope returns empty",
+			scope:       "invalid:scope",
+			wantDisplay: "",
+			wantFound:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, found := GetDisplayName(tt.scope)
+			if got != tt.wantDisplay {
+				t.Errorf("GetDisplayName(%q) = %q, want %q", tt.scope, got, tt.wantDisplay)
+			}
+			if found != tt.wantFound {
+				t.Errorf("GetDisplayName(%q) found = %v, want %v", tt.scope, found, tt.wantFound)
+			}
+		})
+	}
+}
+
+func TestIsValidScope_AcceptsDisplayNames(t *testing.T) {
+	displayNames := []string{
+		"Exchange Viewer",
+		"CloudHub Admin",
+		"Audit Log Viewer",
+		"Manage Runtime Fabrics",
+		"Generative AI User",
+	}
+
+	for _, dn := range displayNames {
+		if !IsValidScope(dn) {
+			t.Errorf("IsValidScope(%q) = false, want true (display name should be valid)", dn)
+		}
+	}
+}
+
+func TestDisplayNameToScopeMapConsistency(t *testing.T) {
+	// Every display name in the map must resolve to a valid scope identifier
+	for displayName, scope := range DisplayNameToScope {
+		if !ValidScopes[scope] {
+			t.Errorf("DisplayNameToScope[%q] = %q, but %q is not in ValidScopes", displayName, scope, scope)
+		}
+	}
+}
+
 func TestScopeConstants(t *testing.T) {
 	// Test specific scope constant values
 	tests := []struct {

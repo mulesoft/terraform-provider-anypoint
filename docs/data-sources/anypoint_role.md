@@ -2,12 +2,13 @@
 page_title: "anypoint_role Data Source - terraform-provider-anypoint"
 subcategory: "Access Management"
 description: |-
-  Fetches information about an Anypoint Platform role group.
+  Fetches information about an Anypoint Platform role group, including its permissions and members.
 ---
 
 # anypoint_role (Data Source)
 
-Fetches information about a specific Anypoint Platform role group by ID.
+Fetches information about a specific Anypoint Platform role group by ID, including
+its permissions (role assignments) and members.
 
 ~> **Note:** This is an Access Management data source and requires the **admin provider** (`anypoint.admin`), which uses admin user credentials along with the `client_id` and `client_secret` of a connected app to authenticate on behalf of the user (`auth_type = "user"`). You must set `provider = anypoint.admin` on this data source. The default provider (connected app credentials only) does not have sufficient privileges for Access Management operations.
 
@@ -45,6 +46,16 @@ output "role_description" {
 output "is_editable" {
   value = data.anypoint_role.example.editable
 }
+
+# The permissions (role assignments) granted by this role group
+output "role_permissions" {
+  value = data.anypoint_role.example.permissions
+}
+
+# The usernames of the role group's members
+output "role_members" {
+  value = data.anypoint_role.example.members
+}
 ```
 
 ## Schema
@@ -63,5 +74,15 @@ output "is_editable" {
 - `description` (String) A description of the role group.
 - `editable` (Boolean) Whether the role group can be edited.
 - `external_names` (List of String) External group names mapped to this role group.
+- `permissions` (List of Object) The permissions (role assignments) granted by this role group. Excludes system/internal assignments and platform-injected side-effect grants (e.g. the auto-added org-scoped "Business Group Viewer"). See [`permissions`](#nestedatt--permissions) below.
+- `members` (List of String) The usernames of members in this role group.
 - `created_at` (String) The timestamp when the role group was created.
 - `updated_at` (String) The timestamp when the role group was last updated.
+
+<a id="nestedatt--permissions"></a>
+### Nested Schema for `permissions`
+
+Read-Only:
+
+- `name` (String) The permission's display name.
+- `context_params` (Map of String) Context parameters for the permission (e.g., `org`, `envId`).

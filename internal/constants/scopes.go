@@ -305,9 +305,199 @@ var ValidScopes = map[string]bool{
 	ScopeWriteAuditLogSettings: true,
 }
 
-// IsValidScope validates if a given scope name is valid
+// DisplayNameToScope maps human-readable display names to scope identifiers.
+// Users can specify either the display name or the identifier in their Terraform config.
+var DisplayNameToScope = map[string]string{
+	// Admin scopes
+	"Access Controls Admin":              ScopeAdminAccessControls,
+	"ANG Governance Profiles Admin":      ScopeAdminAngGovernanceProfiles,
+	"API Manager Admin":                  ScopeAdminAPIManager,
+	"API Query Admin":                    ScopeAdminAPIQuery,
+	"CloudHub Admin":                     ScopeAdminCloudHub,
+	"Data Exporter Configurations Admin": ScopeAdminDataExporterConfigurations,
+	"Data Exporter Connections Admin":    ScopeAdminDataExporterConnections,
+	"Org Client Provider Clients Admin":  ScopeAdminOrgClientProviderClients,
+	"Org Client Providers Admin":         ScopeAdminOrgClientProviders,
+	"Org Clients Admin":                  ScopeAdminOrgClients,
+	"Partner Manager Admin":              ScopeAdminPartnerManager,
+
+	// Administer scopes
+	"Administer Destinations": ScopeAdministerDestinations,
+
+	// AEH
+	"Anypoint Event Hub Admin": ScopeAEHAdmin,
+
+	// Clear scopes
+	"Clear Destinations": ScopeClearDestinations,
+
+	// Create scopes
+	"Create Applications":        ScopeCreateApplications,
+	"Create Client Applications": ScopeCreateClientApplications,
+	"Design Center Creator":      ScopeCreateDesignCenter,
+	"Create Environment":         ScopeCreateEnvironment,
+	"Exchange Creator":           ScopeCreateExchange,
+	"Exchange GenAI Creator":     ScopeCreateExchangeGenAI,
+	"Generative AI User":         ScopeCreateGenerations,
+	"Create Org Clients":         ScopeCreateOrgClients,
+	"Create Sub Orgs":            ScopeCreateSubOrgs,
+
+	// Delete scopes
+	"Delete Applications": ScopeDeleteApplications,
+
+	// Download scopes
+	"Download Applications": ScopeDownloadApplications,
+
+	// Edit scopes
+	"API Catalog Editor":        ScopeEditAPICatalog,
+	"API Query Editor":          ScopeEditAPIQuery,
+	"Design Center Editor":      ScopeEditDesignCenter,
+	"Edit Environment":          ScopeEditEnvironment,
+	"Flow Designer Editor":      ScopeEditFlowDesigner,
+	"Identity Providers Editor": ScopeEditIdentityProviders,
+	"Monitoring Editor":         ScopeEditMonitoring,
+	"Organization Editor":       ScopeEditOrganization,
+	"Org Invites Editor":        ScopeEditOrgInvites,
+	"Org Users Editor":          ScopeEditOrgUsers,
+	"RPA Editor":                ScopeEditRPA,
+	"Visualizer Editor":         ScopeEditVisualizer,
+
+	// Execute scopes
+	"Execute Document Actions": ScopeExecuteDocumentActions,
+
+	// Manage scopes
+	"Manage Activity":              ScopeManageActivity,
+	"Manage API Alerts":            ScopeManageAPIAlerts,
+	"Manage API Configuration":     ScopeManageAPIConfiguration,
+	"Manage API Contracts":         ScopeManageAPIContracts,
+	"Manage API Groups":            ScopeManageAPIGroups,
+	"Manage API Policies":          ScopeManageAPIPolicies,
+	"Manage API Proxies":           ScopeManageAPIProxies,
+	"Manage API Query":             ScopeManageAPIQuery,
+	"Manage APIs":                  ScopeManageAPIs,
+	"Manage Application Alerts":    ScopeManageApplicationAlerts,
+	"Manage Application Data":      ScopeManageApplicationData,
+	"Manage Application Flows":     ScopeManageApplicationFlows,
+	"Manage Application Queues":    ScopeManageApplicationQueues,
+	"Manage Application Schedules": ScopeManageApplicationSchedules,
+	"Manage Application Settings":  ScopeManageApplicationSettings,
+	"Manage Application Tenants":   ScopeManageApplicationTenants,
+	"Manage Clients":               ScopeManageClients,
+	"Manage CloudHub Networking":   ScopeManageCloudHubNetworking,
+	"Manage Data Gateway":          ScopeManageDataGateway,
+	"Manage Env Client Providers":  ScopeManageEnvClientProviders,
+	"Manage Exchange":              ScopeManageExchange,
+	"Manage Host":                  ScopeManageHost,
+	"Manage Identity Providers":    ScopeManageIdentityProviders,
+	"Manage Partners":              ScopeManagePartners,
+	"Manage Private Spaces":        ScopeManagePrivateSpaces,
+	"Manage Runtime Fabrics":       ScopeManageRuntimeFabrics,
+	"Manage Secret Groups":         ScopeManageSecretGroups,
+	"Manage Secrets":               ScopeManageSecrets,
+	"Manage Servers":               ScopeManageServers,
+	"Manage Store":                 ScopeManageStore,
+	"Manage Store Clients":         ScopeManageStoreClients,
+	"Manage Store Data":            ScopeManageStoreData,
+
+	// Promote scopes
+	"Promote API Query": ScopePromoteAPIQuery,
+
+	// Publish scopes
+	"Publish Destinations": ScopePublishDestinations,
+
+	// Read scopes
+	"Read Activity":                    ScopeReadActivity,
+	"Read API Configuration":           ScopeReadAPIConfiguration,
+	"Read API Contracts":               ScopeReadAPIContracts,
+	"Read API Policies":                ScopeReadAPIPolicies,
+	"Read API Query":                   ScopeReadAPIQuery,
+	"Read Application Alerts":          ScopeReadApplicationAlerts,
+	"Read Applications":                ScopeReadApplications,
+	"Audit Log Viewer":                 ScopeReadAuditLogs,
+	"Read Client Applications":         ScopeReadClientApplications,
+	"Read CloudHub Networking":         ScopeReadCloudHubNetworking,
+	"Read Data Gateway":                ScopeReadDataGateway,
+	"Exchange Viewer":                  ScopeReadExchange,
+	"Read Host Partners":               ScopeReadHostPartners,
+	"Read Org Client Provider Clients": ScopeReadOrgClientProviderClients,
+	"Read Org Client Providers":        ScopeReadOrgClientProviders,
+	"Read Org Clients":                 ScopeReadOrgClients,
+	"Read Org Connected Apps":          ScopeReadOrgConnApps,
+	"Read Org Environments":            ScopeReadOrgEnvironments,
+	"Read Org Invites":                 ScopeReadOrgInvites,
+	"Read Organization":                ScopeReadOrganization,
+	"Read Org Users":                   ScopeReadOrgUsers,
+	"Read Runtime Fabrics":             ScopeReadRuntimeFabrics,
+	"Read Secrets":                     ScopeReadSecrets,
+	"Read Secrets Metadata":            ScopeReadSecretsMetadata,
+	"Read Servers":                     ScopeReadServers,
+	"Read Stats":                       ScopeReadStats,
+	"Read Store":                       ScopeReadStore,
+	"Read Store Clients":               ScopeReadStoreClients,
+	"Read Store Metrics":               ScopeReadStoreMetrics,
+
+	// Restart scopes
+	"Restart Applications": ScopeRestartApplications,
+
+	// Subscribe scopes
+	"Subscribe Destinations": ScopeSubscribeDestinations,
+
+	// View scopes
+	"View Access Controls":         ScopeViewAccessControls,
+	"View ANG Governance Profiles": ScopeViewAngGovernanceProfiles,
+	"View Clients":                 ScopeViewClients,
+	"View Design Center":           ScopeViewDesignCenter,
+	"View Destinations":            ScopeViewDestinations,
+	"View Env Client Providers":    ScopeViewEnvClientProviders,
+	"View Environment":             ScopeViewEnvironment,
+	"View Identity Providers":      ScopeViewIdentityProviders,
+	"View Metering":                ScopeViewMetering,
+	"View Monitoring":              ScopeViewMonitoring,
+
+	// Write scopes
+	"Write Audit Log Settings": ScopeWriteAuditLogSettings,
+}
+
+// scopeToDisplayName is the reverse mapping (identifier → display name), built at init.
+var scopeToDisplayName map[string]string
+
+func init() {
+	scopeToDisplayName = make(map[string]string, len(DisplayNameToScope))
+	for displayName, scope := range DisplayNameToScope {
+		scopeToDisplayName[scope] = displayName
+	}
+}
+
+// IsValidScope validates if a given scope name is valid.
+// Accepts both identifiers (e.g. "read:exchange") and display names (e.g. "Exchange Viewer").
 func IsValidScope(scope string) bool {
-	return ValidScopes[scope]
+	if ValidScopes[scope] {
+		return true
+	}
+	_, ok := DisplayNameToScope[scope]
+	return ok
+}
+
+// ResolveScopeIdentifier resolves a scope value to its identifier.
+// If the input is already a valid identifier, it is returned as-is.
+// If the input is a display name, the corresponding identifier is returned.
+// Returns the identifier and true if resolved, or the original input and false if not found.
+func ResolveScopeIdentifier(scope string) (string, bool) {
+	// Check if it's already a valid identifier
+	if ValidScopes[scope] {
+		return scope, true
+	}
+	// Check if it's a display name
+	if id, ok := DisplayNameToScope[scope]; ok {
+		return id, true
+	}
+	return scope, false
+}
+
+// GetDisplayName returns the display name for a scope identifier.
+// Returns the display name and true if found, or empty string and false if not.
+func GetDisplayName(scope string) (string, bool) {
+	dn, ok := scopeToDisplayName[scope]
+	return dn, ok
 }
 
 // GetAllScopes returns a slice of all valid scope names

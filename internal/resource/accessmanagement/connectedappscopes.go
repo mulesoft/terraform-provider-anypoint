@@ -57,7 +57,13 @@ func (r *ConnectedAppScopesResource) Metadata(_ context.Context, req resource.Me
 // Schema defines the schema for the resource.
 func (r *ConnectedAppScopesResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Manages scopes for an Anypoint Connected Application using user authentication.",
+		Description: "Manages scopes for an Anypoint Connected Application using user authentication. " +
+			"DEPRECATED: use the inline `scopes` attribute on the `anypoint_connected_app` resource instead, " +
+			"which manages the app and its scopes as a single authoritative resource.",
+		DeprecationMessage: "Use the inline `scopes` attribute on the `anypoint_connected_app` resource instead. " +
+			"The standalone `anypoint_connected_app_scopes` resource will be removed in a future release. " +
+			"Migration: move the `scopes = [...]` block into the corresponding `anypoint_connected_app` resource " +
+			"and remove this resource.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Description: "The unique identifier for the connected app scopes (same as connected_app_id).",
@@ -79,8 +85,9 @@ func (r *ConnectedAppScopesResource) Schema(_ context.Context, _ resource.Schema
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"scope": schema.StringAttribute{
-							Description: "The scope name (e.g., 'admin:cloudhub', 'read:applications').",
-							Required:    true,
+							Description: "The scope identifier (e.g., 'read:exchange', 'admin:cloudhub') or display name (e.g., 'Exchange Viewer', 'CloudHub Admin'). " +
+								"Display names are automatically resolved to identifiers. Use the anypoint_scopes_catalog data source to discover available scopes.",
+							Required: true,
 						},
 						"context_params": schema.MapAttribute{
 							Description: "Context parameters for the scope (e.g., organization ID).",
@@ -175,9 +182,12 @@ func (r *ConnectedAppScopesResource) Create(ctx context.Context, req resource.Cr
 	// Set the ID
 	data.ID = data.ConnectedAppID
 
+	// Normalize scopes to identifiers in state (resolve display names)
+	data.Scopes = r.normalizeScopesToIdentifiers(ctx, data.Scopes)
+
 	tflog.Trace(ctx, "created connected app scopes")
 
-	// Save data into Terraform state - use planned values to ensure consistency
+	// Save data into Terraform state with resolved identifiers
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
@@ -256,6 +266,9 @@ func (r *ConnectedAppScopesResource) Update(ctx context.Context, req resource.Up
 			return
 		}
 	}
+
+	// Normalize scopes to identifiers in state
+	planned.Scopes = r.normalizeScopesToIdentifiers(ctx, planned.Scopes)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &planned)...)
 }
@@ -345,7 +358,46 @@ func (r *ConnectedAppScopesResource) updateStateFromAPI(_ context.Context, data 
 	return nil
 }
 
-// convertScopesToAPI is a helper function to convert Terraform scopes to API format
+// normalizeScopesToIdentifiers converts any display names in the scopes set to their
+// identifier form, so the state always stores identifiers consistently.
+func (r *ConnectedAppScopesResource) normalizeScopesToIdentifiers(_ context.Context, scopesSet types.Set) types.Set {
+	scopeElements := scopesSet.Elements()
+	normalizedObjects := make([]attr.Value, 0, len(scopeElements))
+
+	for _, scopeElement := range scopeElements {
+		scopeObj := scopeElement.(types.Object)
+		scopeAttrs := scopeObj.Attributes()
+
+		// Resolve display name to identifier
+		scopeName := scopeAttrs["scope"].(types.String).ValueString()
+		resolvedScope, _ := constants.ResolveScopeIdentifier(scopeName)
+
+		// Build normalized object with resolved identifier
+		normalizedAttrs := map[string]attr.Value{
+			"scope":          types.StringValue(resolvedScope),
+			"context_params": scopeAttrs["context_params"],
+		}
+
+		normalizedObj, _ := types.ObjectValue(map[string]attr.Type{
+			"scope":          types.StringType,
+			"context_params": types.MapType{ElemType: types.StringType},
+		}, normalizedAttrs)
+
+		normalizedObjects = append(normalizedObjects, normalizedObj)
+	}
+
+	normalizedSet, _ := types.SetValue(types.ObjectType{
+		AttrTypes: map[string]attr.Type{
+			"scope":          types.StringType,
+			"context_params": types.MapType{ElemType: types.StringType},
+		},
+	}, normalizedObjects)
+
+	return normalizedSet
+}
+
+// convertScopesToAPI is a helper function to convert Terraform scopes to API format.
+// It resolves display names to scope identifiers automatically.
 func (r *ConnectedAppScopesResource) convertScopesToAPI(_ context.Context, scopesSet types.Set) []accessmanagement.Scope {
 	scopeElements := scopesSet.Elements()
 	apiScopes := make([]accessmanagement.Scope, 0, len(scopeElements))
@@ -353,8 +405,9 @@ func (r *ConnectedAppScopesResource) convertScopesToAPI(_ context.Context, scope
 		scopeObj := scopeElement.(types.Object)
 		scopeAttrs := scopeObj.Attributes()
 
-		// Get scope name
+		// Get scope name — resolve display names to identifiers
 		scopeName := scopeAttrs["scope"].(types.String).ValueString()
+		resolvedScope, _ := constants.ResolveScopeIdentifier(scopeName)
 
 		// Get context params
 		contextParams := make(map[string]interface{})
@@ -367,7 +420,7 @@ func (r *ConnectedAppScopesResource) convertScopesToAPI(_ context.Context, scope
 		}
 
 		apiScopes = append(apiScopes, accessmanagement.Scope{
-			Scope:         scopeName,
+			Scope:         resolvedScope,
 			ContextParams: contextParams,
 		})
 	}
@@ -396,7 +449,8 @@ func scopeDiff(a, b []accessmanagement.Scope) []accessmanagement.Scope {
 	return diff
 }
 
-// validateScopes validates that all scope names are valid Anypoint Platform scopes
+// validateScopes validates that all scope names are valid Anypoint Platform scopes.
+// Accepts both scope identifiers (e.g. "read:exchange") and display names (e.g. "Exchange Viewer").
 func (r *ConnectedAppScopesResource) validateScopes(_ context.Context, scopesSet types.Set) diag.Diagnostics {
 	var diags diag.Diagnostics
 
@@ -409,15 +463,14 @@ func (r *ConnectedAppScopesResource) validateScopes(_ context.Context, scopesSet
 		// Get scope name
 		scopeName := scopeAttrs["scope"].(types.String).ValueString()
 
-		// Validate scope name
+		// Validate — accepts both identifiers and display names
 		if !constants.IsValidScope(scopeName) {
 			diags.AddError(
 				"Invalid Scope Name",
 				fmt.Sprintf("The scope '%s' at index %d is not a valid Anypoint Platform scope. "+
-					"Please check the scope name for typos. Valid scopes include: "+
-					"admin:cloudhub, manage:runtime_fabrics, create:environment, manage:private_spaces, "+
-					"admin:api_manager, read:api_query, edit:api_query, manage:api_query, etc. "+
-					"For a complete list of valid scopes, see the provider documentation.",
+					"You can use either the scope identifier (e.g., 'read:exchange', 'admin:cloudhub') "+
+					"or the display name (e.g., 'Exchange Viewer', 'CloudHub Admin'). "+
+					"Use the anypoint_scopes_catalog data source to discover valid scopes and their display names.",
 					scopeName, i),
 			)
 		}

@@ -603,6 +603,32 @@ func TestTeam_JSONSerialization(t *testing.T) {
 	}
 }
 
+// TestTeam_DirectParentID verifies parent derivation from ancestor_team_ids, which
+// the platform orders root-first / direct-parent-LAST. The 2-level-deep case is the
+// regression guard: indexing [0] there returns the ROOT, which flipped a nested
+// team's parent_team_id and produced "inconsistent result after apply".
+func TestTeam_DirectParentID(t *testing.T) {
+	tests := []struct {
+		name      string
+		ancestors []string
+		want      string
+	}{
+		{"root team (no ancestors)", nil, ""},
+		{"root team (empty slice)", []string{}, ""},
+		{"one level below root -> parent is root", []string{"root-id"}, "root-id"},
+		{"two levels deep -> parent is LAST, not root", []string{"root-id", "parent-id"}, "parent-id"},
+		{"three levels deep -> parent is deepest ancestor", []string{"root-id", "a-id", "b-id"}, "b-id"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			team := &Team{AncestorTeamIDs: tt.ancestors}
+			if got := team.DirectParentID(); got != tt.want {
+				t.Errorf("DirectParentID() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestCreateTeamRequest_JSONSerialization(t *testing.T) {
 	req := &CreateTeamRequest{
 		TeamName:     "Test Team",
