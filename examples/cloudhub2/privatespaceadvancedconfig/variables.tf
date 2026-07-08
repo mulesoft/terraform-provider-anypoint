@@ -25,10 +25,10 @@ variable "private_space_id" {
 
 variable "private_space_id_custom_org" {
   description = "The ID of the private space in a custom organization"
-  type        = string  
+  type        = string
 }
 
 variable "custom_organization_id" {
   description = "Custom organization ID for multi-org scenarios"
-  type        = string  
+  type        = string
 }

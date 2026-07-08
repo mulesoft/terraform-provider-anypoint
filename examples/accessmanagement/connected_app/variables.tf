@@ -37,3 +37,9 @@ variable "org_id" {
   type        = string
   default     = "<org_id>"
 }
+
+variable "env_id" {
+  description = "The environment ID (for environment-scoped scopes)"
+  type        = string
+  default     = "<env_id>"
+}

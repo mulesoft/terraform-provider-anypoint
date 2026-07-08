@@ -28,7 +28,7 @@ type typedScope struct {
 }
 
 // validateAndResolveScopes validates every scope name and returns the resolved API scopes.
-// Accepts identifiers ("read:applications") and display names ("CloudHub Admin"). Rejects
+// Accepts identifiers ("read:applications") and display names ("Cloudhub Organization Admin"). Rejects
 // system scopes (e.g. "profile") — they are platform-managed and undeletable, so listing them
 // would create a perpetual diff. Returns (nil, nil) when the set is null/unknown (unmanaged).
 func validateAndResolveScopes(scopeSet types.Set) ([]accessmanagement.Scope, diag.Diagnostics) {
@@ -56,7 +56,7 @@ func validateAndResolveScopes(scopeSet types.Set) ([]accessmanagement.Scope, dia
 			diags.AddError(
 				"Invalid Scope Name",
 				fmt.Sprintf("The scope %q at index %d is not a valid Anypoint Platform scope. Use either the scope "+
-					"identifier (e.g. 'read:applications') or the display name (e.g. 'CloudHub Admin'). Use the "+
+					"identifier (e.g. 'read:applications') or the display name (e.g. 'Cloudhub Organization Admin'). Use the "+
 					"anypoint_scopes_catalog data source to discover valid scopes.", typed, i),
 			)
 			continue

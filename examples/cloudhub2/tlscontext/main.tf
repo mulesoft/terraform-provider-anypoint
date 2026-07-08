@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     anypoint = {
-      source = "mulesoft/anypoint"
+      source  = "mulesoft/anypoint"
       version = "~> 1.0.0"
     }
   }
@@ -32,26 +32,26 @@ resource "anypoint_tls_context" "pem_example" {
 
   key_filename         = "key.pem"
   certificate_filename = "cert.pem"
-  
+
   # Cipher configuration
   ciphers = {
-    aes128_gcm_sha256                = true
-    aes128_sha256                    = false
-    aes256_gcm_sha384                = false
-    aes256_sha256                    = false
-    dhe_rsa_aes128_sha256            = false
-    dhe_rsa_aes256_gcm_sha384        = false
-    dhe_rsa_aes256_sha256            = false
-    ecdhe_ecdsa_aes128_gcm_sha256    = true
-    ecdhe_ecdsa_aes256_gcm_sha384    = true
-    ecdhe_rsa_aes128_gcm_sha256      = true
-    ecdhe_rsa_aes256_gcm_sha384      = true
-    ecdhe_ecdsa_chacha20_poly1305    = false
-    ecdhe_rsa_chacha20_poly1305      = false
-    dhe_rsa_chacha20_poly1305        = false
-    tls_aes256_gcm_sha384            = true
-    tls_chacha20_poly1305_sha256     = true
-    tls_aes128_gcm_sha256            = true
+    aes128_gcm_sha256             = true
+    aes128_sha256                 = false
+    aes256_gcm_sha384             = false
+    aes256_sha256                 = false
+    dhe_rsa_aes128_sha256         = false
+    dhe_rsa_aes256_gcm_sha384     = false
+    dhe_rsa_aes256_sha256         = false
+    ecdhe_ecdsa_aes128_gcm_sha256 = true
+    ecdhe_ecdsa_aes256_gcm_sha384 = true
+    ecdhe_rsa_aes128_gcm_sha256   = true
+    ecdhe_rsa_aes256_gcm_sha384   = true
+    ecdhe_ecdsa_chacha20_poly1305 = false
+    ecdhe_rsa_chacha20_poly1305   = false
+    dhe_rsa_chacha20_poly1305     = false
+    tls_aes256_gcm_sha384         = true
+    tls_chacha20_poly1305_sha256  = true
+    tls_aes128_gcm_sha256         = true
   }
 }
 
@@ -60,14 +60,14 @@ resource "anypoint_tls_context" "pem_example" {
 #   private_space_id = "beaa792a-7fff-4865-9d36-d7e28ebbc04d"
 #   name             = "example-jks-tls-context"
 #   keystore_type    = "JKS"
-  
+
 #   # JKS-specific configuration
 #   keystore_base64     = "var.jks_keystore_base64"
 #   store_passphrase    = "var.jks_store_passphrase"
 #   key_passphrase      = "var.jks_key_passphrase"
 #   alias               = "var.jks_alias"
 #   keystore_filename   = "keystore.jks"
-  
+
 #   # Cipher configuration (more restrictive)
 #   ciphers = {
 #     aes128_gcm_sha256                = false
@@ -93,11 +93,11 @@ resource "anypoint_tls_context" "pem_example" {
 # Output TLS Context information
 output "pem_tls_context" {
   value = {
-    id           = anypoint_tls_context.pem_example.id
-    name         = anypoint_tls_context.pem_example.name
-    type         = anypoint_tls_context.pem_example.type
-    trust_store  = anypoint_tls_context.pem_example.trust_store
-    key_store    = anypoint_tls_context.pem_example.key_store
+    id          = anypoint_tls_context.pem_example.id
+    name        = anypoint_tls_context.pem_example.name
+    type        = anypoint_tls_context.pem_example.type
+    trust_store = anypoint_tls_context.pem_example.trust_store
+    key_store   = anypoint_tls_context.pem_example.key_store
   }
 }
 

@@ -27,14 +27,25 @@ provider "anypoint" {
   base_url      = var.anypoint_base_url
 }
 
-# Connected app that acts on behalf of a user (OAuth flow)
+# Connected app that acts on behalf of a user (OAuth flow).
+# redirect_uris and client_uri are required for user-behalf apps to be editable in the UI.
 resource "anypoint_connected_app" "oauth_app" {
-  provider     = anypoint.admin
-  client_name  = "My OAuth Application"
-  grant_types  = ["authorization_code"]
+  provider      = anypoint.admin
+  client_name   = "My OAuth Application"
+  grant_types   = ["authorization_code"]
   redirect_uris = ["https://example.com/callback"]
-  audience     = "internal"
-  enabled      = true
+  client_uri    = "https://example.com"
+  audience      = "internal"
+  enabled       = true
+
+  # Scopes on user-behalf apps are stored in the app body (flat field).
+  # The provider handles this transparently — usage is identical to client_credentials.
+  scopes = [
+    {
+      scope          = "Exchange Viewer"
+      context_params = { org = var.org_id }
+    },
+  ]
 }
 
 # Connected app that acts on its own behalf (client credentials)
@@ -46,38 +57,47 @@ resource "anypoint_connected_app" "service_app" {
   enabled     = true
 }
 
-# Connected app with JWT Bearer grant for user impersonation
+# Connected app with JWT Bearer grant for user impersonation.
+# redirect_uris and client_uri are required for user-behalf apps to be editable in the UI.
 resource "anypoint_connected_app" "jwt_app" {
-  provider    = anypoint.admin
-  client_name = "JWT Service App"
-  grant_types = ["urn:ietf:params:oauth:grant-type:jwt-bearer"]
-  public_keys = [
-    file("${path.module}/public_key.pem")
+  provider      = anypoint.admin
+  client_name   = "JWT Service App"
+  grant_types   = ["urn:ietf:params:oauth:grant-type:jwt-bearer"]
+  redirect_uris = ["https://jwt-service.example.com/callback"]
+  client_uri    = "https://jwt-service.example.com"
+  public_keys   = [file("${path.module}/public_key.pem")]
+  audience      = "internal"
+  enabled       = true
+
+  scopes = [
+    {
+      scope          = "Read Applications"
+      context_params = { org = var.org_id, envId = var.env_id }
+    },
   ]
-  audience = "internal"
-  enabled  = true
 }
 
 # Connected app with inline, authoritative scopes (preferred over the
-# deprecated anypoint_connected_app_scopes resource)
+# deprecated anypoint_connected_app_scopes resource).
+# Use the display names you see in the Anypoint UI — discover them with
+# the anypoint_scopes_catalog data source.
 resource "anypoint_connected_app" "with_scopes" {
   provider    = anypoint.admin
   client_name = "Automation App"
   grant_types = ["client_credentials"]
 
   scopes = [
-    # Org-scoped scope (identifier form)
+    # Org-scoped scope (display name as shown in the UI)
     {
-      scope          = "create:generations"
+      scope          = "Mule Developer Generative AI User"
       context_params = { org = var.org_id }
     },
     # Environment-scoped scope (needs envId)
     {
-      scope          = "read:applications"
+      scope          = "Read Applications"
       context_params = { org = var.org_id, envId = var.env_id }
     },
-    # Display-name form — resolved to its identifier automatically,
-    # and preserved as typed in state (no perpetual diff)
+    # Another org-scoped scope
     {
       scope          = "Exchange Viewer"
       context_params = { org = var.org_id }
@@ -96,12 +116,12 @@ resource "anypoint_connected_app" "with_scopes" {
 ### Optional
 
 - `audience` (String) Who can use this application. 'internal' = members of this organization only, 'everyone' = all Anypoint Platform users. Default: 'internal'.
-- `client_uri` (String) Website URL where users can learn more about the app.
+- `client_uri` (String) Website URL where users can learn more about the app. Required for user-behalf apps (`authorization_code`, `password`, `jwt-bearer`) to be editable in the Anypoint UI.
 - `enabled` (Boolean) Whether the connected app is enabled. Default: true.
 - `organization_id` (String) The organization ID. Defaults to the provider's org.
 - `public_keys` (List of String) Public keys for JWT Bearer grant type.
-- `redirect_uris` (List of String) OAuth redirect URIs. Required for 'authorization_code' grant type.
-- `scopes` (Attributes Set) Context-aware scopes assigned to the connected application. **Authoritative when set:** the provider makes the app's scopes match this set exactly — scopes assigned out-of-band are removed on the next apply. Omit the block to leave scopes unmanaged; set it to an empty list (`[]`) to remove all user-assigned scopes. Scopes are orthogonal to grant type (they apply to both `client_credentials` and user-behalf apps). Prefer this over the separate, deprecated `anypoint_connected_app_scopes` resource. (see [below for nested schema](#nestedatt--scopes))
+- `redirect_uris` (List of String) OAuth redirect URIs. Required for user-behalf apps (`authorization_code`, `password`, `jwt-bearer`) to be editable in the Anypoint UI.
+- `scopes` (Attributes Set) Scopes assigned to the connected application. **Authoritative when set:** the provider makes the app's scopes match this set exactly — scopes assigned out-of-band (e.g. via the UI) are removed on the next apply. Omit the block to leave scopes unmanaged; set it to an empty list (`[]`) to remove all user-assigned scopes. Scopes work for all grant types — the provider automatically routes to the correct API endpoint: context-aware `/scopes` subresource for `client_credentials`, or the flat body `scopes` field for user-behalf apps (`authorization_code`, `password`, `jwt-bearer`). Prefer this over the separate, deprecated `anypoint_connected_app_scopes` resource. (see [below for nested schema](#nestedatt--scopes))
 
 ~> **Note:** The platform auto-assigns an undeletable `profile` scope to every connected app. It is managed by the platform, never appears in this set, and must not be listed here — the provider ignores it so that a `plan` immediately after `apply` reports no changes.
 
@@ -118,7 +138,7 @@ resource "anypoint_connected_app" "with_scopes" {
 
 Required:
 
-- `scope` (String) The scope identifier (e.g. `read:applications`, `admin:cloudhub`) or display name (e.g. `CloudHub Admin`). Display names are resolved to identifiers automatically. Use the `anypoint_scopes_catalog` data source to discover available scopes.
+- `scope` (String) The scope display name as shown in the Anypoint UI (e.g. `Read Applications`, `Cloudhub Organization Admin`, `Exchange Viewer`). Discover valid names with the `anypoint_scopes_catalog` data source. Scope identifiers (e.g. `read:applications`) are also accepted for advanced use.
 
 Optional:
 

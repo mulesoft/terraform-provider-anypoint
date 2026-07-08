@@ -101,22 +101,22 @@ resource "anypoint_connected_app_scopes" "app_permissions" {
   connected_app_id = var.anypoint_client_id
 
   scopes = [
-    { scope = "admin:cloudhub",          context_params = { org = anypoint_organization.commerce_bu.id } },
-    { scope = "manage:runtime_fabrics",  context_params = { org = anypoint_organization.commerce_bu.id } },
-    { scope = "manage:cloudhub_networking",   context_params = { org = anypoint_organization.commerce_bu.id } },
-    { scope = "create:environment",          context_params = { org = anypoint_organization.commerce_bu.id } },
-    { scope = "manage:api_groups",       context_params = { org = anypoint_organization.commerce_bu.id} },
-    { scope = "manage:apis",             context_params = { org = anypoint_organization.commerce_bu.id, envId = anypoint_environment.sandbox.id } },
-    { scope = "manage:api_policies",     context_params = { org = anypoint_organization.commerce_bu.id, envId = anypoint_environment.sandbox.id } },
-    { scope = "manage:api_configuration",context_params = { org = anypoint_organization.commerce_bu.id, envId = anypoint_environment.sandbox.id } },
-    { scope = "manage:secret_groups",    context_params = { org = anypoint_organization.commerce_bu.id, envId = anypoint_environment.sandbox.id } },
-    { scope = "manage:secrets",          context_params = { org = anypoint_organization.commerce_bu.id, envId = anypoint_environment.sandbox.id } },
-    { scope = "manage:api_groups",       context_params = { org = anypoint_organization.commerce_bu.id } },
-    { scope = "manage:apis",             context_params = { org = anypoint_organization.commerce_bu.id, envId = anypoint_environment.production.id } },
-    { scope = "manage:api_policies",     context_params = { org = anypoint_organization.commerce_bu.id, envId = anypoint_environment.production.id } },
-    { scope = "manage:api_configuration",context_params = { org = anypoint_organization.commerce_bu.id, envId = anypoint_environment.production.id } },
-    { scope = "manage:secret_groups",    context_params = { org = anypoint_organization.commerce_bu.id, envId = anypoint_environment.sandbox.id } },
-    { scope = "manage:secrets",          context_params = { org = anypoint_organization.commerce_bu.id, envId = anypoint_environment.sandbox.id } },
+    { scope = "admin:cloudhub", context_params = { org = anypoint_organization.commerce_bu.id } },
+    { scope = "manage:runtime_fabrics", context_params = { org = anypoint_organization.commerce_bu.id } },
+    { scope = "manage:cloudhub_networking", context_params = { org = anypoint_organization.commerce_bu.id } },
+    { scope = "create:environment", context_params = { org = anypoint_organization.commerce_bu.id } },
+    { scope = "manage:api_groups", context_params = { org = anypoint_organization.commerce_bu.id } },
+    { scope = "manage:apis", context_params = { org = anypoint_organization.commerce_bu.id, envId = anypoint_environment.sandbox.id } },
+    { scope = "manage:api_policies", context_params = { org = anypoint_organization.commerce_bu.id, envId = anypoint_environment.sandbox.id } },
+    { scope = "manage:api_configuration", context_params = { org = anypoint_organization.commerce_bu.id, envId = anypoint_environment.sandbox.id } },
+    { scope = "manage:secret_groups", context_params = { org = anypoint_organization.commerce_bu.id, envId = anypoint_environment.sandbox.id } },
+    { scope = "manage:secrets", context_params = { org = anypoint_organization.commerce_bu.id, envId = anypoint_environment.sandbox.id } },
+    { scope = "manage:api_groups", context_params = { org = anypoint_organization.commerce_bu.id } },
+    { scope = "manage:apis", context_params = { org = anypoint_organization.commerce_bu.id, envId = anypoint_environment.production.id } },
+    { scope = "manage:api_policies", context_params = { org = anypoint_organization.commerce_bu.id, envId = anypoint_environment.production.id } },
+    { scope = "manage:api_configuration", context_params = { org = anypoint_organization.commerce_bu.id, envId = anypoint_environment.production.id } },
+    { scope = "manage:secret_groups", context_params = { org = anypoint_organization.commerce_bu.id, envId = anypoint_environment.sandbox.id } },
+    { scope = "manage:secrets", context_params = { org = anypoint_organization.commerce_bu.id, envId = anypoint_environment.sandbox.id } },
   ]
 }
 
@@ -141,7 +141,7 @@ resource "anypoint_secret_group" "main" {
   environment_id = var.environment_id
   name           = "commerce-secrets-group"
   downloadable   = false
-  depends_on = [anypoint_private_space_config.private_space]
+  depends_on     = [anypoint_private_space_config.private_space]
 }
 
 resource "anypoint_secret_group_keystore" "tls" {
@@ -152,7 +152,7 @@ resource "anypoint_secret_group_keystore" "tls" {
 
   certificate_base64 = base64encode(file("${path.module}/../certs/cert.pem"))
   key_base64         = base64encode(file("${path.module}/../certs/key.pem"))
-  depends_on = [anypoint_secret_group.main]
+  depends_on         = [anypoint_secret_group.main]
 }
 
 resource "anypoint_secret_group_truststore" "ca" {
@@ -162,7 +162,7 @@ resource "anypoint_secret_group_truststore" "ca" {
   type            = "PEM"
 
   truststore_base64 = base64encode(file("${path.module}/../certs/truststore.pem"))
-  depends_on = [anypoint_secret_group.main]
+  depends_on        = [anypoint_secret_group.main]
 }
 
 resource "anypoint_secret_group_tls_context" "omni" {
@@ -174,14 +174,14 @@ resource "anypoint_secret_group_tls_context" "omni" {
   truststore_id = anypoint_secret_group_truststore.ca.id
 
   alpn_protocols = ["h2", "http/1.1"]
-  depends_on = [anypoint_secret_group_keystore.tls, anypoint_secret_group_truststore.ca]
+  depends_on     = [anypoint_secret_group_keystore.tls, anypoint_secret_group_truststore.ca]
 }
 
 # 2e. Deploy a Managed Omni Gateway into the Private Space
 resource "anypoint_managed_omni_gateway" "commerce-gateway" {
-  environment_id  = var.environment_id
-  name            = "commerce-gateway"
-  target_id       = var.target_id
+  environment_id = var.environment_id
+  name           = "commerce-gateway"
+  target_id      = var.target_id
 
   depends_on = [anypoint_secret_group_tls_context.omni]
 }
@@ -211,7 +211,7 @@ resource "anypoint_api_instance" "orders_api" {
     base_path       = "/orders/v1"
   }
 
-  gateway_id = anypoint_managed_omni_gateway.commerce-gateway.id
+  gateway_id   = anypoint_managed_omni_gateway.commerce-gateway.id
   upstream_uri = "http://orders-api.internal:8080"
 
   depends_on = [anypoint_managed_omni_gateway.commerce-gateway]
@@ -281,9 +281,9 @@ resource "anypoint_api_policy_jwt_validation" "orders_jwt" {
   environment_id  = var.environment_id
   api_instance_id = anypoint_api_instance.orders_api.id
 
-  label           = "jwt-rsa"
-  order           = 1
-  disabled        = true
+  label    = "jwt-rsa"
+  order    = 1
+  disabled = true
 
   configuration = {
     jwt_origin                      = "httpBearerAuthenticationHeader"
@@ -320,7 +320,7 @@ resource "anypoint_api_policy_rate_limiting" "orders_rate_limit" {
 
   configuration = {
     rate_limits = [{
-      maximum_requests = 100
+      maximum_requests            = 100
       time_period_in_milliseconds = 60000
     }]
     expose_headers = true

@@ -41,7 +41,7 @@ resource "anypoint_api_instance" "minimal" {
 
   endpoint = {
     base_path = "minimal"
-  }  
+  }
 }
 
 ###############################################################################
@@ -218,7 +218,7 @@ resource "anypoint_api_instance" "weighted_routing" {
 variable "anypoint_client_id" {
   description = "Anypoint Platform Connected App client ID"
   type        = string
-  default = "<anypoint_connected_app_client_id>"
+  default     = "<anypoint_connected_app_client_id>"
 }
 
 variable "anypoint_client_secret" {

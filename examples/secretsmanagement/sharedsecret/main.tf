@@ -78,9 +78,9 @@ resource "anypoint_secret_group_shared_secret" "s3" {
   name            = "s3-backup-creds"
   type            = "S3Credential"
 
-  access_key_id      = var.aws_access_key
-  secret_access_key  = var.aws_secret_key
-  expiration_date    = "2026-12-31"
+  access_key_id     = var.aws_access_key
+  secret_access_key = var.aws_secret_key
+  expiration_date   = "2026-12-31"
 }
 
 variable "aws_access_key" {

@@ -36,6 +36,7 @@ type ConnectedApp struct {
 	GrantTypes                   []string `json:"grant_types"`
 	RedirectURIs                 []string `json:"redirect_uris"`
 	PublicKeys                   []string `json:"public_keys"`
+	Scopes                       []string `json:"scopes"`
 	Audience                     string   `json:"audience"`
 	ClientURI                    string   `json:"client_uri"`
 	Enabled                      bool     `json:"enabled"`
@@ -55,24 +56,31 @@ type ConnectedApp struct {
 
 // CreateConnectedAppRequest represents the request body to create a connected app.
 // Note: redirect_uris MUST always be present (even as []) — the API's RAML validation rejects requests without it.
-// Scopes are NOT set here: the create-body `scopes` field is a context-UNAWARE array of strings, a different
-// concept from the context-aware scopes subresource (`/connectedApplications/{id}/scopes`). Context-aware scopes
-// are managed separately (see ConnectedAppScopesClient) AFTER the app is created.
+//
+// Scopes handling depends on grant type (per RAML spec):
+//   - client_credentials: scopes are managed via the context-aware subresource
+//     (/connectedApplications/{id}/scopes) AFTER creation — see ConnectedAppScopesClient.
+//   - user-behalf (authorization_code, password, jwt-bearer): scopes are set in the body as a
+//     flat string array. The context-aware subresource is NOT used for these grant types.
 type CreateConnectedAppRequest struct {
 	ClientName   string   `json:"client_name"`
 	GrantTypes   []string `json:"grant_types"`
 	RedirectURIs []string `json:"redirect_uris"`
 	PublicKeys   []string `json:"public_keys"`
+	Scopes       []string `json:"scopes,omitempty"`
 	Audience     string   `json:"audience,omitempty"`
 	ClientURI    string   `json:"client_uri,omitempty"`
 }
 
 // UpdateConnectedAppRequest represents the request body to update a connected app.
+// For user-behalf apps (authorization_code, password, jwt-bearer), the Scopes field
+// is used to set/update the flat scopes list on the app body (per RAML spec).
 type UpdateConnectedAppRequest struct {
 	ClientName   *string  `json:"client_name,omitempty"`
 	GrantTypes   []string `json:"grant_types,omitempty"`
 	RedirectURIs []string `json:"redirect_uris,omitempty"`
 	PublicKeys   []string `json:"public_keys,omitempty"`
+	Scopes       []string `json:"scopes,omitempty"`
 	Audience     *string  `json:"audience,omitempty"`
 	ClientURI    *string  `json:"client_uri,omitempty"`
 	Enabled      *bool    `json:"enabled,omitempty"`

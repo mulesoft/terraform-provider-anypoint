@@ -31,7 +31,7 @@ func TestValidateAndResolveScopes_ResolvesIdentifiersAndDisplayNames(t *testing.
 		params map[string]attr.Value
 	}{
 		{scope: "read:applications", params: map[string]attr.Value{"org": types.StringValue("o1")}},
-		{scope: "CloudHub Admin", params: map[string]attr.Value{"org": types.StringValue("o1")}}, // display name
+		{scope: "Cloudhub Organization Admin", params: map[string]attr.Value{"org": types.StringValue("o1")}}, // display name
 	})
 
 	got, diags := validateAndResolveScopes(set)
@@ -49,7 +49,7 @@ func TestValidateAndResolveScopes_ResolvesIdentifiersAndDisplayNames(t *testing.
 		t.Errorf("identifier read:applications missing: %+v", got)
 	}
 	if !byScope["admin:cloudhub"] {
-		t.Errorf("display name 'CloudHub Admin' not resolved to admin:cloudhub: %+v", got)
+		t.Errorf("display name 'Cloudhub Organization Admin' not resolved to admin:cloudhub: %+v", got)
 	}
 }
 
@@ -103,7 +103,7 @@ func newTestScopesResource(t *testing.T, server string) *ConnectedAppResource {
 //  2. a matched scope keeps the user's typed representation (display name) instead of the resolved
 //     identifier the API returns.
 func TestReconcileScopesIntoState_SkipsProfileAndPreservesTyped(t *testing.T) {
-	// API returns: profile (system), admin:cloudhub (matches typed "CloudHub Admin"),
+	// API returns: profile (system), admin:cloudhub (matches typed "Cloudhub Organization Admin"),
 	// and read:applications (not in typed source -> emitted as identifier).
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 		"/accounts/api/connectedApplications/app-1/scopes": func(w http.ResponseWriter, r *http.Request) {
@@ -120,12 +120,12 @@ func TestReconcileScopesIntoState_SkipsProfileAndPreservesTyped(t *testing.T) {
 	server := testutil.MockHTTPServer(t, handlers)
 	r := newTestScopesResource(t, server.URL)
 
-	// Typed source: user wrote the display name "CloudHub Admin".
+	// Typed source: user wrote the display name "Cloudhub Organization Admin".
 	typed := makeScopeSet(t, []struct {
 		scope  string
 		params map[string]attr.Value
 	}{
-		{scope: "CloudHub Admin", params: map[string]attr.Value{"org": types.StringValue("o1")}},
+		{scope: "Cloudhub Organization Admin", params: map[string]attr.Value{"org": types.StringValue("o1")}},
 	})
 
 	got, diags := r.reconcileScopesIntoState(context.Background(), "app-1", typed)
@@ -145,8 +145,8 @@ func TestReconcileScopesIntoState_SkipsProfileAndPreservesTyped(t *testing.T) {
 	if names["profile"] {
 		t.Errorf("system scope 'profile' must not appear in state")
 	}
-	if !names["CloudHub Admin"] {
-		t.Errorf("typed display name 'CloudHub Admin' should be preserved, got %v", names)
+	if !names["Cloudhub Organization Admin"] {
+		t.Errorf("typed display name 'Cloudhub Organization Admin' should be preserved, got %v", names)
 	}
 	if !names["read:applications"] {
 		t.Errorf("unmatched API scope should be emitted as identifier, got %v", names)
