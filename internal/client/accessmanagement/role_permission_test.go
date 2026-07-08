@@ -3,14 +3,101 @@ package accessmanagement
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
 )
+
+// paginatedRoleAssignmentsHandler returns an http handler that serves `total`
+// synthetic role assignments across pages, honoring the limit/offset query
+// params. Like the real accounts API, it defaults to a SMALL page size (25)
+// when the client omits limit — so a non-paginating client is truncated to 25
+// and the test fails. `hits` counts requests so tests can assert that
+// pagination actually issued multiple round-trips.
+func paginatedRoleAssignmentsHandler(total int, hits *int) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		*hits++
+		q := r.URL.Query()
+		limit := 25 // server default when the client omits limit
+		if v := q.Get("limit"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				limit = n
+			}
+		}
+		offset := 0
+		if v := q.Get("offset"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				offset = n
+			}
+		}
+
+		page := make([]RoleAssignment, 0, limit)
+		for i := offset; i < offset+limit && i < total; i++ {
+			page = append(page, RoleAssignment{
+				RoleID:        fmt.Sprintf("role-%d", i),
+				Name:          fmt.Sprintf("Role %d", i),
+				ContextParams: map[string]string{"org": "test-org"},
+			})
+		}
+		testutil.JSONResponse(w, http.StatusOK, ListRoleAssignmentsResponse{Data: page, Total: total})
+	}
+}
+
+// TestRolePermissionClient_ListRoleAssignments_Paginates proves that a role
+// group with more than one page of assignments is fully returned. total (250)
+// is deliberately larger than the client's page size (limit=100) so the offset
+// loop MUST fire several times. Regression test for the truncation bug: before
+// ListRoleAssignments paginated it issued a single GET with no limit, so the
+// server defaulted to a 25-item page and silently dropped the rest — corrupting
+// the authoritative reconcile (perpetual diff for assignments past the first
+// page, and inability to remove them since they were invisible). The handler
+// below reproduces that default, so any regression that stops passing limit
+// (→ 25 returned) or stops looping (→ 100 returned) fails the count assertion.
+func TestRolePermissionClient_ListRoleAssignments_Paginates(t *testing.T) {
+	const total = 250
+	hits := 0
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		"/accounts/api/organizations/test-org/rolegroups/test-rg/roles": paginatedRoleAssignmentsHandler(total, &hits),
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	c := &RolePermissionClient{
+		UserAnypointClient: &client.UserAnypointClient{
+			BaseURL:    server.URL,
+			Token:      "mock-token",
+			HTTPClient: &http.Client{},
+			OrgID:      "test-org",
+		},
+	}
+
+	assignments, err := c.ListRoleAssignments(context.Background(), "test-org", "test-rg")
+	if err != nil {
+		t.Fatalf("ListRoleAssignments() unexpected error = %v", err)
+	}
+	if len(assignments) != total {
+		t.Fatalf("ListRoleAssignments() returned %d assignments, want %d (pagination truncated the result)", len(assignments), total)
+	}
+	if hits < 2 {
+		t.Errorf("expected pagination to issue >=2 requests, got %d", hits)
+	}
+	// Verify no duplicates and the last-page item is present.
+	seen := map[string]bool{}
+	for _, a := range assignments {
+		if seen[a.RoleID] {
+			t.Errorf("duplicate role_id across pages: %s", a.RoleID)
+		}
+		seen[a.RoleID] = true
+	}
+	if !seen[fmt.Sprintf("role-%d", total-1)] {
+		t.Errorf("last-page assignment role-%d missing from result", total-1)
+	}
+}
 
 func TestNewRolePermissionClient(t *testing.T) {
 	server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())

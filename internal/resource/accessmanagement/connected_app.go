@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -32,7 +33,8 @@ var (
 
 // ConnectedAppResource is the resource implementation.
 type ConnectedAppResource struct {
-	client *accessmanagement.ConnectedAppClient
+	client       *accessmanagement.ConnectedAppClient
+	scopesClient *accessmanagement.ConnectedAppScopesClient
 }
 
 // ConnectedAppResourceModel describes the resource data model.
@@ -50,6 +52,25 @@ type ConnectedAppResourceModel struct {
 	OwnerUserID    types.String `tfsdk:"owner_user_id"`
 	CreatedAt      types.String `tfsdk:"created_at"`
 	UpdatedAt      types.String `tfsdk:"updated_at"`
+	Scopes         types.Set    `tfsdk:"scopes"`
+}
+
+// connectedAppScopeObjectType is the object type of a single element in the inline `scopes` set.
+var connectedAppScopeObjectType = types.ObjectType{
+	AttrTypes: map[string]attr.Type{
+		"scope":          types.StringType,
+		"context_params": types.MapType{ElemType: types.StringType},
+	},
+}
+
+// systemConnectedAppScopes are scopes the platform auto-injects on every connected app and that
+// cannot be removed (verified on devx 2026-07-07). They are never user-manageable, so the
+// reconcile filters them out of state and validation rejects them if listed explicitly. Keeping
+// them out of state is what makes the authoritative `scopes` attribute idempotent — otherwise the
+// injected "profile" scope would show up as a perpetual diff (same class of bug as the team
+// "Business Group Viewer" side-effect).
+var systemConnectedAppScopes = map[string]bool{
+	"profile": true,
 }
 
 func NewConnectedAppResource() resource.Resource {
@@ -161,6 +182,33 @@ func (r *ConnectedAppResource) Schema(_ context.Context, _ resource.SchemaReques
 				Description: "When the connected app was last updated.",
 				Computed:    true,
 			},
+			"scopes": schema.SetNestedAttribute{
+				Description: "Context-aware scopes assigned to the connected application. AUTHORITATIVE when set: " +
+					"the provider makes the app's scopes match this set exactly (extra scopes assigned out-of-band " +
+					"are removed on the next apply). Omit the block entirely to leave scopes unmanaged; set it to an " +
+					"empty list ([]) to remove all user-assigned scopes. The platform auto-assigns an undeletable " +
+					"'profile' scope to every app — it is managed by the platform, never appears in this set, and " +
+					"must not be listed here. Scopes are orthogonal to grant type (they apply to both " +
+					"client_credentials and user-behalf apps). Prefer this over the separate " +
+					"anypoint_connected_app_scopes resource, which is deprecated.",
+				Optional: true,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"scope": schema.StringAttribute{
+							Description: "The scope identifier (e.g., 'read:applications', 'admin:cloudhub') or display " +
+								"name (e.g., 'CloudHub Admin'). Display names are resolved to identifiers automatically. " +
+								"Use the anypoint_scopes_catalog data source to discover available scopes.",
+							Required: true,
+						},
+						"context_params": schema.MapAttribute{
+							Description: "Context parameters for the scope. Always include 'org'; add 'envId' for " +
+								"environment-scoped scopes.",
+							Optional:    true,
+							ElementType: types.StringType,
+						},
+					},
+				},
+			},
 		},
 	}
 }
@@ -198,7 +246,17 @@ func (r *ConnectedAppResource) Configure(_ context.Context, req resource.Configu
 		return
 	}
 
+	scopesClient, err := accessmanagement.NewConnectedAppScopesClient(userConfig)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to Create Connected App Scopes Client",
+			"Client Error: "+err.Error(),
+		)
+		return
+	}
+
 	r.client = appClient
+	r.scopesClient = scopesClient
 }
 
 // Create creates a connected app.
@@ -280,6 +338,16 @@ func (r *ConnectedAppResource) Create(ctx context.Context, req resource.CreateRe
 	// Always set client_uri to avoid "unknown after apply" errors
 	plan.ClientURI = types.StringValue(app.ClientURI)
 
+	// Apply inline scopes (authoritative) if the block is set. Null => unmanaged, leave as-is.
+	// `scopes` is Optional (not Computed), so state MUST equal config exactly after apply —
+	// plan.Scopes is stored verbatim (which also preserves the user's typed display names/casing).
+	if !plan.Scopes.IsNull() && !plan.Scopes.IsUnknown() {
+		if diags := r.applyScopes(ctx, app.ClientID, plan.Scopes); diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+	}
+
 	tflog.Trace(ctx, "created connected app", map[string]interface{}{
 		"client_id":   app.ClientID,
 		"client_name": app.ClientName,
@@ -328,6 +396,17 @@ func (r *ConnectedAppResource) Read(ctx context.Context, req resource.ReadReques
 	r.setListsFromAPI(ctx, &state, app, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	// Reconcile scopes only when they are being managed (state.Scopes non-null). If the block was
+	// never set, leave it null (unmanaged) so we don't surface scopes the user didn't ask to track.
+	if !state.Scopes.IsNull() {
+		reconciled, diags := r.reconcileScopesIntoState(ctx, state.ID.ValueString(), state.Scopes)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		state.Scopes = reconciled
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -425,6 +504,16 @@ func (r *ConnectedAppResource) Update(ctx context.Context, req resource.UpdateRe
 	r.setListsFromAPI(ctx, &plan, app, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	// Reconcile scopes when the plan differs from state. Null plan => stop managing scopes (leave
+	// whatever is live untouched). Non-null => apply authoritatively. `scopes` is Optional (not
+	// Computed) so state is stored verbatim from the plan (preserving the user's typed form).
+	if !plan.Scopes.Equal(state.Scopes) && !plan.Scopes.IsNull() && !plan.Scopes.IsUnknown() {
+		if diags := r.applyScopes(ctx, state.ID.ValueString(), plan.Scopes); diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)

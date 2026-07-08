@@ -4,12 +4,96 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
 )
+
+// paginatedRolesHandler returns an http handler that serves `total` synthetic
+// assignments across pages, honoring the limit/offset query params. It mimics
+// the real accounts API behavior of defaulting to a SMALL page size (25) when
+// the client omits limit — so a non-paginating client is truncated to 25 and
+// the test fails. `hits` is incremented once per request so tests can assert
+// that pagination actually issued multiple round-trips.
+func paginatedTeamRolesHandler(total int, hits *int) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		*hits++
+		q := r.URL.Query()
+		limit := 25 // server default when the client omits limit
+		if v := q.Get("limit"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				limit = n
+			}
+		}
+		offset := 0
+		if v := q.Get("offset"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				offset = n
+			}
+		}
+
+		page := make([]TeamRoleAssignment, 0, limit)
+		for i := offset; i < offset+limit && i < total; i++ {
+			page = append(page, TeamRoleAssignment{
+				RoleID:        fmt.Sprintf("role-%d", i),
+				Name:          fmt.Sprintf("Role %d", i),
+				ContextParams: map[string]string{"org": "test-org-id"},
+			})
+		}
+		testutil.JSONResponse(w, http.StatusOK, ListTeamRolesResponse{Data: page, Total: total})
+	}
+}
+
+// TestTeamRolesClient_ListTeamRoles_Paginates proves that a team with more than
+// one page of role assignments is fully returned. total (250) is deliberately
+// larger than the client's page size (limit=100) so the offset loop MUST fire
+// several times. Regression test for the truncation bug: before ListTeamRoles
+// paginated it issued a single GET with no limit, so the server defaulted to a
+// 25-item page and silently dropped the rest — corrupting the authoritative
+// reconcile. The handler below reproduces that default, so any regression that
+// stops passing limit (→ 25 returned) or stops looping (→ 100 returned) fails
+// the count assertion.
+func TestTeamRolesClient_ListTeamRoles_Paginates(t *testing.T) {
+	const total = 250
+	hits := 0
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		"/accounts/api/organizations/test-org-id/teams/test-team-id/roles": paginatedTeamRolesHandler(total, &hits),
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	c := &TeamRolesClient{
+		UserAnypointClient: &client.UserAnypointClient{
+			BaseURL:    server.URL,
+			Token:      "mock-token",
+			HTTPClient: &http.Client{},
+		},
+	}
+
+	roles, err := c.ListTeamRoles(context.Background(), "test-org-id", "test-team-id")
+	if err != nil {
+		t.Fatalf("ListTeamRoles() unexpected error = %v", err)
+	}
+	if len(roles) != total {
+		t.Fatalf("ListTeamRoles() returned %d roles, want %d (pagination truncated the result)", len(roles), total)
+	}
+	if hits < 2 {
+		t.Errorf("expected pagination to issue >=2 requests, got %d", hits)
+	}
+	// Verify no duplicates and the last-page item is present.
+	seen := map[string]bool{}
+	for _, a := range roles {
+		if seen[a.RoleID] {
+			t.Errorf("duplicate role_id across pages: %s", a.RoleID)
+		}
+		seen[a.RoleID] = true
+	}
+	if !seen[fmt.Sprintf("role-%d", total-1)] {
+		t.Errorf("last-page assignment role-%d missing from result", total-1)
+	}
+}
 
 func TestNewTeamRolesClient(t *testing.T) {
 	tests := []struct {

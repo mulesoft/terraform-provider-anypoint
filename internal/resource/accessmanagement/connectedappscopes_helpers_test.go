@@ -115,6 +115,201 @@ func TestConnectedAppScopesResource_convertScopesToAPI(t *testing.T) {
 	})
 }
 
+// --- convertScopesToAPI with display names ---
+
+func TestConnectedAppScopesResource_convertScopesToAPI_DisplayNames(t *testing.T) {
+	r := &ConnectedAppScopesResource{}
+	ctx := context.Background()
+
+	t.Run("display name is resolved to identifier", func(t *testing.T) {
+		set := makeScopeSet(t, []struct {
+			scope  string
+			params map[string]attr.Value
+		}{
+			{"Exchange Viewer", map[string]attr.Value{"org": types.StringValue("org-1")}},
+		})
+		result := r.convertScopesToAPI(ctx, set)
+		if len(result) != 1 {
+			t.Fatalf("convertScopesToAPI() len = %d, want 1", len(result))
+		}
+		if result[0].Scope != "read:exchange" {
+			t.Errorf("Scope = %q, want read:exchange (resolved from display name)", result[0].Scope)
+		}
+	})
+
+	t.Run("multiple display names are resolved", func(t *testing.T) {
+		set := makeScopeSet(t, []struct {
+			scope  string
+			params map[string]attr.Value
+		}{
+			{"CloudHub Admin", map[string]attr.Value{"org": types.StringValue("org-1")}},
+			{"Audit Log Viewer", map[string]attr.Value{"org": types.StringValue("org-1")}},
+			{"Manage Runtime Fabrics", map[string]attr.Value{"org": types.StringValue("org-1")}},
+		})
+		result := r.convertScopesToAPI(ctx, set)
+		if len(result) != 3 {
+			t.Fatalf("convertScopesToAPI() len = %d, want 3", len(result))
+		}
+		// Check each resolved correctly (order in set is not guaranteed, check by content)
+		found := map[string]bool{}
+		for _, s := range result {
+			found[s.Scope] = true
+		}
+		expectedScopes := []string{"admin:cloudhub", "read:audit_logs", "manage:runtime_fabrics"}
+		for _, expected := range expectedScopes {
+			if !found[expected] {
+				t.Errorf("Expected resolved scope %q not found in result", expected)
+			}
+		}
+	})
+
+	t.Run("mix of identifiers and display names", func(t *testing.T) {
+		set := makeScopeSet(t, []struct {
+			scope  string
+			params map[string]attr.Value
+		}{
+			{"read:exchange", map[string]attr.Value{"org": types.StringValue("org-1")}},
+			{"CloudHub Admin", map[string]attr.Value{"org": types.StringValue("org-1")}},
+		})
+		result := r.convertScopesToAPI(ctx, set)
+		if len(result) != 2 {
+			t.Fatalf("convertScopesToAPI() len = %d, want 2", len(result))
+		}
+		found := map[string]bool{}
+		for _, s := range result {
+			found[s.Scope] = true
+		}
+		if !found["read:exchange"] {
+			t.Error("Expected read:exchange in result")
+		}
+		if !found["admin:cloudhub"] {
+			t.Error("Expected admin:cloudhub (resolved from CloudHub Admin) in result")
+		}
+	})
+
+	t.Run("identifier passthrough when already valid", func(t *testing.T) {
+		set := makeScopeSet(t, []struct {
+			scope  string
+			params map[string]attr.Value
+		}{
+			{"admin:cloudhub", nil},
+		})
+		result := r.convertScopesToAPI(ctx, set)
+		if len(result) != 1 {
+			t.Fatalf("convertScopesToAPI() len = %d, want 1", len(result))
+		}
+		if result[0].Scope != "admin:cloudhub" {
+			t.Errorf("Scope = %q, want admin:cloudhub (passthrough)", result[0].Scope)
+		}
+	})
+}
+
+// --- normalizeScopesToIdentifiers ---
+
+func TestConnectedAppScopesResource_normalizeScopesToIdentifiers(t *testing.T) {
+	r := &ConnectedAppScopesResource{}
+	ctx := context.Background()
+
+	t.Run("display names are normalized to identifiers", func(t *testing.T) {
+		set := makeScopeSet(t, []struct {
+			scope  string
+			params map[string]attr.Value
+		}{
+			{"Exchange Viewer", map[string]attr.Value{"org": types.StringValue("org-1")}},
+			{"Audit Log Viewer", map[string]attr.Value{"org": types.StringValue("org-1")}},
+		})
+
+		normalized := r.normalizeScopesToIdentifiers(ctx, set)
+		elements := normalized.Elements()
+		if len(elements) != 2 {
+			t.Fatalf("normalized len = %d, want 2", len(elements))
+		}
+
+		// Extract scope values from the normalized set
+		found := map[string]bool{}
+		for _, elem := range elements {
+			obj := elem.(types.Object)
+			scopeVal := obj.Attributes()["scope"].(types.String).ValueString()
+			found[scopeVal] = true
+		}
+		if !found["read:exchange"] {
+			t.Error("Expected read:exchange in normalized set")
+		}
+		if !found["read:audit_logs"] {
+			t.Error("Expected read:audit_logs in normalized set")
+		}
+	})
+
+	t.Run("identifiers pass through unchanged", func(t *testing.T) {
+		set := makeScopeSet(t, []struct {
+			scope  string
+			params map[string]attr.Value
+		}{
+			{"read:exchange", map[string]attr.Value{"org": types.StringValue("org-1")}},
+		})
+
+		normalized := r.normalizeScopesToIdentifiers(ctx, set)
+		elements := normalized.Elements()
+		if len(elements) != 1 {
+			t.Fatalf("normalized len = %d, want 1", len(elements))
+		}
+		obj := elements[0].(types.Object)
+		scopeVal := obj.Attributes()["scope"].(types.String).ValueString()
+		if scopeVal != "read:exchange" {
+			t.Errorf("Scope = %q, want read:exchange", scopeVal)
+		}
+	})
+}
+
+// --- validateScopes with display names ---
+
+func TestConnectedAppScopesResource_validateScopes_DisplayNames(t *testing.T) {
+	r := &ConnectedAppScopesResource{}
+	ctx := context.Background()
+
+	t.Run("display names are valid", func(t *testing.T) {
+		set := makeScopeSet(t, []struct {
+			scope  string
+			params map[string]attr.Value
+		}{
+			{"Exchange Viewer", map[string]attr.Value{"org": types.StringValue("org-1")}},
+			{"CloudHub Admin", map[string]attr.Value{"org": types.StringValue("org-1")}},
+			{"Audit Log Viewer", map[string]attr.Value{"org": types.StringValue("org-1")}},
+		})
+		diags := r.validateScopes(ctx, set)
+		if diags.HasError() {
+			t.Errorf("validateScopes() should accept display names, got errors: %v", diags.Errors())
+		}
+	})
+
+	t.Run("invalid display name is rejected", func(t *testing.T) {
+		set := makeScopeSet(t, []struct {
+			scope  string
+			params map[string]attr.Value
+		}{
+			{"Not A Real Scope Name", map[string]attr.Value{"org": types.StringValue("org-1")}},
+		})
+		diags := r.validateScopes(ctx, set)
+		if !diags.HasError() {
+			t.Error("validateScopes() should reject invalid display names")
+		}
+	})
+
+	t.Run("mix of identifiers and display names is valid", func(t *testing.T) {
+		set := makeScopeSet(t, []struct {
+			scope  string
+			params map[string]attr.Value
+		}{
+			{"read:exchange", map[string]attr.Value{"org": types.StringValue("org-1")}},
+			{"CloudHub Admin", map[string]attr.Value{"org": types.StringValue("org-1")}},
+		})
+		diags := r.validateScopes(ctx, set)
+		if diags.HasError() {
+			t.Errorf("validateScopes() should accept mix of identifiers and display names, got: %v", diags.Errors())
+		}
+	})
+}
+
 // --- updateStateFromAPI ---
 
 func TestConnectedAppScopesResource_updateStateFromAPI(t *testing.T) {

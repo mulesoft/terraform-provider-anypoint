@@ -2,12 +2,17 @@
 page_title: "anypoint_role Resource - terraform-provider-anypoint"
 subcategory: "Access Management"
 description: |-
-  Manages an Anypoint Platform role group (custom or default).
+  Manages an Anypoint Platform role group (custom or default), including its inline permissions and members.
 ---
 
 # anypoint_role (Resource)
 
 Manages an Anypoint Platform role group (custom or default). Requires Organization Administrator privileges.
+
+This single resource also manages the role group's **permissions** (role
+assignments) and **members** inline. You do not need separate resources for those
+— assign permissions by their UI display name and add members by username,
+directly on this resource.
 
 ~> **Note:** This is an Access Management resource and requires the **admin provider** (`anypoint.admin`), which uses admin user credentials along with the `client_id` and `client_secret` of a connected app to authenticate on behalf of the user (`auth_type = "user"`). You must set `provider = anypoint.admin` on this resource. The default provider (connected app credentials only) does not have sufficient privileges for Access Management operations.
 
@@ -30,9 +35,55 @@ provider "anypoint" {
 resource "anypoint_role" "example" {
   provider    = anypoint.admin
   name        = "API Developers"
-  description = "Role group for API development team"
+  description = "Role group for the API development team"
+
+  # Inline permissions (role assignments). Each permission is referenced by its
+  # UI display name (case-insensitive); the provider resolves the name to a role
+  # ID at apply time. Use the anypoint_available_roles data source to discover
+  # valid names. When set, this list is authoritative — permissions not listed
+  # here are removed on apply.
+  permissions = [
+    {
+      # Organization-scoped permission (context_params carries only the org).
+      name = "Exchange Viewer"
+      context_params = {
+        org = var.organization_id
+      }
+    },
+    {
+      # Environment-scoped permission (also carries envId). Some permissions can
+      # only be applied to Sandbox/Production environments.
+      name = "Read Applications"
+      context_params = {
+        org   = var.organization_id
+        envId = var.environment_id
+      }
+    },
+  ]
+
+  # Inline members, referenced by username (case-insensitive). When set, this
+  # list is authoritative — members not listed here are removed on apply. Use the
+  # anypoint_users data source to discover usernames.
+  members = [
+    "jdoe",
+    "asmith",
+  ]
 }
 ```
+
+Omit `permissions` (or `members`) entirely to leave that aspect **unmanaged** —
+the provider will not read, add, or remove permissions (or members) it is not
+told to manage. Supplying an empty list (`permissions = []`) is different: it
+declares that the role group should have **no** managed permissions and removes
+any that exist.
+
+-> **Platform side-effect grants:** When you assign an environment-scoped
+permission, the platform may auto-add an organization-scoped "Business Group
+Viewer" grant so the grantee can navigate to the business group. That grant is
+not part of the assignable catalog and cannot be expressed in configuration; the
+provider deliberately ignores it (it is never surfaced in state and never
+removed), so it does not cause a perpetual diff. System (internal) assignments
+are likewise never modified.
 
 ## Schema
 
@@ -42,8 +93,10 @@ resource "anypoint_role" "example" {
 
 ### Optional
 
-- `description` (String) A description of the role group.
+- `description` (String) A description of the role group. This attribute is Optional and Computed: if you omit it, the server-resolved value is retained (an omitted `description` is **not** wiped when you change another field such as `name`).
 - `organization_id` (String) The organization ID where the role group will be created. If not specified, uses the organization from provider credentials.
+- `permissions` (Attributes Set) The set of permissions granted by this role group. When set, this list is authoritative: permissions not listed here are removed on apply. Omit the attribute entirely to leave permissions unmanaged. System (internal) assignments are never modified. (see [below for nested schema](#nestedatt--permissions))
+- `members` (Set of String) The set of usernames that are members of this role group. When set, this list is authoritative: members not listed here are removed on apply. Omit the attribute entirely to leave membership unmanaged. Usernames are case-insensitive; use the `anypoint_users` data source to discover usernames.
 
 ### Read-Only
 
@@ -53,9 +106,22 @@ resource "anypoint_role" "example" {
 - `id` (String) The unique identifier for the role group.
 - `updated_at` (String) The timestamp when the role group was last updated.
 
+<a id="nestedatt--permissions"></a>
+### Nested Schema for `permissions`
+
+Required:
+
+- `name` (String) The permission's display name as shown in the Anypoint UI (e.g., `Exchange Viewer`). Case-insensitive. Use the `anypoint_available_roles` data source to discover valid names.
+
+Optional:
+
+- `context_params` (Map of String) Context parameters for the permission. Typically includes `org` (organization ID) and, for environment-scoped permissions, `envId`.
+
 ## Import
 
-An existing role group can be imported using its role group ID (UUID).
+An existing role group can be imported using its role group ID (UUID). After a
+passthrough import, the `permissions` and `members` sets are populated on the
+first `terraform plan`/`apply` that reconciles them against your configuration.
 
 ### Using an import block (Terraform ≥ 1.5 — recommended)
 

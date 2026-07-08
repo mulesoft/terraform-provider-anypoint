@@ -33,7 +33,13 @@ variable "anypoint_base_url" {
 }
 
 variable "org_id" {
-  description = "The organization ID"
+  description = "The organization ID (used as the 'org' context param on permissions)"
   type        = string
   default     = "<org_id>"
+}
+
+variable "env_id" {
+  description = "The environment ID for environment-scoped permissions (the 'envId' context param)"
+  type        = string
+  default     = "<env_id>"
 }

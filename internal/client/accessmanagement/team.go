@@ -37,6 +37,22 @@ type Team struct {
 	UpdatedAt       string   `json:"updated_at"`
 }
 
+// DirectParentID returns the team's immediate parent team ID, or "" for the root
+// team (which has no ancestors).
+//
+// The platform orders ancestor_team_ids from the ROOT down to the DIRECT PARENT —
+// i.e. root first, direct parent LAST. For a team nested as root > A > B, team B's
+// ancestor_team_ids is ["<root>", "<A>"], so the direct parent is the last element,
+// NOT the first. (Indexing [0] returns the root, which is only coincidentally the
+// direct parent for teams sitting one level below root — the reason this was missed
+// until the first 2-level-deep team was created.)
+func (t *Team) DirectParentID() string {
+	if len(t.AncestorTeamIDs) == 0 {
+		return ""
+	}
+	return t.AncestorTeamIDs[len(t.AncestorTeamIDs)-1]
+}
+
 // CreateTeamRequest represents the request to create a team
 type CreateTeamRequest struct {
 	TeamName     string `json:"team_name"`

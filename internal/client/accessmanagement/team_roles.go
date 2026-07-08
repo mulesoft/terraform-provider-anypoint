@@ -165,39 +165,61 @@ func (c *TeamRolesClient) UnassignTeamRole(ctx context.Context, orgID, teamID st
 	return nil
 }
 
-// ListTeamRoles lists all roles assigned to a team.
+// ListTeamRoles lists all roles assigned to a team, following pagination.
 // API: GET /accounts/api/organizations/{orgId}/teams/{teamId}/roles
+//
+// The accounts API enforces a default page size (25) when limit is omitted, so
+// this MUST paginate: a team with more than one page of role assignments would
+// otherwise be silently truncated, corrupting the authoritative reconcile
+// (perpetual diff for roles past the first page, and inability to remove them
+// since they're invisible). Mirrors the pagination in ListTeamMembers.
 func (c *TeamRolesClient) ListTeamRoles(ctx context.Context, orgID, teamID string) ([]TeamRoleAssignment, error) {
-	url := fmt.Sprintf("%s/accounts/api/organizations/%s/teams/%s/roles", c.BaseURL, orgID, teamID)
+	var allAssignments []TeamRoleAssignment
+	limit := 100
+	offset := 0
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+	for {
+		url := fmt.Sprintf("%s/accounts/api/organizations/%s/teams/%s/roles?limit=%d&offset=%d", c.BaseURL, orgID, teamID, limit, offset)
+
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+
+		req.Header.Set("Authorization", "Bearer "+c.Token)
+
+		resp, err := c.HTTPClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to send request: %w", err)
+		}
+
+		if resp.StatusCode == http.StatusNotFound {
+			_ = resp.Body.Close()
+			return nil, client.NewNotFoundError("team")
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			return nil, fmt.Errorf("failed to list team roles with status %d: %s", resp.StatusCode, string(body))
+		}
+
+		var listResp ListTeamRolesResponse
+		if err := json.NewDecoder(resp.Body).Decode(&listResp); err != nil {
+			_ = resp.Body.Close()
+			return nil, fmt.Errorf("failed to decode response: %w", err)
+		}
+		_ = resp.Body.Close()
+
+		allAssignments = append(allAssignments, listResp.Data...)
+
+		if len(listResp.Data) < limit || len(allAssignments) >= listResp.Total {
+			break
+		}
+		offset += limit
 	}
 
-	req.Header.Set("Authorization", "Bearer "+c.Token)
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, client.NewNotFoundError("team")
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to list team roles with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var listResp ListTeamRolesResponse
-	if err := json.NewDecoder(resp.Body).Decode(&listResp); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return listResp.Data, nil
+	return allAssignments, nil
 }
 
 // GetTeamRoleAssignment retrieves a specific role assignment by listing all
