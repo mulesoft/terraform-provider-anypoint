@@ -243,7 +243,25 @@ type ListTeamsResponse struct {
 
 // ListTeams lists all teams in the organization with pagination.
 // API: GET /accounts/api/organizations/{orgId}/teams
+// Results are cached per-apply per org: the team list is used for root-team
+// resolution and parent_team lookups, and does not change within a run.
 func (c *TeamClient) ListTeams(ctx context.Context, orgID string) ([]TeamListItem, error) {
+	cacheKey := "teams:" + orgID
+
+	if c.Cache != nil {
+		v, err := c.Cache.GetOrFetch(cacheKey, func() (interface{}, error) {
+			return c.listTeamsFromAPI(ctx, orgID)
+		})
+		if err != nil {
+			return nil, err
+		}
+		return v.([]TeamListItem), nil
+	}
+	return c.listTeamsFromAPI(ctx, orgID)
+}
+
+// listTeamsFromAPI performs the actual paginated API call.
+func (c *TeamClient) listTeamsFromAPI(ctx context.Context, orgID string) ([]TeamListItem, error) {
 	var allTeams []TeamListItem
 	limit := 100
 	offset := 0

@@ -29,9 +29,9 @@ provider "anypoint" {
 
 resource "anypoint_team" "example" {
   provider  = anypoint.admin
-  team_name = "Development Team"
+  name      = "Development Team"
   team_type = "internal"
-  # parent_team_id is optional — omit to create under the org root team
+  # parent_team is optional — omit to create under the org root team
 
   # Inline role assignments. Roles are referenced by their UI display name
   # (case-insensitive); the provider resolves each name to a role ID at apply time.
@@ -58,10 +58,10 @@ resource "anypoint_team" "example" {
 }
 
 resource "anypoint_team" "sub_team" {
-  provider       = anypoint.admin
-  team_name      = "Frontend Team"
-  parent_team_id = anypoint_team.example.id
-  team_type      = "internal"
+  provider    = anypoint.admin
+  name        = "Frontend Team"
+  parent_team = anypoint_team.example.name
+  team_type   = "internal"
 }
 ```
 
@@ -69,12 +69,12 @@ resource "anypoint_team" "sub_team" {
 
 ### Required
 
-- `team_name` (String) The name of the team.
+- `name` (String) The name of the team.
 
 ### Optional
 
 - `organization_id` (String) The organization ID where the team will be created. If not provided, the organization ID will be inferred from the connected app credentials.
-- `parent_team_id` (String) The ID of the parent team. If not specified, the provider looks up the organization's root team (the team with no ancestors) and uses it as the parent — mirroring the Anypoint UI, which defaults the parent to the root team. The platform API requires a parent, so this value is always populated in state after apply.
+- `parent_team` (String, Optional) The name of the parent team. The provider resolves it to an ID automatically (case-insensitive). If omitted, the org's root team is used as the parent — mirroring the Anypoint UI default.
 - `team_type` (String) The type of the team. Optional; defaults to `internal` — the same default the Anypoint UI applies (its Create Team dialog only asks for a name and parent, and sends `team_type: "internal"` behind the scenes). Changing the type requires the target type to be enabled in the organization.
 - `members` (Attributes Set) The set of members of this team. When set, this list is authoritative: members not listed here are removed on apply. Omit the attribute entirely to leave membership unmanaged. Members assigned via external groups (SAML/SCIM) are never modified. (see [below for nested schema](#nestedatt--members))
 - `roles` (Attributes Set) The set of roles (permissions) assigned to this team. When set, this list is authoritative: roles not listed here are removed on apply. Omit the attribute entirely to leave role assignments unmanaged. System (internal) assignments are never modified. (see [below for nested schema](#nestedatt--roles))
@@ -90,7 +90,7 @@ resource "anypoint_team" "sub_team" {
 
 Required:
 
-- `name` (String) The role's display name as shown in the Anypoint UI (e.g., `Exchange Viewer`). Case-insensitive. Use the `anypoint_available_roles` data source to discover valid names.
+- `name` (String) The role's display name as shown in the Anypoint UI (e.g., `Exchange Viewer`). Case-insensitive. Use the `anypoint_available_permissions` data source to discover valid names.
 
 Optional:
 
@@ -123,7 +123,7 @@ import {
 resource "anypoint_team" "imported" {
   provider        = anypoint.admin
   organization_id = "<organization_id>"
-  team_name       = "<team_name>"
+  name            = "<team_name>"
   team_type       = "internal"
 }
 ```

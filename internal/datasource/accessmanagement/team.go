@@ -32,7 +32,7 @@ type TeamDataSource struct {
 type TeamDataSourceModel struct {
 	ID             types.String `tfsdk:"id"`
 	Name           types.String `tfsdk:"name"`
-	ParentTeamID   types.String `tfsdk:"parent_team_id"`
+	ParentTeam     types.String `tfsdk:"parent_team"`
 	TeamType       types.String `tfsdk:"team_type"`
 	OrganizationID types.String `tfsdk:"organization_id"`
 	Roles          types.List   `tfsdk:"roles"`
@@ -80,8 +80,8 @@ func (d *TeamDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, r
 				Description: "The name of the team.",
 				Computed:    true,
 			},
-			"parent_team_id": schema.StringAttribute{
-				Description: "The parent team ID.",
+			"parent_team": schema.StringAttribute{
+				Description: "The name of the parent team (reverse-resolved from its ID). Null for root teams.",
 				Computed:    true,
 			},
 			"team_type": schema.StringAttribute{
@@ -261,9 +261,18 @@ func (d *TeamDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	// parent is the last element (see Team.DirectParentID). [0] would surface the
 	// ROOT for any team more than one level deep.
 	if parent := team.DirectParentID(); parent != "" {
-		data.ParentTeamID = types.StringValue(parent)
+		// Reverse-resolve the parent team ID to its name.
+		parentTeam, err := d.client.GetTeam(ctx, orgID, parent)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error resolving parent team name",
+				"Could not read parent team "+parent+": "+err.Error(),
+			)
+			return
+		}
+		data.ParentTeam = types.StringValue(parentTeam.TeamName)
 	} else {
-		data.ParentTeamID = types.StringNull()
+		data.ParentTeam = types.StringNull()
 	}
 
 	// Populate roles (excluding internal/system assignments), labeled by display name.

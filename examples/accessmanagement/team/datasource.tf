@@ -30,6 +30,6 @@ output "existing_team_updated_at" {
   value = data.anypoint_team.existing_team.updated_at
 }
 
-output "existing_team_parent_team_id" {
-  value = data.anypoint_team.existing_team.parent_team_id
+output "existing_team_parent_team" {
+  value = data.anypoint_team.existing_team.parent_team
 }

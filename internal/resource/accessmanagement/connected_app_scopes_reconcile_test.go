@@ -97,14 +97,16 @@ func newTestScopesResource(t *testing.T, server string) *ConnectedAppResource {
 	return &ConnectedAppResource{scopesClient: sc}
 }
 
-// TestReconcileScopesIntoState_SkipsProfileAndPreservesTyped verifies the two behaviors that keep
+// TestReconcileScopesIntoState_SkipsProfileAndPreservesTyped verifies the three behaviors that keep
 // the inline scopes attribute idempotent:
-//  1. the platform-injected "profile" scope is dropped from state (never surfaced), and
+//  1. the platform-injected "profile" scope is dropped from state (never surfaced),
 //  2. a matched scope keeps the user's typed representation (display name) instead of the resolved
-//     identifier the API returns.
+//     identifier the API returns, and
+//  3. an unmatched scope (not in typed source) is reverse-resolved to its display name so that
+//     post-import state matches what users write in config.
 func TestReconcileScopesIntoState_SkipsProfileAndPreservesTyped(t *testing.T) {
 	// API returns: profile (system), admin:cloudhub (matches typed "Cloudhub Organization Admin"),
-	// and read:applications (not in typed source -> emitted as identifier).
+	// and read:applications (not in typed source -> reverse-resolved to "Read Applications").
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 		"/accounts/api/connectedApplications/app-1/scopes": func(w http.ResponseWriter, r *http.Request) {
 			testutil.JSONResponse(w, http.StatusOK, accessmgmt.ConnectedAppScopes{
@@ -148,8 +150,9 @@ func TestReconcileScopesIntoState_SkipsProfileAndPreservesTyped(t *testing.T) {
 	if !names["Cloudhub Organization Admin"] {
 		t.Errorf("typed display name 'Cloudhub Organization Admin' should be preserved, got %v", names)
 	}
-	if !names["read:applications"] {
-		t.Errorf("unmatched API scope should be emitted as identifier, got %v", names)
+	// Unmatched scope is reverse-resolved to display name for import compatibility.
+	if !names["Read Applications"] {
+		t.Errorf("unmatched API scope should be reverse-resolved to display name 'Read Applications', got %v", names)
 	}
 }
 

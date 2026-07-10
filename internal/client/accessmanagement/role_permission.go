@@ -263,7 +263,25 @@ type ListAvailableRolesResponse struct {
 
 // ListAvailableRoles returns all roles (permissions) available for assignment.
 // It paginates through results to fetch the complete catalog.
+// Results are cached per-apply: the available-roles catalog does not change within
+// a single terraform run, so N resources calling this get ONE API round-trip.
 func (c *RolePermissionClient) ListAvailableRoles(ctx context.Context) ([]AvailableRole, error) {
+	const cacheKey = "available_roles"
+
+	if c.Cache != nil {
+		v, err := c.Cache.GetOrFetch(cacheKey, func() (interface{}, error) {
+			return c.listAvailableRolesFromAPI(ctx)
+		})
+		if err != nil {
+			return nil, err
+		}
+		return v.([]AvailableRole), nil
+	}
+	return c.listAvailableRolesFromAPI(ctx)
+}
+
+// listAvailableRolesFromAPI performs the actual paginated API call.
+func (c *RolePermissionClient) listAvailableRolesFromAPI(ctx context.Context) ([]AvailableRole, error) {
 	var allRoles []AvailableRole
 	limit := 100
 	offset := 0

@@ -31,7 +31,7 @@ provider "anypoint" {
 # redirect_uris and client_uri are required for user-behalf apps to be editable in the UI.
 resource "anypoint_connected_app" "oauth_app" {
   provider      = anypoint.admin
-  client_name   = "My OAuth Application"
+  name          = "My OAuth Application"
   grant_types   = ["authorization_code"]
   redirect_uris = ["https://example.com/callback"]
   client_uri    = "https://example.com"
@@ -51,7 +51,7 @@ resource "anypoint_connected_app" "oauth_app" {
 # Connected app that acts on its own behalf (client credentials)
 resource "anypoint_connected_app" "service_app" {
   provider    = anypoint.admin
-  client_name = "Backend Service"
+  name        = "Backend Service"
   grant_types = ["client_credentials"]
   audience    = "internal"
   enabled     = true
@@ -61,7 +61,7 @@ resource "anypoint_connected_app" "service_app" {
 # redirect_uris and client_uri are required for user-behalf apps to be editable in the UI.
 resource "anypoint_connected_app" "jwt_app" {
   provider      = anypoint.admin
-  client_name   = "JWT Service App"
+  name          = "JWT Service App"
   grant_types   = ["urn:ietf:params:oauth:grant-type:jwt-bearer"]
   redirect_uris = ["https://jwt-service.example.com/callback"]
   client_uri    = "https://jwt-service.example.com"
@@ -80,10 +80,10 @@ resource "anypoint_connected_app" "jwt_app" {
 # Connected app with inline, authoritative scopes (preferred over the
 # deprecated anypoint_connected_app_scopes resource).
 # Use the display names you see in the Anypoint UI — discover them with
-# the anypoint_scopes_catalog data source.
+# the anypoint_available_scopes data source.
 resource "anypoint_connected_app" "with_scopes" {
   provider    = anypoint.admin
-  client_name = "Automation App"
+  name        = "Automation App"
   grant_types = ["client_credentials"]
 
   scopes = [
@@ -110,7 +110,7 @@ resource "anypoint_connected_app" "with_scopes" {
 
 ### Required
 
-- `client_name` (String) The name of the connected app.
+- `name` (String) The name of the connected app.
 - `grant_types` (List of String) The OAuth grant types. Valid values: 'authorization_code', 'password', 'urn:ietf:params:oauth:grant-type:jwt-bearer' (for apps on behalf of a user), or 'client_credentials' (for apps on their own behalf).
 
 ### Optional
@@ -138,7 +138,7 @@ resource "anypoint_connected_app" "with_scopes" {
 
 Required:
 
-- `scope` (String) The scope display name as shown in the Anypoint UI (e.g. `Read Applications`, `Cloudhub Organization Admin`, `Exchange Viewer`). Discover valid names with the `anypoint_scopes_catalog` data source. Scope identifiers (e.g. `read:applications`) are also accepted for advanced use.
+- `scope` (String) The scope display name as shown in the Anypoint UI (e.g. `Read Applications`, `Cloudhub Organization Admin`, `Exchange Viewer`). Discover valid names with the `anypoint_available_scopes` data source. Scope identifiers (e.g. `read:applications`) are also accepted for advanced use.
 
 Optional:
 
@@ -162,7 +162,7 @@ import {
 
 resource "anypoint_connected_app" "imported" {
   provider    = anypoint.admin
-  client_name = "<client_name>"
+  name        = "<client_name>"
   grant_types = ["client_credentials"]
 }
 ```

@@ -215,7 +215,7 @@ func TestIntegrationTeamResource_InterfaceCompliance(t *testing.T) {
 	}
 
 	// Verify required attributes exist
-	requiredAttrs := []string{"team_name", "team_type"}
+	requiredAttrs := []string{"name", "team_type"}
 	for _, attr := range requiredAttrs {
 		if _, exists := schemaResp.Schema.Attributes[attr]; !exists {
 			t.Errorf("Schema missing required attribute: %s", attr)

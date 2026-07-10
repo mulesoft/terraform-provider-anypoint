@@ -21,12 +21,16 @@ type UserAnypointClient struct {
 	HTTPClient   *http.Client
 	Token        string
 	OrgID        string
+	Cache        *ResponseCache
 }
 
 // UserClientConfig represents the configuration for the UserAnypointClient.
 // Token and OrgID are populated on the first NewUserAnypointClient call and
 // reused by all subsequent calls within the same terraform apply.
 // mu guards Token and OrgID against concurrent writes.
+// Cache provides per-apply response caching for expensive lookup calls
+// (ListAvailableRoles, ListOrgUsers, ListTeams) so that N resources sharing
+// this config do not each fire redundant API calls for the same catalog data.
 type UserClientConfig struct {
 	BaseURL      string
 	ClientID     string
@@ -37,6 +41,7 @@ type UserClientConfig struct {
 	mu           sync.Mutex
 	Token        string
 	OrgID        string
+	Cache        *ResponseCache
 }
 
 // NewUserAnypointClient creates a new User-based Anypoint API client using password grant
@@ -78,6 +83,13 @@ func NewUserAnypointClient(config *UserClientConfig) (*UserAnypointClient, error
 		timeout = time.Duration(config.Timeout) * time.Second
 	}
 
+	// Ensure cache is initialized (nil-safe for tests that don't set it)
+	cache := config.Cache
+	if cache == nil {
+		cache = NewResponseCache()
+		config.Cache = cache
+	}
+
 	c := &UserAnypointClient{
 		BaseURL:      baseURL,
 		ClientID:     config.ClientID,
@@ -87,6 +99,7 @@ func NewUserAnypointClient(config *UserClientConfig) (*UserAnypointClient, error
 		HTTPClient: &http.Client{
 			Timeout: timeout,
 		},
+		Cache: cache,
 	}
 
 	config.mu.Lock()

@@ -39,7 +39,7 @@ resource "anypoint_role" "example" {
 
   # Inline permissions (role assignments). Each permission is referenced by its
   # UI display name (case-insensitive); the provider resolves the name to a role
-  # ID at apply time. Use the anypoint_available_roles data source to discover
+  # ID at apply time. Use the anypoint_available_permissions data source to discover
   # valid names. When set, this list is authoritative — permissions not listed
   # here are removed on apply.
   permissions = [
@@ -111,7 +111,7 @@ are likewise never modified.
 
 Required:
 
-- `name` (String) The permission's display name as shown in the Anypoint UI (e.g., `Exchange Viewer`). Case-insensitive. Use the `anypoint_available_roles` data source to discover valid names.
+- `name` (String) The permission's display name as shown in the Anypoint UI (e.g., `Exchange Viewer`). Case-insensitive. Use the `anypoint_available_permissions` data source to discover valid names.
 
 Optional:
 

@@ -16,18 +16,14 @@ provider "anypoint" {
   base_url      = var.anypoint_base_url
 }
 
-# Create a QA team (top-level)
+# Create a QA team (top-level, under org root — parent_team omitted)
 resource "anypoint_team" "qa" {
-  team_name      = "QA Team"
-  parent_team_id = var.parent_team_id
-  team_type      = "internal"
+  name = "QA Team"
 }
 
-# # Create a development team (top-level) with inline roles + members.
+# Create a development team (top-level) with inline roles + members.
 resource "anypoint_team" "development" {
-  team_name      = "Development Team With Child teams"
-  parent_team_id = var.parent_team_id
-  team_type      = "internal"
+  name = "Development Team With Child teams"
 
   # Roles are referenced by their UI display name (case-insensitive); the provider
   # resolves each to a role ID at apply time. Omit `roles` entirely to leave role
@@ -61,32 +57,26 @@ data "anypoint_team" "development" {
   organization_id = var.org_id
 }
 
-# Create a development team with no child teams(top-level)
+# Create a development team with no child teams (top-level)
 resource "anypoint_team" "development_without_child_teams" {
-  team_name      = "Development Team With No Child teams changed"
-  parent_team_id = var.parent_team_id
-  team_type      = "internal"
+  name = "Development Team With No Child teams changed"
 }
 
-# # Create a sub-team under development
+# Create a sub-team under development (parent resolved by name)
 resource "anypoint_team" "frontend" {
-  team_name      = "Frontend Team"
-  parent_team_id = anypoint_team.development.id
-  team_type      = "internal"
+  name        = "Frontend Team"
+  parent_team = anypoint_team.development.name
 }
 
-# Create a sub-team under development
+# Create a sub-team under development_without_child_teams
 resource "anypoint_team" "backend" {
-  team_name      = "Backend Team"
-  parent_team_id = anypoint_team.development_without_child_teams.id
-  team_type      = "internal"
+  name        = "Backend Team"
+  parent_team = anypoint_team.development_without_child_teams.name
 }
 
 # Create an operations team (top-level)
 resource "anypoint_team" "operations" {
-  team_name      = "Operations Team"
-  parent_team_id = var.parent_team_id
-  team_type      = "internal"
+  name = "Operations Team"
 }
 
 output "development_team_id" {

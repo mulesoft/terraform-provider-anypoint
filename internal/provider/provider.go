@@ -194,6 +194,7 @@ func (p *AnypointProvider) Configure(ctx context.Context, req provider.Configure
 		Password:     stringValueOrEnv(config.Password, "ANYPOINT_PASSWORD"),
 		BaseURL:      stringValueOrEnv(config.BaseURL, "ANYPOINT_BASE_URL"),
 		Timeout:      int(config.Timeout.ValueInt64()),
+		Cache:        client.NewResponseCache(),
 	}
 
 	resp.DataSourceData = clientConfig
@@ -253,6 +254,7 @@ func (p *AnypointProvider) DataSources(_ context.Context) []func() datasource.Da
 		dsAccessManagement.NewRolesDataSource,
 		dsAccessManagement.NewAvailableRolesDataSource,
 		dsAccessManagement.NewUsersDataSource,
+		dsAccessManagement.NewConnectedAppDataSource,
 		dsAccessManagement.NewConnectedAppsDataSource,
 		dsAccessManagement.NewConnectedAppScopesDataSource,
 		dsAccessManagement.NewScopesCatalogDataSource,

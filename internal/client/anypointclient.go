@@ -35,10 +35,13 @@ type Config struct {
 	mu    sync.Mutex
 	Token string
 	OrgID string
+	// Cache provides per-apply response caching shared by all resources/data sources.
+	Cache *ResponseCache
 }
 
 // ToUserClientConfig converts a Config into a UserClientConfig, propagating
-// any cached token so the user client can skip re-authentication.
+// any cached token and the shared response cache so the user client can skip
+// re-authentication and reuse cached catalog lookups.
 func (c *Config) ToUserClientConfig() *UserClientConfig {
 	c.mu.Lock()
 	token, orgID := c.Token, c.OrgID
@@ -52,6 +55,7 @@ func (c *Config) ToUserClientConfig() *UserClientConfig {
 		Timeout:      c.Timeout,
 		Token:        token,
 		OrgID:        orgID,
+		Cache:        c.Cache,
 	}
 }
 

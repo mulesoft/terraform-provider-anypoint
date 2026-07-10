@@ -1,11 +1,11 @@
 ---
-page_title: "anypoint_scopes_catalog Data Source - terraform-provider-anypoint"
+page_title: "anypoint_available_scopes Data Source - terraform-provider-anypoint"
 subcategory: "Access Management"
 description: |-
   Fetches the catalog of all available scopes for connected applications in the Anypoint Platform.
 ---
 
-# anypoint_scopes_catalog (Data Source)
+# anypoint_available_scopes (Data Source)
 
 Fetches the complete catalog of scopes available for connected applications. This includes all scope names, display names, descriptions, and product labels.
 
@@ -28,30 +28,30 @@ provider "anypoint" {
 }
 
 # Retrieve the full catalog of available scopes
-data "anypoint_scopes_catalog" "all" {
+data "anypoint_available_scopes" "all" {
   provider = anypoint.admin
 }
 
 # Retrieve the catalog including internal scopes
-data "anypoint_scopes_catalog" "with_internal" {
+data "anypoint_available_scopes" "with_internal" {
   provider         = anypoint.admin
   include_internal = true
 }
 
 # Output all available scopes (display_name is what you use in connected_app scopes)
 output "available_scopes" {
-  value = data.anypoint_scopes_catalog.all.scopes
+  value = data.anypoint_available_scopes.all.scopes
 }
 
 # List all display names — use these directly in anypoint_connected_app scopes blocks
 output "scope_display_names" {
-  value = [for s in data.anypoint_scopes_catalog.all.scopes : s.display_name]
+  value = [for s in data.anypoint_available_scopes.all.scopes : s.display_name]
 }
 
 # Filter to CloudHub scopes
 output "cloudhub_scopes" {
   value = [
-    for scope in data.anypoint_scopes_catalog.all.scopes :
+    for scope in data.anypoint_available_scopes.all.scopes :
     scope if can(regex("(?i)cloudhub", scope.display_name))
   ]
 }
@@ -59,7 +59,7 @@ output "cloudhub_scopes" {
 # Group scopes by product label
 locals {
   scopes_by_product = {
-    for scope in data.anypoint_scopes_catalog.all.scopes :
+    for scope in data.anypoint_available_scopes.all.scopes :
     scope.product_label => scope...
   }
 }

@@ -32,7 +32,7 @@ type ConnectedAppsDataSourceModel struct {
 // ConnectedAppItemModel represents a single connected app in the list.
 type ConnectedAppItemModel struct {
 	ClientID    types.String `tfsdk:"client_id"`
-	ClientName  types.String `tfsdk:"client_name"`
+	Name        types.String `tfsdk:"name"`
 	GrantTypes  types.List   `tfsdk:"grant_types"`
 	Audience    types.String `tfsdk:"audience"`
 	ClientURI   types.String `tfsdk:"client_uri"`
@@ -70,7 +70,7 @@ func (d *ConnectedAppsDataSource) Schema(_ context.Context, _ datasource.SchemaR
 							Description: "The unique client ID of the app.",
 							Computed:    true,
 						},
-						"client_name": schema.StringAttribute{
+						"name": schema.StringAttribute{
 							Description: "The name of the app.",
 							Computed:    true,
 						},
@@ -181,7 +181,7 @@ func (d *ConnectedAppsDataSource) Read(ctx context.Context, req datasource.ReadR
 
 		state.Apps[i] = ConnectedAppItemModel{
 			ClientID:    types.StringValue(app.ClientID),
-			ClientName:  types.StringValue(app.ClientName),
+			Name:        types.StringValue(app.ClientName),
 			GrantTypes:  grantTypesList,
 			Audience:    types.StringValue(app.Audience),
 			ClientURI:   types.StringValue(app.ClientURI),
