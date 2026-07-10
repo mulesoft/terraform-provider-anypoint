@@ -28,7 +28,7 @@ resource "anypoint_role" "api_managers" {
 
   # Permissions are referenced by their UI display name (case-insensitive); the
   # provider resolves each to a role ID at apply time. Use the
-  # anypoint_available_roles data source to discover valid names.
+  # anypoint_available_permissions data source to discover valid names.
   permissions = [
     {
       # Organization-scoped permission.
