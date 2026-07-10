@@ -38,8 +38,8 @@ func TestAvailableRolesDataSource_Metadata(t *testing.T) {
 
 	ds.Metadata(ctx, req, resp)
 
-	if resp.TypeName != "anypoint_available_roles" {
-		t.Errorf("Metadata() TypeName = %v, want %v", resp.TypeName, "anypoint_available_roles")
+	if resp.TypeName != "anypoint_available_permissions" {
+		t.Errorf("Metadata() TypeName = %v, want %v", resp.TypeName, "anypoint_available_permissions")
 	}
 }
 
@@ -65,13 +65,13 @@ func TestAvailableRolesDataSource_Schema(t *testing.T) {
 		t.Error("Schema() missing attribute: name_filter")
 	}
 
-	// Check computed roles attribute
-	if attr, exists := resp.Schema.Attributes["roles"]; exists {
+	// Check computed permissions attribute
+	if attr, exists := resp.Schema.Attributes["permissions"]; exists {
 		if !attr.IsComputed() {
-			t.Error("Schema() attribute 'roles' should be computed")
+			t.Error("Schema() attribute 'permissions' should be computed")
 		}
 	} else {
-		t.Error("Schema() missing computed attribute: roles")
+		t.Error("Schema() missing computed attribute: permissions")
 	}
 }
 
@@ -187,7 +187,7 @@ func TestAvailableRolesDataSource_Read(t *testing.T) {
 	// No filter - should return all roles
 	configRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
 		"name_filter": tftypes.NewValue(tftypes.String, nil), // null = no filter
-		"roles": tftypes.NewValue(
+		"permissions": tftypes.NewValue(
 			tftypes.List{ElementType: tftypes.Object{AttributeTypes: map[string]tftypes.Type{
 				"role_id":     tftypes.String,
 				"name":        tftypes.String,
@@ -209,8 +209,8 @@ func TestAvailableRolesDataSource_Read(t *testing.T) {
 	if diags := resp.State.Get(ctx, &got); diags.HasError() {
 		t.Fatalf("State.Get errors: %v", diags.Errors())
 	}
-	if len(got.Roles.Elements()) != 3 {
-		t.Errorf("Expected 3 roles, got %d", len(got.Roles.Elements()))
+	if len(got.Permissions.Elements()) != 3 {
+		t.Errorf("Expected 3 roles, got %d", len(got.Permissions.Elements()))
 	}
 }
 
@@ -265,7 +265,7 @@ func TestAvailableRolesDataSource_Read_WithFilter(t *testing.T) {
 	// Filter for "Applications" - should match "Read Applications" and "Create Applications"
 	configRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
 		"name_filter": tftypes.NewValue(tftypes.String, "Applications"),
-		"roles": tftypes.NewValue(
+		"permissions": tftypes.NewValue(
 			tftypes.List{ElementType: tftypes.Object{AttributeTypes: map[string]tftypes.Type{
 				"role_id":     tftypes.String,
 				"name":        tftypes.String,
@@ -287,8 +287,8 @@ func TestAvailableRolesDataSource_Read_WithFilter(t *testing.T) {
 	if diags := resp.State.Get(ctx, &got); diags.HasError() {
 		t.Fatalf("State.Get errors: %v", diags.Errors())
 	}
-	if len(got.Roles.Elements()) != 2 {
-		t.Errorf("Expected 2 roles matching 'Applications', got %d", len(got.Roles.Elements()))
+	if len(got.Permissions.Elements()) != 2 {
+		t.Errorf("Expected 2 roles matching 'Applications', got %d", len(got.Permissions.Elements()))
 	}
 }
 
@@ -337,7 +337,7 @@ func TestAvailableRolesDataSource_Read_CaseInsensitiveFilter(t *testing.T) {
 	// Filter using lowercase "audit" - should match "Audit Log Viewer"
 	configRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
 		"name_filter": tftypes.NewValue(tftypes.String, "audit"),
-		"roles": tftypes.NewValue(
+		"permissions": tftypes.NewValue(
 			tftypes.List{ElementType: tftypes.Object{AttributeTypes: map[string]tftypes.Type{
 				"role_id":     tftypes.String,
 				"name":        tftypes.String,
@@ -359,8 +359,8 @@ func TestAvailableRolesDataSource_Read_CaseInsensitiveFilter(t *testing.T) {
 	if diags := resp.State.Get(ctx, &got); diags.HasError() {
 		t.Fatalf("State.Get errors: %v", diags.Errors())
 	}
-	if len(got.Roles.Elements()) != 1 {
-		t.Errorf("Expected 1 role matching 'audit' (case-insensitive), got %d", len(got.Roles.Elements()))
+	if len(got.Permissions.Elements()) != 1 {
+		t.Errorf("Expected 1 role matching 'audit' (case-insensitive), got %d", len(got.Permissions.Elements()))
 	}
 }
 
@@ -392,7 +392,7 @@ func TestAvailableRolesDataSource_Read_Error(t *testing.T) {
 
 	configRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
 		"name_filter": tftypes.NewValue(tftypes.String, nil),
-		"roles": tftypes.NewValue(
+		"permissions": tftypes.NewValue(
 			tftypes.List{ElementType: tftypes.Object{AttributeTypes: map[string]tftypes.Type{
 				"role_id":     tftypes.String,
 				"name":        tftypes.String,

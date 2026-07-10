@@ -381,7 +381,7 @@ func TestTeamDataSource_Read_Direct(t *testing.T) {
 	configRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
 		"id":              tftypes.NewValue(tftypes.String, "test-team-id"),
 		"name":            tftypes.NewValue(tftypes.String, nil),
-		"parent_team_id":  tftypes.NewValue(tftypes.String, nil),
+		"parent_team":     tftypes.NewValue(tftypes.String, nil),
 		"team_type":       tftypes.NewValue(tftypes.String, nil),
 		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
 		"roles":           tftypes.NewValue(tftypes.List{ElementType: roleObjType}, nil),
@@ -479,7 +479,7 @@ func TestTeamDataSource_Read_Direct_Error(t *testing.T) {
 	configRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
 		"id":              tftypes.NewValue(tftypes.String, "test-team-id"),
 		"name":            tftypes.NewValue(tftypes.String, nil),
-		"parent_team_id":  tftypes.NewValue(tftypes.String, nil),
+		"parent_team":     tftypes.NewValue(tftypes.String, nil),
 		"team_type":       tftypes.NewValue(tftypes.String, nil),
 		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
 		"roles":           tftypes.NewValue(tftypes.List{ElementType: roleObjType}, nil),

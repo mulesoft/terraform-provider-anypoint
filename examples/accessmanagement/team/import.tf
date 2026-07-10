@@ -22,8 +22,8 @@
 
 # resource "anypoint_team" "imported" {
 #   organization_id = var.org_id
-#   team_name       = "<team_name>"
-#   parent_team_id  = "<parent_team_id>"  # use the org ID for a root-level team
+#   name            = "<team_name>"
+#   parent_team     = "<parent_team_name>"  # omit for root-level teams
 #   team_type       = "internal"
 # }
 

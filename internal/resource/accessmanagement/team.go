@@ -3,7 +3,9 @@ package accessmanagement
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -36,9 +38,9 @@ type TeamResource struct {
 // TeamResourceModel describes the resource data model.
 type TeamResourceModel struct {
 	ID             types.String `tfsdk:"id"`
-	TeamName       types.String `tfsdk:"team_name"`
+	Name           types.String `tfsdk:"name"`
 	OrganizationID types.String `tfsdk:"organization_id"`
-	ParentTeamID   types.String `tfsdk:"parent_team_id"`
+	ParentTeam     types.String `tfsdk:"parent_team"`
 	TeamType       types.String `tfsdk:"team_type"`
 	Roles          types.Set    `tfsdk:"roles"`
 	Members        types.Set    `tfsdk:"members"`
@@ -67,8 +69,8 @@ func (r *TeamResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"team_name": schema.StringAttribute{
-				Description: "The name of the team.",
+			"name": schema.StringAttribute{
+				Description: "The name of the team (shown as 'Team Name' in the UI).",
 				Required:    true,
 			},
 			"organization_id": schema.StringAttribute{
@@ -79,19 +81,13 @@ func (r *TeamResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"parent_team_id": schema.StringAttribute{
-				Description: "The ID of the parent team. If not specified, the provider looks up the " +
-					"organization's root team (the team with no ancestors) and uses it as the parent — " +
-					"mirroring the Anypoint UI, which defaults the parent to the root team. The platform " +
-					"API requires a parent, so this is always populated in state after apply.",
+			"parent_team": schema.StringAttribute{
+				Description: "The parent team (by name, case-insensitive). The provider resolves " +
+					"this to an ID automatically. If not specified, defaults to the organization's " +
+					"root team. After import, this is populated by reverse-resolving the parent " +
+					"team's ID back to its name — matching the Anypoint UI.",
 				Optional: true,
 				Computed: true,
-				// Optional+Computed: when the user omits parent_team_id, the provider
-				// computes it once (the org root) and stores it. Without this modifier,
-				// every subsequent plan would mark the already-known parent as "known
-				// after apply", which then drives Update to send an empty parent_team_id
-				// (a phantom "move") and get a 400 from the platform. UseStateForUnknown
-				// keeps the stored value stable across plans — matching id/created_at above.
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
@@ -113,7 +109,7 @@ func (r *TeamResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
 							Description: "The role's display name as shown in the Anypoint UI (e.g., 'Exchange Viewer'). " +
-								"Case-insensitive. Use the anypoint_available_roles data source to discover valid names.",
+								"Case-insensitive. Use the anypoint_available_permissions data source to discover valid names.",
 							Required: true,
 						},
 						"context_params": schema.MapAttribute{
@@ -276,10 +272,19 @@ func (r *TeamResource) Create(ctx context.Context, req resource.CreateRequest, r
 	}
 
 	// Resolve the parent team. The platform API REQUIRES parent_team_id, so when
-	// the user omits it we default to the org's root team (the team with no
-	// ancestors) — mirroring the Anypoint UI, whose Create Team dialog defaults
-	// the parent to the root ("Everyone at <org>") and always sends it.
-	parentTeamID := data.ParentTeamID.ValueString()
+	// the user omits parent_team we default to the org's root team — mirroring
+	// the Anypoint UI, whose Create Team dialog defaults the parent to the root
+	// ("Everyone at <org>") and always sends it.
+	var parentTeamID string
+	if !data.ParentTeam.IsNull() && data.ParentTeam.ValueString() != "" {
+		// Resolve parent_team → ID (case-insensitive)
+		resolved, resolveErr := r.resolveTeamNameToID(ctx, orgID, data.ParentTeam.ValueString())
+		if resolveErr != nil {
+			resp.Diagnostics.AddError("Error resolving parent_team", resolveErr.Error())
+			return
+		}
+		parentTeamID = resolved
+	}
 	if parentTeamID == "" {
 		rootID, err := r.resolveRootTeamID(ctx, orgID)
 		if err != nil {
@@ -291,7 +296,7 @@ func (r *TeamResource) Create(ctx context.Context, req resource.CreateRequest, r
 
 	// Create the team
 	teamRequest := &accessmanagement.CreateTeamRequest{
-		TeamName:     data.TeamName.ValueString(),
+		TeamName:     data.Name.ValueString(),
 		ParentTeamID: parentTeamID,
 		TeamType:     data.TeamType.ValueString(),
 	}
@@ -306,14 +311,18 @@ func (r *TeamResource) Create(ctx context.Context, req resource.CreateRequest, r
 	}
 
 	// Map response body to schema (leaves Roles/Members untouched).
-	r.mapTeamToState(team, &data, orgID)
+	actualParentID := r.mapTeamToState(team, &data, orgID)
+	if actualParentID == "" {
+		actualParentID = parentTeamID // fallback to what we sent
+	}
 
-	// Guarantee parent_team_id is recorded in state even if the create response
-	// omitted ancestor_team_ids (mapTeamToState derives the parent from those).
-	// Falls back to exactly what we sent — for an omitted parent that is the
-	// resolved root ID, so a follow-up plan shows no drift.
-	if data.ParentTeamID.IsNull() || data.ParentTeamID.IsUnknown() {
-		data.ParentTeamID = types.StringValue(parentTeamID)
+	// Reverse-resolve parent → parent_team name so state always shows it.
+	// If user already set parent_team we keep their value; if they didn't (defaulted
+	// to root) we populate it from the resolved ID.
+	if data.ParentTeam.IsNull() || data.ParentTeam.IsUnknown() {
+		if parentName, resolveErr := r.resolveTeamIDToName(ctx, orgID, actualParentID); resolveErr == nil {
+			data.ParentTeam = types.StringValue(parentName)
+		}
 	}
 
 	// Persist partial state now so a later failure doesn't orphan the team.
@@ -380,7 +389,21 @@ func (r *TeamResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	}
 
 	// Map response body to schema (leaves Roles/Members as they were in state).
-	r.mapTeamToState(team, &data, orgID)
+	parentID := r.mapTeamToState(team, &data, orgID)
+
+	// Reverse-resolve parent ID → parent_team name so state always shows the
+	// human-readable parent name (matching what users write in config and what import produces).
+	if parentID != "" {
+		parentName, err := r.resolveTeamIDToName(ctx, orgID, parentID)
+		if err != nil {
+			// Non-fatal: just don't populate the name.
+			tflog.Warn(ctx, "could not resolve parent team ID to name", map[string]interface{}{"parent_id": parentID, "error": err.Error()})
+		} else {
+			data.ParentTeam = types.StringValue(parentName)
+		}
+	} else {
+		data.ParentTeam = types.StringNull()
+	}
 
 	// Only refresh roles/members if they are being managed (non-null in state).
 	// Omitted (null) attributes stay null so the resource leaves them unmanaged.
@@ -439,15 +462,22 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
-	// Handle parent_team_id changes first (requires separate API call). Only move
-	// the team when the planned parent is KNOWN, NON-EMPTY, and actually different
-	// from the current parent. The unknown/empty guard is defense-in-depth: the
-	// platform API rejects an empty parent_team_id with a 400, so a phantom "move"
-	// (e.g. a planned unknown collapsing to "") must never reach it. With
-	// parent_team_id using UseStateForUnknown this should not occur, but the guard
-	// keeps a future regression from silently sending an empty parent.
-	plannedParent := plan.ParentTeamID.ValueString()
-	if !plan.ParentTeamID.IsUnknown() && plannedParent != "" && plannedParent != state.ParentTeamID.ValueString() {
+	// Handle parent team changes first (requires separate API call). Resolve
+	// parent_team → ID. Only move the team when the resolved parent name changed.
+	var plannedParent string
+	if !plan.ParentTeam.IsNull() && !plan.ParentTeam.IsUnknown() && plan.ParentTeam.ValueString() != "" {
+		resolved, resolveErr := r.resolveTeamNameToID(ctx, orgID, plan.ParentTeam.ValueString())
+		if resolveErr != nil {
+			resp.Diagnostics.AddError("Error resolving parent_team", resolveErr.Error())
+			return
+		}
+		plannedParent = resolved
+	}
+	// Compare planned parent name to state parent name (case-insensitive) to
+	// detect moves. We don't store the ID in state, so name comparison suffices.
+	parentChanged := plannedParent != "" &&
+		!strings.EqualFold(plan.ParentTeam.ValueString(), state.ParentTeam.ValueString())
+	if parentChanged {
 		parentUpdateRequest := &accessmanagement.UpdateTeamParentRequest{
 			ParentTeamID: plannedParent,
 		}
@@ -463,8 +493,8 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	// Build update request for name/type — only send changed fields.
 	updateRequest := &accessmanagement.UpdateTeamRequest{}
 	hasChanges := false
-	if !plan.TeamName.Equal(state.TeamName) {
-		teamName := plan.TeamName.ValueString()
+	if !plan.Name.Equal(state.Name) {
+		teamName := plan.Name.ValueString()
 		updateRequest.TeamName = &teamName
 		hasChanges = true
 	}
@@ -474,6 +504,7 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		hasChanges = true
 	}
 
+	var updateParentID string
 	if hasChanges {
 		team, err := r.client.UpdateTeam(ctx, orgID, teamID, updateRequest)
 		if err != nil {
@@ -483,7 +514,7 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 			)
 			return
 		}
-		r.mapTeamToState(team, &plan, orgID)
+		updateParentID = r.mapTeamToState(team, &plan, orgID)
 	} else {
 		// Read the team back so computed fields (updated_at, etc.) are current.
 		team, err := r.client.GetTeam(ctx, orgID, teamID)
@@ -494,7 +525,14 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 			)
 			return
 		}
-		r.mapTeamToState(team, &plan, orgID)
+		updateParentID = r.mapTeamToState(team, &plan, orgID)
+	}
+
+	// Reverse-resolve parent ID → parent_team name for state consistency.
+	if updateParentID != "" {
+		if parentName, err := r.resolveTeamIDToName(ctx, orgID, updateParentID); err == nil {
+			plan.ParentTeam = types.StringValue(parentName)
+		}
 	}
 
 	// Reconcile roles if managed. On failure, refresh actual state so a partial
@@ -554,8 +592,19 @@ func (r *TeamResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 }
 
 // ImportState imports the resource into Terraform state.
+// Seeds roles and members as empty sets so the subsequent Read populates them
+// from the API (null would cause Read to skip them as "unmanaged").
 func (r *TeamResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+
+	// Seed roles and members as empty sets so Read fetches them from the API.
+	emptyRoles, diags := types.SetValue(teamRoleObjectType, []attr.Value{})
+	resp.Diagnostics.Append(diags...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("roles"), emptyRoles)...)
+
+	emptyMembers, diags := types.SetValue(teamMemberObjectType, []attr.Value{})
+	resp.Diagnostics.Append(diags...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("members"), emptyMembers)...)
 }
 
 // refreshManagedIntoStateBestEffort re-reads the actual roles/members from the API
@@ -591,30 +640,497 @@ func (r *TeamResource) resolveRootTeamID(ctx context.Context, orgID string) (str
 	}
 	return "", fmt.Errorf(
 		"could not find a root team (a team with no ancestors) in organization %s; "+
-			"set parent_team_id explicitly on the anypoint_team resource",
+			"set parent_team explicitly on the anypoint_team resource",
 		orgID,
 	)
 }
 
+// resolveTeamNameToID resolves a team name to its ID by listing all org teams.
+// Returns an error if no match or multiple matches are found.
+func (r *TeamResource) resolveTeamNameToID(ctx context.Context, orgID, name string) (string, error) {
+	teams, err := r.client.ListTeams(ctx, orgID)
+	if err != nil {
+		return "", fmt.Errorf("could not list teams to resolve parent_team %q: %w", name, err)
+	}
+	// Platform team names are case-insensitive (creating "Test" fails if "test" exists).
+	var matches []string
+	for _, t := range teams {
+		if strings.EqualFold(t.TeamName, name) {
+			matches = append(matches, t.ID)
+		}
+	}
+	switch len(matches) {
+	case 0:
+		return "", fmt.Errorf("no team found with name %q in organization %s", name, orgID)
+	case 1:
+		return matches[0], nil
+	default:
+		return "", fmt.Errorf("multiple teams found with name %q in organization %s (IDs: %v)", name, orgID, matches)
+	}
+}
+
+// resolveTeamIDToName reverse-resolves a team ID to its name by listing all teams
+// in the organization. Used to populate parent_team in state after Read/Import.
+func (r *TeamResource) resolveTeamIDToName(ctx context.Context, orgID, teamID string) (string, error) {
+	teams, err := r.client.ListTeams(ctx, orgID)
+	if err != nil {
+		return "", fmt.Errorf("could not list teams to resolve team ID %q: %w", teamID, err)
+	}
+	for _, t := range teams {
+		if t.ID == teamID {
+			return t.TeamName, nil
+		}
+	}
+	return "", fmt.Errorf("no team found with ID %q in organization %s", teamID, orgID)
+}
+
 // mapTeamToState maps an API Team response to the Terraform state model, leaving the
 // Roles/Members typed values untouched (they are reconciled separately).
-func (r *TeamResource) mapTeamToState(team *accessmanagement.Team, data *TeamResourceModel, orgID string) {
+// Returns the direct parent team ID (from ancestor_team_ids) for callers that need it.
+func (r *TeamResource) mapTeamToState(team *accessmanagement.Team, data *TeamResourceModel, orgID string) string {
 	data.ID = types.StringValue(team.ID)
-	data.TeamName = types.StringValue(team.TeamName)
+	data.Name = types.StringValue(team.TeamName)
 	data.TeamType = types.StringValue(team.TeamType)
 	data.OrganizationID = types.StringValue(orgID)
 	data.CreatedAt = types.StringValue(team.CreatedAt)
 	data.UpdatedAt = types.StringValue(team.UpdatedAt)
 
-	// Derive parent_team_id from ancestor_team_ids. The platform lists ancestors
+	// Derive parent team ID from ancestor_team_ids. The platform lists ancestors
 	// root-first / direct-parent-LAST, so the direct parent is the last element
-	// (see Team.DirectParentID). Using [0] would return the ROOT for any team more
-	// than one level deep, flipping parent_team_id and causing "inconsistent result
-	// after apply".
-	if parent := team.DirectParentID(); parent != "" {
-		data.ParentTeamID = types.StringValue(parent)
-	} else if data.ParentTeamID.IsUnknown() {
-		// No ancestors and nothing planned — normalize unknown to null so state is consistent.
-		data.ParentTeamID = types.StringNull()
+	// (see Team.DirectParentID).
+	return team.DirectParentID()
+}
+
+// teamRoleObjectType is the Terraform object type for a single role entry in the
+// anypoint_team resource's `roles` set. It mirrors the role resource's permission
+// entry (a display name plus optional context params).
+var teamRoleObjectType = types.ObjectType{
+	AttrTypes: map[string]attr.Type{
+		"name":           types.StringType,
+		"context_params": types.MapType{ElemType: types.StringType},
+	},
+}
+
+// teamMemberObjectType is the Terraform object type for a single member entry in
+// the anypoint_team resource's `members` set: a username and an optional
+// membership_type ("member" or "maintainer").
+var teamMemberObjectType = types.ObjectType{
+	AttrTypes: map[string]attr.Type{
+		"username":        types.StringType,
+		"membership_type": types.StringType,
+	},
+}
+
+// desiredTeamRole is a resolved role ready to be sent to the API.
+type desiredTeamRole struct {
+	roleID        string
+	typedName     string            // exactly what the user wrote (preserved in state)
+	contextParams map[string]string // resolved context params
+	contextKey    string            // canonical JSON of contextParams for matching
+}
+
+// typedTeamRole holds the user's original (typed) representation of a role so Read
+// can preserve casing / context_params form and avoid perpetual diffs.
+type typedTeamRole struct {
+	name types.String
+	cp   types.Map
+}
+
+// desiredTeamMember is a resolved member ready to be sent to the API.
+type desiredTeamMember struct {
+	userID         string
+	typedUsername  string // exactly what the user wrote (preserved in state)
+	membershipType string // resolved membership type ("member" when omitted)
+}
+
+// typedTeamMember holds the user's original (typed) representation of a member so
+// Read can preserve username casing and the (possibly null) membership_type.
+type typedTeamMember struct {
+	username       types.String
+	membershipType types.String
+}
+
+// --- roles -------------------------------------------------------------------
+
+// resolveTeamRoles resolves each role's display name to a role_id using the
+// available-roles catalog (case-insensitive). Returns an error listing the
+// offending name if it is unknown or ambiguous. Returns (nil, nil) when unmanaged.
+func (r *TeamResource) resolveTeamRoles(ctx context.Context, roleSet types.Set) ([]desiredTeamRole, error) {
+	if roleSet.IsNull() || roleSet.IsUnknown() {
+		return nil, nil
 	}
+
+	roles, err := r.catalogClient.ListAvailableRoles(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("could not list available roles for name resolution: %w", err)
+	}
+
+	// Build a case-insensitive name -> []role_id map so we can detect ambiguity.
+	nameToIDs := make(map[string][]string, len(roles))
+	for _, role := range roles {
+		key := normalizeName(role.Name)
+		nameToIDs[key] = append(nameToIDs[key], role.RoleID)
+	}
+
+	out := make([]desiredTeamRole, 0, len(roleSet.Elements()))
+	for _, el := range roleSet.Elements() {
+		obj := el.(types.Object)
+		attrs := obj.Attributes()
+		typedName := attrs["name"].(types.String).ValueString()
+		cpMap := mapToStringMap(attrs["context_params"].(types.Map))
+
+		ids := nameToIDs[normalizeName(typedName)]
+		if len(ids) == 0 {
+			return nil, fmt.Errorf(
+				"role %q is not a valid role name; use the anypoint_available_permissions data source to discover valid role names",
+				typedName,
+			)
+		}
+		if len(ids) > 1 {
+			return nil, fmt.Errorf(
+				"role name %q is ambiguous (matches %d roles); the platform has multiple roles with this name so it cannot be resolved by name alone",
+				typedName, len(ids),
+			)
+		}
+
+		out = append(out, desiredTeamRole{
+			roleID:        ids[0],
+			typedName:     typedName,
+			contextParams: cpMap,
+			contextKey:    canonicalContextParams(cpMap),
+		})
+	}
+	return out, nil
+}
+
+// applyTeamRoles reconciles the team's role assignments to exactly `desired`.
+// It adds missing assignments and removes extras, skipping internal (system) ones.
+func (r *TeamResource) applyTeamRoles(ctx context.Context, orgID, teamID string, desired []desiredTeamRole) error {
+	assignments, err := r.rolesClient.ListTeamRoles(ctx, orgID, teamID)
+	if err != nil {
+		return fmt.Errorf("could not list current team role assignments: %w", err)
+	}
+
+	// Build the set of catalog (assignable) role IDs. Any assignment whose role_id
+	// is not in the catalog is a platform-injected side-effect grant (e.g. the
+	// org-scoped "Business Group Viewer" auto-added alongside an env-scoped role)
+	// and must never be removed — the user can't express it in config, so removing
+	// it would fight the platform on every apply.
+	catalog, err := r.catalogClient.ListAvailableRoles(ctx)
+	if err != nil {
+		return fmt.Errorf("could not list available roles for assignment reconciliation: %w", err)
+	}
+	catalogIDs := make(map[string]struct{}, len(catalog))
+	for _, role := range catalog {
+		catalogIDs[role.RoleID] = struct{}{}
+	}
+
+	actual := make(map[string]accessmanagement.TeamRoleAssignment)
+	for _, a := range assignments {
+		if a.Internal {
+			continue // never touch system-managed assignments
+		}
+		if _, inCatalog := catalogIDs[a.RoleID]; !inCatalog {
+			continue // never touch platform-injected side-effect grants
+		}
+		actual[a.RoleID+"|"+canonicalContextParams(a.ContextParams)] = a
+	}
+
+	desiredByKey := make(map[string]desiredTeamRole, len(desired))
+	for _, d := range desired {
+		desiredByKey[d.roleID+"|"+d.contextKey] = d
+	}
+
+	// Add anything desired that isn't already present.
+	for key, d := range desiredByKey {
+		if _, ok := actual[key]; ok {
+			continue
+		}
+		if _, err := r.rolesClient.AssignTeamRole(ctx, orgID, teamID, &accessmanagement.AssignTeamRoleRequest{
+			RoleID:        d.roleID,
+			ContextParams: d.contextParams,
+		}); err != nil {
+			return fmt.Errorf("failed to assign role %q: %w", d.typedName, err)
+		}
+	}
+
+	// Remove anything present that is no longer desired.
+	for key, a := range actual {
+		if _, ok := desiredByKey[key]; ok {
+			continue
+		}
+		if err := r.rolesClient.UnassignTeamRole(ctx, orgID, teamID, &accessmanagement.AssignTeamRoleRequest{
+			RoleID:        a.RoleID,
+			ContextParams: a.ContextParams,
+		}); err != nil {
+			return fmt.Errorf("failed to unassign role %q: %w", a.Name, err)
+		}
+	}
+
+	return nil
+}
+
+// reconcileTeamRolesIntoState reads the actual (non-internal) role assignments from
+// the API and builds a roles set. For each assignment matching an entry in
+// typedSource, the user's original name/context_params are preserved (so casing
+// differences don't cause perpetual diffs). Unmatched assignments (drift or import)
+// are labeled with the canonical role name from the catalog.
+func (r *TeamResource) reconcileTeamRolesIntoState(ctx context.Context, orgID, teamID string, typedSource types.Set) (types.Set, error) {
+	assignments, err := r.rolesClient.ListTeamRoles(ctx, orgID, teamID)
+	if err != nil {
+		return types.SetNull(teamRoleObjectType), fmt.Errorf("could not list team role assignments: %w", err)
+	}
+
+	roles, err := r.catalogClient.ListAvailableRoles(ctx)
+	if err != nil {
+		return types.SetNull(teamRoleObjectType), fmt.Errorf("could not list available roles: %w", err)
+	}
+	roleIDToName := make(map[string]string, len(roles))
+	nameToID := make(map[string]string, len(roles))
+	for _, role := range roles {
+		roleIDToName[role.RoleID] = role.Name
+		nameToID[normalizeName(role.Name)] = role.RoleID
+	}
+
+	// Index the user's typed roles by (role_id | context) so we can preserve their
+	// exact representation for matched assignments.
+	typedByKey := map[string]typedTeamRole{}
+	if !typedSource.IsNull() && !typedSource.IsUnknown() {
+		for _, el := range typedSource.Elements() {
+			obj := el.(types.Object)
+			attrs := obj.Attributes()
+			typedName := attrs["name"].(types.String)
+			cpTypes := attrs["context_params"].(types.Map)
+			rid := nameToID[normalizeName(typedName.ValueString())]
+			key := rid + "|" + canonicalContextParams(mapToStringMap(cpTypes))
+			typedByKey[key] = typedTeamRole{name: typedName, cp: cpTypes}
+		}
+	}
+
+	objs := make([]attr.Value, 0, len(assignments))
+	for _, a := range assignments {
+		if a.Internal {
+			continue
+		}
+		// Skip platform-injected side-effect grants that are not in the assignable
+		// catalog (e.g. the org-scoped "Business Group Viewer" the platform auto-adds
+		// when any env-scoped role is assigned to a team). The user cannot express
+		// these in config — resolveTeamRoles only accepts catalog role names — so
+		// treating them as managed would surface a phantom `name = ""` entry and a
+		// perpetual diff. Mirror the internal-skip above.
+		if _, inCatalog := roleIDToName[a.RoleID]; !inCatalog {
+			continue
+		}
+		key := a.RoleID + "|" + canonicalContextParams(a.ContextParams)
+
+		var nameVal types.String
+		var cpVal types.Map
+		if tr, ok := typedByKey[key]; ok {
+			nameVal = tr.name
+			cpVal = tr.cp
+		} else {
+			nameVal = types.StringValue(roleIDToName[a.RoleID])
+			cpVal = stringMapToTypesMap(a.ContextParams)
+		}
+
+		obj, diags := types.ObjectValue(teamRoleObjectType.AttrTypes, map[string]attr.Value{
+			"name":           nameVal,
+			"context_params": cpVal,
+		})
+		if diags.HasError() {
+			return types.SetNull(teamRoleObjectType), fmt.Errorf("failed to build team role object")
+		}
+		objs = append(objs, obj)
+	}
+
+	set, diags := types.SetValue(teamRoleObjectType, objs)
+	if diags.HasError() {
+		return types.SetNull(teamRoleObjectType), fmt.Errorf("failed to build team roles set")
+	}
+	return set, nil
+}
+
+// --- members -----------------------------------------------------------------
+
+// resolveTeamMembers resolves each username to a user_id (case-insensitive) using
+// the org user list. Returns a map of user_id -> desiredTeamMember (carrying the
+// typed username and resolved membership type). Returns an error listing the
+// offending username if it is unknown. Returns (nil, nil) when unmanaged.
+func (r *TeamResource) resolveTeamMembers(ctx context.Context, orgID string, memberSet types.Set) (map[string]desiredTeamMember, error) {
+	if memberSet.IsNull() || memberSet.IsUnknown() {
+		return nil, nil
+	}
+
+	users, err := r.usersClient.ListOrgUsers(ctx, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("could not list organization users for username resolution: %w", err)
+	}
+	usernameToID := make(map[string]string, len(users))
+	for _, u := range users {
+		usernameToID[normalizeName(u.Username)] = u.ID
+	}
+
+	out := make(map[string]desiredTeamMember)
+	for _, el := range memberSet.Elements() {
+		obj := el.(types.Object)
+		attrs := obj.Attributes()
+		typedUsername := attrs["username"].(types.String).ValueString()
+
+		membershipType := "member"
+		if mt, ok := attrs["membership_type"].(types.String); ok && !mt.IsNull() && !mt.IsUnknown() && mt.ValueString() != "" {
+			membershipType = mt.ValueString()
+		}
+
+		id, ok := usernameToID[normalizeName(typedUsername)]
+		if !ok {
+			return nil, fmt.Errorf(
+				"member %q is not a valid username in organization %s; use the anypoint_users data source to discover usernames",
+				typedUsername, orgID,
+			)
+		}
+		out[id] = desiredTeamMember{
+			userID:         id,
+			typedUsername:  typedUsername,
+			membershipType: membershipType,
+		}
+	}
+	return out, nil
+}
+
+// applyTeamMembers reconciles the team's membership to exactly the desired members.
+// Members assigned via external groups (SAML/SCIM) are never modified. Members whose
+// membership_type changed are re-PUT to update in place.
+func (r *TeamResource) applyTeamMembers(ctx context.Context, orgID, teamID string, desired map[string]desiredTeamMember) error {
+	actual, err := r.membersClient.ListTeamMembers(ctx, orgID, teamID)
+	if err != nil {
+		return fmt.Errorf("could not list current team members: %w", err)
+	}
+
+	// Build the set of real org-user IDs. The team-members endpoint also returns
+	// non-user identities: once a team has a child team, that child surfaces here as
+	// a member entry (and the platform may inject other group identities). Those are
+	// NOT org users, so they can never appear in `desired` (which is built by
+	// resolving usernames). They must NOT be removed — deleting a child team via the
+	// members endpoint fails with 405 "Cannot delete a child team using this
+	// endpoint". Mirroring the read path (reconcileTeamMembersIntoState), we only
+	// manage members that resolve to an org user; every other identity is left
+	// untouched, exactly like external-group memberships.
+	users, err := r.usersClient.ListOrgUsers(ctx, orgID)
+	if err != nil {
+		return fmt.Errorf("could not list organization users: %w", err)
+	}
+	isOrgUser := make(map[string]bool, len(users))
+	for _, u := range users {
+		isOrgUser[u.ID] = true
+	}
+
+	actualByID := make(map[string]accessmanagement.TeamMember, len(actual))
+	for _, m := range actual {
+		if m.IsAssignedViaExternalGroups {
+			continue // never touch externally-managed memberships
+		}
+		if !isOrgUser[m.ID] {
+			continue // non-user identity (e.g. a child team) — not manageable here
+		}
+		actualByID[m.ID] = m
+	}
+
+	// Add missing members, or update those whose membership_type changed.
+	for id, d := range desired {
+		cur, present := actualByID[id]
+		if present && cur.MembershipType == d.membershipType {
+			continue
+		}
+		if err := r.membersClient.AddTeamMember(ctx, orgID, teamID, id, d.membershipType); err != nil {
+			return fmt.Errorf("failed to add/update member %q: %w", d.typedUsername, err)
+		}
+	}
+
+	// Remove members that are no longer desired.
+	for id := range actualByID {
+		if _, ok := desired[id]; ok {
+			continue
+		}
+		if err := r.membersClient.RemoveTeamMember(ctx, orgID, teamID, id); err != nil {
+			return fmt.Errorf("failed to remove member (user_id %s): %w", id, err)
+		}
+	}
+
+	return nil
+}
+
+// reconcileTeamMembersIntoState reads actual team members and builds a members set,
+// preserving the user's typed username casing and (possibly null) membership_type
+// for matched members. External-group memberships and non-user identities that
+// cannot be mapped to an org username are excluded.
+func (r *TeamResource) reconcileTeamMembersIntoState(ctx context.Context, orgID, teamID string, typedSource types.Set) (types.Set, error) {
+	actual, err := r.membersClient.ListTeamMembers(ctx, orgID, teamID)
+	if err != nil {
+		return types.SetNull(teamMemberObjectType), fmt.Errorf("could not list team members: %w", err)
+	}
+
+	users, err := r.usersClient.ListOrgUsers(ctx, orgID)
+	if err != nil {
+		return types.SetNull(teamMemberObjectType), fmt.Errorf("could not list organization users: %w", err)
+	}
+	userIDToUsername := make(map[string]string, len(users))
+	for _, u := range users {
+		userIDToUsername[u.ID] = u.Username
+	}
+
+	// Index the user's typed members by lowercased username so we can preserve their
+	// exact casing and membership_type form for matched members.
+	typedByLower := map[string]typedTeamMember{}
+	if !typedSource.IsNull() && !typedSource.IsUnknown() {
+		for _, el := range typedSource.Elements() {
+			obj := el.(types.Object)
+			attrs := obj.Attributes()
+			uname := attrs["username"].(types.String)
+			mt, _ := attrs["membership_type"].(types.String)
+			typedByLower[normalizeName(uname.ValueString())] = typedTeamMember{username: uname, membershipType: mt}
+		}
+	}
+
+	objs := make([]attr.Value, 0, len(actual))
+	for _, m := range actual {
+		if m.IsAssignedViaExternalGroups {
+			continue
+		}
+		username, ok := userIDToUsername[m.ID]
+		if !ok {
+			// Not an org user (e.g. a group identity) — cannot represent by username.
+			continue
+		}
+
+		var usernameVal types.String
+		var mtVal types.String
+		if tm, matched := typedByLower[normalizeName(username)]; matched {
+			usernameVal = tm.username
+			// Preserve the typed membership_type verbatim (including null when the
+			// user omitted it) so state matches config and avoids perpetual diffs.
+			mtVal = tm.membershipType
+		} else {
+			usernameVal = types.StringValue(username)
+			if m.MembershipType != "" {
+				mtVal = types.StringValue(m.MembershipType)
+			} else {
+				mtVal = types.StringValue("member")
+			}
+		}
+
+		obj, diags := types.ObjectValue(teamMemberObjectType.AttrTypes, map[string]attr.Value{
+			"username":        usernameVal,
+			"membership_type": mtVal,
+		})
+		if diags.HasError() {
+			return types.SetNull(teamMemberObjectType), fmt.Errorf("failed to build team member object")
+		}
+		objs = append(objs, obj)
+	}
+
+	set, diags := types.SetValue(teamMemberObjectType, objs)
+	if diags.HasError() {
+		return types.SetNull(teamMemberObjectType), fmt.Errorf("failed to build team members set")
+	}
+	return set, nil
 }

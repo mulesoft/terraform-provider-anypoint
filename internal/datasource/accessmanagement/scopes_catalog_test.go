@@ -33,8 +33,8 @@ func TestScopesCatalogDataSource_Metadata(t *testing.T) {
 
 	dataSource.Metadata(ctx, req, resp)
 
-	if resp.TypeName != "test_scopes_catalog" {
-		t.Errorf("Metadata() TypeName = %v, want %v", resp.TypeName, "test_scopes_catalog")
+	if resp.TypeName != "test_available_scopes" {
+		t.Errorf("Metadata() TypeName = %v, want %v", resp.TypeName, "test_available_scopes")
 	}
 }
 

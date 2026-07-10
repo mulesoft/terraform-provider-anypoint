@@ -26,8 +26,8 @@ type AvailableRolesDataSource struct {
 
 // AvailableRolesDataSourceModel describes the data source data model.
 type AvailableRolesDataSourceModel struct {
-	NameFilter types.String `tfsdk:"name_filter"`
-	Roles      types.List   `tfsdk:"roles"`
+	NameFilter  types.String `tfsdk:"name_filter"`
+	Permissions types.List   `tfsdk:"permissions"`
 }
 
 func NewAvailableRolesDataSource() datasource.DataSource {
@@ -35,23 +35,26 @@ func NewAvailableRolesDataSource() datasource.DataSource {
 }
 
 // Metadata returns the data source type name.
+// Exposed as "anypoint_available_permissions" because API "roles" map to the UI
+// label "Permissions" (Permissions tab in Access Management). The old name
+// "anypoint_available_roles" is intentionally retired to match UI terminology.
 func (d *AvailableRolesDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_available_roles"
+	resp.TypeName = req.ProviderTypeName + "_available_permissions"
 }
 
 // Schema defines the schema for the data source.
 func (d *AvailableRolesDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Lists all available roles (permissions) that can be assigned to role groups. " +
-			"Use this to look up role IDs by name instead of hardcoding UUIDs.",
+		Description: "Lists all available permissions that can be assigned to roles (role groups). " +
+			"Use this to discover permission names before assigning them in the anypoint_role resource.",
 		Attributes: map[string]schema.Attribute{
 			"name_filter": schema.StringAttribute{
-				Description: "Optional filter to match roles by name (case-insensitive substring match). " +
-					"For example, 'Read Applications' returns only roles with that name.",
+				Description: "Optional filter to match permissions by name (case-insensitive substring match). " +
+					"For example, 'Read Applications' returns only permissions with that name.",
 				Optional: true,
 			},
-			"roles": schema.ListNestedAttribute{
-				Description: "List of available roles (permissions).",
+			"permissions": schema.ListNestedAttribute{
+				Description: "List of available permissions.",
 				Computed:    true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
@@ -171,7 +174,7 @@ func (d *AvailableRolesDataSource) Read(ctx context.Context, req datasource.Read
 		return
 	}
 
-	data.Roles = rolesList
+	data.Permissions = rolesList
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }

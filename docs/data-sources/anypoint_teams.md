@@ -7,7 +7,7 @@ description: |-
 
 # anypoint_teams (Data Source)
 
-Lists all teams in the organization. Use this to find the root team (for use as parent_team_id when creating new teams) or to look up a team by name.
+Lists all teams in the organization. Use this to find the root team or to look up a team by name.
 
 ~> **Note:** This is an Access Management data source and requires the **admin provider** (`anypoint.admin`), which uses admin user credentials along with the `client_id` and `client_secret` of a connected app to authenticate on behalf of the user (`auth_type = "user"`). You must set `provider = anypoint.admin` on this data source. The default provider (connected app credentials only) does not have sufficient privileges for Access Management operations.
 
@@ -37,9 +37,9 @@ output "all_teams" {
   value = data.anypoint_teams.all.teams
 }
 
-# Find the root team (for use as parent_team_id)
-output "root_team_id" {
-  value = [for t in data.anypoint_teams.all.teams : t.id if t.is_root_team][0]
+# Find the root team
+output "root_team_name" {
+  value = [for t in data.anypoint_teams.all.teams : t.name if t.is_root_team][0]
 }
 
 # Filter teams by name
@@ -70,10 +70,10 @@ output "engineering_teams" {
 
 Read-Only:
 
-- `id` (String) The unique team ID. Use this as team_id or parent_team_id in other resources.
-- `name` (String) The team name.
+- `id` (String) The unique team ID.
+- `name` (String) The team name. Use this as `parent_team` in other resources when nesting teams.
 - `team_type` (String) The type of team (e.g. 'internal').
 - `ancestor_team_ids` (List of String) List of ancestor team IDs (empty for the root team).
-- `is_root_team` (Boolean) True if this is the organization's root team (has no ancestors). Use this team's ID as parent_team_id when creating top-level teams.
+- `is_root_team` (Boolean) True if this is the organization's root team (has no ancestors). Top-level teams (with `parent_team` omitted) are automatically parented under the root.
 - `created_at` (String) When the team was created.
 - `updated_at` (String) When the team was last updated.

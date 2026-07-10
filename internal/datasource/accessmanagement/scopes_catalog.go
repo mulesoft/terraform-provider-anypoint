@@ -43,8 +43,10 @@ func NewScopesCatalogDataSource() datasource.DataSource {
 }
 
 // Metadata returns the data source type name.
+// Exposed as "anypoint_available_scopes" to match the naming convention of
+// "anypoint_available_permissions". The old name "anypoint_scopes_catalog" is retired.
 func (d *ScopesCatalogDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_scopes_catalog"
+	resp.TypeName = req.ProviderTypeName + "_available_scopes"
 }
 
 // Schema defines the schema for the data source.

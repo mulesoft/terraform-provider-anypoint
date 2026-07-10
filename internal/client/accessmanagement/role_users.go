@@ -199,7 +199,25 @@ func (c *RoleUsersClient) GetRoleGroupUser(ctx context.Context, orgID, roleGroup
 
 // ListOrgUsers lists all users in the organization.
 // API: GET /accounts/api/organizations/{orgId}/users
+// Results are cached per-apply per org: the user list does not change within
+// a single terraform run, so N resources calling this get ONE API round-trip.
 func (c *RoleUsersClient) ListOrgUsers(ctx context.Context, orgID string) ([]OrgUser, error) {
+	cacheKey := "org_users:" + orgID
+
+	if c.Cache != nil {
+		v, err := c.Cache.GetOrFetch(cacheKey, func() (interface{}, error) {
+			return c.listOrgUsersFromAPI(ctx, orgID)
+		})
+		if err != nil {
+			return nil, err
+		}
+		return v.([]OrgUser), nil
+	}
+	return c.listOrgUsersFromAPI(ctx, orgID)
+}
+
+// listOrgUsersFromAPI performs the actual paginated API call.
+func (c *RoleUsersClient) listOrgUsersFromAPI(ctx context.Context, orgID string) ([]OrgUser, error) {
 	var allUsers []OrgUser
 	limit := 100
 	offset := 0

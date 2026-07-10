@@ -38,8 +38,3 @@ variable "org_id" {
   default     = "<org_id>"
 }
 
-variable "parent_team_id" {
-  description = "The id of the parent team. Use the organization id to create a root team."
-  type        = string
-  default     = "c63f78eb-39c8-4fb2-80df-09f885c480e0"
-} 

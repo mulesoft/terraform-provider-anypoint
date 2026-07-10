@@ -33,7 +33,7 @@ func TestConnectedAppResource_Metadata(t *testing.T) {
 func TestConnectedAppResource_Schema(t *testing.T) {
 	res := NewConnectedAppResource()
 
-	requiredAttrs := []string{"client_name", "grant_types"}
+	requiredAttrs := []string{"name", "grant_types"}
 	optionalAttrs := []string{"redirect_uris", "public_keys", "audience", "client_uri", "enabled", "organization_id"}
 	computedAttrs := []string{"id", "client_secret", "owner_user_id", "created_at", "updated_at"}
 
@@ -82,7 +82,7 @@ func TestConnectedAppResource_Configure_InvalidProviderData(t *testing.T) {
 func TestConnectedAppResourceModel_Validation(t *testing.T) {
 	model := ConnectedAppResourceModel{}
 	_ = model.ID
-	_ = model.ClientName
+	_ = model.Name
 	_ = model.GrantTypes
 }
 
