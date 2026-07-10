@@ -17,28 +17,28 @@ provider "anypoint" {
 }
 
 # Fetch the full scopes catalog (excluding internal scopes)
-data "anypoint_scopes_catalog" "public_scopes" {
+data "anypoint_available_scopes" "public_scopes" {
   include_internal = false
 }
 
 # Fetch all scopes including internal ones
-data "anypoint_scopes_catalog" "all_scopes" {
+data "anypoint_available_scopes" "all_scopes" {
   include_internal = true
 }
 
 # Output all public scopes
 output "public_scopes" {
-  value = data.anypoint_scopes_catalog.public_scopes.scopes
+  value = data.anypoint_available_scopes.public_scopes.scopes
 }
 
 output "public_scope_count" {
-  value = length(data.anypoint_scopes_catalog.public_scopes.scopes)
+  value = length(data.anypoint_available_scopes.public_scopes.scopes)
 }
 
 # Filter for CloudHub-related scopes
 output "cloudhub_scopes" {
   value = [
-    for scope in data.anypoint_scopes_catalog.public_scopes.scopes :
+    for scope in data.anypoint_available_scopes.public_scopes.scopes :
     scope if strcontains(lower(scope.product_label), "cloudhub") || strcontains(lower(scope.display_name), "cloudhub")
   ]
 }
@@ -46,7 +46,7 @@ output "cloudhub_scopes" {
 # Filter for Runtime Manager scopes
 output "runtime_manager_scopes" {
   value = [
-    for scope in data.anypoint_scopes_catalog.public_scopes.scopes :
+    for scope in data.anypoint_available_scopes.public_scopes.scopes :
     scope if strcontains(lower(scope.product_label), "runtime manager")
   ]
 }
@@ -54,7 +54,7 @@ output "runtime_manager_scopes" {
 # Filter for Exchange scopes
 output "exchange_scopes" {
   value = [
-    for scope in data.anypoint_scopes_catalog.public_scopes.scopes :
+    for scope in data.anypoint_available_scopes.public_scopes.scopes :
     scope if strcontains(lower(scope.product_label), "exchange")
   ]
 }
@@ -62,20 +62,20 @@ output "exchange_scopes" {
 # Filter for Design Center scopes
 output "design_center_scopes" {
   value = [
-    for scope in data.anypoint_scopes_catalog.public_scopes.scopes :
+    for scope in data.anypoint_available_scopes.public_scopes.scopes :
     scope if strcontains(lower(scope.product_label), "design center")
   ]
 }
 
 # Output display names (use these in anypoint_connected_app scopes blocks)
 output "all_scope_display_names" {
-  value = [for scope in data.anypoint_scopes_catalog.public_scopes.scopes : scope.display_name]
+  value = [for scope in data.anypoint_available_scopes.public_scopes.scopes : scope.display_name]
 }
 
 # Example: Find a scope by its display name (as shown in the Anypoint UI)
 output "read_applications_scope" {
   value = [
-    for scope in data.anypoint_scopes_catalog.public_scopes.scopes :
+    for scope in data.anypoint_available_scopes.public_scopes.scopes :
     scope if scope.display_name == "Read Applications"
   ]
 }
@@ -83,7 +83,7 @@ output "read_applications_scope" {
 # Example: Find a scope by its identifier (for advanced use)
 output "create_generations_scope" {
   value = [
-    for scope in data.anypoint_scopes_catalog.public_scopes.scopes :
+    for scope in data.anypoint_available_scopes.public_scopes.scopes :
     scope if scope.scope == "create:generations"
   ]
 }

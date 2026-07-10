@@ -101,8 +101,8 @@ provider "anypoint" {
 | `anypoint_team_group_mappings` | — | **Not supported** | External IdP group → team mappings aren't in the official provider yet. |
 | `anypoint_idp_oidc` | — | **Not supported** | Identity-provider management is not in scope for the official provider today. |
 | `anypoint_idp_saml` | — | **Not supported** | Same. |
-| `anypoint_connected_app` | `anypoint_connected_app` | **As-is (schema change)** | Type name matches. Scope configuration on the community provider is inline; official provider splits it into a separate `anypoint_connected_app_scopes` resource. |
-| — | `anypoint_connected_app_scopes` | **New in official** | Dedicated resource for scope assignment. |
+| `anypoint_connected_app` | `anypoint_connected_app` | **As-is (schema change)** | Type name matches. Scope configuration is inline on both providers via the authoritative `scopes` attribute on `anypoint_connected_app`. A standalone `anypoint_connected_app_scopes` resource also exists but is deprecated in favor of inline scopes. |
+| — | `anypoint_connected_app_scopes` | **Deprecated** | Standalone scope resource (use inline `scopes` on `anypoint_connected_app` instead). |
 
 ### API Management
 

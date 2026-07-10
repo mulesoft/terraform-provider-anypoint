@@ -26,7 +26,7 @@ resource "anypoint_connected_app" "service_app" {
 
   # Scopes are authoritative: the provider ensures the app has exactly these
   # scopes. Use the display names you see in the Anypoint UI. Discover them
-  # with: data "anypoint_scopes_catalog" "all" {}
+  # with: data "anypoint_available_scopes" "all" {}
   scopes = [
     {
       scope          = "Read Applications"
