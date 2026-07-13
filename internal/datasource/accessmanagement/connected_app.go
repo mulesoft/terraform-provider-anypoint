@@ -147,9 +147,7 @@ func (d *ConnectedAppDataSource) Configure(_ context.Context, req datasource.Con
 		return
 	}
 
-	userConfig := config.ToUserClientConfig()
-
-	appClient, err := accessmanagement.NewConnectedAppClient(userConfig)
+	appClient, err := accessmanagement.NewConnectedAppClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Connected App Client",
@@ -158,7 +156,7 @@ func (d *ConnectedAppDataSource) Configure(_ context.Context, req datasource.Con
 		return
 	}
 
-	scopesClient, err := accessmanagement.NewConnectedAppScopesClient(userConfig)
+	scopesClient, err := accessmanagement.NewConnectedAppScopesClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Connected App Scopes Client",

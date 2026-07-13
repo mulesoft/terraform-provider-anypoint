@@ -68,7 +68,7 @@ func TestRolePermissionClient_ListRoleAssignments_Paginates(t *testing.T) {
 	server := testutil.MockHTTPServer(t, handlers)
 
 	c := &RolePermissionClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -102,7 +102,7 @@ func TestRolePermissionClient_ListRoleAssignments_Paginates(t *testing.T) {
 func TestNewRolePermissionClient(t *testing.T) {
 	server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
 
-	config := &client.UserClientConfig{
+	config := &client.Config{
 		BaseURL:      server.URL,
 		ClientID:     "test-id",
 		ClientSecret: "test-secret",
@@ -123,7 +123,7 @@ func TestNewRolePermissionClient(t *testing.T) {
 }
 
 func TestNewRolePermissionClient_MissingClientID(t *testing.T) {
-	config := &client.UserClientConfig{
+	config := &client.Config{
 		BaseURL:      "http://localhost",
 		ClientID:     "",
 		ClientSecret: "test-secret",
@@ -173,7 +173,7 @@ func TestRolePermissionClient_AssignRole(t *testing.T) {
 	defer server.Close()
 
 	c := &RolePermissionClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -228,7 +228,7 @@ func TestRolePermissionClient_AssignRole_NullResponse(t *testing.T) {
 	defer server.Close()
 
 	c := &RolePermissionClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -272,7 +272,7 @@ func TestRolePermissionClient_AssignRole_WithEnvID(t *testing.T) {
 	defer server.Close()
 
 	c := &RolePermissionClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -300,7 +300,7 @@ func TestRolePermissionClient_AssignRole_ServerError(t *testing.T) {
 	defer server.Close()
 
 	c := &RolePermissionClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -337,7 +337,7 @@ func TestRolePermissionClient_UnassignRole(t *testing.T) {
 	defer server.Close()
 
 	c := &RolePermissionClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -362,7 +362,7 @@ func TestRolePermissionClient_UnassignRole_NotFound(t *testing.T) {
 	defer server.Close()
 
 	c := &RolePermissionClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -418,7 +418,7 @@ func TestRolePermissionClient_ListRoleAssignments(t *testing.T) {
 	defer server.Close()
 
 	c := &RolePermissionClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -449,7 +449,7 @@ func TestRolePermissionClient_ListRoleAssignments_NotFound(t *testing.T) {
 	defer server.Close()
 
 	c := &RolePermissionClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -496,7 +496,7 @@ func TestRolePermissionClient_GetRoleAssignment(t *testing.T) {
 	defer server.Close()
 
 	c := &RolePermissionClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -528,7 +528,7 @@ func TestRolePermissionClient_GetRoleAssignment_NotFound(t *testing.T) {
 	defer server.Close()
 
 	c := &RolePermissionClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -570,7 +570,7 @@ func TestRolePermissionClient_ListAvailableRoles(t *testing.T) {
 	defer server.Close()
 
 	c := &RolePermissionClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -601,7 +601,7 @@ func TestRolePermissionClient_ListAvailableRoles_ServerError(t *testing.T) {
 	defer server.Close()
 
 	c := &RolePermissionClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},

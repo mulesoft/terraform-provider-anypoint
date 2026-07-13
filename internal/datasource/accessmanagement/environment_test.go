@@ -227,7 +227,7 @@ func TestEnvironmentDataSource_ReadClientTests(t *testing.T) {
 
 			// Create client with mock server
 			envClient := &accessmanagement.EnvironmentClient{
-				UserAnypointClient: &client.UserAnypointClient{
+				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},
@@ -292,7 +292,7 @@ func TestEnvironmentDataSource_Read(t *testing.T) {
 
 	ds := NewEnvironmentDataSource().(*EnvironmentDataSource)
 	ds.client = &accessmanagement.EnvironmentClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -345,7 +345,7 @@ func TestEnvironmentDataSource_Read_Error(t *testing.T) {
 
 	ds := NewEnvironmentDataSource().(*EnvironmentDataSource)
 	ds.client = &accessmanagement.EnvironmentClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},

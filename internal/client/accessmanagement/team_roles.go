@@ -11,18 +11,18 @@ import (
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 )
 
-// TeamRolesClient wraps the UserAnypointClient for team role assignment operations.
+// TeamRolesClient wraps the AnypointClient for team role assignment operations.
 type TeamRolesClient struct {
-	*client.UserAnypointClient
+	*client.AnypointClient
 }
 
 // NewTeamRolesClient creates a new TeamRolesClient
-func NewTeamRolesClient(config *client.UserClientConfig) (*TeamRolesClient, error) {
-	userAnypointClient, err := client.NewUserAnypointClient(config)
+func NewTeamRolesClient(config *client.Config) (*TeamRolesClient, error) {
+	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err
 	}
-	return &TeamRolesClient{UserAnypointClient: userAnypointClient}, nil
+	return &TeamRolesClient{AnypointClient: anypointClient}, nil
 }
 
 // TeamRoleAssignment represents a role assigned to a team

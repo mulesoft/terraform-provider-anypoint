@@ -15,13 +15,13 @@ import (
 func TestNewTeamClient(t *testing.T) {
 	tests := []struct {
 		name        string
-		config      *client.UserClientConfig
+		config      *client.Config
 		wantErr     bool
 		errContains string
 	}{
 		{
 			name: "valid config",
-			config: &client.UserClientConfig{
+			config: &client.Config{
 				ClientID:     "test-client-id",
 				ClientSecret: "test-client-secret",
 				Username:     "test-user",
@@ -31,7 +31,7 @@ func TestNewTeamClient(t *testing.T) {
 		},
 		{
 			name: "missing client ID",
-			config: &client.UserClientConfig{
+			config: &client.Config{
 				ClientSecret: "test-client-secret",
 				Username:     "test-user",
 				Password:     "test-password",
@@ -41,7 +41,7 @@ func TestNewTeamClient(t *testing.T) {
 		},
 		{
 			name: "missing client secret",
-			config: &client.UserClientConfig{
+			config: &client.Config{
 				ClientID: "test-client-id",
 				Username: "test-user",
 				Password: "test-password",
@@ -218,7 +218,7 @@ func TestTeamClient_CreateTeam(t *testing.T) {
 			server := testutil.MockHTTPServer(t, handlers)
 
 			client := &TeamClient{
-				UserAnypointClient: &client.UserAnypointClient{
+				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},
@@ -333,7 +333,7 @@ func TestTeamClient_GetTeam(t *testing.T) {
 			server := testutil.MockHTTPServer(t, handlers)
 
 			client := &TeamClient{
-				UserAnypointClient: &client.UserAnypointClient{
+				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},
@@ -456,7 +456,7 @@ func TestTeamClient_UpdateTeam(t *testing.T) {
 			server := testutil.MockHTTPServer(t, handlers)
 
 			client := &TeamClient{
-				UserAnypointClient: &client.UserAnypointClient{
+				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},
@@ -542,7 +542,7 @@ func TestTeamClient_DeleteTeam(t *testing.T) {
 			server := testutil.MockHTTPServer(t, handlers)
 
 			client := &TeamClient{
-				UserAnypointClient: &client.UserAnypointClient{
+				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},

@@ -16,13 +16,13 @@ import (
 func TestNewOrganizationClient(t *testing.T) {
 	tests := []struct {
 		name        string
-		config      *client.UserClientConfig
+		config      *client.Config
 		wantErr     bool
 		errContains string
 	}{
 		{
 			name: "valid config",
-			config: &client.UserClientConfig{
+			config: &client.Config{
 				ClientID:     "test-client-id",
 				ClientSecret: "test-client-secret",
 				Username:     "test-user",
@@ -32,7 +32,7 @@ func TestNewOrganizationClient(t *testing.T) {
 		},
 		{
 			name: "missing client ID",
-			config: &client.UserClientConfig{
+			config: &client.Config{
 				ClientSecret: "test-client-secret",
 				Username:     "test-user",
 				Password:     "test-password",
@@ -42,7 +42,7 @@ func TestNewOrganizationClient(t *testing.T) {
 		},
 		{
 			name: "missing client secret",
-			config: &client.UserClientConfig{
+			config: &client.Config{
 				ClientID: "test-client-id",
 				Username: "test-user",
 				Password: "test-password",
@@ -171,7 +171,7 @@ func TestOrganizationClient_CreateOrganization(t *testing.T) {
 			server := testutil.MockHTTPServer(t, handlers)
 
 			client := &OrganizationClient{
-				UserAnypointClient: &client.UserAnypointClient{
+				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},
@@ -292,7 +292,7 @@ func TestOrganizationClient_GetOrganization(t *testing.T) {
 			server := testutil.MockHTTPServer(t, handlers)
 
 			client := &OrganizationClient{
-				UserAnypointClient: &client.UserAnypointClient{
+				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},
@@ -491,7 +491,7 @@ func TestOrganizationClient_UpdateOrganization(t *testing.T) {
 			server := testutil.MockHTTPServer(t, handlers)
 
 			oc := &OrganizationClient{
-				UserAnypointClient: &client.UserAnypointClient{
+				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},
@@ -633,7 +633,7 @@ func TestOrganizationClient_ErrorHandling(t *testing.T) {
 			name: "nil request to CreateOrganization",
 			setupClient: func() *OrganizationClient {
 				return &OrganizationClient{
-					UserAnypointClient: &client.UserAnypointClient{
+					AnypointClient: &client.AnypointClient{
 						BaseURL:    "http://test.com",
 						Token:      "mock-token",
 						HTTPClient: &http.Client{},
@@ -650,7 +650,7 @@ func TestOrganizationClient_ErrorHandling(t *testing.T) {
 			name: "empty organization ID to GetOrganization",
 			setupClient: func() *OrganizationClient {
 				return &OrganizationClient{
-					UserAnypointClient: &client.UserAnypointClient{
+					AnypointClient: &client.AnypointClient{
 						BaseURL:    "http://test.com",
 						Token:      "mock-token",
 						HTTPClient: &http.Client{},
@@ -720,7 +720,7 @@ func TestOrganizationClient_WaitForOrganizationDeletion(t *testing.T) {
 		server := testutil.MockHTTPServer(t, handlers)
 
 		c := &OrganizationClient{
-			UserAnypointClient: &client.UserAnypointClient{
+			AnypointClient: &client.AnypointClient{
 				BaseURL: server.URL, Token: "mock-token", HTTPClient: &http.Client{},
 			},
 		}
@@ -744,7 +744,7 @@ func TestOrganizationClient_WaitForOrganizationDeletion(t *testing.T) {
 		server := testutil.MockHTTPServer(t, handlers)
 
 		c := &OrganizationClient{
-			UserAnypointClient: &client.UserAnypointClient{
+			AnypointClient: &client.AnypointClient{
 				BaseURL: server.URL, Token: "mock-token", HTTPClient: &http.Client{},
 			},
 		}
@@ -769,7 +769,7 @@ func TestOrganizationClient_WaitForOrganizationDeletion(t *testing.T) {
 		server := testutil.MockHTTPServer(t, handlers)
 
 		c := &OrganizationClient{
-			UserAnypointClient: &client.UserAnypointClient{
+			AnypointClient: &client.AnypointClient{
 				BaseURL: server.URL, Token: "mock-token", HTTPClient: &http.Client{},
 			},
 		}

@@ -25,7 +25,7 @@ type ScopesCatalogDataSource struct {
 
 // ScopesCatalogDataSourceModel describes the data source data model.
 type ScopesCatalogDataSourceModel struct {
-	Scopes         []ScopeCatalogModel `tfsdk:"scopes"`
+	Scopes          []ScopeCatalogModel `tfsdk:"scopes"`
 	IncludeInternal types.Bool          `tfsdk:"include_internal"`
 }
 
@@ -107,16 +107,7 @@ func (d *ScopesCatalogDataSource) Configure(_ context.Context, req datasource.Co
 		return
 	}
 
-	userConfig := &client.UserClientConfig{
-		BaseURL:      config.BaseURL,
-		ClientID:     config.ClientID,
-		ClientSecret: config.ClientSecret,
-		Username:     config.Username,
-		Password:     config.Password,
-		Timeout:      config.Timeout,
-	}
-
-	catalogClient, err := accessmanagement.NewScopesCatalogClient(userConfig)
+	catalogClient, err := accessmanagement.NewScopesCatalogClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Scopes Catalog Client",

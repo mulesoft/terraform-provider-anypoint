@@ -38,7 +38,7 @@ func TestNewRoleUsersClient(t *testing.T) {
 	}))
 	defer server.Close()
 
-	config := &client.UserClientConfig{
+	config := &client.Config{
 		BaseURL:      server.URL,
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
@@ -70,7 +70,7 @@ func TestRoleUsersClient_AddUserToRoleGroup(t *testing.T) {
 	defer server.Close()
 
 	c := &RoleUsersClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -92,7 +92,7 @@ func TestRoleUsersClient_AddUserToRoleGroup_NotFound(t *testing.T) {
 	defer server.Close()
 
 	c := &RoleUsersClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -124,7 +124,7 @@ func TestRoleUsersClient_RemoveUserFromRoleGroup(t *testing.T) {
 	defer server.Close()
 
 	c := &RoleUsersClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -147,7 +147,7 @@ func TestRoleUsersClient_RemoveUserFromRoleGroup_Conflict(t *testing.T) {
 	defer server.Close()
 
 	c := &RoleUsersClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -193,7 +193,7 @@ func TestRoleUsersClient_ListRoleGroupUsers(t *testing.T) {
 	defer server.Close()
 
 	c := &RoleUsersClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -227,7 +227,7 @@ func TestRoleUsersClient_GetRoleGroupUser(t *testing.T) {
 	defer server.Close()
 
 	c := &RoleUsersClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -255,7 +255,7 @@ func TestRoleUsersClient_GetRoleGroupUser_NotFound(t *testing.T) {
 	defer server.Close()
 
 	c := &RoleUsersClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -286,7 +286,7 @@ func TestRoleUsersClient_ListOrgUsers(t *testing.T) {
 	defer server.Close()
 
 	c := &RoleUsersClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -311,7 +311,7 @@ func TestRoleUsersClient_ListOrgUsers_ServerError(t *testing.T) {
 	defer server.Close()
 
 	c := &RoleUsersClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},

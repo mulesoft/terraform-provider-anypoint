@@ -171,7 +171,7 @@ func TestAvailableRolesDataSource_Read(t *testing.T) {
 
 	ds := NewAvailableRolesDataSource().(*AvailableRolesDataSource)
 	ds.client = &accessmanagement.RolePermissionClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -249,7 +249,7 @@ func TestAvailableRolesDataSource_Read_WithFilter(t *testing.T) {
 
 	ds := NewAvailableRolesDataSource().(*AvailableRolesDataSource)
 	ds.client = &accessmanagement.RolePermissionClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -321,7 +321,7 @@ func TestAvailableRolesDataSource_Read_CaseInsensitiveFilter(t *testing.T) {
 
 	ds := NewAvailableRolesDataSource().(*AvailableRolesDataSource)
 	ds.client = &accessmanagement.RolePermissionClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -377,7 +377,7 @@ func TestAvailableRolesDataSource_Read_Error(t *testing.T) {
 
 	ds := NewAvailableRolesDataSource().(*AvailableRolesDataSource)
 	ds.client = &accessmanagement.RolePermissionClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},

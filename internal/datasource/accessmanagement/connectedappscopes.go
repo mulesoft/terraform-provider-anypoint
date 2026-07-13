@@ -103,18 +103,8 @@ func (d *ConnectedAppScopesDataSource) Configure(_ context.Context, req datasour
 		return
 	}
 
-	// Create user client config - ConnectedAppScopesClient requires UserClientConfig
-	userConfig := &client.UserClientConfig{
-		BaseURL:      config.BaseURL,
-		ClientID:     config.ClientID,
-		ClientSecret: config.ClientSecret,
-		Username:     config.Username,
-		Password:     config.Password,
-		Timeout:      config.Timeout,
-	}
-
 	// Create the connected app scopes client
-	scopesClient, err := accessmanagement.NewConnectedAppScopesClient(userConfig)
+	scopesClient, err := accessmanagement.NewConnectedAppScopesClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Anypoint Connected App Scopes API Client",
@@ -126,7 +116,7 @@ func (d *ConnectedAppScopesDataSource) Configure(_ context.Context, req datasour
 	}
 
 	// Create catalog client for display name resolution
-	catalogClient, err := accessmanagement.NewScopesCatalogClient(userConfig)
+	catalogClient, err := accessmanagement.NewScopesCatalogClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Scopes Catalog Client",

@@ -9,29 +9,28 @@ description: |-
 
 Manages an Anypoint Platform team.
 
-~> **Note:** This is an Access Management resource and requires the **admin provider** (`anypoint.admin`), which uses admin user credentials along with the `client_id` and `client_secret` of a connected app to authenticate on behalf of the user (`auth_type = "user"`). You must set `provider = anypoint.admin` on this resource. The default provider (connected app credentials only) does not have sufficient privileges for Access Management operations.
-
--> **Connected App:** This resource requires an **admin connected app** configured with `auth_type = "user"` (user credentials + connected app client credentials). Use the `anypoint.admin` provider alias. A standard connected app (client credentials only) does not have sufficient privileges for Access Management operations.
+-> **Authentication:** This resource uses client_credentials authentication via the connected app configured in the provider block. No username/password is required.
 
 ## Example Usage
 
 ```terraform
-# Admin provider – authenticates on behalf of a user using connected app credentials
 provider "anypoint" {
-  alias         = "admin"
-  auth_type     = "user"
-  client_id     = var.anypoint_admin_client_id
-  client_secret = var.anypoint_admin_client_secret
-  username      = var.anypoint_admin_username
-  password      = var.anypoint_admin_password
+  client_id     = var.anypoint_client_id
+  client_secret = var.anypoint_client_secret
   base_url      = var.anypoint_base_url
 }
 
+# Look up the root team to use as parent
+data "anypoint_teams" "all" {}
+
+locals {
+  root_team_id = [for t in data.anypoint_teams.all.teams : t.id if t.is_root_team][0]
+}
+
 resource "anypoint_team" "example" {
-  provider  = anypoint.admin
-  name      = "Development Team"
-  team_type = "internal"
-  # parent_team is optional — omit to create under the org root team
+  name           = "Development Team"
+  team_type      = "internal"
+  parent_team_id = local.root_team_id  # optional — omit to default to root team
 
   # Inline role assignments. Roles are referenced by their UI display name
   # (case-insensitive); the provider resolves each name to a role ID at apply time.
@@ -58,10 +57,9 @@ resource "anypoint_team" "example" {
 }
 
 resource "anypoint_team" "sub_team" {
-  provider    = anypoint.admin
-  name        = "Frontend Team"
-  parent_team = anypoint_team.example.name
-  team_type   = "internal"
+  name           = "Frontend Team"
+  parent_team_id = anypoint_team.example.id
+  team_type      = "internal"
 }
 ```
 
@@ -74,7 +72,7 @@ resource "anypoint_team" "sub_team" {
 ### Optional
 
 - `organization_id` (String) The organization ID where the team will be created. If not provided, the organization ID will be inferred from the connected app credentials.
-- `parent_team` (String, Optional) The name of the parent team. The provider resolves it to an ID automatically (case-insensitive). If omitted, the org's root team is used as the parent — mirroring the Anypoint UI default.
+- `parent_team_id` (String, Optional) The ID of the parent team. If omitted, the org's root team is used as the parent — mirroring the Anypoint UI default. Use the `anypoint_teams` data source to look up team IDs by name.
 - `team_type` (String) The type of the team. Optional; defaults to `internal` — the same default the Anypoint UI applies (its Create Team dialog only asks for a name and parent, and sends `team_type: "internal"` behind the scenes). Changing the type requires the target type to be enabled in the organization.
 - `members` (Attributes Set) The set of members of this team. When set, this list is authoritative: members not listed here are removed on apply. Omit the attribute entirely to leave membership unmanaged. Members assigned via external groups (SAML/SCIM) are never modified. (see [below for nested schema](#nestedatt--members))
 - `roles` (Attributes Set) The set of roles (permissions) assigned to this team. When set, this list is authoritative: roles not listed here are removed on apply. Omit the attribute entirely to leave role assignments unmanaged. System (internal) assignments are never modified. (see [below for nested schema](#nestedatt--roles))
@@ -115,13 +113,11 @@ An existing team can be imported using its team ID (UUID).
 
 ```terraform
 import {
-  provider = anypoint.admin
-  to       = anypoint_team.imported
-  id       = "<team_id>"
+  to = anypoint_team.imported
+  id = "<team_id>"
 }
 
 resource "anypoint_team" "imported" {
-  provider        = anypoint.admin
   organization_id = "<organization_id>"
   name            = "<team_name>"
   team_type       = "internal"

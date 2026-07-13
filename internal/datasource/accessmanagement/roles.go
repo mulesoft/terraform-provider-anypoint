@@ -105,16 +105,7 @@ func (d *RolesDataSource) Configure(_ context.Context, req datasource.ConfigureR
 		return
 	}
 
-	userConfig := &client.UserClientConfig{
-		BaseURL:      config.BaseURL,
-		ClientID:     config.ClientID,
-		ClientSecret: config.ClientSecret,
-		Username:     config.Username,
-		Password:     config.Password,
-		Timeout:      config.Timeout,
-	}
-
-	roleClient, err := accessmanagement.NewRoleClient(userConfig)
+	roleClient, err := accessmanagement.NewRoleClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Anypoint Role Group API Client",

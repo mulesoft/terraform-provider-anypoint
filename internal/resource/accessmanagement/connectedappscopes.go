@@ -119,18 +119,7 @@ func (r *ConnectedAppScopesResource) Configure(_ context.Context, req resource.C
 		return
 	}
 
-	// Create user client config - this is a simplified implementation
-	// In practice, you'd need to get username/password from the provider configuration
-	userConfig := &client.UserClientConfig{
-		ClientID:     config.ClientID,
-		ClientSecret: config.ClientSecret,
-		BaseURL:      config.BaseURL,
-		Timeout:      config.Timeout,
-		Username:     config.Username,
-		Password:     config.Password,
-	}
-
-	scopesClient, err := accessmanagement.NewConnectedAppScopesClient(userConfig)
+	scopesClient, err := accessmanagement.NewConnectedAppScopesClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Connected App Scopes Client",

@@ -26,9 +26,9 @@ type TeamsDataSource struct {
 
 // TeamsDataSourceModel describes the data source data model.
 type TeamsDataSourceModel struct {
-	OrganizationID types.String     `tfsdk:"organization_id"`
-	NameFilter     types.String     `tfsdk:"name_filter"`
-	Teams          []TeamItemModel  `tfsdk:"teams"`
+	OrganizationID types.String    `tfsdk:"organization_id"`
+	NameFilter     types.String    `tfsdk:"name_filter"`
+	Teams          []TeamItemModel `tfsdk:"teams"`
 }
 
 // TeamItemModel describes a single team in the list.
@@ -124,16 +124,7 @@ func (d *TeamsDataSource) Configure(_ context.Context, req datasource.ConfigureR
 		return
 	}
 
-	userConfig := &client.UserClientConfig{
-		BaseURL:      config.BaseURL,
-		ClientID:     config.ClientID,
-		ClientSecret: config.ClientSecret,
-		Username:     config.Username,
-		Password:     config.Password,
-		Timeout:      config.Timeout,
-	}
-
-	teamClient, err := accessmanagement.NewTeamClient(userConfig)
+	teamClient, err := accessmanagement.NewTeamClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Teams Client",

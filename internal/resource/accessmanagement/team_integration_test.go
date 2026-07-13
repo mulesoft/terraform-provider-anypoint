@@ -35,7 +35,7 @@ func TestIntegrationTeamResource_CRUD(t *testing.T) {
 	defer server.Close()
 
 	// Create client
-	userClientConfig := &client.UserClientConfig{
+	clientConfig := &client.Config{
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
 		Username:     "test-user",
@@ -44,13 +44,13 @@ func TestIntegrationTeamResource_CRUD(t *testing.T) {
 		Timeout:      30,
 	}
 
-	userClient, err := client.NewUserAnypointClient(userClientConfig)
+	userClient, err := client.NewAnypointClient(clientConfig)
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
 
 	teamClient := &accessmanagement.TeamClient{
-		UserAnypointClient: userClient,
+		AnypointClient: userClient,
 	}
 
 	// Create team resource
@@ -138,7 +138,7 @@ func TestIntegrationTeamResource_ErrorHandling(t *testing.T) {
 	defer server.Close()
 
 	// Create client
-	userClientConfig := &client.UserClientConfig{
+	clientConfig := &client.Config{
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
 		Username:     "test-user",
@@ -147,13 +147,13 @@ func TestIntegrationTeamResource_ErrorHandling(t *testing.T) {
 		Timeout:      30,
 	}
 
-	userClient, err := client.NewUserAnypointClient(userClientConfig)
+	userClient, err := client.NewAnypointClient(clientConfig)
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
 
 	teamClient := &accessmanagement.TeamClient{
-		UserAnypointClient: userClient,
+		AnypointClient: userClient,
 	}
 
 	ctx := context.Background()

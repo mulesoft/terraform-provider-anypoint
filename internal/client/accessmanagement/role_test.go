@@ -13,13 +13,13 @@ import (
 func TestNewRoleClient(t *testing.T) {
 	tests := []struct {
 		name        string
-		config      *client.UserClientConfig
+		config      *client.Config
 		wantErr     bool
 		errContains string
 	}{
 		{
 			name: "valid config",
-			config: &client.UserClientConfig{
+			config: &client.Config{
 				ClientID:     "test-client-id",
 				ClientSecret: "test-client-secret",
 				Username:     "test-user",
@@ -29,7 +29,7 @@ func TestNewRoleClient(t *testing.T) {
 		},
 		{
 			name: "missing client ID",
-			config: &client.UserClientConfig{
+			config: &client.Config{
 				ClientSecret: "test-client-secret",
 				Username:     "test-user",
 				Password:     "test-password",
@@ -39,7 +39,7 @@ func TestNewRoleClient(t *testing.T) {
 		},
 		{
 			name: "missing client secret",
-			config: &client.UserClientConfig{
+			config: &client.Config{
 				ClientID: "test-client-id",
 				Username: "test-user",
 				Password: "test-password",
@@ -161,7 +161,7 @@ func TestRoleClient_CreateRoleGroup(t *testing.T) {
 
 			server := testutil.MockHTTPServer(t, handlers)
 
-			roleClient, err := NewRoleClient(&client.UserClientConfig{
+			roleClient, err := NewRoleClient(&client.Config{
 				BaseURL:      server.URL,
 				ClientID:     "test-client-id",
 				ClientSecret: "test-client-secret",
@@ -253,7 +253,7 @@ func TestRoleClient_GetRoleGroup(t *testing.T) {
 
 			server := testutil.MockHTTPServer(t, handlers)
 
-			roleClient, err := NewRoleClient(&client.UserClientConfig{
+			roleClient, err := NewRoleClient(&client.Config{
 				BaseURL:      server.URL,
 				ClientID:     "test-client-id",
 				ClientSecret: "test-client-secret",
@@ -363,7 +363,7 @@ func TestRoleClient_UpdateRoleGroup(t *testing.T) {
 
 			server := testutil.MockHTTPServer(t, handlers)
 
-			roleClient, err := NewRoleClient(&client.UserClientConfig{
+			roleClient, err := NewRoleClient(&client.Config{
 				BaseURL:      server.URL,
 				ClientID:     "test-client-id",
 				ClientSecret: "test-client-secret",
@@ -447,7 +447,7 @@ func TestRoleClient_DeleteRoleGroup(t *testing.T) {
 
 			server := testutil.MockHTTPServer(t, handlers)
 
-			roleClient, err := NewRoleClient(&client.UserClientConfig{
+			roleClient, err := NewRoleClient(&client.Config{
 				BaseURL:      server.URL,
 				ClientID:     "test-client-id",
 				ClientSecret: "test-client-secret",
@@ -548,7 +548,7 @@ func TestRoleClient_ListRoleGroups(t *testing.T) {
 
 			server := testutil.MockHTTPServer(t, handlers)
 
-			roleClient, err := NewRoleClient(&client.UserClientConfig{
+			roleClient, err := NewRoleClient(&client.Config{
 				BaseURL:      server.URL,
 				ClientID:     "test-client-id",
 				ClientSecret: "test-client-secret",

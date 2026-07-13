@@ -172,6 +172,9 @@ func (r *ConnectedAppResource) Schema(_ context.Context, _ resource.SchemaReques
 			"owner_user_id": schema.StringAttribute{
 				Description: "The user ID of the app owner.",
 				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"created_at": schema.StringAttribute{
 				Description: "When the connected app was created.",
@@ -194,6 +197,7 @@ func (r *ConnectedAppResource) Schema(_ context.Context, _ resource.SchemaReques
 					"client_credentials and user-behalf apps). Prefer this over the separate " +
 					"anypoint_connected_app_scopes resource, which is deprecated.",
 				Optional: true,
+				Computed: true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"scope": schema.StringAttribute{
@@ -230,16 +234,7 @@ func (r *ConnectedAppResource) Configure(_ context.Context, req resource.Configu
 		return
 	}
 
-	userConfig := &client.UserClientConfig{
-		BaseURL:      config.BaseURL,
-		ClientID:     config.ClientID,
-		ClientSecret: config.ClientSecret,
-		Username:     config.Username,
-		Password:     config.Password,
-		Timeout:      config.Timeout,
-	}
-
-	appClient, err := accessmanagement.NewConnectedAppClient(userConfig)
+	appClient, err := accessmanagement.NewConnectedAppClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Connected App Client",
@@ -248,7 +243,7 @@ func (r *ConnectedAppResource) Configure(_ context.Context, req resource.Configu
 		return
 	}
 
-	scopesClient, err := accessmanagement.NewConnectedAppScopesClient(userConfig)
+	scopesClient, err := accessmanagement.NewConnectedAppScopesClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Connected App Scopes Client",
@@ -379,6 +374,26 @@ func (r *ConnectedAppResource) Create(ctx context.Context, req resource.CreateRe
 		"name":      app.ClientName,
 	})
 
+	// For unmanaged scopes (config omitted → plan is unknown), populate from API
+	// so state is concrete. With Optional+Computed, Terraform needs a value.
+	if plan.Scopes.IsNull() || plan.Scopes.IsUnknown() {
+		if isClientCredentials(grantTypes) {
+			reconciled, diags := r.reconcileScopesIntoState(ctx, app.ClientID, plan.Scopes)
+			resp.Diagnostics.Append(diags...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+			plan.Scopes = reconciled
+		} else {
+			reconciled, diags := reconcileUserBehalfScopesIntoState(app.Scopes, plan.Scopes)
+			resp.Diagnostics.Append(diags...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+			plan.Scopes = reconciled
+		}
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -424,26 +439,26 @@ func (r *ConnectedAppResource) Read(ctx context.Context, req resource.ReadReques
 		return
 	}
 
-	// Reconcile scopes only when they are being managed (state.Scopes non-null).
+	// Always reconcile scopes from the API into state. With Optional+Computed,
+	// Terraform handles the diff: if config sets scopes, it becomes authoritative;
+	// if config omits them, state (from API) is accepted as-is.
 	// Per RAML spec: context-aware /scopes is ONLY for client_credentials.
 	// User-behalf apps read from the flat body scopes field.
-	if !state.Scopes.IsNull() {
-		if isClientCredentials(app.GrantTypes) {
-			reconciled, diags := r.reconcileScopesIntoState(ctx, state.ID.ValueString(), state.Scopes)
-			resp.Diagnostics.Append(diags...)
-			if resp.Diagnostics.HasError() {
-				return
-			}
-			state.Scopes = reconciled
-		} else {
-			// User-behalf: read from the flat body scopes field (already in app.Scopes)
-			reconciled, diags := reconcileUserBehalfScopesIntoState(app.Scopes, state.Scopes)
-			resp.Diagnostics.Append(diags...)
-			if resp.Diagnostics.HasError() {
-				return
-			}
-			state.Scopes = reconciled
+	if isClientCredentials(app.GrantTypes) {
+		reconciled, diags := r.reconcileScopesIntoState(ctx, state.ID.ValueString(), state.Scopes)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
 		}
+		state.Scopes = reconciled
+	} else {
+		// User-behalf: read from the flat body scopes field (already in app.Scopes)
+		reconciled, diags := reconcileUserBehalfScopesIntoState(app.Scopes, state.Scopes)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		state.Scopes = reconciled
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -618,11 +633,9 @@ func (r *ConnectedAppResource) ImportState(ctx context.Context, req resource.Imp
 	// Note: client_secret is not available after import — it's only shown at creation.
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("client_secret"), "")...)
 
-	// Seed scopes as empty set so the subsequent Read populates them from the API.
-	// (null would cause Read to skip them as "unmanaged".)
-	emptyScopes, diags := types.SetValue(connectedAppScopeObjectType, []attr.Value{})
-	resp.Diagnostics.Append(diags...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("scopes"), emptyScopes)...)
+	// Scopes will be populated by the Read that follows ImportState.
+	// With Optional+Computed schema, the API-read values become state, and
+	// Terraform's diff engine handles authoritative enforcement if config sets them.
 }
 
 // setListsFromAPI converts API response arrays to Terraform list types.

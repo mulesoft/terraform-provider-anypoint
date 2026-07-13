@@ -43,7 +43,7 @@ output "team_members" {
 ### Read-Only
 
 - `name` (String) The name of the team.
-- `parent_team` (String) The name of the parent team (reverse-resolved from its ID). Null for root teams.
+- `parent_team_id` (String) The ID of the parent team. Null for root teams. Use this value as `parent_team_id` when creating child teams.
 - `team_type` (String) The type of the team.
 - `roles` (Attributes List) The roles (permissions) assigned to this team. Excludes system/internal assignments. (see [below for nested schema](#nestedatt--roles))
 - `members` (Attributes List) The members of this team. (see [below for nested schema](#nestedatt--members))

@@ -181,16 +181,16 @@ func newRoleTestResource(t *testing.T, state *roleTestServerState) *RoleResource
 	}
 
 	server := testutil.MockHTTPServer(t, handlers)
-	userClient := &client.UserAnypointClient{
+	userClient := &client.AnypointClient{
 		BaseURL:    server.URL,
 		Token:      "mock-token",
 		HTTPClient: &http.Client{},
 		OrgID:      testOrgID,
 	}
 	return &RoleResource{
-		client:      &accessmanagement.RoleClient{UserAnypointClient: userClient},
-		permClient:  &accessmanagement.RolePermissionClient{UserAnypointClient: userClient},
-		usersClient: &accessmanagement.RoleUsersClient{UserAnypointClient: userClient},
+		client:      &accessmanagement.RoleClient{AnypointClient: userClient},
+		permClient:  &accessmanagement.RolePermissionClient{AnypointClient: userClient},
+		usersClient: &accessmanagement.RoleUsersClient{AnypointClient: userClient},
 	}
 }
 

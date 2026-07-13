@@ -35,8 +35,8 @@ resource "anypoint_team" "parent" {
 }
 
 resource "anypoint_team" "child" {
-  name        = "Child Team"
-  parent_team = anypoint_team.parent.name
+  name           = "Child Team"
+  parent_team_id = anypoint_team.parent.id
 }
 ```
 

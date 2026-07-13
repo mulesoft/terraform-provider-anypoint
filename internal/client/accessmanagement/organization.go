@@ -13,18 +13,18 @@ import (
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 )
 
-// OrganizationClient wraps the UserAnypointClient for organization operations
+// OrganizationClient wraps the AnypointClient for organization operations
 type OrganizationClient struct {
-	*client.UserAnypointClient
+	*client.AnypointClient
 }
 
-// NewOrganizationClient creates a new OrganizationClient using UserAnypointClient
-func NewOrganizationClient(config *client.UserClientConfig) (*OrganizationClient, error) {
-	userAnypointClient, err := client.NewUserAnypointClient(config)
+// NewOrganizationClient creates a new OrganizationClient using AnypointClient
+func NewOrganizationClient(config *client.Config) (*OrganizationClient, error) {
+	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err
 	}
-	return &OrganizationClient{UserAnypointClient: userAnypointClient}, nil
+	return &OrganizationClient{AnypointClient: anypointClient}, nil
 }
 
 // VCoreEntitlement represents a vCore-style entitlement structure

@@ -213,7 +213,7 @@ func TestConnectedAppScopesDataSource_ReadClientTests(t *testing.T) {
 
 			// Create client with mock server
 			scopesClient := &accessmanagement.ConnectedAppScopesClient{
-				UserAnypointClient: &client.UserAnypointClient{
+				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},
@@ -273,7 +273,7 @@ func TestConnectedAppScopesDataSource_Read(t *testing.T) {
 
 	ds := NewConnectedAppScopesDataSource().(*ConnectedAppScopesDataSource)
 	ds.client = &accessmanagement.ConnectedAppScopesClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -331,7 +331,7 @@ func TestConnectedAppScopesDataSource_Read_Error(t *testing.T) {
 
 	ds := NewConnectedAppScopesDataSource().(*ConnectedAppScopesDataSource)
 	ds.client = &accessmanagement.ConnectedAppScopesClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
