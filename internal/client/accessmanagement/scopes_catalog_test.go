@@ -13,13 +13,13 @@ import (
 func TestNewScopesCatalogClient(t *testing.T) {
 	tests := []struct {
 		name        string
-		config      *client.UserClientConfig
+		config      *client.Config
 		wantErr     bool
 		errContains string
 	}{
 		{
 			name: "valid config",
-			config: &client.UserClientConfig{
+			config: &client.Config{
 				ClientID:     "test-client-id",
 				ClientSecret: "test-client-secret",
 				Username:     "test-user",
@@ -29,7 +29,7 @@ func TestNewScopesCatalogClient(t *testing.T) {
 		},
 		{
 			name: "missing client ID",
-			config: &client.UserClientConfig{
+			config: &client.Config{
 				ClientSecret: "test-client-secret",
 				Username:     "test-user",
 				Password:     "test-password",
@@ -39,7 +39,7 @@ func TestNewScopesCatalogClient(t *testing.T) {
 		},
 		{
 			name: "missing client secret",
-			config: &client.UserClientConfig{
+			config: &client.Config{
 				ClientID: "test-client-id",
 				Username: "test-user",
 				Password: "test-password",
@@ -146,7 +146,7 @@ func TestScopesCatalogClient_ListScopesCatalog(t *testing.T) {
 			server := testutil.MockHTTPServer(t, handlers)
 
 			client := &ScopesCatalogClient{
-				UserAnypointClient: &client.UserAnypointClient{
+				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},

@@ -14,13 +14,13 @@ import (
 func TestNewConnectedAppClient(t *testing.T) {
 	tests := []struct {
 		name        string
-		config      *client.UserClientConfig
+		config      *client.Config
 		wantErr     bool
 		errContains string
 	}{
 		{
 			name: "valid config",
-			config: &client.UserClientConfig{
+			config: &client.Config{
 				ClientID:     "test-client-id",
 				ClientSecret: "test-client-secret",
 				Username:     "test-user",
@@ -30,7 +30,7 @@ func TestNewConnectedAppClient(t *testing.T) {
 		},
 		{
 			name: "missing client ID",
-			config: &client.UserClientConfig{
+			config: &client.Config{
 				ClientSecret: "test-client-secret",
 				Username:     "test-user",
 				Password:     "test-password",
@@ -40,7 +40,7 @@ func TestNewConnectedAppClient(t *testing.T) {
 		},
 		{
 			name: "missing client secret",
-			config: &client.UserClientConfig{
+			config: &client.Config{
 				ClientID: "test-client-id",
 				Username: "test-user",
 				Password: "test-password",
@@ -164,7 +164,7 @@ func TestConnectedAppClient_CreateConnectedApp(t *testing.T) {
 			server := testutil.MockHTTPServer(t, handlers)
 
 			client := &ConnectedAppClient{
-				UserAnypointClient: &client.UserAnypointClient{
+				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},
@@ -255,7 +255,7 @@ func TestConnectedAppClient_GetConnectedApp(t *testing.T) {
 			server := testutil.MockHTTPServer(t, handlers)
 
 			client := &ConnectedAppClient{
-				UserAnypointClient: &client.UserAnypointClient{
+				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},
@@ -356,7 +356,7 @@ func TestConnectedAppClient_UpdateConnectedApp(t *testing.T) {
 			server := testutil.MockHTTPServer(t, handlers)
 
 			client := &ConnectedAppClient{
-				UserAnypointClient: &client.UserAnypointClient{
+				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},
@@ -431,7 +431,7 @@ func TestConnectedAppClient_DeleteConnectedApp(t *testing.T) {
 			server := testutil.MockHTTPServer(t, handlers)
 
 			client := &ConnectedAppClient{
-				UserAnypointClient: &client.UserAnypointClient{
+				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},

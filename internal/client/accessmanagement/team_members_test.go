@@ -14,13 +14,13 @@ import (
 func TestNewTeamMembersClient(t *testing.T) {
 	tests := []struct {
 		name        string
-		config      *client.UserClientConfig
+		config      *client.Config
 		wantErr     bool
 		errContains string
 	}{
 		{
 			name: "valid config",
-			config: &client.UserClientConfig{
+			config: &client.Config{
 				ClientID:     "test-client-id",
 				ClientSecret: "test-client-secret",
 				Username:     "test-user",
@@ -30,7 +30,7 @@ func TestNewTeamMembersClient(t *testing.T) {
 		},
 		{
 			name: "missing client ID",
-			config: &client.UserClientConfig{
+			config: &client.Config{
 				ClientSecret: "test-client-secret",
 				Username:     "test-user",
 				Password:     "test-password",
@@ -145,7 +145,7 @@ func TestTeamMembersClient_AddTeamMember(t *testing.T) {
 			server := testutil.MockHTTPServer(t, handlers)
 
 			client := &TeamMembersClient{
-				UserAnypointClient: &client.UserAnypointClient{
+				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},
@@ -221,7 +221,7 @@ func TestTeamMembersClient_RemoveTeamMember(t *testing.T) {
 			server := testutil.MockHTTPServer(t, handlers)
 
 			client := &TeamMembersClient{
-				UserAnypointClient: &client.UserAnypointClient{
+				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},
@@ -320,7 +320,7 @@ func TestTeamMembersClient_ListTeamMembers(t *testing.T) {
 			server := testutil.MockHTTPServer(t, handlers)
 
 			client := &TeamMembersClient{
-				UserAnypointClient: &client.UserAnypointClient{
+				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},

@@ -10,18 +10,18 @@ import (
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 )
 
-// ScopesCatalogClient wraps the UserAnypointClient for scopes catalog operations.
+// ScopesCatalogClient wraps the AnypointClient for scopes catalog operations.
 type ScopesCatalogClient struct {
-	*client.UserAnypointClient
+	*client.AnypointClient
 }
 
 // NewScopesCatalogClient creates a new ScopesCatalogClient.
-func NewScopesCatalogClient(config *client.UserClientConfig) (*ScopesCatalogClient, error) {
-	userClient, err := client.NewUserAnypointClient(config)
+func NewScopesCatalogClient(config *client.Config) (*ScopesCatalogClient, error) {
+	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err
 	}
-	return &ScopesCatalogClient{UserAnypointClient: userClient}, nil
+	return &ScopesCatalogClient{AnypointClient: anypointClient}, nil
 }
 
 // ScopeCatalogEntry represents a single scope in the platform catalog.

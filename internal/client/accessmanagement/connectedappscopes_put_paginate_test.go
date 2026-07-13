@@ -59,7 +59,7 @@ func TestConnectedAppScopesClient_GetConnectedAppScopes_Paginates(t *testing.T) 
 	server := testutil.MockHTTPServer(t, handlers)
 
 	c := &ConnectedAppScopesClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -131,7 +131,7 @@ func TestConnectedAppScopesClient_ReplaceConnectedAppScopes(t *testing.T) {
 			server := testutil.MockHTTPServer(t, handlers)
 
 			c := &ConnectedAppScopesClient{
-				UserAnypointClient: &client.UserAnypointClient{
+				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},

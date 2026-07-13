@@ -3,7 +3,6 @@ package accessmanagement
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -40,7 +39,7 @@ type TeamResourceModel struct {
 	ID             types.String `tfsdk:"id"`
 	Name           types.String `tfsdk:"name"`
 	OrganizationID types.String `tfsdk:"organization_id"`
-	ParentTeam     types.String `tfsdk:"parent_team"`
+	ParentTeamID   types.String `tfsdk:"parent_team_id"`
 	TeamType       types.String `tfsdk:"team_type"`
 	Roles          types.Set    `tfsdk:"roles"`
 	Members        types.Set    `tfsdk:"members"`
@@ -81,11 +80,10 @@ func (r *TeamResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"parent_team": schema.StringAttribute{
-				Description: "The parent team (by name, case-insensitive). The provider resolves " +
-					"this to an ID automatically. If not specified, defaults to the organization's " +
-					"root team. After import, this is populated by reverse-resolving the parent " +
-					"team's ID back to its name — matching the Anypoint UI.",
+			"parent_team_id": schema.StringAttribute{
+				Description: "The ID of the parent team. If not specified, defaults to the organization's " +
+					"root team (mirroring the Anypoint UI default). Use the anypoint_teams data source " +
+					"to look up team IDs by name, or use the root team's ID (the one with is_root_team = true).",
 				Optional: true,
 				Computed: true,
 				PlanModifiers: []planmodifier.String{
@@ -105,6 +103,7 @@ func (r *TeamResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 					"authoritative: roles not listed here are removed on apply. Omit the attribute entirely " +
 					"to leave role assignments unmanaged. System (internal) assignments are never modified.",
 				Optional: true,
+				Computed: true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
@@ -126,6 +125,7 @@ func (r *TeamResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 					"listed here are removed on apply. Omit the attribute entirely to leave membership unmanaged. " +
 					"Members assigned via external groups (SAML/SCIM) are never modified.",
 				Optional: true,
+				Computed: true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"username": schema.StringAttribute{
@@ -170,16 +170,7 @@ func (r *TeamResource) Configure(_ context.Context, req resource.ConfigureReques
 		return
 	}
 
-	userConfig := &client.UserClientConfig{
-		BaseURL:      config.BaseURL,
-		ClientID:     config.ClientID,
-		ClientSecret: config.ClientSecret,
-		Username:     config.Username,
-		Password:     config.Password,
-		Timeout:      config.Timeout,
-	}
-
-	teamClient, err := accessmanagement.NewTeamClient(userConfig)
+	teamClient, err := accessmanagement.NewTeamClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Team Client",
@@ -191,8 +182,8 @@ func (r *TeamResource) Configure(_ context.Context, req resource.ConfigureReques
 	}
 
 	// Sub-clients for managing the team's roles and members inline. They share the
-	// same cached token via userConfig, so no extra authentication is performed.
-	rolesClient, err := accessmanagement.NewTeamRolesClient(userConfig)
+	// same cached token via config, so no extra authentication is performed.
+	rolesClient, err := accessmanagement.NewTeamRolesClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Team Roles Client",
@@ -202,7 +193,7 @@ func (r *TeamResource) Configure(_ context.Context, req resource.ConfigureReques
 		return
 	}
 
-	membersClient, err := accessmanagement.NewTeamMembersClient(userConfig)
+	membersClient, err := accessmanagement.NewTeamMembersClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Team Members Client",
@@ -212,7 +203,7 @@ func (r *TeamResource) Configure(_ context.Context, req resource.ConfigureReques
 		return
 	}
 
-	usersClient, err := accessmanagement.NewRoleUsersClient(userConfig)
+	usersClient, err := accessmanagement.NewRoleUsersClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Users Client",
@@ -222,7 +213,7 @@ func (r *TeamResource) Configure(_ context.Context, req resource.ConfigureReques
 		return
 	}
 
-	catalogClient, err := accessmanagement.NewRolePermissionClient(userConfig)
+	catalogClient, err := accessmanagement.NewRolePermissionClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Role Catalog Client",
@@ -272,19 +263,10 @@ func (r *TeamResource) Create(ctx context.Context, req resource.CreateRequest, r
 	}
 
 	// Resolve the parent team. The platform API REQUIRES parent_team_id, so when
-	// the user omits parent_team we default to the org's root team — mirroring
-	// the Anypoint UI, whose Create Team dialog defaults the parent to the root
-	// ("Everyone at <org>") and always sends it.
-	var parentTeamID string
-	if !data.ParentTeam.IsNull() && data.ParentTeam.ValueString() != "" {
-		// Resolve parent_team → ID (case-insensitive)
-		resolved, resolveErr := r.resolveTeamNameToID(ctx, orgID, data.ParentTeam.ValueString())
-		if resolveErr != nil {
-			resp.Diagnostics.AddError("Error resolving parent_team", resolveErr.Error())
-			return
-		}
-		parentTeamID = resolved
-	}
+	// the user omits it we default to the org's root team — mirroring the Anypoint
+	// UI, whose Create Team dialog defaults the parent to the root ("Everyone at
+	// <org>") and always sends it.
+	parentTeamID := data.ParentTeamID.ValueString()
 	if parentTeamID == "" {
 		rootID, err := r.resolveRootTeamID(ctx, orgID)
 		if err != nil {
@@ -316,12 +298,13 @@ func (r *TeamResource) Create(ctx context.Context, req resource.CreateRequest, r
 		actualParentID = parentTeamID // fallback to what we sent
 	}
 
-	// Reverse-resolve parent → parent_team name so state always shows it.
-	// If user already set parent_team we keep their value; if they didn't (defaulted
-	// to root) we populate it from the resolved ID.
-	if data.ParentTeam.IsNull() || data.ParentTeam.IsUnknown() {
-		if parentName, resolveErr := r.resolveTeamIDToName(ctx, orgID, actualParentID); resolveErr == nil {
-			data.ParentTeam = types.StringValue(parentName)
+	// Populate parent_team_id in state. If the user specified it, keep their value;
+	// if they didn't (defaulted to root), populate from the resolved parent.
+	if data.ParentTeamID.IsNull() || data.ParentTeamID.IsUnknown() || data.ParentTeamID.ValueString() == "" {
+		if actualParentID != "" {
+			data.ParentTeamID = types.StringValue(actualParentID)
+		} else {
+			data.ParentTeamID = types.StringValue(parentTeamID)
 		}
 	}
 
@@ -353,8 +336,25 @@ func (r *TeamResource) Create(ctx context.Context, req resource.CreateRequest, r
 
 	tflog.Trace(ctx, "created team")
 
-	// On success, actual == desired == plan, so keep the plan's typed values verbatim
-	// (guaranteeing state == config for these Optional attributes).
+	// For managed attributes, plan values are already correct. For unmanaged attributes
+	// (config omitted → plan is unknown), populate from API so state is concrete.
+	if !manageRoles {
+		roles, rolesErr := r.reconcileTeamRolesIntoState(ctx, orgID, team.ID, data.Roles)
+		if rolesErr != nil {
+			resp.Diagnostics.AddError("Error reading roles after create", rolesErr.Error())
+			return
+		}
+		data.Roles = roles
+	}
+	if !manageMembers {
+		members, membersErr := r.reconcileTeamMembersIntoState(ctx, orgID, team.ID, data.Members)
+		if membersErr != nil {
+			resp.Diagnostics.AddError("Error reading members after create", membersErr.Error())
+			return
+		}
+		data.Members = members
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
@@ -391,38 +391,29 @@ func (r *TeamResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	// Map response body to schema (leaves Roles/Members as they were in state).
 	parentID := r.mapTeamToState(team, &data, orgID)
 
-	// Reverse-resolve parent ID → parent_team name so state always shows the
-	// human-readable parent name (matching what users write in config and what import produces).
+	// Populate parent_team_id from the API response's ancestor chain.
 	if parentID != "" {
-		parentName, err := r.resolveTeamIDToName(ctx, orgID, parentID)
-		if err != nil {
-			// Non-fatal: just don't populate the name.
-			tflog.Warn(ctx, "could not resolve parent team ID to name", map[string]interface{}{"parent_id": parentID, "error": err.Error()})
-		} else {
-			data.ParentTeam = types.StringValue(parentName)
-		}
+		data.ParentTeamID = types.StringValue(parentID)
 	} else {
-		data.ParentTeam = types.StringNull()
+		// Root team has no parent
+		data.ParentTeamID = types.StringNull()
 	}
 
-	// Only refresh roles/members if they are being managed (non-null in state).
-	// Omitted (null) attributes stay null so the resource leaves them unmanaged.
-	if !data.Roles.IsNull() {
-		roles, err := r.reconcileTeamRolesIntoState(ctx, orgID, data.ID.ValueString(), data.Roles)
-		if err != nil {
-			resp.Diagnostics.AddError("Error reading roles", err.Error())
-			return
-		}
-		data.Roles = roles
+	// Always read roles/members from API into state. With Optional+Computed,
+	// Terraform handles the diff: config sets them → authoritative; config omits → accepts API reality.
+	roles, err := r.reconcileTeamRolesIntoState(ctx, orgID, data.ID.ValueString(), data.Roles)
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading roles", err.Error())
+		return
 	}
-	if !data.Members.IsNull() {
-		members, err := r.reconcileTeamMembersIntoState(ctx, orgID, data.ID.ValueString(), data.Members)
-		if err != nil {
-			resp.Diagnostics.AddError("Error reading members", err.Error())
-			return
-		}
-		data.Members = members
+	data.Roles = roles
+
+	members, err := r.reconcileTeamMembersIntoState(ctx, orgID, data.ID.ValueString(), data.Members)
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading members", err.Error())
+		return
 	}
+	data.Members = members
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -462,22 +453,11 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
-	// Handle parent team changes first (requires separate API call). Resolve
-	// parent_team → ID. Only move the team when the resolved parent name changed.
-	var plannedParent string
-	if !plan.ParentTeam.IsNull() && !plan.ParentTeam.IsUnknown() && plan.ParentTeam.ValueString() != "" {
-		resolved, resolveErr := r.resolveTeamNameToID(ctx, orgID, plan.ParentTeam.ValueString())
-		if resolveErr != nil {
-			resp.Diagnostics.AddError("Error resolving parent_team", resolveErr.Error())
-			return
-		}
-		plannedParent = resolved
-	}
-	// Compare planned parent name to state parent name (case-insensitive) to
-	// detect moves. We don't store the ID in state, so name comparison suffices.
-	parentChanged := plannedParent != "" &&
-		!strings.EqualFold(plan.ParentTeam.ValueString(), state.ParentTeam.ValueString())
-	if parentChanged {
+	// Handle parent team changes first (requires separate API call).
+	// Compare planned parent_team_id to state parent_team_id to detect moves.
+	plannedParent := plan.ParentTeamID.ValueString()
+	stateParent := state.ParentTeamID.ValueString()
+	if plannedParent != "" && plannedParent != stateParent {
 		parentUpdateRequest := &accessmanagement.UpdateTeamParentRequest{
 			ParentTeamID: plannedParent,
 		}
@@ -528,11 +508,9 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		updateParentID = r.mapTeamToState(team, &plan, orgID)
 	}
 
-	// Reverse-resolve parent ID → parent_team name for state consistency.
+	// Populate parent_team_id in state from the API response.
 	if updateParentID != "" {
-		if parentName, err := r.resolveTeamIDToName(ctx, orgID, updateParentID); err == nil {
-			plan.ParentTeam = types.StringValue(parentName)
-		}
+		plan.ParentTeamID = types.StringValue(updateParentID)
 	}
 
 	// Reconcile roles if managed. On failure, refresh actual state so a partial
@@ -556,6 +534,24 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	}
 
 	tflog.Trace(ctx, "updated team")
+
+	// For unmanaged attributes (config omitted → plan is unknown), populate from API.
+	if !manageRoles {
+		roles, rolesErr := r.reconcileTeamRolesIntoState(ctx, orgID, teamID, plan.Roles)
+		if rolesErr != nil {
+			resp.Diagnostics.AddError("Error reading roles after update", rolesErr.Error())
+			return
+		}
+		plan.Roles = roles
+	}
+	if !manageMembers {
+		members, membersErr := r.reconcileTeamMembersIntoState(ctx, orgID, teamID, plan.Members)
+		if membersErr != nil {
+			resp.Diagnostics.AddError("Error reading members after update", membersErr.Error())
+			return
+		}
+		plan.Members = members
+	}
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -592,19 +588,11 @@ func (r *TeamResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 }
 
 // ImportState imports the resource into Terraform state.
-// Seeds roles and members as empty sets so the subsequent Read populates them
-// from the API (null would cause Read to skip them as "unmanaged").
+// Roles and members will be populated by the Read that follows ImportState.
+// With Optional+Computed schema, the API-read values become state, and
+// Terraform's diff engine handles authoritative enforcement if config sets them.
 func (r *TeamResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
-
-	// Seed roles and members as empty sets so Read fetches them from the API.
-	emptyRoles, diags := types.SetValue(teamRoleObjectType, []attr.Value{})
-	resp.Diagnostics.Append(diags...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("roles"), emptyRoles)...)
-
-	emptyMembers, diags := types.SetValue(teamMemberObjectType, []attr.Value{})
-	resp.Diagnostics.Append(diags...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("members"), emptyMembers)...)
 }
 
 // refreshManagedIntoStateBestEffort re-reads the actual roles/members from the API
@@ -640,48 +628,9 @@ func (r *TeamResource) resolveRootTeamID(ctx context.Context, orgID string) (str
 	}
 	return "", fmt.Errorf(
 		"could not find a root team (a team with no ancestors) in organization %s; "+
-			"set parent_team explicitly on the anypoint_team resource",
+			"set parent_team_id explicitly on the anypoint_team resource",
 		orgID,
 	)
-}
-
-// resolveTeamNameToID resolves a team name to its ID by listing all org teams.
-// Returns an error if no match or multiple matches are found.
-func (r *TeamResource) resolveTeamNameToID(ctx context.Context, orgID, name string) (string, error) {
-	teams, err := r.client.ListTeams(ctx, orgID)
-	if err != nil {
-		return "", fmt.Errorf("could not list teams to resolve parent_team %q: %w", name, err)
-	}
-	// Platform team names are case-insensitive (creating "Test" fails if "test" exists).
-	var matches []string
-	for _, t := range teams {
-		if strings.EqualFold(t.TeamName, name) {
-			matches = append(matches, t.ID)
-		}
-	}
-	switch len(matches) {
-	case 0:
-		return "", fmt.Errorf("no team found with name %q in organization %s", name, orgID)
-	case 1:
-		return matches[0], nil
-	default:
-		return "", fmt.Errorf("multiple teams found with name %q in organization %s (IDs: %v)", name, orgID, matches)
-	}
-}
-
-// resolveTeamIDToName reverse-resolves a team ID to its name by listing all teams
-// in the organization. Used to populate parent_team in state after Read/Import.
-func (r *TeamResource) resolveTeamIDToName(ctx context.Context, orgID, teamID string) (string, error) {
-	teams, err := r.client.ListTeams(ctx, orgID)
-	if err != nil {
-		return "", fmt.Errorf("could not list teams to resolve team ID %q: %w", teamID, err)
-	}
-	for _, t := range teams {
-		if t.ID == teamID {
-			return t.TeamName, nil
-		}
-	}
-	return "", fmt.Errorf("no team found with ID %q in organization %s", teamID, orgID)
 }
 
 // mapTeamToState maps an API Team response to the Terraform state model, leaving the

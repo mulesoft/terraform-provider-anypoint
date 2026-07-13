@@ -172,16 +172,16 @@ func TestRoleDataSource_Read_Direct(t *testing.T) {
 	}
 	server := testutil.MockHTTPServer(t, handlers)
 
-	userClient := &client.UserAnypointClient{
+	userClient := &client.AnypointClient{
 		BaseURL:    server.URL,
 		Token:      "mock-token",
 		HTTPClient: &http.Client{},
 		OrgID:      "test-org-id",
 	}
 	ds := NewRoleDataSource().(*RoleDataSource)
-	ds.client = &accessmanagement.RoleClient{UserAnypointClient: userClient}
-	ds.permClient = &accessmanagement.RolePermissionClient{UserAnypointClient: userClient}
-	ds.usersClient = &accessmanagement.RoleUsersClient{UserAnypointClient: userClient}
+	ds.client = &accessmanagement.RoleClient{AnypointClient: userClient}
+	ds.permClient = &accessmanagement.RolePermissionClient{AnypointClient: userClient}
+	ds.usersClient = &accessmanagement.RoleUsersClient{AnypointClient: userClient}
 
 	ctx := context.Background()
 	schemaResp := &datasource.SchemaResponse{}
@@ -255,7 +255,7 @@ func TestRoleDataSource_Read_Error(t *testing.T) {
 
 	ds := NewRoleDataSource().(*RoleDataSource)
 	ds.client = &accessmanagement.RoleClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},

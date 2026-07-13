@@ -165,18 +165,18 @@ func newTeamTestResource(t *testing.T, state *teamTestServerState) *TeamResource
 	}
 
 	server := testutil.MockHTTPServer(t, handlers)
-	userClient := &client.UserAnypointClient{
+	userClient := &client.AnypointClient{
 		BaseURL:    server.URL,
 		Token:      "mock-token",
 		HTTPClient: &http.Client{},
 		OrgID:      testOrgID,
 	}
 	return &TeamResource{
-		client:        &accessmanagement.TeamClient{UserAnypointClient: userClient},
-		rolesClient:   &accessmanagement.TeamRolesClient{UserAnypointClient: userClient},
-		membersClient: &accessmanagement.TeamMembersClient{UserAnypointClient: userClient},
-		usersClient:   &accessmanagement.RoleUsersClient{UserAnypointClient: userClient},
-		catalogClient: &accessmanagement.RolePermissionClient{UserAnypointClient: userClient},
+		client:        &accessmanagement.TeamClient{AnypointClient: userClient},
+		rolesClient:   &accessmanagement.TeamRolesClient{AnypointClient: userClient},
+		membersClient: &accessmanagement.TeamMembersClient{AnypointClient: userClient},
+		usersClient:   &accessmanagement.RoleUsersClient{AnypointClient: userClient},
+		catalogClient: &accessmanagement.RolePermissionClient{AnypointClient: userClient},
 	}
 }
 

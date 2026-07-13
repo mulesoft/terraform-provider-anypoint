@@ -95,7 +95,7 @@ func TestOrganizationDataSource_Configure(t *testing.T) {
 		t.Errorf("Configure() with nil provider data should not error: %v", resp.Diagnostics.Errors())
 	}
 
-	// Test with valid provider data but missing username (expected to fail)
+	// Test with valid provider data (client_credentials - no username needed)
 	server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
 	config := &client.Config{
 		ClientID:     "test-client-id",
@@ -106,21 +106,22 @@ func TestOrganizationDataSource_Configure(t *testing.T) {
 	resp = &datasource.ConfigureResponse{}
 	dataSource.Configure(ctx, req, resp)
 
-	// This should error because username is required for organization operations
-	if !resp.Diagnostics.HasError() {
-		t.Error("Configure() should have errors when username is missing")
+	// Should succeed - client_credentials only needs client_id and client_secret
+	if resp.Diagnostics.HasError() {
+		t.Errorf("Configure() should not error with valid client_credentials config: %v", resp.Diagnostics.Errors())
 	}
 
-	// Verify error message contains username requirement
-	hasUsernameError := false
-	for _, err := range resp.Diagnostics.Errors() {
-		if strings.Contains(err.Detail(), "username is required") {
-			hasUsernameError = true
-			break
-		}
+	// Test with missing client_id (expected to fail)
+	configNoID := &client.Config{
+		ClientSecret: "test-client-secret",
+		BaseURL:      server.URL,
 	}
-	if !hasUsernameError {
-		t.Error("Configure() should report username is required error")
+	req = datasource.ConfigureRequest{ProviderData: configNoID}
+	resp = &datasource.ConfigureResponse{}
+	dataSource.Configure(ctx, req, resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Error("Configure() should error when client_id is missing")
 	}
 }
 
@@ -239,7 +240,7 @@ func TestOrganizationDataSource_Read(t *testing.T) {
 			// Create client with mock server
 			// Note: Organization operations require UserAnypointClient
 			orgClient := &accessmanagement.OrganizationClient{
-				UserAnypointClient: &client.UserAnypointClient{
+				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},
@@ -313,7 +314,7 @@ func TestOrganizationDataSource_Read_Direct(t *testing.T) {
 
 	ds := NewOrganizationDataSource().(*OrganizationDataSource)
 	ds.client = &accessmanagement.OrganizationClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -334,30 +335,30 @@ func TestOrganizationDataSource_Read_Direct(t *testing.T) {
 	ownerObjType := objType.AttributeTypes["owner"].(tftypes.Object)
 
 	configRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
-		"id":                               tftypes.NewValue(tftypes.String, "test-org-id"),
-		"name":                             tftypes.NewValue(tftypes.String, nil),
-		"created_at":                       tftypes.NewValue(tftypes.String, nil),
-		"updated_at":                       tftypes.NewValue(tftypes.String, nil),
-		"owner_id":                         tftypes.NewValue(tftypes.String, nil),
-		"client_id":                        tftypes.NewValue(tftypes.String, nil),
-		"idprovider_id":                    tftypes.NewValue(tftypes.String, nil),
-		"is_federated":                     tftypes.NewValue(tftypes.Bool, nil),
-		"parent_organization_ids":          tftypes.NewValue(tftypes.List{ElementType: parentOrgIDsElemType}, nil),
-		"sub_organization_ids":             tftypes.NewValue(tftypes.List{ElementType: subOrgIDsElemType}, nil),
-		"tenant_organization_ids":          tftypes.NewValue(tftypes.List{ElementType: tenantOrgIDsElemType}, nil),
-		"mfa_required":                     tftypes.NewValue(tftypes.String, nil),
+		"id":                                  tftypes.NewValue(tftypes.String, "test-org-id"),
+		"name":                                tftypes.NewValue(tftypes.String, nil),
+		"created_at":                          tftypes.NewValue(tftypes.String, nil),
+		"updated_at":                          tftypes.NewValue(tftypes.String, nil),
+		"owner_id":                            tftypes.NewValue(tftypes.String, nil),
+		"client_id":                           tftypes.NewValue(tftypes.String, nil),
+		"idprovider_id":                       tftypes.NewValue(tftypes.String, nil),
+		"is_federated":                        tftypes.NewValue(tftypes.Bool, nil),
+		"parent_organization_ids":             tftypes.NewValue(tftypes.List{ElementType: parentOrgIDsElemType}, nil),
+		"sub_organization_ids":                tftypes.NewValue(tftypes.List{ElementType: subOrgIDsElemType}, nil),
+		"tenant_organization_ids":             tftypes.NewValue(tftypes.List{ElementType: tenantOrgIDsElemType}, nil),
+		"mfa_required":                        tftypes.NewValue(tftypes.String, nil),
 		"is_automatic_admin_promotion_exempt": tftypes.NewValue(tftypes.Bool, nil),
-		"org_type":                         tftypes.NewValue(tftypes.String, nil),
-		"gdot_id":                          tftypes.NewValue(tftypes.String, nil),
-		"deleted_at":                       tftypes.NewValue(tftypes.String, nil),
-		"domain":                           tftypes.NewValue(tftypes.String, nil),
-		"is_root":                          tftypes.NewValue(tftypes.Bool, nil),
-		"is_master":                        tftypes.NewValue(tftypes.Bool, nil),
-		"entitlements":                     tftypes.NewValue(tftypes.String, nil),
-		"subscription":                     tftypes.NewValue(subObjType, nil),
-		"environments":                     tftypes.NewValue(tftypes.List{ElementType: envsElemType}, nil),
-		"owner":                            tftypes.NewValue(ownerObjType, nil),
-		"session_timeout":                  tftypes.NewValue(tftypes.Number, nil),
+		"org_type":                            tftypes.NewValue(tftypes.String, nil),
+		"gdot_id":                             tftypes.NewValue(tftypes.String, nil),
+		"deleted_at":                          tftypes.NewValue(tftypes.String, nil),
+		"domain":                              tftypes.NewValue(tftypes.String, nil),
+		"is_root":                             tftypes.NewValue(tftypes.Bool, nil),
+		"is_master":                           tftypes.NewValue(tftypes.Bool, nil),
+		"entitlements":                        tftypes.NewValue(tftypes.String, nil),
+		"subscription":                        tftypes.NewValue(subObjType, nil),
+		"environments":                        tftypes.NewValue(tftypes.List{ElementType: envsElemType}, nil),
+		"owner":                               tftypes.NewValue(ownerObjType, nil),
+		"session_timeout":                     tftypes.NewValue(tftypes.Number, nil),
 	})
 
 	req := datasource.ReadRequest{Config: tfsdk.Config{Schema: schemaResp.Schema, Raw: configRaw}}
@@ -388,7 +389,7 @@ func TestOrganizationDataSource_Read_Direct_Error(t *testing.T) {
 
 	ds := NewOrganizationDataSource().(*OrganizationDataSource)
 	ds.client = &accessmanagement.OrganizationClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -409,30 +410,30 @@ func TestOrganizationDataSource_Read_Direct_Error(t *testing.T) {
 	ownerObjType := objType.AttributeTypes["owner"].(tftypes.Object)
 
 	configRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
-		"id":                               tftypes.NewValue(tftypes.String, "test-org-id"),
-		"name":                             tftypes.NewValue(tftypes.String, nil),
-		"created_at":                       tftypes.NewValue(tftypes.String, nil),
-		"updated_at":                       tftypes.NewValue(tftypes.String, nil),
-		"owner_id":                         tftypes.NewValue(tftypes.String, nil),
-		"client_id":                        tftypes.NewValue(tftypes.String, nil),
-		"idprovider_id":                    tftypes.NewValue(tftypes.String, nil),
-		"is_federated":                     tftypes.NewValue(tftypes.Bool, nil),
-		"parent_organization_ids":          tftypes.NewValue(tftypes.List{ElementType: parentOrgIDsElemType}, nil),
-		"sub_organization_ids":             tftypes.NewValue(tftypes.List{ElementType: subOrgIDsElemType}, nil),
-		"tenant_organization_ids":          tftypes.NewValue(tftypes.List{ElementType: tenantOrgIDsElemType}, nil),
-		"mfa_required":                     tftypes.NewValue(tftypes.String, nil),
+		"id":                                  tftypes.NewValue(tftypes.String, "test-org-id"),
+		"name":                                tftypes.NewValue(tftypes.String, nil),
+		"created_at":                          tftypes.NewValue(tftypes.String, nil),
+		"updated_at":                          tftypes.NewValue(tftypes.String, nil),
+		"owner_id":                            tftypes.NewValue(tftypes.String, nil),
+		"client_id":                           tftypes.NewValue(tftypes.String, nil),
+		"idprovider_id":                       tftypes.NewValue(tftypes.String, nil),
+		"is_federated":                        tftypes.NewValue(tftypes.Bool, nil),
+		"parent_organization_ids":             tftypes.NewValue(tftypes.List{ElementType: parentOrgIDsElemType}, nil),
+		"sub_organization_ids":                tftypes.NewValue(tftypes.List{ElementType: subOrgIDsElemType}, nil),
+		"tenant_organization_ids":             tftypes.NewValue(tftypes.List{ElementType: tenantOrgIDsElemType}, nil),
+		"mfa_required":                        tftypes.NewValue(tftypes.String, nil),
 		"is_automatic_admin_promotion_exempt": tftypes.NewValue(tftypes.Bool, nil),
-		"org_type":                         tftypes.NewValue(tftypes.String, nil),
-		"gdot_id":                          tftypes.NewValue(tftypes.String, nil),
-		"deleted_at":                       tftypes.NewValue(tftypes.String, nil),
-		"domain":                           tftypes.NewValue(tftypes.String, nil),
-		"is_root":                          tftypes.NewValue(tftypes.Bool, nil),
-		"is_master":                        tftypes.NewValue(tftypes.Bool, nil),
-		"entitlements":                     tftypes.NewValue(tftypes.String, nil),
-		"subscription":                     tftypes.NewValue(subObjType, nil),
-		"environments":                     tftypes.NewValue(tftypes.List{ElementType: envsElemType}, nil),
-		"owner":                            tftypes.NewValue(ownerObjType, nil),
-		"session_timeout":                  tftypes.NewValue(tftypes.Number, nil),
+		"org_type":                            tftypes.NewValue(tftypes.String, nil),
+		"gdot_id":                             tftypes.NewValue(tftypes.String, nil),
+		"deleted_at":                          tftypes.NewValue(tftypes.String, nil),
+		"domain":                              tftypes.NewValue(tftypes.String, nil),
+		"is_root":                             tftypes.NewValue(tftypes.Bool, nil),
+		"is_master":                           tftypes.NewValue(tftypes.Bool, nil),
+		"entitlements":                        tftypes.NewValue(tftypes.String, nil),
+		"subscription":                        tftypes.NewValue(subObjType, nil),
+		"environments":                        tftypes.NewValue(tftypes.List{ElementType: envsElemType}, nil),
+		"owner":                               tftypes.NewValue(ownerObjType, nil),
+		"session_timeout":                     tftypes.NewValue(tftypes.Number, nil),
 	})
 
 	req := datasource.ReadRequest{Config: tfsdk.Config{Schema: schemaResp.Schema, Raw: configRaw}}

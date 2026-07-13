@@ -3,8 +3,10 @@ package accessmanagement
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -116,6 +118,7 @@ func (r *RoleResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 					"authoritative: permissions not listed here are removed on apply. Omit the attribute " +
 					"entirely to leave permissions unmanaged. System (internal) assignments are never modified.",
 				Optional: true,
+				Computed: true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
@@ -138,6 +141,7 @@ func (r *RoleResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 					"leave membership unmanaged. Usernames are case-insensitive; use the anypoint_users data source " +
 					"to discover usernames.",
 				Optional:    true,
+				Computed:    true,
 				ElementType: types.StringType,
 			},
 			"created_at": schema.StringAttribute{
@@ -170,16 +174,7 @@ func (r *RoleResource) Configure(_ context.Context, req resource.ConfigureReques
 		return
 	}
 
-	userConfig := &client.UserClientConfig{
-		BaseURL:      config.BaseURL,
-		ClientID:     config.ClientID,
-		ClientSecret: config.ClientSecret,
-		Username:     config.Username,
-		Password:     config.Password,
-		Timeout:      config.Timeout,
-	}
-
-	roleClient, err := accessmanagement.NewRoleClient(userConfig)
+	roleClient, err := accessmanagement.NewRoleClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Role Group Client",
@@ -191,8 +186,8 @@ func (r *RoleResource) Configure(_ context.Context, req resource.ConfigureReques
 	}
 
 	// Sub-clients for managing the role group's permissions and members inline.
-	// They share the same cached token via userConfig, so no extra authentication.
-	permClient, err := accessmanagement.NewRolePermissionClient(userConfig)
+	// They share the same cached token via config, so no extra authentication.
+	permClient, err := accessmanagement.NewRolePermissionClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Role Permission Client",
@@ -202,7 +197,7 @@ func (r *RoleResource) Configure(_ context.Context, req resource.ConfigureReques
 		return
 	}
 
-	usersClient, err := accessmanagement.NewRoleUsersClient(userConfig)
+	usersClient, err := accessmanagement.NewRoleUsersClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Role Users Client",
@@ -295,8 +290,25 @@ func (r *RoleResource) Create(ctx context.Context, req resource.CreateRequest, r
 
 	tflog.Trace(ctx, "created role group")
 
-	// On success, actual == desired == plan, so keep the plan's typed values verbatim
-	// (guaranteeing state == config for these Optional attributes).
+	// For managed attributes, plan values are already correct. For unmanaged attributes
+	// (config omitted → plan is unknown), populate from API so state is concrete.
+	if !managePerms {
+		perms, permsErr := r.reconcilePermissionsIntoState(ctx, orgID, roleGroup.ID, data.Permissions)
+		if permsErr != nil {
+			resp.Diagnostics.AddError("Error reading permissions after create", permsErr.Error())
+			return
+		}
+		data.Permissions = perms
+	}
+	if !manageMembers {
+		membersResult, membersErr := r.reconcileMembersIntoState(ctx, orgID, roleGroup.ID, data.Members)
+		if membersErr != nil {
+			resp.Diagnostics.AddError("Error reading members after create", membersErr.Error())
+			return
+		}
+		data.Members = membersResult
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
@@ -334,24 +346,21 @@ func (r *RoleResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	// Map response body to schema (leaves Permissions/Members as they were in state).
 	r.mapRoleGroupToState(roleGroup, &data, orgID)
 
-	// Only refresh permissions/members if they are being managed (non-null in state).
-	// Omitted (null) attributes stay null so the resource leaves them unmanaged.
-	if !data.Permissions.IsNull() {
-		perms, err := r.reconcilePermissionsIntoState(ctx, orgID, data.ID.ValueString(), data.Permissions)
-		if err != nil {
-			resp.Diagnostics.AddError("Error reading permissions", err.Error())
-			return
-		}
-		data.Permissions = perms
+	// Always read permissions/members from API into state. With Optional+Computed,
+	// Terraform handles the diff: config sets them → authoritative; config omits → accepts API reality.
+	perms, err := r.reconcilePermissionsIntoState(ctx, orgID, data.ID.ValueString(), data.Permissions)
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading permissions", err.Error())
+		return
 	}
-	if !data.Members.IsNull() {
-		members, err := r.reconcileMembersIntoState(ctx, orgID, data.ID.ValueString(), data.Members)
-		if err != nil {
-			resp.Diagnostics.AddError("Error reading members", err.Error())
-			return
-		}
-		data.Members = members
+	data.Permissions = perms
+
+	members, err := r.reconcileMembersIntoState(ctx, orgID, data.ID.ValueString(), data.Members)
+	if err != nil {
+		resp.Diagnostics.AddError("Error reading members", err.Error())
+		return
 	}
+	data.Members = members
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -431,6 +440,24 @@ func (r *RoleResource) Update(ctx context.Context, req resource.UpdateRequest, r
 
 	tflog.Trace(ctx, "updated role group")
 
+	// For unmanaged attributes (config omitted → plan is unknown), populate from API.
+	if !managePerms {
+		perms, permsErr := r.reconcilePermissionsIntoState(ctx, orgID, roleGroupID, plan.Permissions)
+		if permsErr != nil {
+			resp.Diagnostics.AddError("Error reading permissions after update", permsErr.Error())
+			return
+		}
+		plan.Permissions = perms
+	}
+	if !manageMembers {
+		membersResult, membersErr := r.reconcileMembersIntoState(ctx, orgID, roleGroupID, plan.Members)
+		if membersErr != nil {
+			resp.Diagnostics.AddError("Error reading members after update", membersErr.Error())
+			return
+		}
+		plan.Members = membersResult
+	}
+
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -468,18 +495,12 @@ func (r *RoleResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 }
 
 // ImportState imports the resource by ID.
+// ImportState imports a role group into Terraform state.
+// Permissions and members will be populated by the Read that follows ImportState.
+// With Optional+Computed schema, the API-read values become state, and
+// Terraform's diff engine handles authoritative enforcement if config sets them.
 func (r *RoleResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
-
-	// Seed permissions and members as empty sets so the subsequent Read populates
-	// them from the API (null would cause Read to skip them as "unmanaged").
-	emptyPerms, diags := types.SetValue(permissionObjectType, []attr.Value{})
-	resp.Diagnostics.Append(diags...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("permissions"), emptyPerms)...)
-
-	emptyMembers, diags := types.SetValue(types.StringType, []attr.Value{})
-	resp.Diagnostics.Append(diags...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("members"), emptyMembers)...)
 }
 
 // refreshManagedIntoStateBestEffort re-reads the actual permissions/members from the
@@ -642,8 +663,24 @@ func (r *RoleResource) resolvePermissions(ctx context.Context, permSet types.Set
 // applyPermissions reconciles the role group's assignments to exactly `desired`.
 // It adds missing assignments and removes extras, skipping internal (system) ones.
 func (r *RoleResource) applyPermissions(ctx context.Context, orgID, roleGroupID string, desired []desiredPermission) error {
-	assignments, err := r.permClient.ListRoleAssignments(ctx, orgID, roleGroupID)
-	if err != nil {
+	// Retry on NotFoundError — the API may take a moment to propagate a newly
+	// created role group before its assignments endpoint becomes available.
+	var assignments []accessmanagement.RoleAssignment
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		assignments, err = r.permClient.ListRoleAssignments(ctx, orgID, roleGroupID)
+		if err == nil {
+			break
+		}
+		var nfe *client.NotFoundError
+		if errors.As(err, &nfe) && attempt < 2 {
+			tflog.Warn(ctx, "Role group not yet available for assignments, retrying...", map[string]interface{}{
+				"attempt":     attempt + 1,
+				"roleGroupID": roleGroupID,
+			})
+			time.Sleep(time.Duration(attempt+1) * 2 * time.Second)
+			continue
+		}
 		return fmt.Errorf("could not list current role assignments: %w", err)
 	}
 

@@ -25,8 +25,8 @@ func teamStateType(t *testing.T, res *TeamResource) tftypes.Type {
 
 // teamRawValue builds a raw team object with null roles/members (so Update's
 // role/member reconcile is skipped) and the given id/name/type/parent.
-// parentName sets parent_team (null if empty string); parentUnknown makes it unknown.
-func teamRawValue(stateType tftypes.Type, id, name, teamType, _ string, parentUnknown bool, parentName string) tftypes.Value {
+// parentID sets parent_team_id (null if empty string); parentUnknown makes it unknown.
+func teamRawValue(stateType tftypes.Type, id, name, teamType, _ string, parentUnknown bool, parentID string) tftypes.Value {
 	roleObj := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
 		"name":           tftypes.String,
 		"context_params": tftypes.Map{ElementType: tftypes.String},
@@ -38,17 +38,17 @@ func teamRawValue(stateType tftypes.Type, id, name, teamType, _ string, parentUn
 	var parentTeamVal tftypes.Value
 	if parentUnknown {
 		parentTeamVal = tftypes.NewValue(tftypes.String, tftypes.UnknownValue)
-	} else if parentName == "" {
+	} else if parentID == "" {
 		parentTeamVal = tftypes.NewValue(tftypes.String, nil)
 	} else {
-		parentTeamVal = tftypes.NewValue(tftypes.String, parentName)
+		parentTeamVal = tftypes.NewValue(tftypes.String, parentID)
 	}
 	return tftypes.NewValue(stateType, map[string]tftypes.Value{
 		"id":              tftypes.NewValue(tftypes.String, id),
 		"name":            tftypes.NewValue(tftypes.String, name),
 		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
 		"team_type":       tftypes.NewValue(tftypes.String, teamType),
-		"parent_team":     parentTeamVal,
+		"parent_team_id":  parentTeamVal,
 		"roles":           tftypes.NewValue(tftypes.Set{ElementType: roleObj}, nil),
 		"members":         tftypes.NewValue(tftypes.Set{ElementType: memberObj}, nil),
 		"created_at":      tftypes.NewValue(tftypes.String, "2024-01-01T00:00:00Z"),
@@ -103,6 +103,31 @@ func TestTeamResource_Update_UnknownParentDoesNotMove(t *testing.T) {
 				"updated_at":        "2024-01-02T00:00:00Z",
 			})
 		},
+		// Reconcile endpoints for unmanaged roles/members (null in plan → !manageRoles/!manageMembers).
+		basePath + "/roles": func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"data":  []interface{}{},
+				"total": 0,
+			})
+		},
+		"/accounts/api/roles": func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"data":  []interface{}{},
+				"total": 0,
+			})
+		},
+		basePath + "/members": func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"data":  []interface{}{},
+				"total": 0,
+			})
+		},
+		"/accounts/api/organizations/test-org-id/users": func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"data":  []interface{}{},
+				"total": 0,
+			})
+		},
 	}
 	server := testutil.MockHTTPServer(t, handlers)
 	res := newTestTeamResource(server.URL)
@@ -112,8 +137,8 @@ func TestTeamResource_Update_UnknownParentDoesNotMove(t *testing.T) {
 	schemaResp := &resource.SchemaResponse{}
 	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
 
-	// State: parent already resolved to the root. Plan: parent UNKNOWN (the bug trigger).
-	stateRaw := teamRawValue(stateType, teamID, "madhav-manual-test-team", "internal", "root-team-id", false, "Root Team")
+	// State: parent_team_id already resolved to the root. Plan: parent UNKNOWN (the bug trigger).
+	stateRaw := teamRawValue(stateType, teamID, "madhav-manual-test-team", "internal", "root-team-id", false, "root-team-id")
 	planRaw := teamRawValue(stateType, teamID, "madhav-manual-test-team", "internal", "", true, "")
 
 	req := resource.UpdateRequest{
@@ -132,8 +157,7 @@ func TestTeamResource_Update_UnknownParentDoesNotMove(t *testing.T) {
 }
 
 // TestTeamResource_Update_RealParentChangeMoves confirms the guard doesn't over-block:
-// a genuine parent change (known, non-empty, different) still moves the team.
-// Update now resolves parent_team → ID via ListTeams, so we mock that endpoint.
+// a genuine parent change (known, non-empty, different ID) still moves the team.
 func TestTeamResource_Update_RealParentChangeMoves(t *testing.T) {
 	teamID := "team-1"
 	basePath := "/accounts/api/organizations/test-org-id/teams/" + teamID
@@ -159,14 +183,29 @@ func TestTeamResource_Update_RealParentChangeMoves(t *testing.T) {
 				"updated_at":        "2024-01-02T00:00:00Z",
 			})
 		},
-		// ListTeams endpoint — resolveTeamNameToID and resolveTeamIDToName call this.
-		"/accounts/api/organizations/test-org-id/teams": func(w http.ResponseWriter, r *http.Request) {
+		// Reconcile endpoints for unmanaged roles/members.
+		basePath + "/roles": func(w http.ResponseWriter, r *http.Request) {
 			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
-				"data": []map[string]interface{}{
-					{"team_id": "root-team-id", "team_name": "Root Team", "org_id": "test-org-id", "ancestor_team_ids": []string{}},
-					{"team_id": "new-parent-id", "team_name": "New Parent Team", "org_id": "test-org-id", "ancestor_team_ids": []string{"root-team-id"}},
-				},
-				"total": 2,
+				"data":  []interface{}{},
+				"total": 0,
+			})
+		},
+		"/accounts/api/roles": func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"data":  []interface{}{},
+				"total": 0,
+			})
+		},
+		basePath + "/members": func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"data":  []interface{}{},
+				"total": 0,
+			})
+		},
+		"/accounts/api/organizations/test-org-id/users": func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"data":  []interface{}{},
+				"total": 0,
 			})
 		},
 	}
@@ -178,9 +217,9 @@ func TestTeamResource_Update_RealParentChangeMoves(t *testing.T) {
 	schemaResp := &resource.SchemaResponse{}
 	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
 
-	// State: current parent is root. Plan: user changed parent_team to "New Parent Team".
-	stateRaw := teamRawValue(stateType, teamID, "madhav-manual-test-team", "internal", "root-team-id", false, "Root Team")
-	planRaw := teamRawValue(stateType, teamID, "madhav-manual-test-team", "internal", "root-team-id", false, "New Parent Team")
+	// State: current parent is root-team-id. Plan: user changed parent_team_id to "new-parent-id".
+	stateRaw := teamRawValue(stateType, teamID, "madhav-manual-test-team", "internal", "root-team-id", false, "root-team-id")
+	planRaw := teamRawValue(stateType, teamID, "madhav-manual-test-team", "internal", "root-team-id", false, "new-parent-id")
 
 	req := resource.UpdateRequest{
 		Plan:  tfsdk.Plan{Schema: schemaResp.Schema, Raw: planRaw},
@@ -201,15 +240,19 @@ func TestTeamResource_Update_RealParentChangeMoves(t *testing.T) {
 }
 
 func newTestTeamResource(serverURL string) *TeamResource {
-	res := NewTeamResource().(*TeamResource)
-	res.client = &accessmanagement.TeamClient{
-		UserAnypointClient: &client.UserAnypointClient{
-			BaseURL:    serverURL,
-			Token:      "mock-token",
-			HTTPClient: &http.Client{},
-			OrgID:      "test-org-id",
-		},
+	mockClient := &client.AnypointClient{
+		BaseURL:    serverURL,
+		Token:      "mock-token",
+		HTTPClient: &http.Client{},
+		OrgID:      "test-org-id",
+		Cache:      client.NewResponseCache(),
 	}
+	res := NewTeamResource().(*TeamResource)
+	res.client = &accessmanagement.TeamClient{AnypointClient: mockClient}
+	res.rolesClient = &accessmanagement.TeamRolesClient{AnypointClient: mockClient}
+	res.membersClient = &accessmanagement.TeamMembersClient{AnypointClient: mockClient}
+	res.usersClient = &accessmanagement.RoleUsersClient{AnypointClient: mockClient}
+	res.catalogClient = &accessmanagement.RolePermissionClient{AnypointClient: mockClient}
 	return res
 }
 
@@ -289,7 +332,7 @@ func TestTeamResource_Schema(t *testing.T) {
 	res := NewTeamResource()
 
 	requiredAttrs := []string{"name"}
-	optionalAttrs := []string{"team_type", "organization_id", "parent_team"}
+	optionalAttrs := []string{"team_type", "organization_id", "parent_team_id"}
 	computedAttrs := []string{"id", "created_at", "updated_at"}
 
 	testutil.TestResourceSchema(t, res, requiredAttrs, optionalAttrs, computedAttrs)
@@ -360,18 +403,46 @@ func TestTeamResource_Read(t *testing.T) {
 				"updated_at": "2024-01-01T00:00:00Z",
 			})
 		},
+		basePath + "/roles": func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"data":  []interface{}{},
+				"total": 0,
+			})
+		},
+		"/accounts/api/roles": func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"data":  []interface{}{},
+				"total": 0,
+			})
+		},
+		basePath + "/members": func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"data":  []interface{}{},
+				"total": 0,
+			})
+		},
+		"/accounts/api/organizations/test-org-id/users": func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"data":  []interface{}{},
+				"total": 0,
+			})
+		},
 	}
 	server := testutil.MockHTTPServer(t, handlers)
 
-	res := NewTeamResource().(*TeamResource)
-	res.client = &accessmanagement.TeamClient{
-		UserAnypointClient: &client.UserAnypointClient{
-			BaseURL:    server.URL,
-			Token:      "mock-token",
-			HTTPClient: &http.Client{},
-			OrgID:      "test-org-id",
-		},
+	mockClient := &client.AnypointClient{
+		BaseURL:    server.URL,
+		Token:      "mock-token",
+		HTTPClient: &http.Client{},
+		OrgID:      "test-org-id",
+		Cache:      client.NewResponseCache(),
 	}
+	res := NewTeamResource().(*TeamResource)
+	res.client = &accessmanagement.TeamClient{AnypointClient: mockClient}
+	res.rolesClient = &accessmanagement.TeamRolesClient{AnypointClient: mockClient}
+	res.membersClient = &accessmanagement.TeamMembersClient{AnypointClient: mockClient}
+	res.usersClient = &accessmanagement.RoleUsersClient{AnypointClient: mockClient}
+	res.catalogClient = &accessmanagement.RolePermissionClient{AnypointClient: mockClient}
 
 	ctx := context.Background()
 	schemaResp := &resource.SchemaResponse{}
@@ -379,15 +450,14 @@ func TestTeamResource_Read(t *testing.T) {
 	stateType := schemaResp.Schema.Type().TerraformType(ctx)
 
 	priorStateRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
-		"id":               tftypes.NewValue(tftypes.String, "test-team-id"),
-		"name":             tftypes.NewValue(tftypes.String, "My Team"),
-		"parent_team":      tftypes.NewValue(tftypes.String, nil),
-		"team_type":        tftypes.NewValue(tftypes.String, "internal"),
-		"organization_id":  tftypes.NewValue(tftypes.String, "test-org-id"),
-		"created_at":       tftypes.NewValue(tftypes.String, ""),
-		"updated_at":       tftypes.NewValue(tftypes.String, ""),
-		// roles/members are null (unmanaged) so Read skips reconciliation and no
-		// role/member endpoints need mocking.
+		"id":              tftypes.NewValue(tftypes.String, "test-team-id"),
+		"name":            tftypes.NewValue(tftypes.String, "My Team"),
+		"parent_team_id":  tftypes.NewValue(tftypes.String, nil),
+		"team_type":       tftypes.NewValue(tftypes.String, "internal"),
+		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
+		"created_at":      tftypes.NewValue(tftypes.String, ""),
+		"updated_at":      tftypes.NewValue(tftypes.String, ""),
+		// roles/members null — Read populates from API (empty sets returned by mock).
 		"roles": tftypes.NewValue(tftypes.Set{ElementType: tftypes.Object{AttributeTypes: map[string]tftypes.Type{
 			"name":           tftypes.String,
 			"context_params": tftypes.Map{ElementType: tftypes.String},
@@ -426,7 +496,7 @@ func TestTeamResource_Read_NotFound(t *testing.T) {
 
 	res := NewTeamResource().(*TeamResource)
 	res.client = &accessmanagement.TeamClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -440,15 +510,14 @@ func TestTeamResource_Read_NotFound(t *testing.T) {
 	stateType := schemaResp.Schema.Type().TerraformType(ctx)
 
 	priorStateRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
-		"id":               tftypes.NewValue(tftypes.String, "test-team-id"),
-		"name":             tftypes.NewValue(tftypes.String, "My Team"),
-		"parent_team":      tftypes.NewValue(tftypes.String, nil),
-		"team_type":        tftypes.NewValue(tftypes.String, "internal"),
-		"organization_id":  tftypes.NewValue(tftypes.String, "test-org-id"),
-		"created_at":       tftypes.NewValue(tftypes.String, ""),
-		"updated_at":       tftypes.NewValue(tftypes.String, ""),
-		// roles/members are null (unmanaged) so Read skips reconciliation and no
-		// role/member endpoints need mocking.
+		"id":              tftypes.NewValue(tftypes.String, "test-team-id"),
+		"name":            tftypes.NewValue(tftypes.String, "My Team"),
+		"parent_team_id":  tftypes.NewValue(tftypes.String, nil),
+		"team_type":       tftypes.NewValue(tftypes.String, "internal"),
+		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
+		"created_at":      tftypes.NewValue(tftypes.String, ""),
+		"updated_at":      tftypes.NewValue(tftypes.String, ""),
+		// roles/members null — Read populates from API (empty sets returned by mock).
 		"roles": tftypes.NewValue(tftypes.Set{ElementType: tftypes.Object{AttributeTypes: map[string]tftypes.Type{
 			"name":           tftypes.String,
 			"context_params": tftypes.Map{ElementType: tftypes.String},

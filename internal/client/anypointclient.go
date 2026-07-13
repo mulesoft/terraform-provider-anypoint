@@ -10,14 +10,22 @@ import (
 	"time"
 )
 
-// AnypointClient represents the Anypoint API client
+// AnypointClient represents the Anypoint API client.
+// It supports two authentication flows:
+//   - client_credentials: just ClientID + ClientSecret (for "acts on its own behalf" apps)
+//   - password: ClientID + ClientSecret + Username + Password (for "acts on behalf of user" apps)
+//
+// The flow is chosen automatically: if Username is set, password grant is used.
 type AnypointClient struct {
 	BaseURL      string
 	ClientID     string
 	ClientSecret string
+	Username     string
+	Password     string
 	HTTPClient   *http.Client
 	Token        string
 	OrgID        string
+	Cache        *ResponseCache
 }
 
 // Config represents the configuration for the AnypointClient
@@ -79,13 +87,22 @@ func NewAnypointClient(config *Config) (*AnypointClient, error) {
 		timeout = time.Duration(config.Timeout) * time.Second
 	}
 
+	// Ensure cache is initialized (nil-safe for tests that don't set it)
+	cache := config.Cache
+	if cache == nil {
+		cache = NewResponseCache()
+	}
+
 	c := &AnypointClient{
 		BaseURL:      baseURL,
 		ClientID:     config.ClientID,
 		ClientSecret: config.ClientSecret,
+		Username:     config.Username,
+		Password:     config.Password,
 		HTTPClient: &http.Client{
 			Timeout: timeout,
 		},
+		Cache: cache,
 	}
 
 	config.mu.Lock()
@@ -112,14 +129,24 @@ func NewAnypointClient(config *Config) (*AnypointClient, error) {
 	return c, nil
 }
 
-// authenticate performs authentication and stores the access token
+// authenticate performs authentication and stores the access token.
+// Uses password grant if Username is set, otherwise client_credentials.
 func (c *AnypointClient) authenticate() error {
 	authURL := fmt.Sprintf("%s/accounts/api/v2/oauth2/token", c.BaseURL)
 
 	authData := map[string]string{
 		"client_id":     c.ClientID,
 		"client_secret": c.ClientSecret,
-		"grant_type":    "client_credentials",
+	}
+
+	if c.Username != "" {
+		// "Acts on behalf of user" connected app — password grant
+		authData["grant_type"] = "password"
+		authData["username"] = c.Username
+		authData["password"] = c.Password
+	} else {
+		// "Acts on its own behalf" connected app — client_credentials grant
+		authData["grant_type"] = "client_credentials"
 	}
 
 	jsonData, err := json.Marshal(authData)

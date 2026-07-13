@@ -25,8 +25,8 @@ type ConnectedAppsDataSource struct {
 
 // ConnectedAppsDataSourceModel describes the data source data model.
 type ConnectedAppsDataSourceModel struct {
-	OrganizationID types.String             `tfsdk:"organization_id"`
-	Apps           []ConnectedAppItemModel  `tfsdk:"apps"`
+	OrganizationID types.String            `tfsdk:"organization_id"`
+	Apps           []ConnectedAppItemModel `tfsdk:"apps"`
 }
 
 // ConnectedAppItemModel represents a single connected app in the list.
@@ -125,16 +125,7 @@ func (d *ConnectedAppsDataSource) Configure(_ context.Context, req datasource.Co
 		return
 	}
 
-	userConfig := &client.UserClientConfig{
-		BaseURL:      config.BaseURL,
-		ClientID:     config.ClientID,
-		ClientSecret: config.ClientSecret,
-		Username:     config.Username,
-		Password:     config.Password,
-		Timeout:      config.Timeout,
-	}
-
-	appClient, err := accessmanagement.NewConnectedAppClient(userConfig)
+	appClient, err := accessmanagement.NewConnectedAppClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Connected Apps Client",

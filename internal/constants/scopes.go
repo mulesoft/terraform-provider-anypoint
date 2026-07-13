@@ -73,36 +73,36 @@ const (
 	ScopeFull = "full"
 
 	// ScopeManageActivity provides activity management access.
-	ScopeManageActivity                = "manage:activity"
-	ScopeManageAPIContractsAllEnvs     = "manage:api_contracts_all_envs"
-	ScopeManageAPIAlerts            = "manage:api_alerts"
-	ScopeManageAPIConfiguration     = "manage:api_configuration"
-	ScopeManageAPIContracts         = "manage:api_contracts"
-	ScopeManageAPIGroups            = "manage:api_groups"
-	ScopeManageAPIPolicies          = "manage:api_policies"
-	ScopeManageAPIProxies           = "manage:api_proxies"
-	ScopeManageAPIQuery             = "manage:api_query"
-	ScopeManageAPIs                 = "manage:apis"
-	ScopeManageApplicationAlerts    = "manage:application_alerts"
-	ScopeManageApplicationData      = "manage:application_data"
-	ScopeManageApplicationFlows     = "manage:application_flows"
-	ScopeManageApplicationQueues    = "manage:application_queues"
-	ScopeManageApplicationSchedules = "manage:application_schedules"
-	ScopeManageApplicationSettings  = "manage:application_settings"
-	ScopeManageApplicationTenants   = "manage:application_tenants"
-	ScopeManageClients              = "manage:clients"
-	ScopeManageCloudHubNetworking   = "manage:cloudhub_networking"
-	ScopeManageDataGateway          = "manage:data_gateway"
-	ScopeManageEnvClientProviders   = "manage:envclientproviders"
-	ScopeManageExchange             = "manage:exchange"
-	ScopeManageHost                 = "manage:host"
-	ScopeManageIdentityProviders    = "manage:identityproviders"
-	ScopeManagePartners             = "manage:partners"
-	ScopeManagePrivateSpaces        = "manage:private_spaces"
-	ScopeManageRuntimeFabrics       = "manage:runtime_fabrics"
-	ScopeManageSecretGroups         = "manage:secret_groups"
-	ScopeManageSecrets              = "manage:secrets"
-	ScopeManageServers              = "manage:servers"
+	ScopeManageActivity              = "manage:activity"
+	ScopeManageAPIContractsAllEnvs   = "manage:api_contracts_all_envs"
+	ScopeManageAPIAlerts             = "manage:api_alerts"
+	ScopeManageAPIConfiguration      = "manage:api_configuration"
+	ScopeManageAPIContracts          = "manage:api_contracts"
+	ScopeManageAPIGroups             = "manage:api_groups"
+	ScopeManageAPIPolicies           = "manage:api_policies"
+	ScopeManageAPIProxies            = "manage:api_proxies"
+	ScopeManageAPIQuery              = "manage:api_query"
+	ScopeManageAPIs                  = "manage:apis"
+	ScopeManageApplicationAlerts     = "manage:application_alerts"
+	ScopeManageApplicationData       = "manage:application_data"
+	ScopeManageApplicationFlows      = "manage:application_flows"
+	ScopeManageApplicationQueues     = "manage:application_queues"
+	ScopeManageApplicationSchedules  = "manage:application_schedules"
+	ScopeManageApplicationSettings   = "manage:application_settings"
+	ScopeManageApplicationTenants    = "manage:application_tenants"
+	ScopeManageClients               = "manage:clients"
+	ScopeManageCloudHubNetworking    = "manage:cloudhub_networking"
+	ScopeManageDataGateway           = "manage:data_gateway"
+	ScopeManageEnvClientProviders    = "manage:envclientproviders"
+	ScopeManageExchange              = "manage:exchange"
+	ScopeManageHost                  = "manage:host"
+	ScopeManageIdentityProviders     = "manage:identityproviders"
+	ScopeManagePartners              = "manage:partners"
+	ScopeManagePrivateSpaces         = "manage:private_spaces"
+	ScopeManageRuntimeFabrics        = "manage:runtime_fabrics"
+	ScopeManageSecretGroups          = "manage:secret_groups"
+	ScopeManageSecrets               = "manage:secrets"
+	ScopeManageServers               = "manage:servers"
 	ScopeManageClientApplication     = "manage:client_application"
 	ScopeManageOrgClientApplications = "manage:org_client_applications"
 	ScopeManageStore                 = "manage:store"
@@ -346,13 +346,13 @@ var ValidScopes = map[string]bool{
 	ScopeEmail:         true,
 
 	// Additional scopes
-	ScopeEditExchange:               true,
-	ScopeExecutionRPA:               true,
+	ScopeEditExchange:                true,
+	ScopeExecutionRPA:                true,
 	ScopeFull:                        true,
-	ScopeManageAPIContractsAllEnvs:  true,
-	ScopeManageClientApplication:    true,
+	ScopeManageAPIContractsAllEnvs:   true,
+	ScopeManageClientApplication:     true,
 	ScopeManageOrgClientApplications: true,
-	ScopeCreateOmniGenAI:            true,
+	ScopeCreateOmniGenAI:             true,
 }
 
 // DisplayNameToScope maps the EXACT display names from the Anypoint Platform
@@ -360,136 +360,136 @@ var ValidScopes = map[string]bool{
 // These names match what users see in the Anypoint UI when adding scopes.
 // Source of truth: live catalog query against devx on 2026-07-08.
 var DisplayNameToScope = map[string]string{
-	"Access Controls Admin":                          ScopeAdminAccessControls,
-	"Admin Client Management Provider Clients":       ScopeAdminOrgClientProviderClients,
-	"Admin Client Management Providers":              ScopeAdminOrgClientProviders,
-	"Admin Particular Organization Clients":          ScopeAdminOrgClients,
-	"Administer destinations":                        ScopeAdministerDestinations,
-	"Anypoint Salesforce SSO":                        ScopeReadAnypointSalesforceSso,
-	"API Catalog Contributor":                        ScopeEditAPICatalog,
-	"API Experience Hub Admin":                       ScopeAEHAdmin,
-	"API Group Administrator":                        ScopeManageAPIGroups,
-	"API Manager All Environments Viewer":            ScopeViewAllEnvs,
-	"API Manager Environment Administrator":         ScopeManageAPIs,
-	"Application Creator":                            ScopeCreateClientApplications,
-	"Application Owner":                              ScopeManageClientApplication,
-	"Application Viewer":                             ScopeReadClientApplications,
-	"Audit Log Config Manager":                       ScopeWriteAuditLogSettings,
-	"Audit Log Viewer":                               ScopeReadAuditLogs,
-	"Background Access":                              ScopeOfflineAccess,
-	"Clear destinations":                             ScopeClearDestinations,
-	"Client Identity for Google's WIF":               ScopeOpenIDGoogle,
-	"Cloudhub Network Administrator":                 ScopeManageCloudHubNetworking,
-	"Cloudhub Network Viewer":                        ScopeReadCloudHubNetworking,
-	"Cloudhub Organization Admin":                    ScopeAdminCloudHub,
-	"Consume":                                        ScopeReadAPIQuery,
-	"Contribute":                                     ScopeEditAPIQuery,
-	"Create Applications":                            ScopeCreateApplications,
-	"Create BGs under a given org":                   ScopeCreateSubOrgs,
-	"Create Environment":                             ScopeCreateEnvironment,
-	"Create Organization Clients":                    ScopeCreateOrgClients,
-	"Data Gateway Administrator":                     ScopeManageDataGateway,
-	"Data Gateway Viewer":                            ScopeReadDataGateway,
-	"DataGraph Admin":                                ScopeAdminAPIQuery,
-	"Delete Applications":                            ScopeDeleteApplications,
-	"Deploy API Proxies":                             ScopeManageAPIProxies,
-	"Design Center Creator":                          ScopeCreateDesignCenter,
-	"Design Center Developer":                        ScopeEditDesignCenter,
-	"Design Center Viewer":                           ScopeViewDesignCenter,
-	"Destination publisher for given environment":    ScopePublishDestinations,
-	"Destination subscriber for given environment":   ScopeSubscribeDestinations,
-	"Download Applications":                          ScopeDownloadApplications,
-	"Edit Environment":                               ScopeEditEnvironment,
-	"Edit Identity Management Providers":             ScopeEditIdentityProviders,
-	"Edit Organization":                              ScopeEditOrganization,
-	"Edit users in an organization":                  ScopeEditOrgUsers,
-	"Email":                                          ScopeEmail,
-	"Exchange Administrator":                         ScopeManageExchange,
-	"Exchange Contributor":                           ScopeEditExchange,
-	"Exchange Creator":                               ScopeCreateExchange,
-	"Exchange Viewer":                                ScopeReadExchange,
-	"Execute Published Actions":                      ScopeExecuteDocumentActions,
-	"Flow Designer Developer":                        ScopeEditFlowDesigner,
-	"Full Access":                                    ScopeFull,
-	"Generate Asset Documentation with AI":           ScopeCreateExchangeGenAI,
-	"Governance Administrator":                       ScopeAdminAngGovernanceProfiles,
-	"Governance Viewer":                              ScopeViewAngGovernanceProfiles,
-	"Grant access to secrets":                        ScopeReadSecrets,
-	"Identity":                                       ScopeOpenID,
-	"Manage Activity":                                ScopeManageActivity,
-	"Manage Alerts":                                  ScopeManageApplicationAlerts,
-	"Manage API Alerts":                              ScopeManageAPIAlerts,
-	"Manage APIs Configuration":                      ScopeManageAPIConfiguration,
-	"Manage Application Data":                        ScopeManageApplicationData,
-	"Manage Application Flows":                       ScopeManageApplicationFlows,
-	"Manage Client Applications":                     ScopeManageOrgClientApplications,
-	"Manage Contracts":                               ScopeManageAPIContracts,
-	"Manage Contracts All Environments":              ScopeManageAPIContractsAllEnvs,
-	"Manage Environment Client Management Providers": ScopeManageEnvClientProviders,
-	"Manage Host":                                    ScopeManageHost,
-	"Manage Identity Management Providers":           ScopeManageIdentityProviders,
-	"Manage Partners and Message Flows":              ScopeManagePartners,
-	"Manage Policies":                                ScopeManageAPIPolicies,
-	"Manage Queues":                                  ScopeManageApplicationQueues,
-	"Manage Runtime Fabrics":                         ScopeManageRuntimeFabrics,
-	"Manage Schedules":                               ScopeManageApplicationSchedules,
-	"Manage Servers":                                 ScopeManageServers,
-	"Manage Settings":                                ScopeManageApplicationSettings,
-	"Manage Tenants":                                 ScopeManageApplicationTenants,
-	"Manage clients":                                 ScopeManageClients,
-	"Manage invites in an organization":              ScopeEditOrgInvites,
-	"Manage secret groups":                           ScopeManageSecretGroups,
-	"Manage store clients":                           ScopeManageStoreClients,
-	"Manage stores":                                  ScopeManageStore,
-	"Manage stores data":                             ScopeManageStoreData,
-	"Maven Repository Reader":                        ScopeReadMavenRepository,
-	"Monitoring Administrator":                       ScopeEditMonitoring,
-	"Monitoring Viewer":                              ScopeViewMonitoring,
-	"Mule Developer Generative AI User":              ScopeCreateGenerations,
-	"Mulesoft Omni Agent for Anypoint":               ScopeCreateOmniGenAI,
-	"Operate":                                        ScopeManageAPIQuery,
-	"Partner Manager Administrator":                  ScopeAdminPartnerManager,
-	"Profile":                                        ScopeProfile,
-	"Promote":                                        ScopePromoteAPIQuery,
-	"RPA Integrator":                                 ScopeEditRPA,
-	"RPA Invocable Process":                          ScopeExecutionRPA,
-	"Read Alerts":                                    ScopeReadApplicationAlerts,
-	"Read Applications":                              ScopeReadApplications,
-	"Read MQ stats":                                  ScopeReadStats,
-	"Read Runtime Fabrics":                           ScopeReadRuntimeFabrics,
-	"Read Servers":                                   ScopeReadServers,
-	"Read secrets metadata":                          ScopeReadSecretsMetadata,
-	"Read-Only Access":                               ScopeReadFull,
-	"Restart Applications":                           ScopeRestartApplications,
-	"Store Metrics Viewer":                           ScopeReadStoreMetrics,
-	"Telemetry Exporter Administrator":               ScopeAdminDataExporterConnections,
-	"Telemetry Exporter Configurations Manager":      ScopeAdminDataExporterConfigurations,
-	"Usage Viewer":                                   ScopeViewMetering,
-	"View API Alerts":                                ScopeReadAPIAlerts,
-	"View APIs Configuration":                        ScopeReadAPIConfiguration,
-	"View Activity":                                  ScopeReadActivity,
+	"Access Controls Admin":                              ScopeAdminAccessControls,
+	"Admin Client Management Provider Clients":           ScopeAdminOrgClientProviderClients,
+	"Admin Client Management Providers":                  ScopeAdminOrgClientProviders,
+	"Admin Particular Organization Clients":              ScopeAdminOrgClients,
+	"Administer destinations":                            ScopeAdministerDestinations,
+	"Anypoint Salesforce SSO":                            ScopeReadAnypointSalesforceSso,
+	"API Catalog Contributor":                            ScopeEditAPICatalog,
+	"API Experience Hub Admin":                           ScopeAEHAdmin,
+	"API Group Administrator":                            ScopeManageAPIGroups,
+	"API Manager All Environments Viewer":                ScopeViewAllEnvs,
+	"API Manager Environment Administrator":              ScopeManageAPIs,
+	"Application Creator":                                ScopeCreateClientApplications,
+	"Application Owner":                                  ScopeManageClientApplication,
+	"Application Viewer":                                 ScopeReadClientApplications,
+	"Audit Log Config Manager":                           ScopeWriteAuditLogSettings,
+	"Audit Log Viewer":                                   ScopeReadAuditLogs,
+	"Background Access":                                  ScopeOfflineAccess,
+	"Clear destinations":                                 ScopeClearDestinations,
+	"Client Identity for Google's WIF":                   ScopeOpenIDGoogle,
+	"Cloudhub Network Administrator":                     ScopeManageCloudHubNetworking,
+	"Cloudhub Network Viewer":                            ScopeReadCloudHubNetworking,
+	"Cloudhub Organization Admin":                        ScopeAdminCloudHub,
+	"Consume":                                            ScopeReadAPIQuery,
+	"Contribute":                                         ScopeEditAPIQuery,
+	"Create Applications":                                ScopeCreateApplications,
+	"Create BGs under a given org":                       ScopeCreateSubOrgs,
+	"Create Environment":                                 ScopeCreateEnvironment,
+	"Create Organization Clients":                        ScopeCreateOrgClients,
+	"Data Gateway Administrator":                         ScopeManageDataGateway,
+	"Data Gateway Viewer":                                ScopeReadDataGateway,
+	"DataGraph Admin":                                    ScopeAdminAPIQuery,
+	"Delete Applications":                                ScopeDeleteApplications,
+	"Deploy API Proxies":                                 ScopeManageAPIProxies,
+	"Design Center Creator":                              ScopeCreateDesignCenter,
+	"Design Center Developer":                            ScopeEditDesignCenter,
+	"Design Center Viewer":                               ScopeViewDesignCenter,
+	"Destination publisher for given environment":        ScopePublishDestinations,
+	"Destination subscriber for given environment":       ScopeSubscribeDestinations,
+	"Download Applications":                              ScopeDownloadApplications,
+	"Edit Environment":                                   ScopeEditEnvironment,
+	"Edit Identity Management Providers":                 ScopeEditIdentityProviders,
+	"Edit Organization":                                  ScopeEditOrganization,
+	"Edit users in an organization":                      ScopeEditOrgUsers,
+	"Email":                                              ScopeEmail,
+	"Exchange Administrator":                             ScopeManageExchange,
+	"Exchange Contributor":                               ScopeEditExchange,
+	"Exchange Creator":                                   ScopeCreateExchange,
+	"Exchange Viewer":                                    ScopeReadExchange,
+	"Execute Published Actions":                          ScopeExecuteDocumentActions,
+	"Flow Designer Developer":                            ScopeEditFlowDesigner,
+	"Full Access":                                        ScopeFull,
+	"Generate Asset Documentation with AI":               ScopeCreateExchangeGenAI,
+	"Governance Administrator":                           ScopeAdminAngGovernanceProfiles,
+	"Governance Viewer":                                  ScopeViewAngGovernanceProfiles,
+	"Grant access to secrets":                            ScopeReadSecrets,
+	"Identity":                                           ScopeOpenID,
+	"Manage Activity":                                    ScopeManageActivity,
+	"Manage Alerts":                                      ScopeManageApplicationAlerts,
+	"Manage API Alerts":                                  ScopeManageAPIAlerts,
+	"Manage APIs Configuration":                          ScopeManageAPIConfiguration,
+	"Manage Application Data":                            ScopeManageApplicationData,
+	"Manage Application Flows":                           ScopeManageApplicationFlows,
+	"Manage Client Applications":                         ScopeManageOrgClientApplications,
+	"Manage Contracts":                                   ScopeManageAPIContracts,
+	"Manage Contracts All Environments":                  ScopeManageAPIContractsAllEnvs,
+	"Manage Environment Client Management Providers":     ScopeManageEnvClientProviders,
+	"Manage Host":                                        ScopeManageHost,
+	"Manage Identity Management Providers":               ScopeManageIdentityProviders,
+	"Manage Partners and Message Flows":                  ScopeManagePartners,
+	"Manage Policies":                                    ScopeManageAPIPolicies,
+	"Manage Queues":                                      ScopeManageApplicationQueues,
+	"Manage Runtime Fabrics":                             ScopeManageRuntimeFabrics,
+	"Manage Schedules":                                   ScopeManageApplicationSchedules,
+	"Manage Servers":                                     ScopeManageServers,
+	"Manage Settings":                                    ScopeManageApplicationSettings,
+	"Manage Tenants":                                     ScopeManageApplicationTenants,
+	"Manage clients":                                     ScopeManageClients,
+	"Manage invites in an organization":                  ScopeEditOrgInvites,
+	"Manage secret groups":                               ScopeManageSecretGroups,
+	"Manage store clients":                               ScopeManageStoreClients,
+	"Manage stores":                                      ScopeManageStore,
+	"Manage stores data":                                 ScopeManageStoreData,
+	"Maven Repository Reader":                            ScopeReadMavenRepository,
+	"Monitoring Administrator":                           ScopeEditMonitoring,
+	"Monitoring Viewer":                                  ScopeViewMonitoring,
+	"Mule Developer Generative AI User":                  ScopeCreateGenerations,
+	"Mulesoft Omni Agent for Anypoint":                   ScopeCreateOmniGenAI,
+	"Operate":                                            ScopeManageAPIQuery,
+	"Partner Manager Administrator":                      ScopeAdminPartnerManager,
+	"Profile":                                            ScopeProfile,
+	"Promote":                                            ScopePromoteAPIQuery,
+	"RPA Integrator":                                     ScopeEditRPA,
+	"RPA Invocable Process":                              ScopeExecutionRPA,
+	"Read Alerts":                                        ScopeReadApplicationAlerts,
+	"Read Applications":                                  ScopeReadApplications,
+	"Read MQ stats":                                      ScopeReadStats,
+	"Read Runtime Fabrics":                               ScopeReadRuntimeFabrics,
+	"Read Servers":                                       ScopeReadServers,
+	"Read secrets metadata":                              ScopeReadSecretsMetadata,
+	"Read-Only Access":                                   ScopeReadFull,
+	"Restart Applications":                               ScopeRestartApplications,
+	"Store Metrics Viewer":                               ScopeReadStoreMetrics,
+	"Telemetry Exporter Administrator":                   ScopeAdminDataExporterConnections,
+	"Telemetry Exporter Configurations Manager":          ScopeAdminDataExporterConfigurations,
+	"Usage Viewer":                                       ScopeViewMetering,
+	"View API Alerts":                                    ScopeReadAPIAlerts,
+	"View APIs Configuration":                            ScopeReadAPIConfiguration,
+	"View Activity":                                      ScopeReadActivity,
 	"View All Environments' Client Management Providers": ScopeViewEnvClientProviders,
-	"View Client Applications":                       ScopeReadOrgClientApplications,
-	"View Client Management Provider Clients":        ScopeReadOrgClientProviderClients,
-	"View Client Management Providers":               ScopeReadOrgClientProviders,
-	"View Connected Applications":                    ScopeReadOrgConnApps,
-	"View Contracts":                                 ScopeReadAPIContracts,
-	"View Environment":                               ScopeViewEnvironment,
-	"View Environments in a particular organization": ScopeReadOrgEnvironments,
-	"View Host, Partners and Message Flows":          ScopeReadHostPartners,
-	"View Identity Management Providers":             ScopeViewIdentityProviders,
-	"View Organization":                              ScopeReadOrganization,
-	"View Particular Organization Clients":           ScopeReadOrgClients,
-	"View Policies":                                  ScopeReadAPIPolicies,
-	"View Policies All Environments":                 ScopeReadAPIPoliciesAllEnvs,
-	"View Users in a particular organization":        ScopeReadOrgUsers,
-	"View clients":                                   ScopeViewClients,
-	"View destinations":                              ScopeViewDestinations,
-	"View invites in an organization":                ScopeReadOrgInvites,
-	"View store clients":                             ScopeReadStoreClients,
-	"View stores":                                    ScopeReadStore,
-	"Visualizer Editor":                              ScopeEditVisualizer,
-	"Write secrets":                                  ScopeManageSecrets,
+	"View Client Applications":                           ScopeReadOrgClientApplications,
+	"View Client Management Provider Clients":            ScopeReadOrgClientProviderClients,
+	"View Client Management Providers":                   ScopeReadOrgClientProviders,
+	"View Connected Applications":                        ScopeReadOrgConnApps,
+	"View Contracts":                                     ScopeReadAPIContracts,
+	"View Environment":                                   ScopeViewEnvironment,
+	"View Environments in a particular organization":     ScopeReadOrgEnvironments,
+	"View Host, Partners and Message Flows":              ScopeReadHostPartners,
+	"View Identity Management Providers":                 ScopeViewIdentityProviders,
+	"View Organization":                                  ScopeReadOrganization,
+	"View Particular Organization Clients":               ScopeReadOrgClients,
+	"View Policies":                                      ScopeReadAPIPolicies,
+	"View Policies All Environments":                     ScopeReadAPIPoliciesAllEnvs,
+	"View Users in a particular organization":            ScopeReadOrgUsers,
+	"View clients":                                       ScopeViewClients,
+	"View destinations":                                  ScopeViewDestinations,
+	"View invites in an organization":                    ScopeReadOrgInvites,
+	"View store clients":                                 ScopeReadStoreClients,
+	"View stores":                                        ScopeReadStore,
+	"Visualizer Editor":                                  ScopeEditVisualizer,
+	"Write secrets":                                      ScopeManageSecrets,
 }
 
 // scopeToDisplayName is the reverse mapping (identifier → display name), built at init.

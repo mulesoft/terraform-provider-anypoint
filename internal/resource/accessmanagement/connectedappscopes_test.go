@@ -112,7 +112,7 @@ func TestConnectedAppScopesResource_Read(t *testing.T) {
 
 	res := NewConnectedAppScopesResource().(*ConnectedAppScopesResource)
 	res.client = &accessmanagement.ConnectedAppScopesClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -154,7 +154,7 @@ func TestConnectedAppScopesResource_Read_Error(t *testing.T) {
 
 	res := NewConnectedAppScopesResource().(*ConnectedAppScopesResource)
 	res.client = &accessmanagement.ConnectedAppScopesClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},

@@ -11,18 +11,18 @@ import (
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 )
 
-// TeamMembersClient wraps the UserAnypointClient for team membership operations.
+// TeamMembersClient wraps the AnypointClient for team membership operations.
 type TeamMembersClient struct {
-	*client.UserAnypointClient
+	*client.AnypointClient
 }
 
 // NewTeamMembersClient creates a new TeamMembersClient
-func NewTeamMembersClient(config *client.UserClientConfig) (*TeamMembersClient, error) {
-	userAnypointClient, err := client.NewUserAnypointClient(config)
+func NewTeamMembersClient(config *client.Config) (*TeamMembersClient, error) {
+	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err
 	}
-	return &TeamMembersClient{UserAnypointClient: userAnypointClient}, nil
+	return &TeamMembersClient{AnypointClient: anypointClient}, nil
 }
 
 // TeamMember represents a user who is a member of a team

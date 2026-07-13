@@ -32,7 +32,7 @@ type TeamDataSource struct {
 type TeamDataSourceModel struct {
 	ID             types.String `tfsdk:"id"`
 	Name           types.String `tfsdk:"name"`
-	ParentTeam     types.String `tfsdk:"parent_team"`
+	ParentTeamID   types.String `tfsdk:"parent_team_id"`
 	TeamType       types.String `tfsdk:"team_type"`
 	OrganizationID types.String `tfsdk:"organization_id"`
 	Roles          types.List   `tfsdk:"roles"`
@@ -80,8 +80,8 @@ func (d *TeamDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, r
 				Description: "The name of the team.",
 				Computed:    true,
 			},
-			"parent_team": schema.StringAttribute{
-				Description: "The name of the parent team (reverse-resolved from its ID). Null for root teams.",
+			"parent_team_id": schema.StringAttribute{
+				Description: "The ID of the parent team. Null for root teams. Use this value as parent_team_id when creating child teams.",
 				Computed:    true,
 			},
 			"team_type": schema.StringAttribute{
@@ -157,16 +157,7 @@ func (d *TeamDataSource) Configure(_ context.Context, req datasource.ConfigureRe
 		return
 	}
 
-	userConfig := &client.UserClientConfig{
-		BaseURL:      config.BaseURL,
-		ClientID:     config.ClientID,
-		ClientSecret: config.ClientSecret,
-		Username:     config.Username,
-		Password:     config.Password,
-		Timeout:      config.Timeout,
-	}
-
-	teamClient, err := accessmanagement.NewTeamClient(userConfig)
+	teamClient, err := accessmanagement.NewTeamClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Anypoint Team API Client",
@@ -177,7 +168,7 @@ func (d *TeamDataSource) Configure(_ context.Context, req datasource.ConfigureRe
 		return
 	}
 
-	rolesClient, err := accessmanagement.NewTeamRolesClient(userConfig)
+	rolesClient, err := accessmanagement.NewTeamRolesClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Team Roles Client",
@@ -187,7 +178,7 @@ func (d *TeamDataSource) Configure(_ context.Context, req datasource.ConfigureRe
 		return
 	}
 
-	membersClient, err := accessmanagement.NewTeamMembersClient(userConfig)
+	membersClient, err := accessmanagement.NewTeamMembersClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Team Members Client",
@@ -197,7 +188,7 @@ func (d *TeamDataSource) Configure(_ context.Context, req datasource.ConfigureRe
 		return
 	}
 
-	usersClient, err := accessmanagement.NewRoleUsersClient(userConfig)
+	usersClient, err := accessmanagement.NewRoleUsersClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Users Client",
@@ -207,7 +198,7 @@ func (d *TeamDataSource) Configure(_ context.Context, req datasource.ConfigureRe
 		return
 	}
 
-	catalogClient, err := accessmanagement.NewRolePermissionClient(userConfig)
+	catalogClient, err := accessmanagement.NewRolePermissionClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Role Catalog Client",
@@ -258,21 +249,11 @@ func (d *TeamDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	data.CreatedAt = types.StringValue(team.CreatedAt)
 	data.UpdatedAt = types.StringValue(team.UpdatedAt)
 	// ancestor_team_ids is ordered root-first / direct-parent-LAST, so the direct
-	// parent is the last element (see Team.DirectParentID). [0] would surface the
-	// ROOT for any team more than one level deep.
+	// parent is the last element (see Team.DirectParentID).
 	if parent := team.DirectParentID(); parent != "" {
-		// Reverse-resolve the parent team ID to its name.
-		parentTeam, err := d.client.GetTeam(ctx, orgID, parent)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error resolving parent team name",
-				"Could not read parent team "+parent+": "+err.Error(),
-			)
-			return
-		}
-		data.ParentTeam = types.StringValue(parentTeam.TeamName)
+		data.ParentTeamID = types.StringValue(parent)
 	} else {
-		data.ParentTeam = types.StringNull()
+		data.ParentTeamID = types.StringNull()
 	}
 
 	// Populate roles (excluding internal/system assignments), labeled by display name.

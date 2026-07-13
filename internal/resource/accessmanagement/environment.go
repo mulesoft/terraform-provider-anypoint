@@ -128,18 +128,8 @@ func (r *EnvironmentResource) Configure(_ context.Context, req resource.Configur
 		return
 	}
 
-	// Convert ClientConfig to UserClientConfig for environment operations
-	userConfig := &client.UserClientConfig{
-		BaseURL:      config.BaseURL,
-		ClientID:     config.ClientID,
-		ClientSecret: config.ClientSecret,
-		Username:     config.Username,
-		Password:     config.Password,
-		Timeout:      config.Timeout,
-	}
-
 	// Create the environment client
-	environmentClient, err := accessmanagement.NewEnvironmentClient(userConfig)
+	environmentClient, err := accessmanagement.NewEnvironmentClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Anypoint Environment API Client",

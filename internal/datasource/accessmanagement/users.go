@@ -107,16 +107,7 @@ func (d *UsersDataSource) Configure(_ context.Context, req datasource.ConfigureR
 		return
 	}
 
-	userConfig := &client.UserClientConfig{
-		BaseURL:      config.BaseURL,
-		ClientID:     config.ClientID,
-		ClientSecret: config.ClientSecret,
-		Username:     config.Username,
-		Password:     config.Password,
-		Timeout:      config.Timeout,
-	}
-
-	usersClient, err := accessmanagement.NewRoleUsersClient(userConfig)
+	usersClient, err := accessmanagement.NewRoleUsersClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Users Client",

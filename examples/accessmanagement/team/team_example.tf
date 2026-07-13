@@ -8,11 +8,8 @@ terraform {
 }
 
 provider "anypoint" {
-  auth_type     = "user"
   client_id     = var.anypoint_client_id
   client_secret = var.anypoint_client_secret
-  username      = var.anypoint_username
-  password      = var.anypoint_password
   base_url      = var.anypoint_base_url
 }
 
@@ -62,16 +59,16 @@ resource "anypoint_team" "development_without_child_teams" {
   name = "Development Team With No Child teams changed"
 }
 
-# Create a sub-team under development (parent resolved by name)
+# Create a sub-team under development (parent resolved by ID)
 resource "anypoint_team" "frontend" {
-  name        = "Frontend Team"
-  parent_team = anypoint_team.development.name
+  name           = "Frontend Team"
+  parent_team_id = anypoint_team.development.id
 }
 
 # Create a sub-team under development_without_child_teams
 resource "anypoint_team" "backend" {
-  name        = "Backend Team"
-  parent_team = anypoint_team.development_without_child_teams.name
+  name           = "Backend Team"
+  parent_team_id = anypoint_team.development_without_child_teams.id
 }
 
 # Create an operations team (top-level)

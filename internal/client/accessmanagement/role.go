@@ -11,19 +11,18 @@ import (
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 )
 
-// RoleClient wraps the UserAnypointClient for role group operations.
-// The Anypoint Role Groups API requires user-level (password grant) authentication.
+// RoleClient wraps the AnypointClient for role group operations.
 type RoleClient struct {
-	*client.UserAnypointClient
+	*client.AnypointClient
 }
 
 // NewRoleClient creates a new RoleClient
-func NewRoleClient(config *client.UserClientConfig) (*RoleClient, error) {
-	userAnypointClient, err := client.NewUserAnypointClient(config)
+func NewRoleClient(config *client.Config) (*RoleClient, error) {
+	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err
 	}
-	return &RoleClient{UserAnypointClient: userAnypointClient}, nil
+	return &RoleClient{AnypointClient: anypointClient}, nil
 }
 
 // RoleGroup represents an Anypoint role group

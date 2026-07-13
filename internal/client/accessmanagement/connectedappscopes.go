@@ -11,18 +11,18 @@ import (
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 )
 
-// ConnectedAppScopesClient wraps the UserAnypointClient for connected app scope operations
+// ConnectedAppScopesClient wraps the AnypointClient for connected app scope operations
 type ConnectedAppScopesClient struct {
-	*client.UserAnypointClient
+	*client.AnypointClient
 }
 
 // NewConnectedAppScopesClient creates a new ConnectedAppScopesClient
-func NewConnectedAppScopesClient(config *client.UserClientConfig) (*ConnectedAppScopesClient, error) {
-	userClient, err := client.NewUserAnypointClient(config)
+func NewConnectedAppScopesClient(config *client.Config) (*ConnectedAppScopesClient, error) {
+	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err
 	}
-	return &ConnectedAppScopesClient{UserAnypointClient: userClient}, nil
+	return &ConnectedAppScopesClient{AnypointClient: anypointClient}, nil
 }
 
 // Scope represents a connected app scope

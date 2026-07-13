@@ -60,7 +60,7 @@ func TestConnectedAppScopesResource_Read_ServerError(t *testing.T) {
 
 	res := NewConnectedAppScopesResource().(*ConnectedAppScopesResource)
 	res.client = &accessmgmt.ConnectedAppScopesClient{
-		UserAnypointClient: &anypointclient.UserAnypointClient{
+		AnypointClient: &anypointclient.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "tok",
 			HTTPClient: &http.Client{},
@@ -97,7 +97,7 @@ func TestOrganizationResource_Read_Error(t *testing.T) {
 
 	res := NewOrganizationResource().(*OrganizationResource)
 	res.client = &accessmgmt.OrganizationClient{
-		UserAnypointClient: &anypointclient.UserAnypointClient{
+		AnypointClient: &anypointclient.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "tok",
 			HTTPClient: &http.Client{},

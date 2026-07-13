@@ -11,18 +11,18 @@ import (
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 )
 
-// RolePermissionClient wraps the UserAnypointClient for role permission (role-to-rolegroup assignment) operations.
+// RolePermissionClient wraps the AnypointClient for role permission (role-to-rolegroup assignment) operations.
 type RolePermissionClient struct {
-	*client.UserAnypointClient
+	*client.AnypointClient
 }
 
 // NewRolePermissionClient creates a new RolePermissionClient
-func NewRolePermissionClient(config *client.UserClientConfig) (*RolePermissionClient, error) {
-	userAnypointClient, err := client.NewUserAnypointClient(config)
+func NewRolePermissionClient(config *client.Config) (*RolePermissionClient, error) {
+	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err
 	}
-	return &RolePermissionClient{UserAnypointClient: userAnypointClient}, nil
+	return &RolePermissionClient{AnypointClient: anypointClient}, nil
 }
 
 // RoleAssignment represents a single role (permission) assigned to a role group

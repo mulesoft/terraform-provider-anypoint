@@ -165,7 +165,7 @@ func TestUsersDataSource_Read(t *testing.T) {
 
 	ds := NewUsersDataSource().(*UsersDataSource)
 	ds.client = &accessmanagement.RoleUsersClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -232,7 +232,7 @@ func TestUsersDataSource_Read_WithFilter(t *testing.T) {
 
 	ds := NewUsersDataSource().(*UsersDataSource)
 	ds.client = &accessmanagement.RoleUsersClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -298,7 +298,7 @@ func TestUsersDataSource_Read_CaseInsensitiveFilter(t *testing.T) {
 
 	ds := NewUsersDataSource().(*UsersDataSource)
 	ds.client = &accessmanagement.RoleUsersClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -364,7 +364,7 @@ func TestUsersDataSource_Read_FilterByEmail(t *testing.T) {
 
 	ds := NewUsersDataSource().(*UsersDataSource)
 	ds.client = &accessmanagement.RoleUsersClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -424,7 +424,7 @@ func TestUsersDataSource_Read_Error(t *testing.T) {
 
 	ds := NewUsersDataSource().(*UsersDataSource)
 	ds.client = &accessmanagement.RoleUsersClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},

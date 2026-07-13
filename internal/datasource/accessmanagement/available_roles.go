@@ -92,16 +92,7 @@ func (d *AvailableRolesDataSource) Configure(_ context.Context, req datasource.C
 		return
 	}
 
-	userConfig := &client.UserClientConfig{
-		BaseURL:      config.BaseURL,
-		ClientID:     config.ClientID,
-		ClientSecret: config.ClientSecret,
-		Username:     config.Username,
-		Password:     config.Password,
-		Timeout:      config.Timeout,
-	}
-
-	permClient, err := accessmanagement.NewRolePermissionClient(userConfig)
+	permClient, err := accessmanagement.NewRolePermissionClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Role Permission Client",

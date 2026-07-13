@@ -18,11 +18,13 @@ import (
 	dsAgentsTools "github.com/mulesoft/terraform-provider-anypoint/internal/datasource/agentstools"
 	dsApiManagement "github.com/mulesoft/terraform-provider-anypoint/internal/datasource/apimanagement"
 	dsCloudHub2 "github.com/mulesoft/terraform-provider-anypoint/internal/datasource/cloudhub2"
+	dsExchange "github.com/mulesoft/terraform-provider-anypoint/internal/datasource/exchange"
 	dsSecretsManagement "github.com/mulesoft/terraform-provider-anypoint/internal/datasource/secretsmanagement"
 	resourceAccessManagement "github.com/mulesoft/terraform-provider-anypoint/internal/resource/accessmanagement"
 	resourceAgentsTools "github.com/mulesoft/terraform-provider-anypoint/internal/resource/agentstools"
 	resourceApiManagement "github.com/mulesoft/terraform-provider-anypoint/internal/resource/apimanagement"
 	resourceCloudHub2 "github.com/mulesoft/terraform-provider-anypoint/internal/resource/cloudhub2"
+	resourceExchange "github.com/mulesoft/terraform-provider-anypoint/internal/resource/exchange"
 	resourceSecretsManagement "github.com/mulesoft/terraform-provider-anypoint/internal/resource/secretsmanagement"
 )
 
@@ -226,6 +228,8 @@ func (p *AnypointProvider) Resources(_ context.Context) []func() resource.Resour
 		// Agents Tools resources
 		resourceAgentsTools.NewAgentInstanceResource,
 		resourceAgentsTools.NewMCPServerResource,
+		// Exchange resources
+		resourceExchange.NewAssetResource,
 		// Secrets Management resources
 		resourceSecretsManagement.NewSecretGroupResource,
 		resourceSecretsManagement.NewKeystoreResource,
@@ -280,6 +284,9 @@ func (p *AnypointProvider) DataSources(_ context.Context) []func() datasource.Da
 		dsAgentsTools.NewAgentInstanceSingleDataSource,
 		dsAgentsTools.NewMCPServerDataSource,
 		dsAgentsTools.NewMCPServerSingleDataSource,
+		// Exchange data sources
+		dsExchange.NewAssetDataSource,
+		dsExchange.NewAssetsDataSource,
 		// Secrets Management data sources
 		dsSecretsManagement.NewSecretGroupDataSource,
 		dsSecretsManagement.NewKeystoreDataSource,

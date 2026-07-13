@@ -111,18 +111,38 @@ func TestRoleResource_Read(t *testing.T) {
 				"updated_at":     "2024-01-01T00:00:00Z",
 			})
 		},
+		basePath + "/roles": func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"data":  []interface{}{},
+				"total": 0,
+			})
+		},
+		basePath + "/users": func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"data":  []interface{}{},
+				"total": 0,
+			})
+		},
+		"/accounts/api/roles": func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"data":  []interface{}{},
+				"total": 0,
+			})
+		},
 	}
 	server := testutil.MockHTTPServer(t, handlers)
 
-	res := NewRoleResource().(*RoleResource)
-	res.client = &accessmanagement.RoleClient{
-		UserAnypointClient: &client.UserAnypointClient{
-			BaseURL:    server.URL,
-			Token:      "mock-token",
-			HTTPClient: &http.Client{},
-			OrgID:      "test-org-id",
-		},
+	mockClient := &client.AnypointClient{
+		BaseURL:    server.URL,
+		Token:      "mock-token",
+		HTTPClient: &http.Client{},
+		OrgID:      "test-org-id",
+		Cache:      client.NewResponseCache(),
 	}
+	res := NewRoleResource().(*RoleResource)
+	res.client = &accessmanagement.RoleClient{AnypointClient: mockClient}
+	res.permClient = &accessmanagement.RolePermissionClient{AnypointClient: mockClient}
+	res.usersClient = &accessmanagement.RoleUsersClient{AnypointClient: mockClient}
 
 	ctx := context.Background()
 	schemaResp := &resource.SchemaResponse{}
@@ -140,7 +160,7 @@ func TestRoleResource_Read(t *testing.T) {
 		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
 		"editable":        tftypes.NewValue(tftypes.Bool, true),
 		"external_names":  tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, []tftypes.Value{}),
-		// permissions/members null => Read leaves them unmanaged (no reconcile calls).
+		// permissions/members null => Read populates from API (empty sets returned by mock).
 		"permissions": tftypes.NewValue(tftypes.Set{ElementType: permObjType}, nil),
 		"members":     tftypes.NewValue(tftypes.Set{ElementType: tftypes.String}, nil),
 		"created_at":  tftypes.NewValue(tftypes.String, "2024-01-01T00:00:00Z"),
@@ -182,7 +202,7 @@ func TestRoleResource_Read_NotFound(t *testing.T) {
 
 	res := NewRoleResource().(*RoleResource)
 	res.client = &accessmanagement.RoleClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},

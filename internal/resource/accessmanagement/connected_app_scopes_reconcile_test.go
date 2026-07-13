@@ -88,7 +88,7 @@ func TestValidateAndResolveScopes_RejectsSystemProfile(t *testing.T) {
 func newTestScopesResource(t *testing.T, server string) *ConnectedAppResource {
 	t.Helper()
 	sc := &accessmgmt.ConnectedAppScopesClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},

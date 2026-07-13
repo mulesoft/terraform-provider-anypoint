@@ -11,18 +11,18 @@ import (
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 )
 
-// ConnectedAppClient wraps the UserAnypointClient for connected app operations.
+// ConnectedAppClient wraps the AnypointClient for connected app operations.
 type ConnectedAppClient struct {
-	*client.UserAnypointClient
+	*client.AnypointClient
 }
 
 // NewConnectedAppClient creates a new ConnectedAppClient
-func NewConnectedAppClient(config *client.UserClientConfig) (*ConnectedAppClient, error) {
-	userClient, err := client.NewUserAnypointClient(config)
+func NewConnectedAppClient(config *client.Config) (*ConnectedAppClient, error) {
+	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err
 	}
-	return &ConnectedAppClient{UserAnypointClient: userClient}, nil
+	return &ConnectedAppClient{AnypointClient: anypointClient}, nil
 }
 
 // ConnectedApp represents a connected application in Anypoint Platform.

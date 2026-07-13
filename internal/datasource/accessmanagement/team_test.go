@@ -226,7 +226,7 @@ func TestTeamDataSource_Read(t *testing.T) {
 
 			// Create client with mock server
 			teamClient := &accessmanagement.TeamClient{
-				UserAnypointClient: &client.UserAnypointClient{
+				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},
@@ -351,18 +351,18 @@ func TestTeamDataSource_Read_Direct(t *testing.T) {
 	}
 	server := testutil.MockHTTPServer(t, handlers)
 
-	userClient := &client.UserAnypointClient{
+	userClient := &client.AnypointClient{
 		BaseURL:    server.URL,
 		Token:      "mock-token",
 		HTTPClient: &http.Client{},
 		OrgID:      "test-org-id",
 	}
 	ds := NewTeamDataSource().(*TeamDataSource)
-	ds.client = &accessmanagement.TeamClient{UserAnypointClient: userClient}
-	ds.rolesClient = &accessmanagement.TeamRolesClient{UserAnypointClient: userClient}
-	ds.membersClient = &accessmanagement.TeamMembersClient{UserAnypointClient: userClient}
-	ds.usersClient = &accessmanagement.RoleUsersClient{UserAnypointClient: userClient}
-	ds.catalogClient = &accessmanagement.RolePermissionClient{UserAnypointClient: userClient}
+	ds.client = &accessmanagement.TeamClient{AnypointClient: userClient}
+	ds.rolesClient = &accessmanagement.TeamRolesClient{AnypointClient: userClient}
+	ds.membersClient = &accessmanagement.TeamMembersClient{AnypointClient: userClient}
+	ds.usersClient = &accessmanagement.RoleUsersClient{AnypointClient: userClient}
+	ds.catalogClient = &accessmanagement.RolePermissionClient{AnypointClient: userClient}
 
 	ctx := context.Background()
 	schemaResp := &datasource.SchemaResponse{}
@@ -381,7 +381,7 @@ func TestTeamDataSource_Read_Direct(t *testing.T) {
 	configRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
 		"id":              tftypes.NewValue(tftypes.String, "test-team-id"),
 		"name":            tftypes.NewValue(tftypes.String, nil),
-		"parent_team":     tftypes.NewValue(tftypes.String, nil),
+		"parent_team_id":  tftypes.NewValue(tftypes.String, nil),
 		"team_type":       tftypes.NewValue(tftypes.String, nil),
 		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
 		"roles":           tftypes.NewValue(tftypes.List{ElementType: roleObjType}, nil),
@@ -454,7 +454,7 @@ func TestTeamDataSource_Read_Direct_Error(t *testing.T) {
 
 	ds := NewTeamDataSource().(*TeamDataSource)
 	ds.client = &accessmanagement.TeamClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -479,7 +479,7 @@ func TestTeamDataSource_Read_Direct_Error(t *testing.T) {
 	configRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
 		"id":              tftypes.NewValue(tftypes.String, "test-team-id"),
 		"name":            tftypes.NewValue(tftypes.String, nil),
-		"parent_team":     tftypes.NewValue(tftypes.String, nil),
+		"parent_team_id":  tftypes.NewValue(tftypes.String, nil),
 		"team_type":       tftypes.NewValue(tftypes.String, nil),
 		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
 		"roles":           tftypes.NewValue(tftypes.List{ElementType: roleObjType}, nil),
