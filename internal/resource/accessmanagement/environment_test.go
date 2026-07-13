@@ -115,7 +115,7 @@ func TestEnvironmentResource_Read(t *testing.T) {
 
 	res := NewEnvironmentResource().(*EnvironmentResource)
 	res.client = &accessmanagement.EnvironmentClient{
-		AnypointClient: &client.AnypointClient{
+		UserAnypointClient: &client.UserAnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -166,7 +166,7 @@ func TestEnvironmentResource_Read_NotFound(t *testing.T) {
 
 	res := NewEnvironmentResource().(*EnvironmentResource)
 	res.client = &accessmanagement.EnvironmentClient{
-		AnypointClient: &client.AnypointClient{
+		UserAnypointClient: &client.UserAnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},

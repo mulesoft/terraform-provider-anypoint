@@ -74,9 +74,9 @@ resource "anypoint_organization" "sub_org" {
   owner_id               = var.owner_user_id
 
   entitlements = {
-    create_sub_orgs     = false
-    create_environments = true
-    global_deployment   = false
+    create_sub_orgs      = false
+    create_environments  = true
+    global_deployment    = false
 
     vcores_production = {
       assigned   = 1
@@ -104,7 +104,7 @@ resource "anypoint_organization" "sub_org" {
       assigned   = 1
       reassigned = 0
     }
-
+    
 
     # hybrid = {
     #   enabled = true
@@ -303,7 +303,7 @@ resource "anypoint_connected_app_scopes" "app_scopes" {
     {
       scope = "manage:api_configuration"
       context_params = {
-        org   = anypoint_organization.sub_org.id
+        org = anypoint_organization.sub_org.id
         envId = anypoint_environment.sandbox_suborg.id
       }
     },
@@ -311,7 +311,7 @@ resource "anypoint_connected_app_scopes" "app_scopes" {
     {
       scope = "manage:apis"
       context_params = {
-        org   = anypoint_organization.sub_org.id
+        org = anypoint_organization.sub_org.id
         envId = anypoint_environment.sandbox_suborg.id
       }
     },
@@ -327,7 +327,7 @@ resource "anypoint_connected_app_scopes" "app_scopes" {
     {
       scope = "manage:api_policies"
       context_params = {
-        org   = anypoint_organization.sub_org.id
+        org = anypoint_organization.sub_org.id
         envId = anypoint_environment.sandbox_suborg.id
       }
     },
@@ -335,7 +335,7 @@ resource "anypoint_connected_app_scopes" "app_scopes" {
     {
       scope = "manage:secret_groups"
       context_params = {
-        org   = anypoint_organization.sub_org.id
+        org = anypoint_organization.sub_org.id
         envId = anypoint_environment.sandbox_suborg.id
       }
     },
@@ -343,14 +343,14 @@ resource "anypoint_connected_app_scopes" "app_scopes" {
     {
       scope = "manage:secrets"
       context_params = {
-        org   = anypoint_organization.sub_org.id
+        org = anypoint_organization.sub_org.id
         envId = anypoint_environment.sandbox_suborg.id
       }
     },
     {
       scope = "manage:apis"
       context_params = {
-        org   = var.organization_id
+        org = var.organization_id
         envId = "448ec638-4283-40e3-ba3a-d1db2b63e02d"
       }
     }
@@ -403,8 +403,8 @@ resource "anypoint_private_space_config" "sandbox_space" {
 ###############################################################################
 
 resource "anypoint_private_space_association" "sandbox_space_association" {
-  provider         = anypoint.normal_user
-  organization_id  = anypoint_organization.sub_org.id
+  provider = anypoint.normal_user
+  organization_id = anypoint_organization.sub_org.id
   private_space_id = anypoint_private_space_config.sandbox_space.id
   associations = [
     {
@@ -448,13 +448,13 @@ output "connected_app_scopes" {
 output "private_space" {
   description = "Private space and network details"
   value = {
-    id                  = anypoint_private_space_config.sandbox_space.id
-    name                = anypoint_private_space_config.sandbox_space.name
-    status              = anypoint_private_space_config.sandbox_space.status
-    organization_id     = anypoint_private_space_config.sandbox_space.organization_id
-    deployment_count    = anypoint_private_space_config.sandbox_space.mule_app_deployment_count
-    network_region      = anypoint_private_space_config.sandbox_space.network.region
-    cidr_block          = anypoint_private_space_config.sandbox_space.network.cidr_block
+    id               = anypoint_private_space_config.sandbox_space.id
+    name             = anypoint_private_space_config.sandbox_space.name
+    status           = anypoint_private_space_config.sandbox_space.status
+    organization_id  = anypoint_private_space_config.sandbox_space.organization_id
+    deployment_count = anypoint_private_space_config.sandbox_space.mule_app_deployment_count
+    network_region   = anypoint_private_space_config.sandbox_space.network.region
+    cidr_block       = anypoint_private_space_config.sandbox_space.network.cidr_block
     inbound_static_ips  = anypoint_private_space_config.sandbox_space.network.inbound_static_ips
     outbound_static_ips = anypoint_private_space_config.sandbox_space.network.outbound_static_ips
     dns_target          = anypoint_private_space_config.sandbox_space.network.dns_target

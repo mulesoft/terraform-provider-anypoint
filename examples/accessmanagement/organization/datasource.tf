@@ -25,7 +25,7 @@
 # Example: Fetch information about an existing organization
 data "anypoint_organization" "example" {
   provider = anypoint.admin
-  id       = "<org_id>"
+  id = "<org_id>"
 }
 
 # Output the organization information
@@ -74,7 +74,7 @@ output "existing_organization_session_timeout" {
 }
 
 locals {
-  entitlements         = jsondecode(data.anypoint_organization.example.entitlements)
+  entitlements = jsondecode(data.anypoint_organization.example.entitlements)
   flex_gateway_enabled = local.entitlements.omniGateway.enabled
 }
 

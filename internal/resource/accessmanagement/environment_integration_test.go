@@ -35,7 +35,7 @@ func TestIntegrationEnvironmentResource_CRUD(t *testing.T) {
 	defer server.Close()
 
 	// Create client
-	clientConfig := &client.Config{
+	clientConfig := &client.UserClientConfig{
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
 		Username:     "test-user",
@@ -44,13 +44,13 @@ func TestIntegrationEnvironmentResource_CRUD(t *testing.T) {
 		Timeout:      30,
 	}
 
-	userAnypointClient, err := client.NewAnypointClient(clientConfig)
+	userAnypointClient, err := client.NewUserAnypointClient(clientConfig)
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
 
 	envClient := &accessmanagement.EnvironmentClient{
-		AnypointClient: userAnypointClient,
+		UserAnypointClient: userAnypointClient,
 	}
 
 	// Create environment resource
@@ -138,7 +138,7 @@ func TestIntegrationEnvironmentResource_ErrorHandling(t *testing.T) {
 	defer server.Close()
 
 	// Create client
-	clientConfig := &client.Config{
+	clientConfig := &client.UserClientConfig{
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
 		Username:     "test-user",
@@ -147,13 +147,13 @@ func TestIntegrationEnvironmentResource_ErrorHandling(t *testing.T) {
 		Timeout:      30,
 	}
 
-	userAnypointClient, err := client.NewAnypointClient(clientConfig)
+	userAnypointClient, err := client.NewUserAnypointClient(clientConfig)
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
 
 	envClient := &accessmanagement.EnvironmentClient{
-		AnypointClient: userAnypointClient,
+		UserAnypointClient: userAnypointClient,
 	}
 
 	ctx := context.Background()

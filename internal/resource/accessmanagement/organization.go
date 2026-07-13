@@ -827,6 +827,7 @@ func zeroVCore() types.Object {
 	)
 }
 
+
 // zeroMq returns a concrete {base = 0, add_on = 0} Object.
 func zeroMq() types.Object {
 	return types.ObjectValueMust(
@@ -955,7 +956,17 @@ func (r *OrganizationResource) Configure(_ context.Context, req resource.Configu
 		return
 	}
 
-	orgClient, err := accessmanagement.NewOrganizationClient(config)
+	// Create user client config for organization operations (requires user authentication)
+	userConfig := &client.UserClientConfig{
+		ClientID:     config.ClientID,
+		ClientSecret: config.ClientSecret,
+		BaseURL:      config.BaseURL,
+		Timeout:      config.Timeout,
+		Username:     config.Username,
+		Password:     config.Password,
+	}
+
+	orgClient, err := accessmanagement.NewOrganizationClient(userConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Failed to create OrganizationClient",

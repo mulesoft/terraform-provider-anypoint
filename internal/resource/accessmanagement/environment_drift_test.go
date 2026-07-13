@@ -52,7 +52,7 @@ func TestEnvironmentResource_Read_DetectsBackendNameDrift(t *testing.T) {
 	server := testutil.MockHTTPServer(t, handlers)
 
 	envClient := &accessmanagement.EnvironmentClient{
-		AnypointClient: &client.AnypointClient{
+		UserAnypointClient: &client.UserAnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -150,7 +150,7 @@ func TestEnvironmentResource_Read_DetectsBackendTypeAndIsProductionDrift(t *test
 	server := testutil.MockHTTPServer(t, handlers)
 
 	envClient := &accessmanagement.EnvironmentClient{
-		AnypointClient: &client.AnypointClient{
+		UserAnypointClient: &client.UserAnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},

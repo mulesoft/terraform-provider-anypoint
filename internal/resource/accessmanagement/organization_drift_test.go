@@ -978,7 +978,7 @@ func TestOrganizationResource_Read_DerivesParentOrgIDOnImport(t *testing.T) {
 	server := testutil.MockHTTPServer(t, handlers)
 
 	orgClient := &am.OrganizationClient{
-		AnypointClient: &anypointclient.AnypointClient{
+		UserAnypointClient: &anypointclient.UserAnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -1073,7 +1073,7 @@ func TestOrganizationResource_Read_PreservesExistingParentOrgID(t *testing.T) {
 	server := testutil.MockHTTPServer(t, handlers)
 
 	orgClient := &am.OrganizationClient{
-		AnypointClient: &anypointclient.AnypointClient{
+		UserAnypointClient: &anypointclient.UserAnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -1229,7 +1229,7 @@ func TestOrganizationResource_Update_DoesNotWriteApiUpdatedAtIntoState(t *testin
 	server := testutil.MockHTTPServer(t, handlers)
 
 	orgClient := &am.OrganizationClient{
-		AnypointClient: &anypointclient.AnypointClient{
+		UserAnypointClient: &anypointclient.UserAnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},

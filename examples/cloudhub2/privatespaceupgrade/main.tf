@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     anypoint = {
-      source  = "mulesoft/anypoint"
+      source = "mulesoft/anypoint"
       version = "~> 1.0.0"
     }
   }
@@ -18,7 +18,7 @@ provider "anypoint" {
 # To cancel the upgrade, simply destroy this resource: terraform destroy -target=anypoint_private_space_upgrade.example
 resource "anypoint_private_space_upgrade" "example" {
   private_space_id = var.private_space_id
-  organization_id  = var.organization_id
+  organization_id = var.organization_id
   date             = "2025-09-12"
   opt_in           = true
 }
@@ -28,7 +28,7 @@ resource "anypoint_private_space_upgrade" "example" {
 # Useful for monitoring the upgrade progress or checking status independently
 data "anypoint_private_space_upgrade" "current_status" {
   private_space_id = "f644726a-d0e4-4c60-a1bb-3996543cd56f"
-
+  
   # Optionally depend on the resource to ensure it's created first
   depends_on = [anypoint_private_space_upgrade.example]
 }

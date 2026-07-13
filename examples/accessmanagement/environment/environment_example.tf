@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     anypoint = {
-      source  = "mulesoft/anypoint"
+      source = "mulesoft/anypoint"
       version = "~> 1.0.0"
     }
   }
@@ -22,7 +22,7 @@ provider "anypoint" {
 
 # Create a design environment
 resource "anypoint_environment" "my_env" {
-  provider        = anypoint.admin
+  provider = anypoint.admin
   organization_id = var.organization_id
   name            = var.environment_name
   type            = var.environment_type
@@ -31,7 +31,7 @@ resource "anypoint_environment" "my_env" {
 
 # Create a design environment
 resource "anypoint_environment" "my_env_1" {
-  provider        = anypoint.admin
+  provider = anypoint.admin
   organization_id = var.organization_id
   name            = "${var.environment_name}-4"
   type            = "production"

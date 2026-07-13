@@ -13,7 +13,7 @@ terraform {
 # export TF_VAR_anypoint_admin_password="your-password"
 
 provider "anypoint" {
-  alias         = "admin"
+  alias = "admin"
   client_id     = var.anypoint_admin_client_id
   client_secret = var.anypoint_admin_client_secret
   username      = var.anypoint_admin_username

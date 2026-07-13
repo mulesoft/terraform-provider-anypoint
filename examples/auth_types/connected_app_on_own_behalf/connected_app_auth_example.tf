@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     anypoint = {
-      source  = "mulesoft/anypoint"
+      source = "mulesoft/anypoint"
       version = "~> 1.0.0"
     }
   }
@@ -27,5 +27,5 @@ resource "anypoint_private_space" "connected_app_space" {
 resource "anypoint_private_space" "specific_org_space" {
   name            = "specific-org-space"
   region          = var.region
-  organization_id = var.target_organization_id # Explicit org ID
+  organization_id = var.target_organization_id  # Explicit org ID
 }

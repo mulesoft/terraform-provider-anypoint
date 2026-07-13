@@ -22,7 +22,7 @@ variable "anypoint_base_url" {
 variable "private_space_id" {
   description = "The ID of the private space to upgrade"
   type        = string
-}
+} 
 
 variable "organization_id" {
   description = "The ID of the organization"

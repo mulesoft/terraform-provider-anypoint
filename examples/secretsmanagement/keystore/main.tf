@@ -87,8 +87,8 @@ resource "anypoint_secret_group_keystore" "ks_jks" {
   type                 = "JKS"
   keystore_file_base64 = filebase64("${path.module}/../../certs/keystore.jks")
   alias                = "sparq"
-  key_passphrase       = "Ankit123"
-  store_passphrase     = "Ankit123"
+  key_passphrase           = "Ankit123"
+  store_passphrase           = "Ankit123"
 }
 
 

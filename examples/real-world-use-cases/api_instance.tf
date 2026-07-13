@@ -22,10 +22,10 @@ locals {
 }
 
 resource "anypoint_api_instance" "payments" {
-  environment_id  = var.env_id
-  gateway_id      = local.gateway_id
-  technology      = "omniGateway"
-  instance_label  = "payments-api"
+  environment_id = var.env_id
+  gateway_id     = local.gateway_id
+  technology     = "omniGateway"
+  instance_label = "payments-api"
   approval_method = "manual"
   spec = {
     asset_id = var.api_asset_id
@@ -38,7 +38,7 @@ resource "anypoint_api_instance" "payments" {
     base_path       = "payments"
     ssl_context_id  = "${anypoint_secret_group.main.id}/${local.omni_tls_context_id}"
   }
-
+  
   routing = [
     {
       label = "read-traffic"

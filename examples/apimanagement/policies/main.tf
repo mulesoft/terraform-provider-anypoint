@@ -19,17 +19,17 @@ provider "anypoint" {
 variable "anypoint_client_id" {
   type      = string
   sensitive = true
-  default   = "<anypoint_connected_app_client_id>"
+  default     = "<anypoint_connected_app_client_id>"
 }
 
 variable "anypoint_client_secret" {
   type      = string
   sensitive = true
-  default   = "<anypoint_connected_app_client_secret>"
+  default     = "<anypoint_connected_app_client_secret>"
 }
 
 variable "anypoint_base_url" {
-  type    = string
+  type    = string  
   default = "https://stgx.anypoint.mulesoft.com"
 }
 
@@ -515,13 +515,13 @@ output "policy_summary" {
       sla_rate_limiting = anypoint_api_policy_rate_limiting_sla_based.rate_limiting_sla.id
     }
     traffic_management = {
-      cors             = anypoint_api_policy_cors.cors.id
-      header_injection = anypoint_api_policy_header_injection.header_injection.id
-      header_removal   = anypoint_api_policy_header_removal.header_removal.id
+      cors              = anypoint_api_policy_cors.cors.id
+      header_injection  = anypoint_api_policy_header_injection.header_injection.id
+      header_removal    = anypoint_api_policy_header_removal.header_removal.id
     }
     monitoring = {
-      message_logging  = anypoint_api_policy_message_logging.message_logging.id
-      response_timeout = anypoint_api_policy_response_timeout.response_timeout.id
+      message_logging   = anypoint_api_policy_message_logging.message_logging.id
+      response_timeout  = anypoint_api_policy_response_timeout.response_timeout.id
     }
     caching = {
       http_caching = anypoint_api_policy_http_caching.http_caching.id

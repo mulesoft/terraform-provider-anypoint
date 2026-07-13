@@ -11,18 +11,18 @@ import (
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 )
 
-// EnvironmentClient wraps the AnypointClient for environment operations
+// EnvironmentClient wraps the UserAnypointClient for environment operations
 type EnvironmentClient struct {
-	*client.AnypointClient
+	*client.UserAnypointClient
 }
 
-// NewEnvironmentClient creates a new EnvironmentClient using AnypointClient
-func NewEnvironmentClient(config *client.Config) (*EnvironmentClient, error) {
-	anypointClient, err := client.NewAnypointClient(config)
+// NewEnvironmentClient creates a new EnvironmentClient using UserAnypointClient
+func NewEnvironmentClient(config *client.UserClientConfig) (*EnvironmentClient, error) {
+	userAnypointClient, err := client.NewUserAnypointClient(config)
 	if err != nil {
 		return nil, err
 	}
-	return &EnvironmentClient{AnypointClient: anypointClient}, nil
+	return &EnvironmentClient{UserAnypointClient: userAnypointClient}, nil
 }
 
 // Environment represents an Anypoint Environment

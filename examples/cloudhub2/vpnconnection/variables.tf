@@ -34,15 +34,15 @@ variable "private_space_name" {
 }
 
 variable "region_id" {
-  description = "The region id."
-  type        = string
-  default     = "us-east-2"
-}
+    description = "The region id."
+    type = string
+    default = "us-east-2"
+} 
 
 variable "cidr_block" {
   description = "The CIDR block for the private network."
-  type        = string
-  default     = "10.0.0.0/18"
+  type = string
+  default = "10.0.0.0/18"
 }
 
 # variable "reserved_cidrs" {
@@ -83,7 +83,7 @@ variable "remote_ip_address" {
 variable "psk_1" {
   description = "Pre-shared key for the first VPN tunnel"
   type        = string
-  default     = ""
+  default     = ""  
 }
 
 variable "psk_2" {

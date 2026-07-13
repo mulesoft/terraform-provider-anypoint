@@ -73,7 +73,7 @@ func TestOrganizationClient_DeleteOrganization(t *testing.T) {
 			server := testutil.MockHTTPServer(t, handlers)
 
 			c := &OrganizationClient{
-				AnypointClient: &client.AnypointClient{
+				UserAnypointClient: &client.UserAnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},
