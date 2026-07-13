@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     anypoint = {
-      source  = "mulesoft/anypoint"
+      source = "mulesoft/anypoint"
       version = "~> 1.0.0"
     }
   }
@@ -52,7 +52,7 @@ output "association_ids" {
 output "environment_associations" {
   description = "Map of environment and organization to association IDs"
   value = {
-    for assoc in anypoint_private_space_association.example.created_associations :
+    for assoc in anypoint_private_space_association.example.created_associations : 
     "${assoc.environment}-${assoc.organization_id}" => assoc.id
   }
 }

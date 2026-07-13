@@ -54,11 +54,11 @@ resource "anypoint_secret_group_tls_context" "omni" {
 # Fully configured Managed Omni Gateway with explicit version
 # --------------------------------------------------------------------------
 resource "anypoint_managed_omni_gateway" "complete" {
-  name           = "real-world-example-gateway"
-  environment_id = var.environment_id
-  target_id      = var.target_id
+  name            = "real-world-example-gateway"  
+  environment_id  = var.environment_id
+  target_id       = var.target_id
   ingress = {
-    public_url          = "https://example.mulesoft.com/"
+    public_url = "https://example.mulesoft.com/"
     forward_ssl_session = true
     last_mile_security  = true
   }

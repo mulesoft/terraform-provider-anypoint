@@ -97,7 +97,7 @@ func TestOrganizationResource_Read_Error(t *testing.T) {
 
 	res := NewOrganizationResource().(*OrganizationResource)
 	res.client = &accessmgmt.OrganizationClient{
-		AnypointClient: &anypointclient.AnypointClient{
+		UserAnypointClient: &anypointclient.UserAnypointClient{
 			BaseURL:    server.URL,
 			Token:      "tok",
 			HTTPClient: &http.Client{},

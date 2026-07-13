@@ -318,8 +318,21 @@ func (d *OrganizationDataSource) Configure(_ context.Context, req datasource.Con
 		return
 	}
 
+	// Create user client config for organization operations (requires user authentication).
+	// Pass through username/password from the provider configuration so values supplied
+	// via the provider block (or TF_VAR_* inputs) take precedence. When they are empty,
+	// UserAnypointClient falls back to ANYPOINT_ADMIN_USERNAME / ANYPOINT_ADMIN_PASSWORD.
+	userConfig := &client.UserClientConfig{
+		ClientID:     config.ClientID,
+		ClientSecret: config.ClientSecret,
+		BaseURL:      config.BaseURL,
+		Timeout:      config.Timeout,
+		Username:     config.Username,
+		Password:     config.Password,
+	}
+
 	// Create the organization client
-	organizationClient, err := accessmanagement.NewOrganizationClient(config)
+	organizationClient, err := accessmanagement.NewOrganizationClient(userConfig)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Anypoint Organization API Client",

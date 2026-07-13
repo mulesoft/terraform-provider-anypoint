@@ -20,7 +20,7 @@
 # Example: Fetch information about an existing environment
 data "anypoint_environment" "existing_environment" {
   provider = anypoint.admin
-  id       = "a4d171b4-9ad4-41da-9d77-18a3ade0a93d" # Replace with a valid environment ID
+  id = "a4d171b4-9ad4-41da-9d77-18a3ade0a93d" # Replace with a valid environment ID
 }
 
 # Output the environment information

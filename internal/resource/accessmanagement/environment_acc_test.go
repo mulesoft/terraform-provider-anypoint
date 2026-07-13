@@ -160,9 +160,9 @@ func TestAccEnvironmentResource_disappears(t *testing.T) {
 }
 
 func testAccCheckEnvironmentDestroy(s *terraform.State) error {
-	userClient := acctest.CreateTestClient(nil)
+	userClient := acctest.CreateUserTestClient(nil)
 	envClient := &accessmanagement.EnvironmentClient{
-		AnypointClient: userClient,
+		UserAnypointClient: userClient,
 	}
 
 	ctx := context.Background()
@@ -196,9 +196,9 @@ func testAccCheckEnvironmentExists(resourceName string) resource.TestCheckFunc {
 			return fmt.Errorf("resource ID is not set")
 		}
 
-		userClient := acctest.CreateTestClient(nil)
+		userClient := acctest.CreateUserTestClient(nil)
 		envClient := &accessmanagement.EnvironmentClient{
-			AnypointClient: userClient,
+			UserAnypointClient: userClient,
 		}
 
 		_, err := envClient.GetEnvironment(context.Background(), rs.Primary.Attributes["organization_id"], rs.Primary.ID)
@@ -217,9 +217,9 @@ func testAccCheckResourceDisappears(resourceName string) resource.TestCheckFunc 
 			return fmt.Errorf("resource not found: %s", resourceName)
 		}
 
-		userClient := acctest.CreateTestClient(nil)
+		userClient := acctest.CreateUserTestClient(nil)
 		envClient := &accessmanagement.EnvironmentClient{
-			AnypointClient: userClient,
+			UserAnypointClient: userClient,
 		}
 
 		return envClient.DeleteEnvironment(context.Background(), rs.Primary.Attributes["organization_id"], rs.Primary.ID)

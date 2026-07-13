@@ -29,6 +29,7 @@ var (
 	_ resource.ResourceWithConfigure      = &APIInstanceResource{}
 	_ resource.ResourceWithImportState    = &APIInstanceResource{}
 	_ resource.ResourceWithValidateConfig = &APIInstanceResource{}
+	_ resource.ResourceWithModifyPlan     = &APIInstanceResource{}
 )
 
 type APIInstanceResource struct {
@@ -756,6 +757,47 @@ func (r *APIInstanceResource) Read(ctx context.Context, req resource.ReadRequest
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
+// ModifyPlan adjusts the plan to mark computed fields as Unknown when their
+// dependencies change, ensuring Terraform's consistency checks pass.
+func (r *APIInstanceResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	// Nothing to do on destroy.
+	if req.Plan.Raw.IsNull() {
+		return
+	}
+
+	// Nothing to do on create (state is null).
+	if req.State.Raw.IsNull() {
+		return
+	}
+
+	var plan, state APIInstanceResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// When spec.version changes, mark asset_version as Unknown so Terraform knows
+	// it will be recomputed. Without this, the provider gets "inconsistent result
+	// after apply" errors because the plan said asset_version="1.0.0" but after
+	// PATCH it became "1.0.1" (W-23307847).
+	stateVersion := ""
+	planVersion := ""
+	if state.Spec != nil && !state.Spec.Version.IsNull() && !state.Spec.Version.IsUnknown() {
+		stateVersion = state.Spec.Version.ValueString()
+	}
+	if plan.Spec != nil && !plan.Spec.Version.IsNull() && !plan.Spec.Version.IsUnknown() {
+		planVersion = plan.Spec.Version.ValueString()
+	}
+
+	if stateVersion != planVersion && planVersion != "" {
+		// Version is changing — mark asset_version as Unknown so Terraform
+		// expects it to be recomputed during apply.
+		plan.AssetVersion = types.StringUnknown()
+		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+	}
+}
+
 func (r *APIInstanceResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan, state APIInstanceResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -774,6 +816,27 @@ func (r *APIInstanceResource) Update(ctx context.Context, req resource.UpdateReq
 	if err != nil {
 		resp.Diagnostics.AddError("Invalid API Instance ID", "Could not parse API instance ID: "+state.ID.ValueString())
 		return
+	}
+
+	// Validate immutable fields: assetId and groupId cannot be changed via PATCH.
+	// These require resource replacement (destroy + recreate).
+	if state.Spec != nil && plan.Spec != nil {
+		if !state.Spec.AssetID.Equal(plan.Spec.AssetID) {
+			resp.Diagnostics.AddError(
+				"Immutable Attribute Changed",
+				"Attribute 'spec.asset_id' cannot be changed after creation (API Manager does not support this operation). "+
+					"To change the asset ID, destroy and recreate the resource with the new value.",
+			)
+			return
+		}
+		if !state.Spec.GroupID.Equal(plan.Spec.GroupID) {
+			resp.Diagnostics.AddError(
+				"Immutable Attribute Changed",
+				"Attribute 'spec.group_id' cannot be changed after creation (API Manager does not support this operation). "+
+					"To change the group ID, destroy and recreate the resource with the new value.",
+			)
+			return
+		}
 	}
 
 	if !plan.GatewayID.IsNull() && !plan.GatewayID.IsUnknown() && (plan.Deployment.IsNull() || plan.Deployment.IsUnknown()) {
@@ -1028,12 +1091,11 @@ func (r *APIInstanceResource) expandUpdateRequest(ctx context.Context, data APII
 		req.EndpointURI = &ce
 	}
 
-	if data.Spec != nil {
-		req.Spec = &apimanagement.APIInstanceSpec{
-			AssetID: data.Spec.AssetID.ValueString(),
-			GroupID: data.Spec.GroupID.ValueString(),
-			Version: data.Spec.Version.ValueString(),
-		}
+	// Asset version can be updated via root-level assetVersion field.
+	// AssetID and GroupID are immutable (changes require resource recreation).
+	if data.Spec != nil && !data.Spec.Version.IsNull() && !data.Spec.Version.IsUnknown() {
+		version := data.Spec.Version.ValueString()
+		req.AssetVersion = &version
 	}
 
 	if dep := deploymentFromObject(data.Deployment); dep != nil {

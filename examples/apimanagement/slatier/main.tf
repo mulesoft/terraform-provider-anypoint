@@ -20,14 +20,14 @@ resource "anypoint_api_instance_sla_tier" "gold" {
   organization_id = var.organization_id
   environment_id  = var.environment_id
   api_instance_id = var.api_instance_id
-  name            = "Gold"
-  description     = "Gold tier with unlimited API access for premium customers"
+  name        = "Gold"
+  description = "Gold tier with unlimited API access for premium customers"
 
   # Unlimited access - effectively no rate limits
   limits = [
     {
-      time_period_in_milliseconds = 60000     # 1 minute
-      maximum_requests            = 999999999 # Effectively unlimited
+      time_period_in_milliseconds = 60000      # 1 minute
+      maximum_requests            = 999999999  # Effectively unlimited
       visible                     = true
     }
   ]
@@ -50,17 +50,17 @@ resource "anypoint_api_instance_sla_tier" "silver" {
   # Multiple rate limit windows
   limits = [
     {
-      time_period_in_milliseconds = 60000 # 1 minute
+      time_period_in_milliseconds = 60000  # 1 minute
       maximum_requests            = 1000
       visible                     = true
     },
     {
-      time_period_in_milliseconds = 3600000 # 1 hour
+      time_period_in_milliseconds = 3600000  # 1 hour
       maximum_requests            = 50000
       visible                     = true
     },
     {
-      time_period_in_milliseconds = 86400000 # 1 day
+      time_period_in_milliseconds = 86400000  # 1 day
       maximum_requests            = 1000000
       visible                     = true
     }
@@ -83,12 +83,12 @@ resource "anypoint_api_instance_sla_tier" "bronze" {
 
   limits = [
     {
-      time_period_in_milliseconds = 60000 # 1 minute
+      time_period_in_milliseconds = 60000  # 1 minute
       maximum_requests            = 100
       visible                     = true
     },
     {
-      time_period_in_milliseconds = 3600000 # 1 hour
+      time_period_in_milliseconds = 3600000  # 1 hour
       maximum_requests            = 5000
       visible                     = true
     }
@@ -111,23 +111,23 @@ resource "anypoint_api_instance_sla_tier" "trial" {
 
   limits = [
     {
-      time_period_in_milliseconds = 60000 # 1 minute
+      time_period_in_milliseconds = 60000  # 1 minute
       maximum_requests            = 10
       visible                     = true
     },
     {
-      time_period_in_milliseconds = 3600000 # 1 hour
+      time_period_in_milliseconds = 3600000  # 1 hour
       maximum_requests            = 500
       visible                     = true
     },
     {
-      time_period_in_milliseconds = 86400000 # 1 day
+      time_period_in_milliseconds = 86400000  # 1 day
       maximum_requests            = 5000
       visible                     = true
     }
   ]
 
-  auto_approve = false # Requires manual approval
+  auto_approve = false  # Requires manual approval
   status       = "ACTIVE"
 }
 
@@ -144,17 +144,17 @@ resource "anypoint_api_instance_sla_tier" "developer" {
 
   limits = [
     {
-      time_period_in_milliseconds = 1000 # 1 second
+      time_period_in_milliseconds = 1000  # 1 second
       maximum_requests            = 2
       visible                     = true
     },
     {
-      time_period_in_milliseconds = 60000 # 1 minute
+      time_period_in_milliseconds = 60000  # 1 minute
       maximum_requests            = 50
       visible                     = true
     },
     {
-      time_period_in_milliseconds = 3600000 # 1 hour
+      time_period_in_milliseconds = 3600000  # 1 hour
       maximum_requests            = 1000
       visible                     = true
     }
@@ -177,23 +177,23 @@ resource "anypoint_api_instance_sla_tier" "partner" {
 
   limits = [
     {
-      time_period_in_milliseconds = 60000 # 1 minute
+      time_period_in_milliseconds = 60000  # 1 minute
       maximum_requests            = 500
       visible                     = true
     },
     {
-      time_period_in_milliseconds = 3600000 # 1 hour
+      time_period_in_milliseconds = 3600000  # 1 hour
       maximum_requests            = 25000
       visible                     = true
     },
     {
-      time_period_in_milliseconds = 86400000 # 1 day
+      time_period_in_milliseconds = 86400000  # 1 day
       maximum_requests            = 500000
       visible                     = true
     }
   ]
 
-  auto_approve = false # Partners require manual approval
+  auto_approve = false  # Partners require manual approval
   status       = "ACTIVE"
 }
 
@@ -210,12 +210,12 @@ resource "anypoint_api_instance_sla_tier" "free" {
 
   limits = [
     {
-      time_period_in_milliseconds = 60000 # 1 minute
+      time_period_in_milliseconds = 60000  # 1 minute
       maximum_requests            = 5
       visible                     = true
     },
     {
-      time_period_in_milliseconds = 86400000 # 1 day
+      time_period_in_milliseconds = 86400000  # 1 day
       maximum_requests            = 1000
       visible                     = true
     }
@@ -238,7 +238,7 @@ resource "anypoint_api_instance_sla_tier" "deprecated" {
 
   limits = [
     {
-      time_period_in_milliseconds = 60000 # 1 minute
+      time_period_in_milliseconds = 60000  # 1 minute
       maximum_requests            = 20
       visible                     = true
     }

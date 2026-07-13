@@ -15,13 +15,13 @@ import (
 func TestNewEnvironmentClient(t *testing.T) {
 	tests := []struct {
 		name        string
-		config      *client.Config
+		config      *client.UserClientConfig
 		wantErr     bool
 		errContains string
 	}{
 		{
 			name: "valid config",
-			config: &client.Config{
+			config: &client.UserClientConfig{
 				ClientID:     "test-client-id",
 				ClientSecret: "test-client-secret",
 				Username:     "test-user",
@@ -31,7 +31,7 @@ func TestNewEnvironmentClient(t *testing.T) {
 		},
 		{
 			name: "missing client ID",
-			config: &client.Config{
+			config: &client.UserClientConfig{
 				ClientSecret: "test-client-secret",
 			},
 			wantErr:     true,
@@ -39,7 +39,7 @@ func TestNewEnvironmentClient(t *testing.T) {
 		},
 		{
 			name: "missing client secret",
-			config: &client.Config{
+			config: &client.UserClientConfig{
 				ClientID: "test-client-id",
 			},
 			wantErr:     true,
@@ -139,7 +139,7 @@ func TestEnvironmentClient_CreateEnvironment(t *testing.T) {
 			server := testutil.MockHTTPServer(t, handlers)
 
 			client := &EnvironmentClient{
-				AnypointClient: &client.AnypointClient{
+				UserAnypointClient: &client.UserAnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},
@@ -227,7 +227,7 @@ func TestEnvironmentClient_GetEnvironment(t *testing.T) {
 			server := testutil.MockHTTPServer(t, handlers)
 
 			client := &EnvironmentClient{
-				AnypointClient: &client.AnypointClient{
+				UserAnypointClient: &client.UserAnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},
@@ -331,7 +331,7 @@ func TestEnvironmentClient_UpdateEnvironment(t *testing.T) {
 			server := testutil.MockHTTPServer(t, handlers)
 
 			client := &EnvironmentClient{
-				AnypointClient: &client.AnypointClient{
+				UserAnypointClient: &client.UserAnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},
@@ -395,7 +395,7 @@ func TestEnvironmentClient_DeleteEnvironment(t *testing.T) {
 			server := testutil.MockHTTPServer(t, handlers)
 
 			client := &EnvironmentClient{
-				AnypointClient: &client.AnypointClient{
+				UserAnypointClient: &client.UserAnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},

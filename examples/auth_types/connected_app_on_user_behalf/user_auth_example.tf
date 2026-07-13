@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     anypoint = {
-      source  = "mulesoft/anypoint"
+      source = "mulesoft/anypoint"
       version = "~> 1.0.0"
     }
   }
@@ -29,7 +29,7 @@ resource "anypoint_private_space" "user_active_org_space" {
 resource "anypoint_private_space" "user_specific_org_space" {
   name            = "user-specific-org-space"
   region          = var.region
-  organization_id = var.target_organization_id # Must be an org the user has access to
+  organization_id = var.target_organization_id  # Must be an org the user has access to
 }
 
 # Example of data source usage
