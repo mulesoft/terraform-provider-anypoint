@@ -1,0 +1,22 @@
+asyncapi: '2.6.0'
+info:
+  title: User Signup Events
+  version: '1.0.0'
+  description: Publishes user signup events for downstream consumers.
+channels:
+  user/signedup:
+    subscribe:
+      operationId: onUserSignup
+      message:
+        payload:
+          type: object
+          properties:
+            userId:
+              type: string
+              description: The unique user identifier
+            email:
+              type: string
+              format: email
+            signupDate:
+              type: string
+              format: date-time
