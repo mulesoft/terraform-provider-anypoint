@@ -9,10 +9,12 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -27,6 +29,7 @@ var (
 	_ resource.Resource                = &AssetResource{}
 	_ resource.ResourceWithConfigure   = &AssetResource{}
 	_ resource.ResourceWithImportState = &AssetResource{}
+	_ resource.ResourceWithModifyPlan  = &AssetResource{}
 )
 
 // AssetResource implements the anypoint_exchange_asset resource.
@@ -72,6 +75,14 @@ type AssetResourceModel struct {
 	Classifier types.String `tfsdk:"classifier"`
 	Keywords   types.String `tfsdk:"keywords"`
 
+	// AdditionalFiles holds EXTRA files for multi-file asset types published in the
+	// same request as the primary file_path. The canonical case is type="policy",
+	// which needs (schema.json + metadata.yaml) or (mule-policy.jar +
+	// policy-definition.yaml). Local-only + upload-only, exactly like file_path:
+	// preserved from prior state on Read, never reconciled from the API. Null/empty
+	// for every single-file and fileless type.
+	AdditionalFiles types.List `tfsdk:"additional_file"`
+
 	// Properties for API spec types
 	APIVersion types.String `tfsdk:"api_version"`
 	MainFile   types.String `tfsdk:"main_file"`
@@ -84,6 +95,14 @@ type AssetResourceModel struct {
 	VersionGroup types.String `tfsdk:"version_group"`
 	CreatedDate  types.String `tfsdk:"created_date"`
 	UpdatedDate  types.String `tfsdk:"updated_date"`
+}
+
+// AdditionalFileModel describes one extra file attached to a multi-file publish
+// (alongside the primary file_path). Both fields mirror the primary file_path /
+// classifier semantics: local-only, used only at creation/replacement time.
+type AdditionalFileModel struct {
+	Path       types.String `tfsdk:"path"`
+	Classifier types.String `tfsdk:"classifier"`
 }
 
 // PageModel describes a documentation page within the asset.
@@ -180,6 +199,21 @@ func (r *AssetResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				Optional:    true,
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{
+					// Reuse the prior state when type is omitted from config, exactly like
+					// the immutable siblings classifier/api_version/main_file. Without this,
+					// an Optional+Computed attribute with config null plans as UNKNOWN, so the
+					// RequiresReplace modifier below sees "rest-api" -> (unknown) and forces a
+					// destroy+recreate on the FIRST plan after import (import seeds type via
+					// Read, but config typically omits it). That is catastrophic: importing an
+					// existing asset must never recreate it. With UseStateForUnknown the plan
+					// keeps the seeded value, so RequiresReplace no-ops on the omit path.
+					// Safe against "inconsistent result after apply": type is immutable, so on
+					// an in-place update Read maps the API type back to the same state value
+					// (normalizeType), and on a genuine type change the plan value is KNOWN
+					// (not unknown) so UseStateForUnknown no-ops and RequiresReplace still
+					// forces replacement. On replacement, create re-plans with null prior
+					// state so this no-ops and the value is recomputed fresh.
+					stringplanmodifier.UseStateForUnknown(),
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
@@ -192,38 +226,94 @@ func (r *AssetResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				},
 			},
 			"file_path": schema.StringAttribute{
-				Description: "Path to the file to upload (JAR, ZIP, RAML, OAS, etc.). Changes trigger replacement.",
-				Optional:    true,
+				Description: "Path to the file to upload (JAR, ZIP, RAML, OAS, etc.). Used only at creation time. " +
+					"After import, one apply settles this field (non-destructive). Changing to a different value triggers replacement.",
+				Optional: true,
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
+					RequiresReplaceExceptOnImport(),
 				},
 			},
 			"classifier": schema.StringAttribute{
 				Description: "The file classifier: custom, raml, oas, wsdl, graphql, etc. Required when file_path is set.",
 				Optional:    true,
+				Computed:    true,
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
+					// Reuse the prior state on unrelated in-place updates instead of rendering
+					// "(known after apply)". Safe because on an in-place update the API returns
+					// the same immutable classifier (normalizeClassifier preserves the state
+					// value; Read seeds it identically), so the frozen plan equals what Update
+					// re-derives. On a genuine change the value is KNOWN in the plan, so this
+					// modifier no-ops and RequiresReplaceExceptOnImport still forces replacement
+					// (the two are mutually exclusive on plan-known-ness). On replacement, core
+					// re-plans the create with null prior state, so UseStateForUnknown no-ops and
+					// the value is recomputed fresh.
+					stringplanmodifier.UseStateForUnknown(),
+					RequiresReplaceExceptOnImport(),
+				},
+			},
+			"additional_file": schema.ListNestedAttribute{
+				Description: "Additional files to upload alongside file_path in the SAME publish request, " +
+					"for multi-file asset types. The canonical case is type=\"policy\", which requires two " +
+					"files: (schema.json + metadata.yaml) or (mule-policy.jar + policy-definition.yaml). Each " +
+					"entry is written as its own files.{classifier}.{ext} part. Like file_path, this is a " +
+					"local-only, create-time field: it is preserved from state on read (never reconciled from " +
+					"the API), and changing it triggers replacement (except the null→value settle after import).",
+				Optional: true,
+				PlanModifiers: []planmodifier.List{
+					// Mirror file_path/classifier: the uploaded file set is immutable, so a
+					// change forces replacement — EXCEPT the post-import null→value settle,
+					// which is non-destructive (ImportState does not seed additional_file, so
+					// the first apply after import goes null→value and must not recreate).
+					RequiresReplaceListExceptOnImport(),
+				},
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"path": schema.StringAttribute{
+							Description: "Local path to the additional file to upload (e.g. specs/metadata.yaml).",
+							Required:    true,
+						},
+						"classifier": schema.StringAttribute{
+							Description: "The classifier for this file (e.g. metadata, policy-definition, schema). " +
+								"Combined with the file extension to form the files.{classifier}.{ext} field name.",
+							Required: true,
+						},
+					},
 				},
 			},
 			"keywords": schema.StringAttribute{
 				Description: "Comma-separated keywords for search discovery.",
 				Optional:    true,
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
+					RequiresReplaceExceptOnImport(),
 				},
 			},
 			"api_version": schema.StringAttribute{
 				Description: "The API version (properties.apiVersion). Used for API spec asset types.",
 				Optional:    true,
+				Computed:    true,
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
+					// See classifier: reuse prior state on unrelated in-place updates. api_version
+					// is create-only metadata read back via extractAttributeValue; on an in-place
+					// update it is unchanged (any change forces replacement), and Read seeds it
+					// identically, so the frozen plan equals the Update re-derivation. No-ops on a
+					// known plan value (so RequiresReplaceExceptOnImport still governs real changes)
+					// and on replacement (create re-plans with null state).
+					stringplanmodifier.UseStateForUnknown(),
+					RequiresReplaceExceptOnImport(),
 				},
 			},
 			"main_file": schema.StringAttribute{
 				Description: "The main file within the uploaded archive (properties.mainFile). Used for multi-file specs.",
 				Optional:    true,
+				Computed:    true,
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
+					// See classifier: reuse prior state on unrelated in-place updates. main_file is
+					// create-only metadata read back via extractFileMetadata from the immutable
+					// uploaded file; on an in-place update it is unchanged (any change forces
+					// replacement), and Read seeds it identically, so the frozen plan equals the
+					// Update re-derivation. No-ops on a known plan value and on replacement.
+					stringplanmodifier.UseStateForUnknown(),
+					RequiresReplaceExceptOnImport(),
 				},
 			},
 			"contact_name": schema.StringAttribute{
@@ -255,6 +345,16 @@ func (r *AssetResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				Optional:    true,
 				Computed:    true,
 				ElementType: types.StringType,
+				PlanModifiers: []planmodifier.List{
+					// Reuse the prior tags list on unrelated in-place updates instead of
+					// rendering "(known after apply)". The Update path gates the tags sync on
+					// !plan.Tags.Equal(state.Tags) && !IsNull && !IsUnknown, so an explicit []
+					// (a KNOWN value) still clears tags; only the false churn is suppressed.
+					// Crash-safe because mapAssetToState reorders the API labels to the prior
+					// tag order (labels are order-unstable from the API), so the frozen plan
+					// order equals the applied order — no "inconsistent result after apply".
+					listplanmodifier.UseStateForUnknown(),
+				},
 			},
 			// Computed fields
 			"file_sha256": schema.StringAttribute{
@@ -302,11 +402,32 @@ func (r *AssetResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 			"updated_date": schema.StringAttribute{
 				Description: "When the asset was last updated.",
 				Computed:    true,
+				// NO UseStateForUnknown here — deliberately. updated_date is a SERVER-BUMPED
+				// timestamp that changes on every write. UseStateForUnknown would freeze the
+				// plan to the prior timestamp, but Update re-reads the NEW timestamp from the
+				// API (mapAssetToState) with no preservation, so apply would fail with
+				// "Provider produced inconsistent result after apply" (planned old timestamp
+				// != applied new timestamp). Showing "(known after apply)" on an in-place
+				// update is CORRECT here: the value genuinely changes. (Contrast created_date,
+				// which is immutable, so UseStateForUnknown is safe there.)
 			},
 			"pages": schema.ListNestedAttribute{
 				Description: "Documentation pages for the asset portal. Each page has a name and markdown content.",
 				Optional:    true,
 				Computed:    true,
+				PlanModifiers: []planmodifier.List{
+					// Keep the whole prior list (including the computed page_path on each
+					// element) in the plan when pages are not being edited. Without this,
+					// any unrelated in-place update (e.g. a tags-only change) renders pages
+					// as "(known after apply)". The Update path gates the pages sync on
+					// !plan.Pages.Equal(state.Pages) && !IsNull && !IsUnknown. The .Equal()
+					// term is load-bearing: reusing prior state (which makes plan==state)
+					// means the gate does NOT fire on the omit path, so pages are not
+					// re-synced. A real edit or an explicit [] is a KNOWN value that differs
+					// from state, so it still clears/updates pages. Do NOT reduce this to
+					// !IsUnknown() alone — that would re-sync on every unrelated update.
+					listplanmodifier.UseStateForUnknown(),
+				},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"page_name": schema.StringAttribute{
@@ -328,11 +449,29 @@ func (r *AssetResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				Description: "Terms and conditions content (markdown). Displayed as the T&C page in the asset portal.",
 				Optional:    true,
 				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					// Keep the prior T&C value in the plan on unrelated in-place updates
+					// instead of "(known after apply)". The Update path gates the T&C sync
+					// on !plan.TermsAndConditions.Equal(state...) && !IsNull && !IsUnknown.
+					// The .Equal() term means reusing prior state (plan==state) does NOT
+					// re-sync on the omit path; an explicit "" (a KNOWN value that differs)
+					// still clears. Do NOT reduce to !IsUnknown() alone.
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"instances": schema.ListNestedAttribute{
 				Description: "Non-managed (external) API instances for this asset version.",
 				Optional:    true,
 				Computed:    true,
+				PlanModifiers: []planmodifier.List{
+					// Keep the whole prior list (including the computed instance_id on each
+					// element) in the plan when instances are not being edited. The Update
+					// path gates the instance sync on !plan.Instances.Equal(state...) &&
+					// !IsNull && !IsUnknown. The .Equal() term means reusing prior state
+					// (plan==state) does NOT re-sync on the omit path; an explicit [] (a
+					// KNOWN value that differs) still clears. Do NOT reduce to !IsUnknown().
+					listplanmodifier.UseStateForUnknown(),
+				},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
@@ -361,6 +500,16 @@ func (r *AssetResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 					"Each entry assigns one or more values to a category key.",
 				Optional: true,
 				Computed: true,
+				PlanModifiers: []planmodifier.List{
+					// Keep the prior categories list in the plan when categories are not
+					// being edited, instead of "(known after apply)" on unrelated updates.
+					// The Update path gates the category sync on !plan.Categories.Equal(
+					// state...) && !IsNull && !IsUnknown. The .Equal() term means reusing
+					// prior state (plan==state) does NOT re-sync on the omit path; an
+					// explicit [] (a KNOWN value that differs) still clears. Do NOT reduce
+					// to !IsUnknown() alone.
+					listplanmodifier.UseStateForUnknown(),
+				},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"key": schema.StringAttribute{
@@ -381,6 +530,15 @@ func (r *AssetResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 					"Each entry assigns one or more values to a custom field key.",
 				Optional: true,
 				Computed: true,
+				PlanModifiers: []planmodifier.List{
+					// Keep the prior custom_fields list in the plan when they are not being
+					// edited, instead of "(known after apply)" on unrelated updates. The
+					// Update path gates the sync on !plan.CustomFields.Equal(state...) &&
+					// !IsNull && !IsUnknown. The .Equal() term means reusing prior state
+					// (plan==state) does NOT re-sync on the omit path; an explicit [] (a
+					// KNOWN value that differs) still clears. Do NOT reduce to !IsUnknown().
+					listplanmodifier.UseStateForUnknown(),
+				},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"key": schema.StringAttribute{
@@ -428,6 +586,161 @@ func (r *AssetResource) Configure(_ context.Context, req resource.ConfigureReque
 	r.client = assetClient
 }
 
+// assetTypesRequiringFile is the allowlist of Exchange asset types whose
+// creation REQUIRES an uploaded spec file. Exchange infers/validates the asset
+// type from the uploaded file, so publishing one of these WITHOUT a file fails
+// mid-apply with COULD_NOT_DETERMINE_ASSET_TYPE.
+//
+// This is an ALLOWLIST on purpose, and intentionally conservative:
+//   - A false positive (blocking a type that does not actually need a file) would
+//     break a legitimate fileless workflow — exactly what we must avoid.
+//   - A false negative (not blocking a type that does need one) merely preserves
+//     today's behavior (the apply still fails with the same server error), so it
+//     is the safe direction to err in.
+//
+// Therefore only types with a MANDATORY formal spec are listed:
+//   - rest-api    (RAML/OAS)  — proven in the field to reject a fileless publish
+//   - soap-api    (WSDL)      — WSDL is mandatory for SOAP
+//   - graphql-api (SDL)       — a GraphQL schema is mandatory
+//   - evented-api (AsyncAPI)  — live-verified 2026-07-16: fileless publish 400s
+//     COULD_NOT_DETERMINE_ASSET_TYPE (classifier=evented-api)
+//   - grpc-api    (protobuf)  — live-verified 2026-07-16: fileless publish 400s
+//     MISSING_FILES_ERROR (protobuf.proto|protobuf.zip)
+//   - ruleset     (profile)   — live-verified 2026-07-16: fileless publish 400s
+//     COULD_NOT_DETERMINE_ASSET_TYPE
+//
+// Deliberately EXCLUDED (may legitimately be published without a file, so blocking
+// them would be a false positive): custom, app, template, example, connector,
+// policy, agent, llm (live-verified fileless 2026-07-16), mcp, http-api, and any
+// future/unknown type. Extend this map only when a type is confirmed to require a file.
+//
+// NOTE: evented-api and grpc-api ALSO require properties.apiVersion (a fileless-or-
+// versionless config 400s MISSING_REQUIRED_PROPERTIES), but that is a distinct
+// constraint not modeled by this file-only allowlist; the api_version omission still
+// surfaces only at apply. See the E2E report Finding B.
+var assetTypesRequiringFile = map[string]bool{
+	"rest-api":    true,
+	"soap-api":    true,
+	"graphql-api": true,
+	"evented-api": true,
+	"grpc-api":    true,
+	"ruleset":     true,
+}
+
+// assetTypeRequiresFile reports whether the given asset type must be published
+// with an uploaded spec file. Unknown/unlisted types return false (never blocked).
+func assetTypeRequiresFile(t string) bool {
+	return assetTypesRequiringFile[strings.ToLower(strings.TrimSpace(t))]
+}
+
+// stringChanged reports whether a KNOWN planned value differs from the prior state
+// value. Unknown or null plan values (and null/unknown prior state) are treated as
+// "no change" so an unresolved computed value is never mistaken for a real edit.
+func stringChanged(state, plan types.String) bool {
+	if plan.IsUnknown() || plan.IsNull() {
+		return false
+	}
+	if state.IsNull() || state.IsUnknown() {
+		return false
+	}
+	return !plan.Equal(state)
+}
+
+// assetReplaceTriggered reports whether the planned change replaces the asset
+// version (destroy + recreate) rather than updating it in place. Terraform recreates
+// the asset when any replace-forcing attribute changes, and the recreate re-runs the
+// file-dependent create path — so a replace with a missing file is just as dangerous
+// as a fresh create. Only the replace-forcing identity/immutable attributes are
+// compared; changing any of them forces replacement per the schema plan modifiers.
+func assetReplaceTriggered(state, plan *AssetResourceModel) bool {
+	return stringChanged(state.OrganizationID, plan.OrganizationID) ||
+		stringChanged(state.GroupID, plan.GroupID) ||
+		stringChanged(state.AssetID, plan.AssetID) ||
+		stringChanged(state.Version, plan.Version) ||
+		stringChanged(state.Type, plan.Type)
+}
+
+// ModifyPlan converts a specific silent-data-loss footgun into a loud plan-time
+// error: publishing (create) or replacing a file-backed asset type with no
+// file_path set. Without this guard, such a plan applies, Exchange rejects the
+// upload with COULD_NOT_DETERMINE_ASSET_TYPE, and — on a version bump, which is a
+// RequiresReplace — the OLD version has already been destroyed by the time the
+// create fails. Failing at plan time (before any destroy) is strictly safer.
+//
+// Carefully scoped to avoid false positives:
+//   - Fileless types (custom/app/template/…) and any unknown type are never blocked
+//     (see assetTypesRequiringFile).
+//   - Only CREATE and REPLACE are guarded. An in-place update — including the
+//     zero-drift import→apply workflow, where the asset already exists on the server
+//     with its file and file_path is a local-only field that legitimately stays
+//     null — is never blocked.
+func (r *AssetResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	// Destroy plan: nothing to validate.
+	if req.Plan.Raw.IsNull() {
+		return
+	}
+
+	var plan AssetResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// If the type is not yet known (e.g. it references another resource that has
+	// not been created), we cannot classify it — skip rather than risk a false
+	// positive. The apply-time server error remains as the backstop in that case.
+	if plan.Type.IsUnknown() {
+		return
+	}
+	if !assetTypeRequiresFile(plan.Type.ValueString()) {
+		return // fileless type — never blocked
+	}
+
+	// The type needs a file. If the config provides one, nothing to flag.
+	if !plan.FilePath.IsNull() && !plan.FilePath.IsUnknown() && plan.FilePath.ValueString() != "" {
+		return
+	}
+
+	// file_path is absent for a file-backed type. This is only a problem when
+	// Exchange will (re)upload the spec — i.e. on CREATE or on a REPLACE. On an
+	// in-place update the asset already exists with its file, so file_path being
+	// null is expected (this is the post-import steady state) and must not error.
+	creating := req.State.Raw.IsNull()
+	replacing := false
+	if !creating {
+		var state AssetResourceModel
+		resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		replacing = assetReplaceTriggered(&state, &plan)
+	}
+	if !creating && !replacing {
+		return // in-place update — file_path legitimately absent
+	}
+
+	action := "created"
+	if replacing {
+		action = "replaced (destroyed and recreated)"
+	}
+	resp.Diagnostics.AddAttributeError(
+		path.Root("file_path"),
+		"Missing file_path for a file-backed asset type",
+		fmt.Sprintf(
+			"Asset type %q must be published with a spec file, but file_path is not set. "+
+				"When the asset version is %s, Exchange uploads the file and infers/validates "+
+				"the type from it; without a file the apply fails with "+
+				"COULD_NOT_DETERMINE_ASSET_TYPE.\n\n"+
+				"Set file_path to the spec file for this version. On a version change this is "+
+				"especially important: the version attribute forces replacement, so a failed "+
+				"upload can occur after the previous version has already been destroyed.\n\n"+
+				"(file_path is expected to be null only when you import an existing asset and "+
+				"leave it unchanged in place.)",
+			plan.Type.ValueString(), action,
+		),
+	)
+}
+
 func (r *AssetResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan AssetResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -440,6 +753,14 @@ func (r *AssetResource) Create(ctx context.Context, req resource.CreateRequest, 
 		"version":  plan.Version.ValueString(),
 	})
 
+	// Extra files for multi-file types (e.g. policy). Each is uploaded as its own
+	// files.{classifier}.{ext} part in the same publish request as file_path.
+	extraFiles, extraDiags := additionalFilesToUploads(ctx, plan.AdditionalFiles)
+	resp.Diagnostics.Append(extraDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	createReq := &exchange.CreateAssetRequest{
 		OrganizationID: plan.OrganizationID.ValueString(),
 		GroupID:        plan.GroupID.ValueString(),
@@ -451,6 +772,7 @@ func (r *AssetResource) Create(ctx context.Context, req resource.CreateRequest, 
 		Status:         plan.Status.ValueString(),
 		FilePath:       plan.FilePath.ValueString(),
 		Classifier:     plan.Classifier.ValueString(),
+		ExtraFiles:     extraFiles,
 		Keywords:       plan.Keywords.ValueString(),
 		APIVersion:     plan.APIVersion.ValueString(),
 		MainFile:       plan.MainFile.ValueString(),
@@ -593,7 +915,20 @@ func (r *AssetResource) Create(ctx context.Context, req resource.CreateRequest, 
 		}
 
 		if len(planInstances) > 0 {
-			err := r.syncInstances(ctx, plan.GroupID.ValueString(), plan.AssetID.ValueString(), asset.VersionGroup, nil, planInstances)
+			// Reconcile against instances that ALREADY exist on this versionGroup.
+			// External instances are not cascade-deleted with the asset version, so a
+			// recreate at the same versionGroup can inherit orphans from a prior delete.
+			// Passing them as "current" makes syncInstances adopt/update (and prune)
+			// them instead of blindly re-POSTing and hitting 409 EXTERNAL_API_CONFLICT.
+			_, existingInstances, listErr := r.fetchExternalInstances(ctx, plan.GroupID.ValueString(), plan.AssetID.ValueString(), plan.Version.ValueString())
+			if listErr != nil {
+				resp.Diagnostics.AddError(
+					"Error creating external instances",
+					"Asset was created but reading existing instances failed: "+listErr.Error(),
+				)
+				return
+			}
+			err := r.syncInstances(ctx, plan.GroupID.ValueString(), plan.AssetID.ValueString(), asset.VersionGroup, existingInstances, planInstances)
 			if err != nil {
 				resp.Diagnostics.AddError(
 					"Error creating external instances",
@@ -644,8 +979,20 @@ func (r *AssetResource) Create(ctx context.Context, req resource.CreateRequest, 
 		}
 	}
 
+	// Ensure Computed fields are concrete in state (not Unknown).
+	// For types without file upload, classifier/api_version/main_file stay null.
+	if plan.Classifier.IsUnknown() {
+		plan.Classifier = types.StringNull()
+	}
+	if plan.APIVersion.IsUnknown() {
+		plan.APIVersion = types.StringNull()
+	}
+	if plan.MainFile.IsUnknown() {
+		plan.MainFile = types.StringNull()
+	}
+
 	// Compute file hash for drift detection
-	if plan.FilePath.ValueString() != "" {
+	if !plan.FilePath.IsNull() && plan.FilePath.ValueString() != "" {
 		hash, hashErr := computeFileHash(plan.FilePath.ValueString())
 		if hashErr == nil {
 			plan.FileSHA256 = types.StringValue(hash)
@@ -693,15 +1040,19 @@ func (r *AssetResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 
-	// Preserve file_path and file_sha256 from state (truly local-only, not in API)
+	// Preserve file_path and file_sha256 from state (truly local-only, not in API).
+	// additional_file is the same: a local, upload-only field the API never echoes
+	// back as such, so it is preserved verbatim rather than reconciled (no drift).
 	filePath := state.FilePath
 	fileSHA256 := state.FileSHA256
+	additionalFiles := state.AdditionalFiles
 
 	r.mapAssetToState(&state, asset)
 
 	// Restore truly local-only fields
 	state.FilePath = filePath
 	state.FileSHA256 = fileSHA256
+	state.AdditionalFiles = additionalFiles
 
 	// Extract api_version from attributes (available in API response for some types).
 	// Some asset types (e.g. GraphQL) don't expose api-version in attributes,
@@ -711,16 +1062,24 @@ func (r *AssetResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	}
 	// else: preserve whatever was already in state (could be user-set or null)
 
-	// Extract classifier and mainFile from the files array (user-uploaded file)
-	classifier, mainFile := extractFileMetadata(asset.Files)
-	if classifier != "" {
-		state.Classifier = types.StringValue(normalizeClassifier(classifier, state.Classifier))
+	// Extract classifier and mainFile from the files array (user-uploaded file).
+	// In MULTI-FILE mode (additional_file set), skip this reconciliation entirely and
+	// preserve the config classifier/main_file verbatim: extractFileMetadata returns
+	// only the FIRST matching file, which is ambiguous when several user files are
+	// uploaded (e.g. policy's schema + metadata). The uploaded file set is immutable
+	// and local-only, so freezing these from config avoids any drift the first-file
+	// heuristic could introduce if the API's file ordering ever changes.
+	if state.AdditionalFiles.IsNull() || state.AdditionalFiles.IsUnknown() {
+		classifier, mainFile := extractFileMetadata(asset.Files)
+		if classifier != "" {
+			state.Classifier = types.StringValue(normalizeClassifier(classifier, state.Classifier))
+		}
+		// else: preserve from state (some asset types may not have user-uploaded files)
+		if mainFile != "" {
+			state.MainFile = types.StringValue(mainFile)
+		}
+		// else: preserve from state
 	}
-	// else: preserve from state (some asset types may not have user-uploaded files)
-	if mainFile != "" {
-		state.MainFile = types.StringValue(mainFile)
-	}
-	// else: preserve from state
 
 	// Keywords: stored as null-key attributes but mixed with system-generated values.
 	// We cannot reliably distinguish user keywords from system ones on import,
@@ -986,13 +1345,23 @@ func (r *AssetResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
-	// Preserve truly local-only fields
-	filePath := state.FilePath
+	// Preserve file_path from plan (config value). After import, state may have null
+	// but plan has the config value. Using plan ensures one apply settles it permanently.
+	filePath := plan.FilePath
+	// additional_file follows file_path exactly: a local, upload-only field. Preserve
+	// the plan (config) value so the post-import null→value settle lands from config
+	// and no drift is shown thereafter.
+	additionalFiles := plan.AdditionalFiles
+	// Preserve file_sha256 from state — never recompute during Update because the plan
+	// uses UseStateForUnknown and expects the value to stay unchanged. For imported
+	// resources where file_sha256 starts as null, it stays null (file_sha256 is only
+	// computed fresh during Create).
 	fileSHA256 := state.FileSHA256
 
 	r.mapAssetToState(&plan, asset)
 
 	plan.FilePath = filePath
+	plan.AdditionalFiles = additionalFiles
 	plan.FileSHA256 = fileSHA256
 
 	// Extract api_version from attributes (some types like GraphQL don't expose it)
@@ -1001,19 +1370,41 @@ func (r *AssetResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	}
 	// else: preserve plan value (create-only field, already set from plan)
 
-	// Extract classifier and mainFile from files array
-	classifierVal, mainFileVal := extractFileMetadata(asset.Files)
-	if classifierVal != "" {
-		plan.Classifier = types.StringValue(normalizeClassifier(classifierVal, state.Classifier))
+	// Extract classifier and mainFile from files array. In MULTI-FILE mode
+	// (additional_file set) skip the first-file reconciliation and keep the plan
+	// values (frozen from state via UseStateForUnknown) — see the matching guard in
+	// Read for why the first-file heuristic is ambiguous with several user files.
+	if plan.AdditionalFiles.IsNull() || plan.AdditionalFiles.IsUnknown() {
+		classifierVal, mainFileVal := extractFileMetadata(asset.Files)
+		if classifierVal != "" {
+			plan.Classifier = types.StringValue(normalizeClassifier(classifierVal, state.Classifier))
+		} else if plan.Classifier.IsUnknown() {
+			plan.Classifier = types.StringNull()
+		}
+		if mainFileVal != "" {
+			plan.MainFile = types.StringValue(mainFileVal)
+		} else if plan.MainFile.IsUnknown() {
+			// API doesn't have mainFile for this type — set to null so state is concrete
+			plan.MainFile = types.StringNull()
+		}
+	} else {
+		// Multi-file: ensure classifier/main_file are concrete even if config omitted
+		// them (Optional+Computed → could be unknown at plan when never set).
+		if plan.Classifier.IsUnknown() {
+			plan.Classifier = types.StringNull()
+		}
+		if plan.MainFile.IsUnknown() {
+			plan.MainFile = types.StringNull()
+		}
 	}
-	// else: preserve plan value
-	if mainFileVal != "" {
-		plan.MainFile = types.StringValue(mainFileVal)
+
+	// Ensure api_version is concrete (not Unknown) after Update
+	if plan.APIVersion.IsUnknown() {
+		plan.APIVersion = types.StringNull()
 	}
-	// else: preserve plan value
 
 	// Keywords: preserve from plan (user's config value)
-	if plan.Keywords.IsNull() || plan.Keywords.ValueString() == "" {
+	if plan.Keywords.IsNull() || plan.Keywords.IsUnknown() || plan.Keywords.ValueString() == "" {
 		plan.Keywords = types.StringNull()
 	}
 
@@ -1038,6 +1429,38 @@ func (r *AssetResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		"asset_id": state.AssetID.ValueString(),
 		"version":  state.Version.ValueString(),
 	})
+
+	// Delete external instances first. They live in api-metadata-service keyed by
+	// versionGroup and are NOT cascade-deleted with the asset version, so leaving them
+	// orphans the instances — a later recreate at the same versionGroup then fails with
+	// 409 EXTERNAL_API_CONFLICT ("instance already exists"). We read the live set
+	// (best-effort) so we also clean up instances that never made it into state.
+	//
+	// LIMITATION: the set to delete comes from a VERSION-scoped GetAsset(...version).Instances,
+	// but the DELETE endpoint is versionGroup-scoped. If two managed asset VERSIONS share a
+	// versionGroup and the API reports the same external instance under both, deleting one
+	// version would remove an instance the sibling version still references (the sibling then
+	// shows drift on its next plan). Observed behaviour is version-scoped instances (one asset
+	// version == one instance set), so this is currently latent; revisit if a group-wide LIST
+	// endpoint is added. We do NOT skip the cleanup on this hypothesis — skipping reintroduces
+	// the verified 409 orphan bug, which is strictly worse than the unverified sibling case.
+	if versionGroup, existing, listErr := r.fetchExternalInstances(ctx,
+		state.GroupID.ValueString(), state.AssetID.ValueString(), state.Version.ValueString()); listErr == nil {
+		for _, inst := range existing {
+			instanceID := inst.InstanceID.ValueString()
+			if instanceID == "" {
+				continue
+			}
+			if delErr := r.client.DeleteExternalInstance(ctx,
+				state.GroupID.ValueString(), state.AssetID.ValueString(), versionGroup, instanceID); delErr != nil {
+				resp.Diagnostics.AddError(
+					"Error deleting exchange asset",
+					fmt.Sprintf("Could not delete external instance %q before removing the asset: %s", inst.Name.ValueString(), delErr.Error()),
+				)
+				return
+			}
+		}
+	}
 
 	// Delete the specific version (not all versions of the asset)
 	err := r.client.DeleteAssetVersion(ctx,
@@ -1067,12 +1490,54 @@ func (r *AssetResource) ImportState(ctx context.Context, req resource.ImportStat
 		return
 	}
 
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("group_id"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("asset_id"), parts[1])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("version"), parts[2])...)
+	groupID := parts[0]
+	assetID := parts[1]
+	version := parts[2]
+
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("group_id"), groupID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("asset_id"), assetID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("version"), version)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), req.ID)...)
-	// organization_id must be set by user after import (or we can try to infer from group_id)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("organization_id"), parts[0])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("organization_id"), groupID)...)
+
+	// Fetch the asset from the API to seed immutable fields so that the first plan
+	// after import shows zero drift (avoids RequiresReplace on file_path, classifier, etc.)
+	asset, err := r.client.GetAsset(ctx, groupID, assetID, version)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Reading Exchange Asset During Import",
+			"Could not read asset to seed state: "+err.Error(),
+		)
+		return
+	}
+
+	// Seed classifier and main_file from the files array
+	classifier, mainFile := extractFileMetadata(asset.Files)
+	if classifier != "" {
+		// Store the user-facing classifier (e.g. "oas" not "fat-oas",
+		// "raml-fragment" not "fat-raml-fragment").
+		userClassifier := apiClassifierToUserClassifier(classifier)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("classifier"), userClassifier)...)
+	}
+	if mainFile != "" {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("main_file"), mainFile)...)
+	}
+
+	// Seed api_version from the attributes array
+	if apiVer := extractAttributeValue(asset.Attributes, "api-version"); apiVer != "" {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("api_version"), apiVer)...)
+	} else {
+		// For GraphQL and some types, api-version is not in attributes.
+		// Check properties.apiVersion in the asset metadata (stored differently by API).
+		// Use the version string as a fallback marker — Read will reconcile from config.
+		// We set it to the config value during plan reconciliation via the custom modifier.
+	}
+
+	// Seed file_path as a sentinel value so RequiresReplace doesn't trigger.
+	// The actual local path comes from config; we just need state to be non-null
+	// so the plan modifier sees "old value exists" and compares properly.
+	// We use a special marker that the plan modifier recognizes.
+	// Actually, we handle this via useConfigValueAfterImport plan modifier instead.
 }
 
 // --- Helpers ---
@@ -1111,39 +1576,36 @@ func normalizeType(apiType string, currentStateType types.String) string {
 	return apiType
 }
 
-// apiClassifierToUserClassifier maps API-returned classifiers back to user-facing names.
-// The Exchange API transforms uploaded classifiers during processing (e.g., bundles RAML/OAS).
-var apiClassifierToUserClassifier = map[string]string{
-	"fat-raml": "raml",
-	"fat-oas":  "oas",
-}
-
-// userClassifierToAPIClassifier maps user-facing classifier names to what the API stores.
-var userClassifierToAPIClassifier = map[string]string{
-	"raml": "fat-raml",
-	"oas":  "fat-oas",
+// apiClassifierToUserClassifier converts an API-stored classifier back to the
+// user-facing value. When the Exchange API ingests an API-spec file it bundles
+// the spec (inlining dependencies) and stores the result with a "fat-" prefix:
+// user "raml" -> stored "fat-raml", "oas" -> "fat-oas", "raml-fragment" ->
+// "fat-raml-fragment", "oas-components" -> "fat-oas-components", etc. Stripping
+// the "fat-" prefix is the general inverse and covers every current and future
+// spec family, not just the two we happened to hardcode originally. Classifiers
+// that are not bundled (wsdl, graphql, json-schema, proto, custom, ...) have no
+// "fat-" prefix and pass through unchanged.
+func apiClassifierToUserClassifier(apiClassifier string) string {
+	return strings.TrimPrefix(apiClassifier, "fat-")
 }
 
 // normalizeClassifier resolves the API response classifier to the user-facing value.
 // If the state already has a classifier set (from user config), preserve it to avoid
-// drift when the API transforms classifiers during processing.
+// perpetual drift / forced replacement when the API bundles the spec into "fat-*".
 func normalizeClassifier(apiClassifier string, currentStateClassifier types.String) string {
-	// If the user already set a classifier and it maps to this API classifier, preserve theirs
 	if !currentStateClassifier.IsNull() && !currentStateClassifier.IsUnknown() {
 		userClassifier := currentStateClassifier.ValueString()
-		if mapped, ok := userClassifierToAPIClassifier[userClassifier]; ok && mapped == apiClassifier {
-			return userClassifier
-		}
-		// If exact match, use directly
+		// API returned exactly what the user set.
 		if userClassifier == apiClassifier {
 			return userClassifier
 		}
+		// API bundled the user's classifier with the "fat-" prefix — preserve theirs.
+		if apiClassifier == "fat-"+userClassifier {
+			return userClassifier
+		}
 	}
-	// Otherwise (e.g. import), translate API classifier back to user-facing name if possible
-	if userClassifier, ok := apiClassifierToUserClassifier[apiClassifier]; ok {
-		return userClassifier
-	}
-	return apiClassifier
+	// Otherwise (e.g. import): strip the "fat-" bundling prefix if present.
+	return apiClassifierToUserClassifier(apiClassifier)
 }
 
 // extractAttributeValue extracts a value from the asset's attributes array by key.
@@ -1159,6 +1621,34 @@ func extractAttributeValue(attributes []interface{}, key string) string {
 		}
 	}
 	return ""
+}
+
+// additionalFilesToUploads converts the additional_file plan list into the client's
+// ExtraFiles slice. Returns nil (no extra files) when the list is null/unknown/empty —
+// the normal case for every single-file and fileless type. Each entry maps path+classifier
+// to an exchange.AssetFileUpload, which buildAssetMultipart writes as its own
+// files.{classifier}.{ext} part in the same publish request as the primary file.
+func additionalFilesToUploads(ctx context.Context, list types.List) ([]exchange.AssetFileUpload, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	if list.IsNull() || list.IsUnknown() {
+		return nil, diags
+	}
+	var models []AdditionalFileModel
+	diags.Append(list.ElementsAs(ctx, &models, false)...)
+	if diags.HasError() {
+		return nil, diags
+	}
+	if len(models) == 0 {
+		return nil, diags
+	}
+	uploads := make([]exchange.AssetFileUpload, 0, len(models))
+	for _, m := range models {
+		uploads = append(uploads, exchange.AssetFileUpload{
+			FilePath:   m.Path.ValueString(),
+			Classifier: m.Classifier.ValueString(),
+		})
+	}
+	return uploads, diags
 }
 
 // extractFileMetadata extracts the classifier and mainFile from the asset's files array.
@@ -1184,6 +1674,59 @@ func extractFileMetadata(files []exchange.AssetFile) (classifier string, mainFil
 	return "", ""
 }
 
+// reorderByKey reorders apiItems so their order matches desiredKeys (matched items
+// first, in desiredKeys order), then appends any apiItems whose key is not present in
+// desiredKeys (preserving their original API order).
+//
+// WHY THIS EXISTS: several computed collections (pages, categories, custom_fields,
+// tags) carry the UseStateForUnknown plan modifier so unrelated in-place updates don't
+// render them as "(known after apply)". UseStateForUnknown is a plan-time PROMISE that
+// the applied value will equal the frozen plan value. The readback helpers re-derive
+// these collections from the API on every Update, and the API does not guarantee
+// element ORDER. If the readback emitted a different order than the frozen plan,
+// Terraform would fail with "Provider produced inconsistent result after apply"
+// (planned order != applied order) — even though the SET of elements is identical.
+// Reordering the readback to the plan/state model order makes applied == frozen plan.
+// (This mirrors the long-standing reorder in readInstancesIntoState.)
+//
+// desiredKeys comes from the model the readback writes into (plan on Update, state on
+// Read): on a real edit it is the config order; on the omit path it is the
+// UseStateForUnknown-frozen prior-state order. Either way, matching it is correct.
+// The returned slice is always a PERMUTATION of apiItems — it never adds, drops, or
+// de-duplicates elements (doing so would itself produce an inconsistent-result error
+// against the frozen plan). Multiplicity and per-key API order are preserved: if the
+// API returns a key twice, both copies survive, matched copies going into the desired
+// section and any extras appended afterward.
+func reorderByKey[T any](apiItems []T, desiredKeys []string, keyOf func(T) string) []T {
+	if len(apiItems) == 0 || len(desiredKeys) == 0 {
+		return apiItems
+	}
+	// Bucket API items by key, preserving multiplicity and original order within a key.
+	buckets := make(map[string][]T, len(apiItems))
+	apiKeyOrder := make([]string, 0, len(apiItems)) // distinct keys in first-seen API order
+	for _, it := range apiItems {
+		k := keyOf(it)
+		if _, ok := buckets[k]; !ok {
+			apiKeyOrder = append(apiKeyOrder, k)
+		}
+		buckets[k] = append(buckets[k], it)
+	}
+	ordered := make([]T, 0, len(apiItems))
+	// First: emit one item per desiredKeys entry, draining that key's bucket (so a key
+	// repeated in desiredKeys consumes multiple API copies, in API order).
+	for _, k := range desiredKeys {
+		if b := buckets[k]; len(b) > 0 {
+			ordered = append(ordered, b[0])
+			buckets[k] = b[1:]
+		}
+	}
+	// Then: append every remaining (unconsumed) API item, in original API key order.
+	for _, k := range apiKeyOrder {
+		ordered = append(ordered, buckets[k]...)
+	}
+	return ordered
+}
+
 // mapAssetToState maps an API Asset response to the Terraform state model.
 func (r *AssetResource) mapAssetToState(state *AssetResourceModel, asset *exchange.Asset) {
 	state.ID = types.StringValue(fmt.Sprintf("%s/%s/%s", asset.GroupID, asset.AssetID, asset.Version))
@@ -1201,33 +1744,55 @@ func (r *AssetResource) mapAssetToState(state *AssetResourceModel, asset *exchan
 	state.CreatedDate = types.StringValue(asset.CreatedDate)
 	state.UpdatedDate = types.StringValue(asset.UpdatedDate)
 
+	// contact_name / contact_email / manager carry UseStateForUnknown, so on an
+	// omit-path update the plan is frozen to the prior value and the Update readback
+	// MUST reproduce that exact value. When the API returns no value we therefore
+	// preserve the prior (user-set) value verbatim — re-materialised via StringValue so
+	// the readback is idempotent: f(known x) == x for both "Alice" and "". The earlier
+	// code forced "" here, which is NOT a fixed point (f("Alice")="" but f("")=null) and
+	// would fail apply with "Provider produced inconsistent result after apply"; it also
+	// caused perpetual churn when config set a value the API did not echo back. IsUnknown
+	// is excluded so an omitted value at Create still settles to a concrete null.
 	if asset.ContactName != nil && *asset.ContactName != "" {
 		state.ContactName = types.StringValue(*asset.ContactName)
-	} else if !state.ContactName.IsNull() && state.ContactName.ValueString() != "" {
-		// Preserve user-set value that may not be reflected in API
-		state.ContactName = types.StringValue("")
+	} else if !state.ContactName.IsNull() && !state.ContactName.IsUnknown() {
+		state.ContactName = types.StringValue(state.ContactName.ValueString())
 	} else {
 		state.ContactName = types.StringNull()
 	}
 	if asset.ContactEmail != nil && *asset.ContactEmail != "" {
 		state.ContactEmail = types.StringValue(*asset.ContactEmail)
-	} else if !state.ContactEmail.IsNull() && state.ContactEmail.ValueString() != "" {
-		state.ContactEmail = types.StringValue("")
+	} else if !state.ContactEmail.IsNull() && !state.ContactEmail.IsUnknown() {
+		state.ContactEmail = types.StringValue(state.ContactEmail.ValueString())
 	} else {
 		state.ContactEmail = types.StringNull()
 	}
 	if asset.Manager != nil && *asset.Manager != "" {
 		state.Manager = types.StringValue(*asset.Manager)
-	} else if !state.Manager.IsNull() && state.Manager.ValueString() != "" {
-		state.Manager = types.StringValue("")
+	} else if !state.Manager.IsNull() && !state.Manager.IsUnknown() {
+		state.Manager = types.StringValue(state.Manager.ValueString())
 	} else {
 		state.Manager = types.StringNull()
 	}
 
-	// Map tags (labels) from API response — labels are simple strings
+	// Map tags (labels) from API response — labels are simple strings.
+	// Reorder to match the model's prior tag order (config order on Create/edit, or the
+	// UseStateForUnknown-frozen prior order on an omit-path Update). The labels API does
+	// not guarantee order; tags carries UseStateForUnknown, so a differently-ordered
+	// readback would fail with "Provider produced inconsistent result after apply". A
+	// label IS its own key, so keyOf is identity. Elements() is used (not ElementsAs) to
+	// keep this helper ctx-free; it returns an empty slice when Tags is null/unknown.
 	if len(asset.Labels) > 0 {
-		tagValues := make([]attr.Value, len(asset.Labels))
-		for i, label := range asset.Labels {
+		var priorTagOrder []string
+		for _, e := range state.Tags.Elements() {
+			if s, ok := e.(types.String); ok {
+				priorTagOrder = append(priorTagOrder, s.ValueString())
+			}
+		}
+		orderedLabels := reorderByKey(asset.Labels, priorTagOrder, func(s string) string { return s })
+
+		tagValues := make([]attr.Value, len(orderedLabels))
+		for i, label := range orderedLabels {
 			tagValues[i] = types.StringValue(label)
 		}
 		state.Tags, _ = types.ListValue(types.StringType, tagValues)
@@ -1274,6 +1839,22 @@ func (r *AssetResource) readPagesIntoState(ctx context.Context, state *AssetReso
 		state.Pages = types.ListValueMust(pageObjectType(), []attr.Value{})
 		return
 	}
+
+	// Reorder to match the model's page order (config order on Update, or the
+	// UseStateForUnknown-frozen prior order otherwise). The portal-pages API does not
+	// guarantee element order; without this, the pages attribute carries
+	// UseStateForUnknown, so a differently-ordered readback would fail with "Provider
+	// produced inconsistent result after apply". Keyed by page_name.
+	var desiredPageNames []string
+	if !state.Pages.IsNull() && !state.Pages.IsUnknown() {
+		var currentPages []PageModel
+		if diags := state.Pages.ElementsAs(ctx, &currentPages, false); !diags.HasError() {
+			for _, cp := range currentPages {
+				desiredPageNames = append(desiredPageNames, cp.PageName.ValueString())
+			}
+		}
+	}
+	userPages = reorderByKey(userPages, desiredPageNames, func(p exchange.PortalPage) string { return p.Name })
 
 	pageValues := make([]attr.Value, 0, len(userPages))
 	for _, p := range userPages {
@@ -1363,9 +1944,32 @@ func (r *AssetResource) syncPages(ctx context.Context, groupID, assetID, version
 				needsPublish = true
 			}
 		} else {
-			// New page — create then set content
+			// New page — create then set content.
 			page, err := r.client.CreateDraftPage(ctx, groupID, assetID, version, name)
 			if err != nil {
+				if client.IsConflict(err) {
+					// The page already exists in the draft even though it is not in our
+					// "current" set. Exchange auto-provisions a "home" page on every asset
+					// version, so a fresh Create (which passes no current pages) hits this
+					// 409 on the very first release. Rather than fail the whole apply,
+					// adopt the existing page: resolve its real draft path and upsert the
+					// desired content. Mirrors the external-instances idempotent-create
+					// reconcile (see syncInstances / client.IsConflict).
+					existingPath, lookupErr := r.lookupDraftPagePath(ctx, groupID, assetID, version, name)
+					if lookupErr != nil {
+						return fmt.Errorf("failed to adopt existing page '%s': %w", name, lookupErr)
+					}
+					if existingPath == "" {
+						return fmt.Errorf("page '%s' already exists but was not found in the draft page listing", name)
+					}
+					if content != "" {
+						if err := r.client.UpdateDraftPageContent(ctx, groupID, assetID, version, existingPath, content); err != nil {
+							return fmt.Errorf("failed to set content for existing page '%s': %w", name, err)
+						}
+					}
+					needsPublish = true
+					continue
+				}
 				return fmt.Errorf("failed to create page '%s': %w", name, err)
 			}
 
@@ -1387,6 +1991,31 @@ func (r *AssetResource) syncPages(ctx context.Context, groupID, assetID, version
 	}
 
 	return nil
+}
+
+// lookupDraftPagePath returns the concrete draft page path for a page identified by
+// its name (e.g. "home"), matching either the page's name or the trailing segment of
+// its path. CreateDraftPage POSTs into the DRAFT namespace, and Exchange assigns the
+// real path (which may carry a prefix), so we resolve it from the draft listing rather
+// than the published listing (an auto-provisioned page may not be published yet).
+// Returns "" (no error) when the page is not present in the draft.
+func (r *AssetResource) lookupDraftPagePath(ctx context.Context, groupID, assetID, version, pageName string) (string, error) {
+	pages, err := r.client.ListDraftPages(ctx, groupID, assetID, version)
+	if err != nil {
+		return "", err
+	}
+	for _, p := range pages {
+		if p.Name == pageName || p.Path == pageName {
+			return p.Path, nil
+		}
+	}
+	// Fall back to matching the trailing path segment (paths may be prefixed).
+	for _, p := range pages {
+		if idx := strings.LastIndex(p.Path, "/"); idx >= 0 && p.Path[idx+1:] == pageName {
+			return p.Path, nil
+		}
+	}
+	return "", nil
 }
 
 // --- Terms & Conditions Helpers ---
@@ -1441,6 +2070,44 @@ func instanceObjectType() basetypes.ObjectTypable {
 			"instance_id":  types.StringType,
 		},
 	}
+}
+
+// fetchExternalInstances returns the external (non-managed) instances currently
+// attached to the asset's version group, as InstanceModel values with InstanceID
+// populated, plus the asset's versionGroup.
+//
+// External instances live in api-metadata-service keyed by versionGroup and are NOT
+// cascade-deleted when an asset version is deleted. A recreate at the same versionGroup
+// can therefore encounter pre-existing ("orphaned") instances left behind by a prior
+// delete. Reading the live set lets Create and Delete reconcile against reality instead
+// of assuming a clean slate — without it, Create blindly re-POSTs and the platform
+// rejects it with 409 API_METADATA_EXTERNAL_API_CONFLICT ("... already exists").
+func (r *AssetResource) fetchExternalInstances(ctx context.Context, groupID, assetID, version string) (string, []InstanceModel, error) {
+	asset, err := r.client.GetAsset(ctx, groupID, assetID, version)
+	if err != nil {
+		return "", nil, err
+	}
+	var out []InstanceModel
+	for _, inst := range asset.Instances {
+		instMap, ok := inst.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if t, _ := instMap["type"].(string); t != "external" {
+			continue
+		}
+		name, _ := instMap["name"].(string)
+		endpoint, _ := instMap["endpointUri"].(string)
+		isPublic, _ := instMap["isPublic"].(bool)
+		id, _ := instMap["id"].(string)
+		out = append(out, InstanceModel{
+			Name:        types.StringValue(name),
+			EndpointURI: types.StringValue(endpoint),
+			IsPublic:    types.BoolValue(isPublic),
+			InstanceID:  types.StringValue(id),
+		})
+	}
+	return asset.VersionGroup, out, nil
 }
 
 // syncInstances synchronizes external instances between desired and current state.
@@ -1511,6 +2178,17 @@ func (r *AssetResource) syncInstances(ctx context.Context, groupID, assetID, ver
 				IsPublic:    isPublic,
 			}
 			if _, err := r.client.CreateExternalInstance(ctx, groupID, assetID, versionGroup, createReq); err != nil {
+				// Idempotent create: an instance with this name already exists on the
+				// version group — typically orphaned by a prior asset delete, since
+				// external instances are NOT cascade-deleted with the asset version.
+				// Rather than fail the whole apply with 409 EXTERNAL_API_CONFLICT, treat
+				// it as already-present and continue. The caller's readInstancesIntoState
+				// (which reads with the concrete version) then reflects the actual
+				// instance into state; if its endpoint/visibility differs from config,
+				// the next plan shows drift and Update reconciles it via PATCH.
+				if client.IsConflict(err) {
+					continue
+				}
 				return fmt.Errorf("failed to create instance '%s': %w", name, err)
 			}
 		}
@@ -1738,11 +2416,39 @@ func (r *AssetResource) readCategoriesIntoState(ctx context.Context, state *Asse
 		return
 	}
 
-	catValues := make([]attr.Value, 0, len(asset.Categories))
-	for _, cat := range asset.Categories {
-		// Build the values list
-		valueAttrs := make([]attr.Value, len(cat.Value))
-		for i, v := range cat.Value {
+	// Reorder to match the model's category order (config order on Update, or the
+	// UseStateForUnknown-frozen prior order otherwise). The asset API does not guarantee
+	// category order; without this, the categories attribute carries UseStateForUnknown,
+	// so a differently-ordered readback would fail with "Provider produced inconsistent
+	// result after apply". Keyed by category key.
+	var desiredCatKeys []string
+	// priorCatValues maps a category key to its prior inner-values order. The parent
+	// UseStateForUnknown freezes the WHOLE nested value (including each category's inner
+	// `values` list), so the inner list order must ALSO match on apply or Terraform fails
+	// with "inconsistent result after apply". The asset API does not guarantee inner value
+	// order either, so we reorder each category's values to its prior order below.
+	priorCatValues := make(map[string][]string)
+	if !state.Categories.IsNull() && !state.Categories.IsUnknown() {
+		var currentCats []CategoryModel
+		if diags := state.Categories.ElementsAs(ctx, &currentCats, false); !diags.HasError() {
+			for _, cc := range currentCats {
+				k := cc.Key.ValueString()
+				desiredCatKeys = append(desiredCatKeys, k)
+				var vals []string
+				if d := cc.Values.ElementsAs(ctx, &vals, false); !d.HasError() {
+					priorCatValues[k] = vals
+				}
+			}
+		}
+	}
+	orderedCats := reorderByKey(asset.Categories, desiredCatKeys, func(c exchange.Category) string { return c.Key })
+
+	catValues := make([]attr.Value, 0, len(orderedCats))
+	for _, cat := range orderedCats {
+		// Build the values list, reordered to the prior inner order (see priorCatValues).
+		orderedVals := reorderByKey(cat.Value, priorCatValues[cat.Key], func(s string) string { return s })
+		valueAttrs := make([]attr.Value, len(orderedVals))
+		for i, v := range orderedVals {
 			valueAttrs[i] = types.StringValue(v)
 		}
 		valuesList, _ := types.ListValue(types.StringType, valueAttrs)
@@ -1780,8 +2486,33 @@ func (r *AssetResource) readCustomFieldsIntoState(ctx context.Context, state *As
 		return
 	}
 
-	fieldValues := make([]attr.Value, 0, len(asset.CustomFields))
-	for _, field := range asset.CustomFields {
+	// Reorder to match the model's custom-field order (config order on Update, or the
+	// UseStateForUnknown-frozen prior order otherwise). The asset API does not guarantee
+	// custom-field order; without this, the custom_fields attribute carries
+	// UseStateForUnknown, so a differently-ordered readback would fail with "Provider
+	// produced inconsistent result after apply". Keyed by field key.
+	var desiredFieldKeys []string
+	// priorFieldValues maps a field key to its prior inner-values order — same rationale as
+	// categories: the parent UseStateForUnknown freezes each field's inner `values` list, so
+	// the inner order must also match on apply to avoid "inconsistent result after apply".
+	priorFieldValues := make(map[string][]string)
+	if !state.CustomFields.IsNull() && !state.CustomFields.IsUnknown() {
+		var currentFields []CustomFieldModel
+		if diags := state.CustomFields.ElementsAs(ctx, &currentFields, false); !diags.HasError() {
+			for _, cf := range currentFields {
+				k := cf.Key.ValueString()
+				desiredFieldKeys = append(desiredFieldKeys, k)
+				var vals []string
+				if d := cf.Values.ElementsAs(ctx, &vals, false); !d.HasError() {
+					priorFieldValues[k] = vals
+				}
+			}
+		}
+	}
+	orderedFields := reorderByKey(asset.CustomFields, desiredFieldKeys, func(f exchange.CustomField) string { return f.Key })
+
+	fieldValues := make([]attr.Value, 0, len(orderedFields))
+	for _, field := range orderedFields {
 		// The API returns value as interface{} — could be string, []string, or []interface{}
 		var values []string
 		switch v := field.Value.(type) {
@@ -1797,6 +2528,8 @@ func (r *AssetResource) readCustomFieldsIntoState(ctx context.Context, state *As
 			}
 		}
 
+		// Reorder to the prior inner order (see priorFieldValues).
+		values = reorderByKey(values, priorFieldValues[field.Key], func(s string) string { return s })
 		valueAttrs := make([]attr.Value, len(values))
 		for i, val := range values {
 			valueAttrs[i] = types.StringValue(val)
@@ -1827,4 +2560,106 @@ func computeFileHash(filePath string) (string, error) {
 	}
 	hash := sha256.Sum256(content)
 	return hex.EncodeToString(hash[:]), nil
+}
+
+// --- Custom Plan Modifiers ---
+
+// requiresReplaceExceptOnImport is a plan modifier that triggers RequiresReplace ONLY when
+// the prior state value is non-null AND differs from the plan value. After import,
+// file_path/api_version may be null in state (the API doesn't store local paths or
+// certain metadata for all types). Going from null → value should NOT force recreation
+// because the asset already exists with the correct content.
+//
+// After import, `terraform plan` may show an in-place update for file_path (null → "path/...").
+// This is a NON-DESTRUCTIVE change — one `terraform apply` settles it permanently.
+// For classifier/api_version/main_file, ImportState seeds from API so no diff is shown.
+type requiresReplaceExceptOnImport struct{}
+
+func (m requiresReplaceExceptOnImport) Description(_ context.Context) string {
+	return "Requires replacement only when changing from one non-null value to another (not after import)."
+}
+
+func (m requiresReplaceExceptOnImport) MarkdownDescription(_ context.Context) string {
+	return "Requires replacement only when changing from one non-null value to another (not after import)."
+}
+
+func (m requiresReplaceExceptOnImport) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	// If the resource is being created (no prior state), no action needed
+	if req.State.Raw.IsNull() {
+		return
+	}
+
+	// If the plan is being destroyed, no action needed
+	if req.Plan.Raw.IsNull() {
+		return
+	}
+
+	// If the plan value is unknown, we can't compare yet
+	if req.PlanValue.IsUnknown() {
+		return
+	}
+
+	// If old value is null/unknown (post-import state), do NOT trigger replacement.
+	// The asset already exists — file_path is a local-only field used at creation.
+	// Plan will show an in-place update (null→value) which is non-destructive.
+	if req.StateValue.IsNull() || req.StateValue.IsUnknown() {
+		return
+	}
+
+	// Both old and new are set. If they differ, require replacement.
+	if !req.PlanValue.Equal(req.StateValue) {
+		resp.RequiresReplace = true
+	}
+}
+
+// RequiresReplaceExceptOnImport returns a plan modifier that requires replacement
+// only when changing from one non-null value to another. Null → value transitions
+// (which occur after import) do NOT trigger replacement.
+func RequiresReplaceExceptOnImport() planmodifier.String {
+	return requiresReplaceExceptOnImport{}
+}
+
+// requiresReplaceListExceptOnImport is the List-typed sibling of
+// requiresReplaceExceptOnImport, used for the additional_file block. Same rule:
+// the uploaded file set is immutable (a change destroys+recreates the version),
+// but a null→value transition after import is a non-destructive settle and must
+// NOT force replacement. ImportState does not seed additional_file, so the first
+// apply after importing a multi-file asset goes null→value here.
+type requiresReplaceListExceptOnImport struct{}
+
+func (m requiresReplaceListExceptOnImport) Description(_ context.Context) string {
+	return "Requires replacement only when changing from one non-null value to another (not after import)."
+}
+
+func (m requiresReplaceListExceptOnImport) MarkdownDescription(_ context.Context) string {
+	return "Requires replacement only when changing from one non-null value to another (not after import)."
+}
+
+func (m requiresReplaceListExceptOnImport) PlanModifyList(ctx context.Context, req planmodifier.ListRequest, resp *planmodifier.ListResponse) {
+	// Being created (no prior state): nothing to compare.
+	if req.State.Raw.IsNull() {
+		return
+	}
+	// Being destroyed: nothing to compare.
+	if req.Plan.Raw.IsNull() {
+		return
+	}
+	// Plan value not yet resolved: can't compare.
+	if req.PlanValue.IsUnknown() {
+		return
+	}
+	// Prior state null/unknown (post-import): null→value is a non-destructive settle.
+	if req.StateValue.IsNull() || req.StateValue.IsUnknown() {
+		return
+	}
+	// Both set and different: the uploaded file set changed → replace.
+	if !req.PlanValue.Equal(req.StateValue) {
+		resp.RequiresReplace = true
+	}
+}
+
+// RequiresReplaceListExceptOnImport returns the List-typed plan modifier that
+// requires replacement only when changing from one non-null value to another.
+func RequiresReplaceListExceptOnImport() planmodifier.List {
+	return requiresReplaceListExceptOnImport{}
 }

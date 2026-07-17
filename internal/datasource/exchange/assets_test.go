@@ -141,8 +141,16 @@ func TestAssetsDataSource_Read(t *testing.T) {
 			if r.URL.Query().Get("organizationId") != "test-org" {
 				t.Errorf("Expected organizationId=test-org, got %s", r.URL.Query().Get("organizationId"))
 			}
-			if r.URL.Query().Get("type") != "rest-api" {
-				t.Errorf("Expected type=rest-api, got %s", r.URL.Query().Get("type"))
+			// The Exchange Experience API uses the PLURAL param `types` for type
+			// filtering; the singular `type` is silently ignored server-side
+			// (verified live: `type=rest-api` returned assets of ALL types).
+			// This asserts the fixed behavior and guards against regressing to
+			// the no-op singular form.
+			if r.URL.Query().Get("types") != "rest-api" {
+				t.Errorf("Expected types=rest-api, got %s", r.URL.Query().Get("types"))
+			}
+			if r.URL.Query().Get("type") != "" {
+				t.Errorf("Must NOT send singular type= (server ignores it); got type=%s", r.URL.Query().Get("type"))
 			}
 
 			assets := []map[string]interface{}{

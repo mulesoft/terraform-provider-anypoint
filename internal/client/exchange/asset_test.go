@@ -1,10 +1,16 @@
 package exchange
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -399,6 +405,85 @@ func TestAssetClient_DeleteAssetVersion(t *testing.T) {
 	}
 }
 
+// TestAssetClient_DeleteType_Header is a regression guard for the delete-type
+// header bug: the client previously sent "DeleteType: hard-delete", which
+// MuleSoft Exchange ignores, silently downgrading every hard delete to a
+// SOFT delete. Soft delete leaves a tombstone that blocks recreating the same
+// groupId/assetId/version (HTTP 409 ASSET_PRE_CONDITIONS_FAILED).
+//
+// The platform header is "x-delete-type" with value "hard-delete" or
+// "soft-delete". This test asserts the exact header name AND value for both
+// version-level and asset-level deletes, and for both hard and soft modes.
+func TestAssetClient_DeleteType_Header(t *testing.T) {
+	cases := []struct {
+		name       string
+		hardDelete bool
+		wantValue  string
+	}{
+		{name: "hard delete sends x-delete-type: hard-delete", hardDelete: true, wantValue: "hard-delete"},
+		{name: "soft delete sends x-delete-type: soft-delete", hardDelete: false, wantValue: "soft-delete"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Version-level delete
+			t.Run("DeleteAssetVersion", func(t *testing.T) {
+				var gotValue string
+				var sawWrongHeader bool
+				handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+					"/exchange/api/v2/assets/g/a/1.0.0": func(w http.ResponseWriter, r *http.Request) {
+						gotValue = r.Header.Get("x-delete-type")
+						// The old, WRONG header name must not be present.
+						if r.Header.Get("DeleteType") != "" {
+							sawWrongHeader = true
+						}
+						w.WriteHeader(http.StatusNoContent)
+					},
+				}
+				server := testutil.MockHTTPServer(t, handlers)
+				client := &AssetClient{BaseURL: server.URL, Token: "mock-token", HTTPClient: &http.Client{}}
+
+				if err := client.DeleteAssetVersion(context.Background(), "g", "a", "1.0.0", tc.hardDelete); err != nil {
+					t.Fatalf("DeleteAssetVersion() unexpected error = %v", err)
+				}
+				if sawWrongHeader {
+					t.Errorf("client sent legacy 'DeleteType' header; must use 'x-delete-type'")
+				}
+				if gotValue != tc.wantValue {
+					t.Errorf("x-delete-type = %q, want %q", gotValue, tc.wantValue)
+				}
+			})
+
+			// Asset-level delete (all versions)
+			t.Run("DeleteAsset", func(t *testing.T) {
+				var gotValue string
+				var sawWrongHeader bool
+				handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+					"/exchange/api/v2/assets/g/a": func(w http.ResponseWriter, r *http.Request) {
+						gotValue = r.Header.Get("x-delete-type")
+						if r.Header.Get("DeleteType") != "" {
+							sawWrongHeader = true
+						}
+						w.WriteHeader(http.StatusNoContent)
+					},
+				}
+				server := testutil.MockHTTPServer(t, handlers)
+				client := &AssetClient{BaseURL: server.URL, Token: "mock-token", HTTPClient: &http.Client{}}
+
+				if err := client.DeleteAsset(context.Background(), "g", "a", tc.hardDelete); err != nil {
+					t.Fatalf("DeleteAsset() unexpected error = %v", err)
+				}
+				if sawWrongHeader {
+					t.Errorf("client sent legacy 'DeleteType' header; must use 'x-delete-type'")
+				}
+				if gotValue != tc.wantValue {
+					t.Errorf("x-delete-type = %q, want %q", gotValue, tc.wantValue)
+				}
+			})
+		})
+	}
+}
+
 func TestAsset_JSONSerialization(t *testing.T) {
 	asset := &Asset{
 		GroupID:      "test-group",
@@ -717,5 +802,343 @@ func TestAssetClient_DeleteCustomField(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// filePart is a decoded file part from a multipart body: the form field name
+// (e.g. "files.schema.json") and the file's contents.
+type filePart struct {
+	fieldName string
+	fileName  string
+	content   string
+}
+
+// parseMultipartFileParts decodes body against contentType and returns every
+// part that carries a filename (i.e. an actual file upload, not a plain field).
+// Used to assert the multi-file publish contract without hitting the network.
+func parseMultipartFileParts(t *testing.T, body *bytes.Buffer, contentType string) []filePart {
+	t.Helper()
+
+	_, params, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		t.Fatalf("failed to parse media type %q: %v", contentType, err)
+	}
+	boundary, ok := params["boundary"]
+	if !ok {
+		t.Fatalf("multipart content type %q has no boundary", contentType)
+	}
+
+	reader := multipart.NewReader(bytes.NewReader(body.Bytes()), boundary)
+	var parts []filePart
+	for {
+		p, err := reader.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("failed to read multipart part: %v", err)
+		}
+		if p.FileName() == "" {
+			// A plain form field (name/type/status/etc.), not a file.
+			continue
+		}
+		data, err := io.ReadAll(p)
+		if err != nil {
+			t.Fatalf("failed to read part %q: %v", p.FormName(), err)
+		}
+		parts = append(parts, filePart{
+			fieldName: p.FormName(),
+			fileName:  p.FileName(),
+			content:   string(data),
+		})
+	}
+	return parts
+}
+
+// writeTempFile writes content to a uniquely-named file under t.TempDir() and
+// returns its absolute path. name controls the base filename (and therefore the
+// extension the multipart field-name logic keys off of).
+func writeTempFile(t *testing.T, name, content string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), name)
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("failed to write temp file %s: %v", path, err)
+	}
+	return path
+}
+
+// TestBuildAssetMultipart_PrimaryOnly asserts the pre-existing single-file
+// behaviour is unchanged: exactly one file part, correct field name, no
+// ExtraFiles bleed-through.
+func TestBuildAssetMultipart_PrimaryOnly(t *testing.T) {
+	primary := writeTempFile(t, "orders-api.raml", "#%RAML 1.0\ntitle: Orders\n")
+
+	req := &CreateAssetRequest{
+		Name:       "RT RAML REST API",
+		Type:       "rest-api",
+		Status:     "published",
+		FilePath:   primary,
+		Classifier: "raml",
+	}
+
+	body, contentType, err := buildAssetMultipart(req)
+	if err != nil {
+		t.Fatalf("buildAssetMultipart() unexpected error = %v", err)
+	}
+
+	parts := parseMultipartFileParts(t, body, contentType)
+	if len(parts) != 1 {
+		t.Fatalf("expected exactly 1 file part, got %d: %+v", len(parts), parts)
+	}
+	if got, want := parts[0].fieldName, "files.raml.raml"; got != want {
+		t.Errorf("field name = %q, want %q", got, want)
+	}
+	if got, want := parts[0].fileName, "orders-api.raml"; got != want {
+		t.Errorf("file name = %q, want %q", got, want)
+	}
+}
+
+// TestBuildAssetMultipart_PolicyTwoFiles is the core regression for task #103:
+// a policy asset (schema.json + metadata.yaml) must produce TWO file parts in
+// ONE multipart body, each with the correct files.{classifier}.{ext} field name
+// and its own file contents. This is the exact shape the Exchange API requires
+// (else MISSING_FILES_ERROR).
+func TestBuildAssetMultipart_PolicyTwoFiles(t *testing.T) {
+	schema := writeTempFile(t, "schema.json", `{"$schema":"http://json-schema.org/draft-07/schema#"}`)
+	metadata := writeTempFile(t, "metadata.yaml", "#%Policy Definition 0.1\nname: E2E policy\n")
+
+	req := &CreateAssetRequest{
+		Name:       "E2E policy",
+		Type:       "policy",
+		Status:     "published",
+		FilePath:   schema,
+		Classifier: "schema",
+		ExtraFiles: []AssetFileUpload{
+			{FilePath: metadata, Classifier: "metadata"},
+		},
+	}
+
+	body, contentType, err := buildAssetMultipart(req)
+	if err != nil {
+		t.Fatalf("buildAssetMultipart() unexpected error = %v", err)
+	}
+
+	parts := parseMultipartFileParts(t, body, contentType)
+	if len(parts) != 2 {
+		t.Fatalf("expected exactly 2 file parts, got %d: %+v", len(parts), parts)
+	}
+
+	// Index by field name so ordering isn't asserted (only presence + content).
+	byField := make(map[string]filePart, len(parts))
+	for _, p := range parts {
+		byField[p.fieldName] = p
+	}
+
+	schemaPart, ok := byField["files.schema.json"]
+	if !ok {
+		t.Fatalf("missing files.schema.json part; got fields %v", fieldNames(parts))
+	}
+	if !strings.Contains(schemaPart.content, "json-schema.org") {
+		t.Errorf("schema part content not preserved: %q", schemaPart.content)
+	}
+	if got, want := schemaPart.fileName, "schema.json"; got != want {
+		t.Errorf("schema file name = %q, want %q", got, want)
+	}
+
+	metaPart, ok := byField["files.metadata.yaml"]
+	if !ok {
+		t.Fatalf("missing files.metadata.yaml part; got fields %v", fieldNames(parts))
+	}
+	if !strings.Contains(metaPart.content, "#%Policy Definition 0.1") {
+		t.Errorf("metadata part content not preserved: %q", metaPart.content)
+	}
+	if got, want := metaPart.fileName, "metadata.yaml"; got != want {
+		t.Errorf("metadata file name = %q, want %q", got, want)
+	}
+}
+
+// TestBuildAssetMultipart_ExtraFilesSkipEmpty asserts an ExtraFiles entry with
+// an empty FilePath is silently skipped (defensive: a partially-built upload
+// list must not emit a bogus empty part or fail).
+func TestBuildAssetMultipart_ExtraFilesSkipEmpty(t *testing.T) {
+	primary := writeTempFile(t, "schema.json", "{}")
+	real := writeTempFile(t, "metadata.yaml", "#%Policy Definition 0.1\n")
+
+	req := &CreateAssetRequest{
+		Name:       "E2E policy",
+		Type:       "policy",
+		FilePath:   primary,
+		Classifier: "schema",
+		ExtraFiles: []AssetFileUpload{
+			{FilePath: "", Classifier: "ignored"}, // skipped
+			{FilePath: real, Classifier: "metadata"},
+		},
+	}
+
+	body, contentType, err := buildAssetMultipart(req)
+	if err != nil {
+		t.Fatalf("buildAssetMultipart() unexpected error = %v", err)
+	}
+
+	parts := parseMultipartFileParts(t, body, contentType)
+	if len(parts) != 2 {
+		t.Fatalf("expected 2 file parts (empty entry skipped), got %d: %v", len(parts), fieldNames(parts))
+	}
+	for _, p := range parts {
+		if strings.Contains(p.fieldName, "ignored") {
+			t.Errorf("empty-FilePath ExtraFiles entry should be skipped, but saw %q", p.fieldName)
+		}
+	}
+}
+
+// TestBuildAssetMultipart_MultiFileFileless asserts ExtraFiles can attach files
+// even when the primary FilePath is empty — the loop is independent of the
+// primary file's presence.
+func TestBuildAssetMultipart_ExtraFilesWithoutPrimary(t *testing.T) {
+	meta := writeTempFile(t, "metadata.yaml", "#%Policy Definition 0.1\n")
+
+	req := &CreateAssetRequest{
+		Name: "no-primary",
+		Type: "policy",
+		// FilePath intentionally empty
+		ExtraFiles: []AssetFileUpload{
+			{FilePath: meta, Classifier: "metadata"},
+		},
+	}
+
+	body, contentType, err := buildAssetMultipart(req)
+	if err != nil {
+		t.Fatalf("buildAssetMultipart() unexpected error = %v", err)
+	}
+
+	parts := parseMultipartFileParts(t, body, contentType)
+	if len(parts) != 1 {
+		t.Fatalf("expected exactly 1 file part, got %d: %v", len(parts), fieldNames(parts))
+	}
+	if got, want := parts[0].fieldName, "files.metadata.yaml"; got != want {
+		t.Errorf("field name = %q, want %q", got, want)
+	}
+}
+
+// TestBuildAssetMultipart_ExtraFileReadError asserts a non-existent ExtraFiles
+// path surfaces as an error (not a silent skip) — a missing second file must
+// fail the publish rather than send an incomplete multipart body.
+func TestBuildAssetMultipart_ExtraFileReadError(t *testing.T) {
+	primary := writeTempFile(t, "schema.json", "{}")
+
+	req := &CreateAssetRequest{
+		Name:       "E2E policy",
+		Type:       "policy",
+		FilePath:   primary,
+		Classifier: "schema",
+		ExtraFiles: []AssetFileUpload{
+			{FilePath: filepath.Join(t.TempDir(), "does-not-exist.yaml"), Classifier: "metadata"},
+		},
+	}
+
+	_, _, err := buildAssetMultipart(req)
+	if err == nil {
+		t.Fatal("expected error for missing ExtraFiles path, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to read file") {
+		t.Errorf("error = %v, want it to mention the file read failure", err)
+	}
+}
+
+// fieldNames extracts the field names from parts for readable failure messages.
+func fieldNames(parts []filePart) []string {
+	names := make([]string, len(parts))
+	for i, p := range parts {
+		names[i] = p.fieldName
+	}
+	return names
+}
+
+// TestAssetClient_CreateAsset_PolicyMultiFile is the end-to-end wire test for
+// task #103: it drives the full CreateAsset path (POST multipart → GET readback)
+// and captures the ACTUAL request body the server received, asserting BOTH policy
+// file parts (schema.json + metadata.yaml) crossed the network in one request.
+// buildAssetMultipart unit tests prove the body is built correctly; this proves
+// CreateAsset actually transmits it.
+func TestAssetClient_CreateAsset_PolicyMultiFile(t *testing.T) {
+	orgID := "test-org"
+	groupID := "test-group"
+	assetID := "rt-policy"
+	version := "0.1.0"
+
+	schema := writeTempFile(t, "schema.json", `{"$schema":"http://json-schema.org/draft-07/schema#"}`)
+	metadata := writeTempFile(t, "metadata.yaml", "#%Policy Definition 0.1\nname: E2E policy\n")
+
+	var capturedParts []filePart
+	postPath := fmt.Sprintf("/exchange/api/v2/organizations/%s/assets/%s/%s/%s", orgID, groupID, assetID, version)
+	getPath := fmt.Sprintf("/exchange/api/v2/assets/%s/%s/%s", groupID, assetID, version)
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		postPath: func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				t.Errorf("expected POST, got %s", r.Method)
+			}
+			if got := r.Header.Get("x-sync-publication"); got != "true" {
+				t.Errorf("x-sync-publication = %q, want \"true\"", got)
+			}
+			raw, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("failed to read request body: %v", err)
+			}
+			capturedParts = parseMultipartFileParts(t, bytes.NewBuffer(raw), r.Header.Get("Content-Type"))
+			w.WriteHeader(http.StatusCreated)
+		},
+		getPath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"groupId": groupID,
+				"assetId": assetID,
+				"version": version,
+				"name":    "E2E policy",
+				"type":    "policy",
+				"status":  "published",
+			})
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	c := &AssetClient{
+		BaseURL:    server.URL,
+		Token:      "mock-token",
+		HTTPClient: &http.Client{},
+	}
+
+	asset, err := c.CreateAsset(context.Background(), &CreateAssetRequest{
+		OrganizationID: orgID,
+		GroupID:        groupID,
+		AssetID:        assetID,
+		Version:        version,
+		Name:           "E2E policy",
+		Type:           "policy",
+		Status:         "published",
+		FilePath:       schema,
+		Classifier:     "schema",
+		ExtraFiles: []AssetFileUpload{
+			{FilePath: metadata, Classifier: "metadata"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateAsset() unexpected error = %v", err)
+	}
+	if asset == nil || asset.Name != "E2E policy" {
+		t.Fatalf("CreateAsset() returned unexpected asset: %+v", asset)
+	}
+
+	if len(capturedParts) != 2 {
+		t.Fatalf("server received %d file parts, want 2: %v", len(capturedParts), fieldNames(capturedParts))
+	}
+	byField := make(map[string]filePart, len(capturedParts))
+	for _, p := range capturedParts {
+		byField[p.fieldName] = p
+	}
+	if _, ok := byField["files.schema.json"]; !ok {
+		t.Errorf("POST body missing files.schema.json part; got %v", fieldNames(capturedParts))
+	}
+	if _, ok := byField["files.metadata.yaml"]; !ok {
+		t.Errorf("POST body missing files.metadata.yaml part; got %v", fieldNames(capturedParts))
 	}
 }
