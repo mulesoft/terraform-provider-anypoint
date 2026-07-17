@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
@@ -14,6 +15,33 @@ import (
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client/accessmanagement"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
 )
+
+// TestTeamResource_ManagedSignal_NoUseStateForUnknown guards the same invariant as the role
+// test: roles and members must NOT carry UseStateForUnknown. Team Update uses
+// plan.X.IsUnknown() as the "is this attribute config-managed?" signal (manageRoles :=
+// !plan.Roles.IsNull() && !plan.Roles.IsUnknown()), so config-omit -> unknown -> reconcile
+// read-only from the API. UseStateForUnknown would make omit -> known -> applyTeamRoles
+// enforces the last-applied set, reverting out-of-band role/member changes and breaking the
+// documented "Omit the attribute entirely to leave ... unmanaged" contract.
+func TestTeamResource_ManagedSignal_NoUseStateForUnknown(t *testing.T) {
+	res := NewTeamResource()
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	attrs := schemaResp.Schema.Attributes
+
+	for _, name := range []string{"roles", "members"} {
+		a, ok := attrs[name].(schema.SetNestedAttribute)
+		if !ok {
+			t.Fatalf("%s: expected SetNestedAttribute, got %T", name, attrs[name])
+		}
+		if len(a.PlanModifiers) != 0 {
+			t.Errorf("%s: expected NO plan modifiers (IsUnknown is the managed-signal; "+
+				"UseStateForUnknown would flip unmanaged->managed and revert out-of-band changes), got %d",
+				name, len(a.PlanModifiers))
+		}
+	}
+}
 
 // teamStateType returns the resource's Terraform type for building raw plan/state.
 func teamStateType(t *testing.T, res *TeamResource) tftypes.Type {

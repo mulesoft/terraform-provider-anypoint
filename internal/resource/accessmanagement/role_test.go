@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
@@ -13,6 +14,39 @@ import (
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client/accessmanagement"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
 )
+
+// TestRoleResource_ManagedSignal_NoUseStateForUnknown guards a deliberate design decision:
+// permissions and members must NOT carry UseStateForUnknown. Unlike exchange/connected_app
+// (whose Update gates collection sync on !plan.X.Equal(state.X)), the role Update uses
+// plan.X.IsUnknown() AS the "is this attribute config-managed?" signal:
+//
+//	managePerms := !plan.Permissions.IsNull() && !plan.Permissions.IsUnknown()
+//
+// When config omits the attribute, the framework marks it unknown, so managePerms=false and
+// the attribute is reconciled read-only from the live API (out-of-band changes preserved).
+// UseStateForUnknown would turn the omitted attribute into a KNOWN prior-state value, so
+// managePerms=true and applyPermissions would ENFORCE the last-applied set — removing grants
+// added out-of-band. That silently breaks the documented "Omit the attribute entirely to
+// leave permissions unmanaged" contract. This test fails if anyone adds the modifier.
+func TestRoleResource_ManagedSignal_NoUseStateForUnknown(t *testing.T) {
+	res := NewRoleResource()
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	attrs := schemaResp.Schema.Attributes
+
+	if a, ok := attrs["permissions"].(schema.SetNestedAttribute); !ok {
+		t.Fatalf("permissions: expected SetNestedAttribute, got %T", attrs["permissions"])
+	} else if len(a.PlanModifiers) != 0 {
+		t.Errorf("permissions: expected NO plan modifiers (IsUnknown is the managed-signal; "+
+			"UseStateForUnknown would flip unmanaged->managed and revert out-of-band grants), got %d", len(a.PlanModifiers))
+	}
+	if a, ok := attrs["members"].(schema.SetAttribute); !ok {
+		t.Fatalf("members: expected SetAttribute, got %T", attrs["members"])
+	} else if len(a.PlanModifiers) != 0 {
+		t.Errorf("members: expected NO plan modifiers (same managed-signal invariant), got %d", len(a.PlanModifiers))
+	}
+}
 
 func TestNewRoleResource(t *testing.T) {
 	r := NewRoleResource()

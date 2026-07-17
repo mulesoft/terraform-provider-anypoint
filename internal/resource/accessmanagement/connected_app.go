@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -198,6 +199,22 @@ func (r *ConnectedAppResource) Schema(_ context.Context, _ resource.SchemaReques
 					"anypoint_connected_app_scopes resource, which is deprecated.",
 				Optional: true,
 				Computed: true,
+				PlanModifiers: []planmodifier.Set{
+					// Keep the prior scopes set in the plan on unrelated in-place updates
+					// (e.g. an enabled or name edit) instead of "(known after apply)". Two
+					// reasons this is correct-and-safe here:
+					//   1. Update gates the scope sync on !plan.Scopes.Equal(state.Scopes)
+					//      (see Update), so reusing prior state -> Equal -> sync is skipped:
+					//      an explicit [] (a KNOWN empty set) still differs from state and
+					//      still clears. Display-only, never masks a real edit.
+					//   2. It also fixes a latent bug: Update does NOT re-derive scopes in
+					//      the omit path (setListsFromAPI doesn't touch Scopes, and there is
+					//      no reconcile like Create/Read have), so without this modifier an
+					//      omitted scopes block leaves plan.Scopes unknown through State.Set
+					//      -> "inconsistent result after apply". Reusing prior state makes it
+					//      concrete. Mirrors redirect_uris/public_keys, which already do this.
+					setplanmodifier.UseStateForUnknown(),
+				},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"scope": schema.StringAttribute{
