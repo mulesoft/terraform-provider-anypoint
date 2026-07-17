@@ -83,6 +83,7 @@ All resources provided by `terraform-provider-anypoint`, grouped by subcategory.
 | [anypoint_privatespace_advanced_config](resources/anypoint_privatespace_advanced_config.md) | Manages advanced configuration for an Anypoint Private Space. |
 | [anypoint_tls_context](resources/anypoint_tls_context.md) | Manages a CloudHub 2.0 TLS Context with support for both PEM and JKS keystores. |
 | [anypoint_vpn_connection](resources/anypoint_vpn_connection.md) | Creates a VPN connection in a CloudHub 2.0 private space. |
+| [anypoint_transit_gateway_connection](resources/anypoint_transit_gateway_connection.md) | Manages a Transit Gateway connection (attachment) linking a CloudHub 2.0 private space to an AWS Transit Gateway, with inline routes. |
 
 ### Secrets Management
 
