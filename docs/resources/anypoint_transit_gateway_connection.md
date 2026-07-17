@@ -1,0 +1,111 @@
+---
+page_title: "anypoint_transit_gateway_connection Resource - terraform-provider-anypoint"
+subcategory: "CloudHub 2.0"
+description: |-
+  Manages a Transit Gateway connection (attachment) in a CloudHub 2.0 Private Space. A Transit Gateway connection links a Private Space to an existing AWS Transit Gateway (shared to MuleSoft via AWS RAM) for private network connectivity.
+---
+
+# anypoint_transit_gateway_connection (Resource)
+
+Manages a Transit Gateway connection (attachment) in a CloudHub 2.0 Private Space. A Transit Gateway connection links a Private Space to an existing AWS Transit Gateway — shared to MuleSoft's AWS account via AWS RAM (Resource Access Manager) — for private network connectivity. This resource manages the *connection/attachment* between the Private Space and the AWS Transit Gateway; it does **not** create the AWS Transit Gateway itself (that lives in your AWS account). The connection goes through `Pending` → `Available` states.
+
+Routes are managed **inline** via the `routes` attribute and can be **updated in place** after the connection is created — there is no separate route resource. Updating `routes` replaces the full set of CIDR routes on the connection.
+
+-> **Prerequisites:** A Private Space with its network provisioned, and an AWS Transit Gateway shared to MuleSoft's AWS account via AWS RAM. The `routes` CIDRs must not overlap with the Private Space CIDR. You can discover the `private_space_id` with the [`anypoint_private_spaces`](../data-sources/anypoint_private_spaces.md) data source. The `resource_share_id` and `resource_share_account` come from your AWS RAM share.
+
+## Example Usage
+
+```terraform
+resource "anypoint_transit_gateway_connection" "main" {
+  organization_id        = var.organization_id
+  private_space_id       = var.private_space_id
+  name                   = "tf-test-tgw"
+  resource_share_id      = "e8e330a8-4f8c-452b-afd0-7810c41287f1" # AWS RAM resource share UUID
+  resource_share_account = "055970264539"                         # AWS account that owns the TGW
+  routes                 = ["192.168.1.0/24", "172.16.0.0/12"]    # >=1 CIDR; must not overlap the PS CIDR
+
+  # Recommended backstop: if a re-create is ever triggered, stand up the new
+  # attachment BEFORE tearing down the old one (avoids a connectivity gap).
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+output "transit_gateway_status" {
+  value = anypoint_transit_gateway_connection.main.status
+}
+
+output "aws_transit_gateway_id" {
+  value = anypoint_transit_gateway_connection.main.aws_transit_gateway_id
+}
+```
+
+### Updating routes
+
+`routes` is updatable in place. Change the list and re-apply — the provider replaces the full set of routes on the connection without recreating it:
+
+```terraform
+resource "anypoint_transit_gateway_connection" "main" {
+  organization_id        = var.organization_id
+  private_space_id       = var.private_space_id
+  name                   = "tf-test-tgw"
+  resource_share_id      = "e8e330a8-4f8c-452b-afd0-7810c41287f1"
+  resource_share_account = "055970264539"
+  routes                 = ["192.168.1.0/24", "172.16.0.0/12", "10.50.0.0/16"] # added a CIDR
+}
+```
+
+## Schema
+
+### Required
+
+- `organization_id` (String) The organization ID.
+- `private_space_id` (String) The ID of the Private Space where this transit gateway is attached.
+- `name` (String) The name of the transit gateway attachment.
+- `resource_share_id` (String) The AWS RAM resource share ID in UUID format (e.g. `e8e330a8-4f8c-452b-afd0-7810c41287f1`).
+- `resource_share_account` (String) The AWS account ID that owns the Transit Gateway.
+- `routes` (List of String) CIDR routes for the transit gateway connection (at least one required). Routes are managed inline and can be updated in place; updating them replaces the full set of routes on the connection.
+
+### Read-Only
+
+- `id` (String) The unique identifier of the transit gateway attachment.
+- `status` (String) The current status of the transit gateway attachment (e.g. `Pending`, `Available`).
+- `aws_transit_gateway_id` (String) The AWS Transit Gateway ID discovered by the platform from the resource share. This is a computed value set after the TGW attachment is created.
+
+## Import
+
+An existing transit gateway connection can be imported using its composite ID: `organization_id/private_space_id/transit_gateway_id`. On import, the current `routes` are read from the platform and seeded into state.
+
+### Using an import block (Terraform ≥ 1.5 — recommended)
+
+```terraform
+import {
+  to = anypoint_transit_gateway_connection.imported
+  id = "<organization_id>/<private_space_id>/<transit_gateway_id>"
+}
+
+resource "anypoint_transit_gateway_connection" "imported" {
+  organization_id        = "<organization_id>"
+  private_space_id       = "<private_space_id>"
+  name                   = "<name>"
+  resource_share_id      = "<resource_share_id>"
+  resource_share_account = "<resource_share_account>"
+  routes                 = ["<cidr>"]
+}
+```
+
+After adding the import block, run:
+
+```shell
+# Let Terraform generate the full resource configuration automatically:
+terraform plan -generate-config-out=generated.tf
+
+# Or apply the import directly if you have an existing resource block:
+terraform apply
+```
+
+### Using the CLI (deprecated, Terraform < 1.5)
+
+```shell
+terraform import anypoint_transit_gateway_connection.imported <organization_id>/<private_space_id>/<transit_gateway_id>
+```

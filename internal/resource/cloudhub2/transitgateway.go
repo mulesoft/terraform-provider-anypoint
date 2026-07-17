@@ -8,7 +8,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -24,7 +23,7 @@ var (
 	_ resource.ResourceWithImportState = &TransitGatewayResource{}
 )
 
-// TransitGatewayResource implements the anypoint_transit_gateway resource.
+// TransitGatewayResource implements the anypoint_transit_gateway_connection resource.
 type TransitGatewayResource struct {
 	client *cloudhub2.TransitGatewayClient
 }
@@ -47,15 +46,16 @@ func NewTransitGatewayResource() resource.Resource {
 }
 
 func (r *TransitGatewayResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_transit_gateway"
+	resp.TypeName = req.ProviderTypeName + "_transit_gateway_connection"
 }
 
 func (r *TransitGatewayResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Manages a Transit Gateway attachment in a CloudHub 2.0 Private Space. " +
-			"Transit Gateways connect a Private Space to an AWS Transit Gateway for private network connectivity. " +
-			"The attachment goes through Pending → Available states. Additional routes can be managed " +
-			"via the anypoint_transit_gateway_route resource after the attachment reaches 'Available' status.",
+		Description: "Manages a Transit Gateway connection (attachment) in a CloudHub 2.0 Private Space. " +
+			"A Transit Gateway connection links a Private Space to an existing AWS Transit Gateway " +
+			"(shared to MuleSoft via AWS RAM) for private network connectivity. The connection goes " +
+			"through Pending → Available states. Routes are managed inline via the 'routes' attribute " +
+			"and can be updated in place after the connection is created.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Description: "The unique identifier of the transit gateway attachment.",
@@ -92,13 +92,11 @@ func (r *TransitGatewayResource) Schema(_ context.Context, _ resource.SchemaRequ
 				},
 			},
 			"routes": schema.ListAttribute{
-				Description: "Initial CIDR routes for the transit gateway (at least one required). " +
-					"Additional routes can be managed via the anypoint_transit_gateway_route resource.",
+				Description: "CIDR routes for the transit gateway connection (at least one required). " +
+					"Routes are managed inline and can be updated in place; updating them replaces " +
+					"the full set of routes on the connection.",
 				Required:    true,
 				ElementType: types.StringType,
-				PlanModifiers: []planmodifier.List{
-					listplanmodifier.RequiresReplace(),
-				},
 			},
 			"private_space_id": schema.StringAttribute{
 				Description: "The ID of the Private Space where this transit gateway is attached.",
@@ -221,12 +219,28 @@ func (r *TransitGatewayResource) Read(ctx context.Context, req resource.ReadRequ
 	state.ResourceShareID = types.StringValue(tgw.Spec.ResourceShare.ID)
 	state.ResourceShareAccount = types.StringValue(tgw.Spec.ResourceShare.Account)
 
-	// NOTE: Do NOT update state.Routes from the API. The API returns ALL routes
-	// (including those added by anypoint_transit_gateway_route). If we set state.Routes
-	// from the API, the resource would show drift and trigger RequiresReplace whenever
-	// additional routes are managed via the separate route resource.
-	// For import: routes will be seeded to null/empty — the first plan after import
-	// will show drift. One apply settles it (same pattern as AM resources).
+	// Reconcile routes from the API. Routes are now the single inline source of
+	// truth for this resource (there is no separate route sub-resource), so Read
+	// must surface genuine out-of-band route drift. To avoid spurious diffs from
+	// mere ordering differences, preserve the existing state ordering when the API
+	// returns the SAME SET of routes; only overwrite when the set actually changed.
+	apiRoutes := tgw.Status.Routes
+	if apiRoutes == nil {
+		apiRoutes = []string{}
+	}
+	var stateRoutes []string
+	resp.Diagnostics.Append(state.Routes.ElementsAs(ctx, &stateRoutes, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !stringSlicesEqualAsSet(stateRoutes, apiRoutes) {
+		routesList, diags := types.ListValueFrom(ctx, types.StringType, apiRoutes)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		state.Routes = routesList
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -244,20 +258,62 @@ func (r *TransitGatewayResource) Update(ctx context.Context, req resource.Update
 		return
 	}
 
-	tflog.Debug(ctx, "Updating transit gateway", map[string]interface{}{
+	tflog.Debug(ctx, "Updating transit gateway connection", map[string]interface{}{
 		"id":   state.ID.ValueString(),
 		"name": plan.Name.ValueString(),
 	})
 
-	updateReq := &cloudhub2.UpdateTransitGatewayRequest{
-		Name: plan.Name.ValueString(),
+	orgID := plan.OrganizationID.ValueString()
+	psID := plan.PrivateSpaceID.ValueString()
+
+	// Extract the desired and prior routes up front. planRoutes is needed by the
+	// routes update (step 2), which PATCHes the private-space connection object.
+	var planRoutes, stateRoutes []string
+	resp.Diagnostics.Append(plan.Routes.ElementsAs(ctx, &planRoutes, false)...)
+	resp.Diagnostics.Append(state.Routes.ElementsAs(ctx, &stateRoutes, false)...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
-	tgw, err := r.client.UpdateTransitGateway(ctx, plan.OrganizationID.ValueString(), plan.PrivateSpaceID.ValueString(), state.ID.ValueString(), updateReq)
+	// 1. Update the name if it changed. Renames go to the ORG-scoped endpoint with
+	// a name-only body (this is what the Anypoint UI does). The private-space-scoped
+	// PATCH the RAML documents silently ignores the name, so it must NOT be used for
+	// renames (see UpdateTransitGatewayRequest for the full divergence). Routes are
+	// handled entirely by step 2 (the private-space connection PATCH).
+	if !plan.Name.Equal(state.Name) {
+		updateReq := &cloudhub2.UpdateTransitGatewayRequest{
+			Name: plan.Name.ValueString(),
+		}
+		if _, err := r.client.UpdateTransitGateway(ctx, orgID, psID, state.ID.ValueString(), updateReq); err != nil {
+			resp.Diagnostics.AddError(
+				"Error updating transit gateway connection",
+				"Could not update transit gateway connection name: "+err.Error(),
+			)
+			return
+		}
+	}
+
+	// 2. Update routes if the set changed. Routes are a field on the private-space
+	// connection object (the RAML's dedicated /routes sub-resource does not exist —
+	// it 404s), so this PATCHes the connection with a {name, routes} body. The name
+	// is echoed to satisfy the handler's required-name check; the endpoint ignores
+	// it for updates (renames go through step 1). Order-only changes are not drift.
+	if !stringSlicesEqualAsSet(planRoutes, stateRoutes) {
+		if err := r.client.UpdateTransitGatewayRoutes(ctx, orgID, psID, state.ID.ValueString(), plan.Name.ValueString(), planRoutes); err != nil {
+			resp.Diagnostics.AddError(
+				"Error updating transit gateway routes",
+				"Could not update transit gateway routes: "+err.Error(),
+			)
+			return
+		}
+	}
+
+	// 3. Re-read the connection to capture the latest computed status/aws id.
+	tgw, err := r.client.GetTransitGateway(ctx, orgID, psID, state.ID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error updating transit gateway",
-			"Could not update transit gateway: "+err.Error(),
+			"Error reading transit gateway connection after update",
+			"Could not read transit gateway connection: "+err.Error(),
 		)
 		return
 	}
@@ -302,13 +358,53 @@ func (r *TransitGatewayResource) ImportState(ctx context.Context, req resource.I
 		return
 	}
 
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("organization_id"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("private_space_id"), parts[1])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[2])...)
+	orgID := parts[0]
+	psID := parts[1]
+	tgwID := parts[2]
 
-	// Seed routes as empty list so Read doesn't error on the Required field.
-	// The first plan after import will show drift (routes = [] vs config).
-	emptyRoutes, diags := types.ListValueFrom(ctx, types.StringType, []string{})
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("organization_id"), orgID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("private_space_id"), psID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), tgwID)...)
+
+	// Fetch the TGW from the API to seed routes from actual state so the
+	// imported resource matches what's actually deployed (no first-plan drift).
+	tgw, err := r.client.GetTransitGateway(ctx, orgID, psID, tgwID)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Reading Transit Gateway During Import",
+			"Could not read transit gateway to seed routes: "+err.Error(),
+		)
+		return
+	}
+
+	routes := tgw.Status.Routes
+	if routes == nil {
+		routes = []string{}
+	}
+	routesList, diags := types.ListValueFrom(ctx, types.StringType, routes)
 	resp.Diagnostics.Append(diags...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("routes"), emptyRoutes)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("routes"), routesList)...)
+}
+
+// stringSlicesEqualAsSet reports whether a and b contain the same elements,
+// ignoring order and duplicates. Used to distinguish real route drift from
+// mere ordering differences returned by the API.
+func stringSlicesEqualAsSet(a, b []string) bool {
+	seen := make(map[string]struct{}, len(a))
+	for _, v := range a {
+		seen[v] = struct{}{}
+	}
+	bSet := make(map[string]struct{}, len(b))
+	for _, v := range b {
+		bSet[v] = struct{}{}
+	}
+	if len(seen) != len(bSet) {
+		return false
+	}
+	for v := range bSet {
+		if _, ok := seen[v]; !ok {
+			return false
+		}
+	}
+	return true
 }

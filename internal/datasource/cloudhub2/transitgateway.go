@@ -24,9 +24,9 @@ type TransitGatewayDataSource struct {
 
 // TransitGatewayDataSourceModel describes the data source data model.
 type TransitGatewayDataSourceModel struct {
-	PrivateSpaceID  types.String              `tfsdk:"private_space_id"`
-	OrganizationID  types.String              `tfsdk:"organization_id"`
-	TransitGateways []TransitGatewayListModel `tfsdk:"transit_gateways"`
+	PrivateSpaceID            types.String              `tfsdk:"private_space_id"`
+	OrganizationID            types.String              `tfsdk:"organization_id"`
+	TransitGatewayConnections []TransitGatewayListModel `tfsdk:"transit_gateway_connections"`
 }
 
 // TransitGatewayListModel represents a single transit gateway entry.
@@ -47,23 +47,23 @@ func NewTransitGatewayDataSource() datasource.DataSource {
 }
 
 func (d *TransitGatewayDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_transit_gateways"
+	resp.TypeName = req.ProviderTypeName + "_transit_gateway_connections"
 }
 
 func (d *TransitGatewayDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Lists all transit gateway attachments in a CloudHub 2.0 Private Space, including their routes.",
+		Description: "Lists all transit gateway connections (attachments) in a CloudHub 2.0 Private Space, including their routes.",
 		Attributes: map[string]schema.Attribute{
 			"private_space_id": schema.StringAttribute{
-				Description: "The ID of the Private Space to list transit gateways for.",
+				Description: "The ID of the Private Space to list transit gateway connections for.",
 				Required:    true,
 			},
 			"organization_id": schema.StringAttribute{
 				Description: "The organization ID.",
 				Required:    true,
 			},
-			"transit_gateways": schema.ListNestedAttribute{
-				Description: "The list of transit gateway attachments.",
+			"transit_gateway_connections": schema.ListNestedAttribute{
+				Description: "The list of transit gateway connections (attachments).",
 				Computed:    true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
@@ -143,7 +143,7 @@ func (d *TransitGatewayDataSource) Read(ctx context.Context, req datasource.Read
 		return
 	}
 
-	state.TransitGateways = []TransitGatewayListModel{}
+	state.TransitGatewayConnections = []TransitGatewayListModel{}
 	for _, tgw := range tgws {
 		tgwModel := TransitGatewayListModel{
 			ID:     types.StringValue(tgw.ID),
@@ -152,19 +152,14 @@ func (d *TransitGatewayDataSource) Read(ctx context.Context, req datasource.Read
 			Routes: []TransitGatewayRouteModel{},
 		}
 
-		// Fetch routes for each transit gateway that is available
-		if tgw.Status.Gateway == "available" {
-			routes, err := d.client.GetTransitGatewayRoutes(ctx, orgID, psID, tgw.ID)
-			if err == nil {
-				for _, route := range routes {
-					tgwModel.Routes = append(tgwModel.Routes, TransitGatewayRouteModel{
-						CIDR: types.StringValue(route),
-					})
-				}
-			}
+		// Routes are already in the list response's status.routes field
+		for _, route := range tgw.Status.Routes {
+			tgwModel.Routes = append(tgwModel.Routes, TransitGatewayRouteModel{
+				CIDR: types.StringValue(route),
+			})
 		}
 
-		state.TransitGateways = append(state.TransitGateways, tgwModel)
+		state.TransitGatewayConnections = append(state.TransitGatewayConnections, tgwModel)
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)

@@ -34,8 +34,8 @@ func TestTransitGatewayDataSource_Metadata(t *testing.T) {
 	resp := &datasource.MetadataResponse{}
 	ds.Metadata(ctx, req, resp)
 
-	if resp.TypeName != "anypoint_transit_gateways" {
-		t.Errorf("Metadata() TypeName = %v, want %v", resp.TypeName, "anypoint_transit_gateways")
+	if resp.TypeName != "anypoint_transit_gateway_connections" {
+		t.Errorf("Metadata() TypeName = %v, want %v", resp.TypeName, "anypoint_transit_gateway_connections")
 	}
 }
 
@@ -62,7 +62,7 @@ func TestTransitGatewayDataSource_Schema(t *testing.T) {
 		}
 	}
 
-	computedAttrs := []string{"transit_gateways"}
+	computedAttrs := []string{"transit_gateway_connections"}
 	for _, attr := range computedAttrs {
 		a, ok := schemaResp.Schema.Attributes[attr]
 		if !ok {
@@ -116,7 +116,6 @@ func TestTransitGatewayDataSource_Configure_InvalidProviderData(t *testing.T) {
 
 func TestTransitGatewayDataSource_Read(t *testing.T) {
 	tgwListPath := "/runtimefabric/api/organizations/test-org-id/privatespaces/test-ps-id/transitgateways"
-	routesPath := "/runtimefabric/api/organizations/test-org-id/privatespaces/test-ps-id/transitgateways/tgw-1/routes"
 
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 		tgwListPath: func(w http.ResponseWriter, r *http.Request) {
@@ -134,7 +133,7 @@ func TestTransitGatewayDataSource_Read(t *testing.T) {
 						"gateway":     "available",
 						"attachment":  "available",
 						"tgwResource": "tgw-0abc",
-						"routes":      []string{"10.0.0.0/8"},
+						"routes":      []string{"10.0.0.0/8", "172.16.0.0/12"},
 					},
 				},
 				{
@@ -155,9 +154,6 @@ func TestTransitGatewayDataSource_Read(t *testing.T) {
 				},
 			})
 		},
-		routesPath: func(w http.ResponseWriter, r *http.Request) {
-			testutil.JSONResponse(w, http.StatusOK, []string{"10.0.0.0/8", "172.16.0.0/12"})
-		},
 	}
 	server := testutil.MockHTTPServer(t, handlers)
 
@@ -175,7 +171,7 @@ func TestTransitGatewayDataSource_Read(t *testing.T) {
 	ds.Schema(ctx, datasource.SchemaRequest{}, schemaResp)
 	configType := schemaResp.Schema.Type().TerraformType(ctx)
 
-	// Build the nested type for transit_gateways attribute
+	// Build the nested type for transit_gateway_connections attribute
 	routeObjType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
 		"cidr": tftypes.String,
 	}}
@@ -187,9 +183,9 @@ func TestTransitGatewayDataSource_Read(t *testing.T) {
 	}}
 
 	configRaw := tftypes.NewValue(configType, map[string]tftypes.Value{
-		"private_space_id": tftypes.NewValue(tftypes.String, "test-ps-id"),
-		"organization_id":  tftypes.NewValue(tftypes.String, "test-org-id"),
-		"transit_gateways": tftypes.NewValue(tftypes.List{ElementType: tgwObjType}, nil),
+		"private_space_id":            tftypes.NewValue(tftypes.String, "test-ps-id"),
+		"organization_id":             tftypes.NewValue(tftypes.String, "test-org-id"),
+		"transit_gateway_connections": tftypes.NewValue(tftypes.List{ElementType: tgwObjType}, nil),
 	})
 
 	req := datasource.ReadRequest{Config: tfsdk.Config{Schema: schemaResp.Schema, Raw: configRaw}}
@@ -205,21 +201,21 @@ func TestTransitGatewayDataSource_Read(t *testing.T) {
 		t.Fatalf("State.Get errors: %v", diags.Errors())
 	}
 
-	if len(got.TransitGateways) != 2 {
-		t.Fatalf("Expected 2 transit gateways, got %d", len(got.TransitGateways))
+	if len(got.TransitGatewayConnections) != 2 {
+		t.Fatalf("Expected 2 transit gateway connections, got %d", len(got.TransitGatewayConnections))
 	}
-	if got.TransitGateways[0].Name.ValueString() != "prod-tgw" {
-		t.Errorf("Expected first TGW name 'prod-tgw', got '%s'", got.TransitGateways[0].Name.ValueString())
+	if got.TransitGatewayConnections[0].Name.ValueString() != "prod-tgw" {
+		t.Errorf("Expected first TGW name 'prod-tgw', got '%s'", got.TransitGatewayConnections[0].Name.ValueString())
 	}
-	if got.TransitGateways[0].Status.ValueString() != "available" {
-		t.Errorf("Expected first TGW status 'available', got '%s'", got.TransitGateways[0].Status.ValueString())
+	if got.TransitGatewayConnections[0].Status.ValueString() != "available" {
+		t.Errorf("Expected first TGW status 'available', got '%s'", got.TransitGatewayConnections[0].Status.ValueString())
 	}
 	// First TGW is "available" so routes should be fetched
-	if len(got.TransitGateways[0].Routes) != 2 {
-		t.Errorf("Expected 2 routes for available TGW, got %d", len(got.TransitGateways[0].Routes))
+	if len(got.TransitGatewayConnections[0].Routes) != 2 {
+		t.Errorf("Expected 2 routes for available TGW, got %d", len(got.TransitGatewayConnections[0].Routes))
 	}
 	// Second TGW is "pending" so routes should be empty
-	if len(got.TransitGateways[1].Routes) != 0 {
-		t.Errorf("Expected 0 routes for pending TGW, got %d", len(got.TransitGateways[1].Routes))
+	if len(got.TransitGatewayConnections[1].Routes) != 0 {
+		t.Errorf("Expected 0 routes for pending TGW, got %d", len(got.TransitGatewayConnections[1].Routes))
 	}
 }

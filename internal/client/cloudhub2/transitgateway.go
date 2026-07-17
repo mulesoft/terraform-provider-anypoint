@@ -63,8 +63,29 @@ type CreateTransitGatewayRequest struct {
 	Routes               []string `json:"routes"`               // Initial CIDR routes (at least one required)
 }
 
-// UpdateTransitGatewayRequest represents the request to update a transit gateway.
-// Only the name field can be updated.
+// UpdateTransitGatewayRequest represents the body of the transit gateway rename
+// PATCH. The body is name-only: {"name":"..."}.
+//
+// IMPORTANT — endpoint/spec divergence, triangulated live 2026-07-17 against the
+// Anypoint UI (browser DevTools), the RAML, and observed server behaviour.
+// There are TWO transit-gateway PATCH endpoints in the CloudHub 2.0 API:
+//
+//   - PRIVATE-SPACE-scoped: .../organizations/{orgId}/privatespaces/{psId}/transitgateways/{tgwId}
+//     The RAML documents this one (body PrivateSpaceTransitGatewayPatch = {name}),
+//     but the LIVE handler is broken for renames: a name-only body is rejected
+//     with 400 "Routes cannot be null", and a name+routes body returns 200 yet
+//     SILENTLY IGNORES the name (only the routes field takes effect). This dead
+//     end is what the earlier routes-in-body workaround was chasing.
+//
+//   - ORG-scoped: .../organizations/{orgId}/transitgateways/{tgwId}
+//     The RAML does NOT document a PATCH here, but this is the endpoint the
+//     Anypoint UI actually uses to rename: it accepts a name-only body
+//     {"name":"..."} and applies the rename (200 OK, verified in DevTools).
+//
+// UpdateTransitGateway therefore targets the ORG-scoped endpoint with a name-only
+// body, mirroring the UI. Routes are NOT sent here; the dedicated private-space
+// {tgwId}/routes sub-resource is the authoritative route setter (see
+// UpdateTransitGatewayRoutes).
 type UpdateTransitGatewayRequest struct {
 	Name string `json:"name"`
 }
@@ -116,6 +137,27 @@ func (c *TransitGatewayClient) CreateTransitGateway(ctx context.Context, orgID, 
 	return nil, fmt.Errorf("transit gateway created but could not be found in list")
 }
 
+// ensureTransitGatewayDecoded guards against a silent zero-value decode. A
+// successful single-object GET/PATCH always carries the transit gateway's id
+// (the request is by-id). An empty id after a 200 therefore means the response
+// shape did not match our struct — e.g. an object envelope wrapping the gateway,
+// exactly the divergence the private-spaces LIST endpoint turned out to have.
+// Surface a loud, diagnosable error instead of persisting an all-empty struct.
+func ensureTransitGatewayDecoded(tgw *TransitGateway, body []byte) error {
+	if tgw.ID != "" {
+		return nil
+	}
+	var envelope map[string]json.RawMessage
+	if err := json.Unmarshal(body, &envelope); err == nil && len(envelope) > 0 {
+		keys := make([]string, 0, len(envelope))
+		for k := range envelope {
+			keys = append(keys, k)
+		}
+		return fmt.Errorf("decoded transit gateway has empty id; unexpected response shape (object keys %v)", keys)
+	}
+	return fmt.Errorf("decoded transit gateway has empty id; empty or unexpected response body")
+}
+
 // GetTransitGateway retrieves a specific transit gateway by its ID.
 // API: GET /runtimefabric/api/organizations/{orgId}/privatespaces/{psId}/transitgateways/{tgwId}
 func (c *TransitGatewayClient) GetTransitGateway(ctx context.Context, orgID, privateSpaceID, transitGatewayID string) (*TransitGateway, error) {
@@ -143,18 +185,33 @@ func (c *TransitGatewayClient) GetTransitGateway(ctx context.Context, orgID, pri
 		return nil, fmt.Errorf("failed to get transit gateway with status %d: %s", resp.StatusCode, string(body))
 	}
 
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
 	var tgw TransitGateway
-	if err := json.NewDecoder(resp.Body).Decode(&tgw); err != nil {
+	if err := json.Unmarshal(body, &tgw); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+	if err := ensureTransitGatewayDecoded(&tgw, body); err != nil {
+		return nil, err
 	}
 
 	return &tgw, nil
 }
 
-// UpdateTransitGateway updates a transit gateway (only name can be changed).
-// API: PATCH /runtimefabric/api/organizations/{orgId}/privatespaces/{psId}/transitgateways/{tgwId}
+// UpdateTransitGateway renames a transit gateway connection. It PATCHes the
+// ORG-scoped endpoint with a name-only body, mirroring the Anypoint UI — the
+// private-space-scoped PATCH the RAML documents silently ignores the name (see
+// UpdateTransitGatewayRequest for the full divergence). Routes are managed
+// separately via UpdateTransitGatewayRoutes; this call does not touch them.
+// Note: privateSpaceID is accepted for signature symmetry with the other
+// methods but is intentionally unused — the org-scoped URL has no ps segment.
+// API: PATCH /runtimefabric/api/organizations/{orgId}/transitgateways/{tgwId}
 func (c *TransitGatewayClient) UpdateTransitGateway(ctx context.Context, orgID, privateSpaceID, transitGatewayID string, req *UpdateTransitGatewayRequest) (*TransitGateway, error) {
-	url := fmt.Sprintf("%s/runtimefabric/api/organizations/%s/privatespaces/%s/transitgateways/%s", c.BaseURL, orgID, privateSpaceID, transitGatewayID)
+	_ = privateSpaceID // org-scoped endpoint takes no private-space segment
+	url := fmt.Sprintf("%s/runtimefabric/api/organizations/%s/transitgateways/%s", c.BaseURL, orgID, transitGatewayID)
 
 	jsonData, err := json.Marshal(req)
 	if err != nil {
@@ -184,11 +241,53 @@ func (c *TransitGatewayClient) UpdateTransitGateway(ctx context.Context, orgID, 
 		return nil, fmt.Errorf("failed to update transit gateway with status %d: %s", resp.StatusCode, string(body))
 	}
 
+	// Response-shape divergence confirmed live 2026-07-17 (browser DevTools): the
+	// org-scoped rename PATCH returns 200 with a JSON ARRAY (the org's TGW list),
+	// not the single object one might expect. A plain json.Decode(&struct) errors
+	// with "cannot unmarshal array into Go value of type ...TransitGateway" AFTER
+	// a successful 200, which used to fail Update even though the server had
+	// already applied the rename. Decode defensively: accept either shape. The
+	// resource's Update discards this value and re-GETs for authoritative state,
+	// so we deliberately do NOT apply the empty-id guard here — a minimal/empty/
+	// array ack must not fail Update.
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+	return decodeTransitGatewayObjectOrArray(body, transitGatewayID)
+}
+
+// decodeTransitGatewayObjectOrArray decodes a transit gateway from a response
+// body that may be EITHER a single object (per the RAML spec) OR a JSON array
+// (what the live connection PATCH actually returns). For the array shape it
+// returns the element whose id matches wantID, falling back to the first
+// element. An empty/whitespace body yields an empty gateway (some acks carry no
+// body). It never errors on shape alone — callers needing authoritative state
+// re-GET the gateway.
+func decodeTransitGatewayObjectOrArray(body []byte, wantID string) (*TransitGateway, error) {
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 {
+		return &TransitGateway{}, nil
+	}
+	if trimmed[0] == '[' {
+		var tgws []TransitGateway
+		if err := json.Unmarshal(trimmed, &tgws); err != nil {
+			return nil, fmt.Errorf("failed to decode response array: %w", err)
+		}
+		for i := range tgws {
+			if tgws[i].ID == wantID {
+				return &tgws[i], nil
+			}
+		}
+		if len(tgws) > 0 {
+			return &tgws[0], nil
+		}
+		return &TransitGateway{}, nil
+	}
 	var tgw TransitGateway
-	if err := json.NewDecoder(resp.Body).Decode(&tgw); err != nil {
+	if err := json.Unmarshal(trimmed, &tgw); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
-
 	return &tgw, nil
 }
 
@@ -254,43 +353,48 @@ func (c *TransitGatewayClient) ListTransitGateways(ctx context.Context, orgID, p
 }
 
 // GetTransitGatewayRoutes retrieves the routes for a transit gateway.
-// API: GET /runtimefabric/api/organizations/{orgId}/privatespaces/{psId}/transitgateways/{tgwId}/routes
+// Routes are embedded in the TGW's status.routes[] field — there's no separate /routes endpoint.
+// API: GET /runtimefabric/api/organizations/{orgId}/privatespaces/{psId}/transitgateways/{tgwId}
 func (c *TransitGatewayClient) GetTransitGatewayRoutes(ctx context.Context, orgID, privateSpaceID, transitGatewayID string) ([]string, error) {
-	url := fmt.Sprintf("%s/runtimefabric/api/organizations/%s/privatespaces/%s/transitgateways/%s/routes", c.BaseURL, orgID, privateSpaceID, transitGatewayID)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	tgw, err := c.GetTransitGateway(ctx, orgID, privateSpaceID, transitGatewayID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, err
 	}
 
-	req.Header.Set("Authorization", "Bearer "+c.Token)
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to get transit gateway routes with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var routes []string
-	if err := json.NewDecoder(resp.Body).Decode(&routes); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return routes, nil
+	return tgw.Status.Routes, nil
 }
 
-// UpdateTransitGatewayRoutes replaces the routes for a transit gateway.
-// Routes are managed as a full replacement (PATCH with the complete list).
-// API: PATCH /runtimefabric/api/organizations/{orgId}/privatespaces/{psId}/transitgateways/{tgwId}/routes
-func (c *TransitGatewayClient) UpdateTransitGatewayRoutes(ctx context.Context, orgID, privateSpaceID, transitGatewayID string, routes []string) error {
-	url := fmt.Sprintf("%s/runtimefabric/api/organizations/%s/privatespaces/%s/transitgateways/%s/routes", c.BaseURL, orgID, privateSpaceID, transitGatewayID)
+// tgwRoutesUpdateBody is the body of a routes update. Routes are a field on the
+// private-space CONNECTION object, so the update PATCHes the connection itself
+// with {"name":...,"routes":[...]}. The live handler requires a non-null routes
+// array (400 "Routes cannot be null" otherwise) and treats name as required
+// (per the RAML PrivateSpaceTransitGatewayPatch); we echo the current/desired
+// name to satisfy that. This endpoint IGNORES name for updates — renames must go
+// through UpdateTransitGateway (org-scoped) — so sending it here is harmless.
+type tgwRoutesUpdateBody struct {
+	Name   string   `json:"name"`
+	Routes []string `json:"routes"`
+}
 
-	jsonData, err := json.Marshal(routes)
+// UpdateTransitGatewayRoutes replaces the routes on a transit gateway connection.
+//
+// IMPORTANT — endpoint divergence confirmed live 2026-07-17 (read-only probes):
+// the RAML documents a dedicated {tgwId}/routes sub-resource, but that path
+// returns 404 at BOTH the private-space and org scopes — it does not exist.
+// Routes are instead a field on the private-space connection object and are
+// updated by PATCHing the connection (.../{tgwId}) with a {name, routes} body.
+// A nil slice is normalised to [] so the body can never contain "routes":null.
+// API: PATCH /runtimefabric/api/organizations/{orgId}/privatespaces/{psId}/transitgateways/{tgwId}
+// Body: {"name":"<name>","routes":["cidr1","cidr2",...]}
+func (c *TransitGatewayClient) UpdateTransitGatewayRoutes(ctx context.Context, orgID, privateSpaceID, transitGatewayID, name string, routes []string) error {
+	url := fmt.Sprintf("%s/runtimefabric/api/organizations/%s/privatespaces/%s/transitgateways/%s", c.BaseURL, orgID, privateSpaceID, transitGatewayID)
+
+	// A nil slice must marshal to "[]" (clear all routes), never "null" — the
+	// live handler rejects "routes":null with 400 "Routes cannot be null".
+	if routes == nil {
+		routes = []string{}
+	}
+	jsonData, err := json.Marshal(tgwRoutesUpdateBody{Name: name, Routes: routes})
 	if err != nil {
 		return fmt.Errorf("failed to marshal routes request: %w", err)
 	}

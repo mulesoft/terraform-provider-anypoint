@@ -508,6 +508,157 @@ func TestPrivateSpacesClient_DeletePrivateSpace(t *testing.T) {
 	}
 }
 
+func TestPrivateSpacesClient_ListPrivateSpaces(t *testing.T) {
+	const listPath = "/runtimefabric/api/organizations/test-org-id/privatespaces"
+
+	tests := []struct {
+		name        string
+		mockHandler func(w http.ResponseWriter, r *http.Request)
+		wantErr     bool
+		errContains string
+		wantCount   int
+		wantFirstID string
+	}{
+		{
+			name: "successful list decodes object envelope under content",
+			mockHandler: func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertHTTPRequest(t, r, "GET", listPath)
+				// The live API returns the collection as an OBJECT ENVELOPE
+				// wrapping the array (this is what the terraform plan hit; a
+				// bare-array assumption failed with "cannot unmarshal object
+				// into Go value of type []PrivateSpace").
+				testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+					"content": []PrivateSpace{
+						{ID: "ps-1", Name: "space-one", Status: "ACTIVE", Network: NetworkConfig{Region: "us-east-1"}, OrganizationID: "test-org-id", RootOrganizationID: "root-org"},
+						{ID: "ps-2", Name: "space-two", Status: "CREATING", Network: NetworkConfig{Region: "us-west-2"}, OrganizationID: "test-org-id", RootOrganizationID: "root-org"},
+					},
+				})
+			},
+			wantCount:   2,
+			wantFirstID: "ps-1",
+		},
+		{
+			name: "successful list still tolerates a bare array",
+			mockHandler: func(w http.ResponseWriter, r *http.Request) {
+				// Forward-compatibility: a bare array must keep decoding too.
+				testutil.JSONResponse(w, http.StatusOK, []PrivateSpace{
+					{ID: "ps-9", Name: "space-nine", Status: "ACTIVE", Network: NetworkConfig{Region: "eu-west-1"}, OrganizationID: "test-org-id", RootOrganizationID: "root-org"},
+				})
+			},
+			wantCount:   1,
+			wantFirstID: "ps-9",
+		},
+		{
+			name: "empty envelope list",
+			mockHandler: func(w http.ResponseWriter, r *http.Request) {
+				testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+					"content": []PrivateSpace{},
+				})
+			},
+			wantCount: 0,
+		},
+		{
+			name: "empty bare array",
+			mockHandler: func(w http.ResponseWriter, r *http.Request) {
+				testutil.JSONResponse(w, http.StatusOK, []PrivateSpace{})
+			},
+			wantCount: 0,
+		},
+		{
+			name: "envelope with unknown single array key",
+			mockHandler: func(w http.ResponseWriter, r *http.Request) {
+				// Not one of the well-known keys, but the only array field, so
+				// the decoder should still find it unambiguously.
+				testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+					"someUnexpectedKey": []PrivateSpace{
+						{ID: "ps-x", Name: "space-x", Status: "ACTIVE"},
+					},
+					"total": 1,
+				})
+			},
+			wantCount:   1,
+			wantFirstID: "ps-x",
+		},
+		{
+			name: "ambiguous envelope with multiple array fields errors",
+			mockHandler: func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{"foo": [{"id":"a"}], "bar": [{"id":"b"}]}`))
+			},
+			wantErr:     true,
+			errContains: "ambiguous list envelope",
+		},
+		{
+			name: "object with no array field errors",
+			mockHandler: func(w http.ResponseWriter, r *http.Request) {
+				testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+					"message": "no spaces",
+					"total":   0,
+				})
+			},
+			wantErr:     true,
+			errContains: "no private space array found",
+		},
+		{
+			name: "server error",
+			mockHandler: func(w http.ResponseWriter, r *http.Request) {
+				testutil.ErrorResponse(w, http.StatusInternalServerError, "boom")
+			},
+			wantErr:     true,
+			errContains: "failed to list private spaces with status 500",
+		},
+		{
+			name: "malformed response",
+			mockHandler: func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{"invalid": json}`))
+			},
+			wantErr:     true,
+			errContains: "failed to decode response",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+				listPath: tt.mockHandler,
+			}
+			server := testutil.MockHTTPServer(t, handlers)
+
+			c := &PrivateSpacesClient{
+				AnypointClient: &client.AnypointClient{
+					BaseURL:    server.URL,
+					Token:      "mock-token",
+					HTTPClient: &http.Client{},
+				},
+			}
+
+			spaces, err := c.ListPrivateSpaces(context.Background(), "test-org-id")
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("ListPrivateSpaces() expected error, got nil")
+				}
+				if !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("ListPrivateSpaces() error = %v, want containing %q", err, tt.errContains)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ListPrivateSpaces() unexpected error = %v", err)
+			}
+			if len(spaces) != tt.wantCount {
+				t.Errorf("ListPrivateSpaces() count = %d, want %d", len(spaces), tt.wantCount)
+			}
+			if tt.wantFirstID != "" && (len(spaces) == 0 || spaces[0].ID != tt.wantFirstID) {
+				t.Errorf("ListPrivateSpaces() first ID = %v, want %v", spaces, tt.wantFirstID)
+			}
+		})
+	}
+}
+
 // Test data structures marshaling/unmarshaling
 func TestPrivateSpace_JSONSerialization(t *testing.T) {
 	ps := &PrivateSpace{
