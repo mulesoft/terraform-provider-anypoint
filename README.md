@@ -264,6 +264,14 @@ In addition, each known policy type has a dedicated typed resource of the form `
 | `anypoint_agent_instance` | Deploy and manage agent instances |
 | `anypoint_mcp_server` | Deploy and manage MCP servers |
 
+###  Exchange Resources
+
+| Resource | Description |
+|----------|-------------|
+| `anypoint_exchange_asset` | Publish and manage Exchange assets (metadata, spec files, docs pages, categories, custom fields, and external instances) |
+
+**Example:** [Exchange Examples](./examples/exchange)
+
 ###  Secrets Management Resources
 
 | Resource | Description |
@@ -317,6 +325,12 @@ The provider includes data sources for reading existing resources:
 |-------------|-------------|
 | `anypoint_agent_instances` | List agent instances |
 | `anypoint_mcp_servers` | List MCP servers |
+
+### Exchange
+| Data Source | Description |
+|-------------|-------------|
+| `anypoint_exchange_asset` | Read a single Exchange asset version by its GAV coordinates |
+| `anypoint_exchange_assets` | List Exchange assets in an organization, filtered by type and search |
 
 ### Secrets Management
 | Data Source | Description |

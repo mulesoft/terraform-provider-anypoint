@@ -162,12 +162,25 @@ type CreateAssetRequest struct {
 	FilePath   string // local file path to upload
 	Classifier string // raml, oas, custom, wsdl, etc.
 
+	// ExtraFiles holds ADDITIONAL files beyond the primary FilePath, uploaded in
+	// the same multipart request. Required by multi-file types such as "policy",
+	// which needs (schema.json + metadata.yaml) or (mule-policy.jar +
+	// policy-definition.yaml). Empty for all single-file / fileless types.
+	ExtraFiles []AssetFileUpload
+
 	// Optional metadata
 	APIVersion string // properties.apiVersion
 	MainFile   string // properties.mainFile
 
 	// Optional keywords
 	Keywords string // comma-separated
+}
+
+// AssetFileUpload is one additional local file to attach to a publish request.
+// Each becomes its own `files.{classifier}.{ext}` multipart part.
+type AssetFileUpload struct {
+	FilePath   string // local file path to upload
+	Classifier string // e.g. metadata, policy-definition
 }
 
 // UpdateAssetRequest represents the request to update asset metadata.
@@ -301,8 +314,14 @@ func (c *AssetClient) DeleteAsset(ctx context.Context, groupID, assetID string, 
 	}
 
 	req.Header.Set("Authorization", "Bearer "+c.Token)
+	// MuleSoft Exchange expects the "x-delete-type" header (NOT "DeleteType").
+	// hard-delete permanently removes the asset and frees the groupId/assetId/version
+	// for reuse; soft-delete leaves a tombstone that blocks recreation at the same GAV.
+	// See: Exchange Experience API "Hard vs Soft Delete" docs.
 	if hardDelete {
-		req.Header.Set("DeleteType", "hard-delete")
+		req.Header.Set("x-delete-type", "hard-delete")
+	} else {
+		req.Header.Set("x-delete-type", "soft-delete")
 	}
 
 	resp, err := c.HTTPClient.Do(req)
@@ -334,8 +353,14 @@ func (c *AssetClient) DeleteAssetVersion(ctx context.Context, groupID, assetID, 
 	}
 
 	req.Header.Set("Authorization", "Bearer "+c.Token)
+	// MuleSoft Exchange expects the "x-delete-type" header (NOT "DeleteType").
+	// hard-delete permanently removes the version and frees the groupId/assetId/version
+	// for reuse; soft-delete leaves a tombstone that blocks recreation at the same GAV.
+	// See: Exchange Experience API "Hard vs Soft Delete" docs.
 	if hardDelete {
-		req.Header.Set("DeleteType", "hard-delete")
+		req.Header.Set("x-delete-type", "hard-delete")
+	} else {
+		req.Header.Set("x-delete-type", "soft-delete")
 	}
 
 	resp, err := c.HTTPClient.Do(req)
@@ -375,7 +400,12 @@ func (c *AssetClient) ListAssets(ctx context.Context, req *ListAssetsRequest) ([
 		url += "&search=" + req.Search
 	}
 	if req.Type != "" {
-		url += "&type=" + req.Type
+		// Exchange Experience API expects the PLURAL param name `types` for
+		// type filtering (verified against dev-portal.mulesoft.com Exchange
+		// Experience API spec). The singular `type` is silently ignored by the
+		// server, so the filter was a no-op (returned all types). Single value
+		// is accepted; the server treats it as a one-element type filter.
+		url += "&types=" + req.Type
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
@@ -603,8 +633,11 @@ func (c *AssetClient) CreateDraftPage(ctx context.Context, groupID, assetID, ver
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusConflict {
-		// Page already exists — not an error for our use case
-		return nil, fmt.Errorf("page '%s' already exists", pageName)
+		// Page already exists (e.g. Exchange auto-provisions a "home" page on every
+		// asset version). Wrap the shared ErrConflict sentinel so callers can detect
+		// this with client.IsConflict and adopt-and-upsert the existing page instead
+		// of failing the whole apply. Message stays "page '<name>' already exists".
+		return nil, client.NewConflictError(fmt.Sprintf("page '%s'", pageName))
 	}
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
@@ -800,6 +833,18 @@ func (c *AssetClient) CreateExternalInstance(ctx context.Context, groupID, asset
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusConflict {
+		// An instance with this name already exists on the version group. This happens
+		// when a prior asset delete orphaned the instance (external instances are not
+		// cascade-deleted with the asset version). Surface a typed error so callers can
+		// treat create as idempotent (adopt the existing instance) instead of failing.
+		respBody, _ := io.ReadAll(resp.Body)
+		return nil, &client.ConflictError{
+			StatusCode: http.StatusConflict,
+			Message:    fmt.Sprintf("external instance %q already exists: %s", req.Name, string(respBody)),
+		}
+	}
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
@@ -1071,35 +1116,22 @@ func buildAssetMultipart(req *CreateAssetRequest) (*bytes.Buffer, string, error)
 		}
 	}
 
-	// File upload (optional — some asset types like "custom" without files are valid)
+	// File upload (optional — some asset types like "custom" without files are valid).
+	// The primary file comes from FilePath/Classifier; multi-file types (e.g. policy)
+	// attach further files via ExtraFiles. Each file is written as its own
+	// `files.{classifier}.{ext}` part in the SAME multipart request.
 	if req.FilePath != "" {
-		fileContent, err := os.ReadFile(req.FilePath)
-		if err != nil {
-			return nil, "", fmt.Errorf("failed to read file %s: %w", req.FilePath, err)
+		if err := writeAssetFilePart(writer, req.FilePath, req.Classifier); err != nil {
+			return nil, "", err
 		}
+	}
 
-		fileName := filepath.Base(req.FilePath)
-		classifier := req.Classifier
-		if classifier == "" {
-			classifier = "custom"
+	for _, f := range req.ExtraFiles {
+		if f.FilePath == "" {
+			continue
 		}
-
-		// The form field name follows the pattern: files.{classifier}.{packaging}
-		// where packaging is the file extension (e.g. raml, jar, json, zip, yaml)
-		ext := filepath.Ext(fileName)
-		if ext != "" {
-			ext = ext[1:] // remove leading dot
-		} else {
-			ext = classifier // fallback to classifier if no extension
-		}
-		fieldName := fmt.Sprintf("files.%s.%s", classifier, ext)
-		part, err := writer.CreateFormFile(fieldName, fileName)
-		if err != nil {
-			return nil, "", fmt.Errorf("failed to create form file: %w", err)
-		}
-
-		if _, err := part.Write(fileContent); err != nil {
-			return nil, "", fmt.Errorf("failed to write file content: %w", err)
+		if err := writeAssetFilePart(writer, f.FilePath, f.Classifier); err != nil {
+			return nil, "", err
 		}
 	}
 
@@ -1108,4 +1140,39 @@ func buildAssetMultipart(req *CreateAssetRequest) (*bytes.Buffer, string, error)
 	}
 
 	return &body, writer.FormDataContentType(), nil
+}
+
+// writeAssetFilePart writes one local file to the multipart writer as a
+// `files.{classifier}.{ext}` part, matching the Exchange publish contract.
+// Shared by the primary file and every ExtraFiles entry so field-name logic is
+// identical for all files in a multi-file publish.
+func writeAssetFilePart(writer *multipart.Writer, filePath, classifier string) error {
+	fileContent, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to read file %s: %w", filePath, err)
+	}
+
+	fileName := filepath.Base(filePath)
+	if classifier == "" {
+		classifier = "custom"
+	}
+
+	// The form field name follows the pattern: files.{classifier}.{packaging}
+	// where packaging is the file extension (e.g. raml, jar, json, zip, yaml)
+	ext := filepath.Ext(fileName)
+	if ext != "" {
+		ext = ext[1:] // remove leading dot
+	} else {
+		ext = classifier // fallback to classifier if no extension
+	}
+	fieldName := fmt.Sprintf("files.%s.%s", classifier, ext)
+	part, err := writer.CreateFormFile(fieldName, fileName)
+	if err != nil {
+		return fmt.Errorf("failed to create form file: %w", err)
+	}
+
+	if _, err := part.Write(fileContent); err != nil {
+		return fmt.Errorf("failed to write file content: %w", err)
+	}
+	return nil
 }

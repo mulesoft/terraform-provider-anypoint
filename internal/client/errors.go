@@ -41,3 +41,38 @@ func IsNotFound(err error) bool {
 	}
 	return errors.Is(err, ErrNotFound)
 }
+
+// ErrConflict is the sentinel that all 409/already-exists errors wrap.
+var ErrConflict = errors.New("resource already exists")
+
+// ConflictError carries HTTP status and a human-readable message while
+// satisfying errors.Is(err, ErrConflict).
+type ConflictError struct {
+	StatusCode int
+	Message    string
+}
+
+func (e *ConflictError) Error() string {
+	return e.Message
+}
+
+func (e *ConflictError) Is(target error) bool {
+	return target == ErrConflict
+}
+
+// NewConflictError constructs a ConflictError for the given resource description.
+func NewConflictError(resourceDesc string) *ConflictError {
+	return &ConflictError{
+		StatusCode: http.StatusConflict,
+		Message:    fmt.Sprintf("%s already exists", resourceDesc),
+	}
+}
+
+// IsConflict returns true when err (or any error in its chain) is a
+// ConflictError or the ErrConflict sentinel.
+func IsConflict(err error) bool {
+	if err == nil {
+		return false
+	}
+	return errors.Is(err, ErrConflict)
+}
