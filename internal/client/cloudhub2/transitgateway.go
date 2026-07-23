@@ -352,18 +352,6 @@ func (c *TransitGatewayClient) ListTransitGateways(ctx context.Context, orgID, p
 	return tgws, nil
 }
 
-// GetTransitGatewayRoutes retrieves the routes for a transit gateway.
-// Routes are embedded in the TGW's status.routes[] field — there's no separate /routes endpoint.
-// API: GET /runtimefabric/api/organizations/{orgId}/privatespaces/{psId}/transitgateways/{tgwId}
-func (c *TransitGatewayClient) GetTransitGatewayRoutes(ctx context.Context, orgID, privateSpaceID, transitGatewayID string) ([]string, error) {
-	tgw, err := c.GetTransitGateway(ctx, orgID, privateSpaceID, transitGatewayID)
-	if err != nil {
-		return nil, err
-	}
-
-	return tgw.Status.Routes, nil
-}
-
 // tgwRoutesUpdateBody is the body of a routes update. Routes are a field on the
 // private-space CONNECTION object, so the update PATCHes the connection itself
 // with {"name":...,"routes":[...]}. The live handler requires a non-null routes
