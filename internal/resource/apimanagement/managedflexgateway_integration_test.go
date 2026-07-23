@@ -171,7 +171,7 @@ func TestIntegrationManagedOmniGatewayResource_InterfaceCompliance(t *testing.T)
 		}
 	}
 
-	computedAttrs := []string{"id", "organization_id", "status"}
+	computedAttrs := []string{"id", "organization_id", "status", "target_type"}
 	for _, attr := range computedAttrs {
 		if _, exists := schemaResp.Schema.Attributes[attr]; !exists {
 			t.Errorf("Schema missing computed attribute: %s", attr)

@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -17,6 +18,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -218,9 +220,24 @@ func (r *AssetResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				},
 			},
 			"status": schema.StringAttribute{
-				Description: "The lifecycle status: published (default) or development.",
-				Optional:    true,
-				Computed:    true,
+				Description: "The lifecycle status of this asset version. One of `development`, " +
+					"`published` (default), or `deprecated`. The value is case-sensitive. " +
+					"Note the API asymmetry (validated at plan time and at apply time): " +
+					"`development` is only accepted when first publishing a version — it CANNOT be " +
+					"set on an existing version (the platform rejects it with HTTP 400), so moving " +
+					"an already-published version back to `development` requires republishing " +
+					"(a new version). `deprecated` can only be set on an existing version, not at " +
+					"initial publish. `published` is valid in both cases.",
+				Optional: true,
+				Computed: true,
+				Validators: []validator.String{
+					// Full valid set = union of the create-path (development, published) and the
+					// update-path (published, deprecated), LIVE-VERIFIED against the platform's own
+					// 400 bodies (2026-07-22). Case-sensitive on purpose: the API does NOT normalize
+					// case ("Published" -> HTTP 400), so catching a typo here at plan time is exactly
+					// what prevents a bad status from reaching a `version`-RequiresReplace apply.
+					stringvalidator.OneOf("development", "published", "deprecated"),
+				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
@@ -333,9 +350,21 @@ func (r *AssetResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				},
 			},
 			"manager": schema.StringAttribute{
-				Description: "Manager for this asset.",
-				Optional:    true,
-				Computed:    true,
+				// READ-ONLY. The Exchange metadata PATCH endpoint does not accept an
+				// arbitrary manager value: LIVE-VERIFIED (2026-07-22) that PATCH
+				// {"manager":"<username>"} returns HTTP 403 Forbidden and
+				// {"manager":"<uuid>"} returns HTTP 400 ("must be equal to one of the
+				// allowed values: ,  ... must match exactly one schema in oneOf"). There
+				// is no supported way to SET the manager through this API from Terraform,
+				// so exposing it as writable only produced apply-time 403/400 failures
+				// that killed the entire apply. It is therefore Computed-only: the value
+				// is surfaced from Exchange (e.g. when set via the UI) but cannot be
+				// managed here. Setting it in configuration is a plan-time error.
+				Description: "The manager of this asset, as reported by Exchange. Read-only: " +
+					"the Exchange API does not permit setting the manager via automation " +
+					"(attempting to do so returns HTTP 403/400), so this attribute cannot be " +
+					"configured — it only reflects a value set elsewhere (e.g. the Exchange UI).",
+				Computed: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
@@ -686,6 +715,76 @@ func (r *AssetResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 		return
 	}
 
+	// Classify the operation ONCE, up front, because both guards below depend on
+	// it and status validation is type-independent (so it must run before the
+	// file-type early-returns):
+	//   - creating  : no prior state.
+	//   - replacing : a RequiresReplace attribute (e.g. version) changed, so the
+	//                  version is destroyed and recreated via the multipart publish.
+	//   - otherwise : an in-place update (PUT /status, PUT /tags, PATCH metadata).
+	// Both create and replace publish through the multipart endpoint; only an
+	// in-place update ever calls PUT /status.
+	creating := req.State.Raw.IsNull()
+	replacing := false
+	var state AssetResourceModel
+	if !creating {
+		resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		replacing = assetReplaceTriggered(&state, &plan)
+	}
+
+	// --- #67: keyed UseStateForUnknown for computed children of CONFIGURED lists. ---
+	// pages (page_path) and instances (instance_id, is_public) are Optional+Computed
+	// nested lists. The list-level UseStateForUnknown only fires when the WHOLE list is
+	// unknown; when the user CONFIGURES the list, the list is known but each element's
+	// computed child is unknown. That renders "page_path = (known after apply)" churn on
+	// every unrelated in-place update AND trips the Update-path !plan.X.Equal(state.X)
+	// sync gate (an unknown child never equals a concrete one), forcing a needless
+	// re-sync. Fill each configured element's UNKNOWN computed children from the prior
+	// state element MATCHED BY KEY (page_name / instance name) — the keyed generalization
+	// of UseStateForUnknown. Done ONLY for an in-place update: on create/replace a new
+	// version's children are genuinely unknown, and a positional copy of the old version's
+	// values would be wrong (and crash with "inconsistent result after apply"). Keyed (not
+	// positional) so reorder/insert/delete is handled correctly; only UNKNOWN plan children
+	// are filled, so a user-set is_public is preserved; a new element with no keyed match
+	// keeps its unknown child (correctly rendered as "known after apply").
+	if !creating && !replacing {
+		r.fillComputedChildrenFromState(ctx, &state, &plan, resp)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
+	// --- Guard #1: `development` cannot be set on an EXISTING version. ---
+	// The multipart CREATE endpoint accepts {development, published}; the PUT
+	// /status UPDATE endpoint accepts only {published, deprecated}. Both facts are
+	// LIVE-VERIFIED against the platform's own 400 bodies (2026-07-22):
+	//   PUT /status {"status":"development"} -> HTTP 400
+	//     "must be equal to one of the allowed values: published, deprecated"
+	// So moving an already-published version's status TO `development` in place is
+	// impossible; the only way to get a `development` version is create/replace
+	// (both go through multipart). Flag it at plan time — before apply issues the
+	// PUT /status and fails with a raw 400 — with an actionable message. The plan
+	// falls through so the file_path guard can also report if applicable.
+	if !creating && !replacing &&
+		!plan.Status.IsNull() && !plan.Status.IsUnknown() &&
+		plan.Status.ValueString() == "development" &&
+		!plan.Status.Equal(state.Status) {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("status"),
+			"Cannot set status to \"development\" on an existing asset version",
+			"The Exchange status endpoint only accepts \"published\" or \"deprecated\" for an "+
+				"existing version; \"development\" is valid only when first publishing a version. "+
+				"The platform rejects an in-place change to \"development\" with HTTP 400.\n\n"+
+				"To have a version in the development state, publish a NEW version with "+
+				"status = \"development\" (change the version attribute, which forces replacement) "+
+				"rather than editing the status of an already-published version in place.",
+		)
+	}
+
+	// --- Guard #2: file-backed types need a file on create/replace. ---
 	// If the type is not yet known (e.g. it references another resource that has
 	// not been created), we cannot classify it — skip rather than risk a false
 	// positive. The apply-time server error remains as the backstop in that case.
@@ -705,16 +804,6 @@ func (r *AssetResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 	// Exchange will (re)upload the spec — i.e. on CREATE or on a REPLACE. On an
 	// in-place update the asset already exists with its file, so file_path being
 	// null is expected (this is the post-import steady state) and must not error.
-	creating := req.State.Raw.IsNull()
-	replacing := false
-	if !creating {
-		var state AssetResourceModel
-		resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-		replacing = assetReplaceTriggered(&state, &plan)
-	}
 	if !creating && !replacing {
 		return // in-place update — file_path legitimately absent
 	}
@@ -739,6 +828,111 @@ func (r *AssetResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 			plan.Type.ValueString(), action,
 		),
 	)
+}
+
+// fillComputedChildrenFromState is the keyed generalization of UseStateForUnknown for
+// the computed CHILDREN of a configured nested list (#67). The list-level
+// UseStateForUnknown plan modifiers on pages/instances only fire when the ENTIRE list is
+// unknown; once the user configures the list, the list is a known value but each
+// element's computed child (page_path; instance_id / is_public) is unknown, which both
+// renders "(known after apply)" churn on unrelated in-place updates and trips the
+// Update-path !plan.X.Equal(state.X) sync gate into a pointless re-sync.
+//
+// For each configured plan element whose computed child is UNKNOWN, copy the prior-state
+// value of that child from the state element with the SAME KEY (page_name for pages, name
+// for instances). Matching is by key — never by position — so reordering, inserting, or
+// deleting elements is handled correctly (a positional copy would assign the wrong
+// page_path/instance_id and crash the apply with "inconsistent result after apply"). Only
+// UNKNOWN plan children are touched, so an explicitly configured is_public is preserved;
+// a new element (no keyed match in state) keeps its unknown child, correctly shown as
+// "known after apply". The caller invokes this ONLY for an in-place update (never on
+// create/replace, where a new version's children are genuinely unknown).
+func (r *AssetResource) fillComputedChildrenFromState(ctx context.Context, state, plan *AssetResourceModel, resp *resource.ModifyPlanResponse) {
+	// pages: fill each unknown page_path from the prior state page with the same page_name.
+	if !plan.Pages.IsNull() && !plan.Pages.IsUnknown() &&
+		!state.Pages.IsNull() && !state.Pages.IsUnknown() {
+		var planPages, statePages []PageModel
+		resp.Diagnostics.Append(plan.Pages.ElementsAs(ctx, &planPages, false)...)
+		resp.Diagnostics.Append(state.Pages.ElementsAs(ctx, &statePages, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		statePathByName := make(map[string]types.String, len(statePages))
+		for _, sp := range statePages {
+			if !sp.PageName.IsNull() && !sp.PageName.IsUnknown() {
+				statePathByName[sp.PageName.ValueString()] = sp.PagePath
+			}
+		}
+		pagesChanged := false
+		for i := range planPages {
+			if !planPages[i].PagePath.IsUnknown() ||
+				planPages[i].PageName.IsNull() || planPages[i].PageName.IsUnknown() {
+				continue
+			}
+			if prior, ok := statePathByName[planPages[i].PageName.ValueString()]; ok {
+				planPages[i].PagePath = prior
+				pagesChanged = true
+			}
+		}
+		if pagesChanged {
+			newList, diags := types.ListValueFrom(ctx, pageObjectType(), planPages)
+			resp.Diagnostics.Append(diags...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+			resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("pages"), newList)...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+		}
+	}
+
+	// instances: fill each unknown instance_id / is_public from the prior state instance
+	// with the same name.
+	if !plan.Instances.IsNull() && !plan.Instances.IsUnknown() &&
+		!state.Instances.IsNull() && !state.Instances.IsUnknown() {
+		var planInstances, stateInstances []InstanceModel
+		resp.Diagnostics.Append(plan.Instances.ElementsAs(ctx, &planInstances, false)...)
+		resp.Diagnostics.Append(state.Instances.ElementsAs(ctx, &stateInstances, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		stateByName := make(map[string]InstanceModel, len(stateInstances))
+		for _, si := range stateInstances {
+			if !si.Name.IsNull() && !si.Name.IsUnknown() {
+				stateByName[si.Name.ValueString()] = si
+			}
+		}
+		instancesChanged := false
+		for i := range planInstances {
+			if planInstances[i].Name.IsNull() || planInstances[i].Name.IsUnknown() {
+				continue
+			}
+			prior, ok := stateByName[planInstances[i].Name.ValueString()]
+			if !ok {
+				continue
+			}
+			if planInstances[i].InstanceID.IsUnknown() {
+				planInstances[i].InstanceID = prior.InstanceID
+				instancesChanged = true
+			}
+			if planInstances[i].IsPublic.IsUnknown() {
+				planInstances[i].IsPublic = prior.IsPublic
+				instancesChanged = true
+			}
+		}
+		if instancesChanged {
+			newList, diags := types.ListValueFrom(ctx, instanceObjectType(), planInstances)
+			resp.Diagnostics.Append(diags...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+			resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("instances"), newList)...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+		}
+	}
 }
 
 func (r *AssetResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -815,11 +1009,10 @@ func (r *AssetResource) Create(ctx context.Context, req resource.CreateRequest, 
 		updateReq.ContactEmail = &ce
 		needsPatch = true
 	}
-	if !plan.Manager.IsNull() && !plan.Manager.IsUnknown() && plan.Manager.ValueString() != "" {
-		mgr := plan.Manager.ValueString()
-		updateReq.Manager = &mgr
-		needsPatch = true
-	}
+	// NOTE: `manager` is intentionally NOT written here. The Exchange metadata PATCH
+	// endpoint rejects any manager value (403 for a username, 400 for a UUID —
+	// LIVE-VERIFIED 2026-07-22), so it is a read-only/Computed attribute. See its
+	// schema definition. The value is populated from the API in Read.
 
 	if needsPatch {
 		patchErr := r.client.UpdateAsset(ctx, plan.GroupID.ValueString(), plan.AssetID.ValueString(), updateReq)
@@ -1106,8 +1299,11 @@ func (r *AssetResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
-	// Only mutable fields can be updated: name, description, contactName, contactEmail, manager
-	// We only send fields that actually changed AND have a meaningful value in the plan.
+	// Only these fields are writable via the metadata PATCH: name, description,
+	// contactName, contactEmail. `manager` is NOT writable — the endpoint rejects any
+	// value (403/400, LIVE-VERIFIED 2026-07-22), so it is read-only/Computed and is
+	// never sent here. We only send fields that actually changed AND have a meaningful
+	// value in the plan.
 	updateReq := &exchange.UpdateAssetRequest{}
 	hasChanges := false
 
@@ -1130,13 +1326,6 @@ func (r *AssetResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		ce := plan.ContactEmail.ValueString()
 		updateReq.ContactEmail = &ce
 		hasChanges = true
-	}
-	if !plan.Manager.Equal(state.Manager) && !plan.Manager.IsNull() && !plan.Manager.IsUnknown() {
-		mgr := plan.Manager.ValueString()
-		if mgr != "" { // API rejects empty string for manager
-			updateReq.Manager = &mgr
-			hasChanges = true
-		}
 	}
 
 	if hasChanges {
@@ -1926,8 +2115,16 @@ func (r *AssetResource) syncPages(ctx context.Context, groupID, assetID, version
 		}
 	}
 
-	// Create or update pages
-	for name, desired := range desiredByName {
+	// Create or update pages. Iterate the ORDERED desiredPages slice (config order),
+	// NOT the desiredByName map — Exchange fixes portal display order to page CREATION
+	// order (there is no reorder endpoint; verified live), so creating pages in config
+	// order is the only way to control what a customer sees in the Exchange portal.
+	// desiredByName is retained only for O(1) existence lookups above/below.
+	for _, desired := range desiredPages {
+		if desired.PageName.IsNull() || desired.PageName.IsUnknown() {
+			continue
+		}
+		name := desired.PageName.ValueString()
 		content := desired.Content.ValueString()
 
 		if current, exists := currentByName[name]; exists {

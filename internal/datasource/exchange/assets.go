@@ -57,8 +57,11 @@ func (d *AssetsDataSource) Schema(_ context.Context, _ datasource.SchemaRequest,
 				Optional:    true,
 			},
 			"limit": schema.Int64Attribute{
-				Description: "Maximum number of assets to return (default: 20, max: 200).",
-				Optional:    true,
+				Description: "Optional cap on the total number of assets to return. When omitted, " +
+					"ALL matching assets are returned (the data source paginates through every " +
+					"page automatically). When set to a positive value, at most that many assets " +
+					"are returned.",
+				Optional: true,
 			},
 			"assets": schema.ListNestedAttribute{
 				Description: "The list of Exchange assets matching the query.",
@@ -145,21 +148,20 @@ func (d *AssetsDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 		return
 	}
 
-	limit := 20
+	// limit is an OPTIONAL cap on the total number of assets returned. When it is
+	// unset (or <= 0) we fetch EVERY matching asset by paginating to completion —
+	// the correct default for a list data source. When set, we honor it as an
+	// explicit upper bound. A negative value is treated as "no cap" (fetch all).
+	limit := 0 // 0 => fetch all (ListAllAssets walks every page)
 	if !data.Limit.IsNull() && !data.Limit.IsUnknown() {
-		limit = int(data.Limit.ValueInt64())
-		if limit > 200 {
-			limit = 200
-		}
-		if limit < 1 {
-			limit = 1
+		if v := int(data.Limit.ValueInt64()); v > 0 {
+			limit = v
 		}
 	}
 
 	listReq := &exchange.ListAssetsRequest{
 		OrganizationID: data.OrganizationID.ValueString(),
 		Limit:          limit,
-		Offset:         0,
 	}
 
 	if !data.Search.IsNull() && !data.Search.IsUnknown() {
@@ -169,7 +171,10 @@ func (d *AssetsDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 		listReq.Type = data.Type.ValueString()
 	}
 
-	assets, err := d.client.ListAssets(ctx, listReq)
+	// ListAllAssets paginates: without it, an org with more matching assets than a
+	// single Exchange page would be silently truncated (the response is a bare array
+	// with no total, so the truncation is invisible to the caller).
+	assets, err := d.client.ListAllAssets(ctx, listReq)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error listing exchange assets",

@@ -9,7 +9,7 @@ description: |-
 
 Manages a CloudHub 2.0 Managed Omni Gateway instance in Anypoint Platform.
 
--> **Supported gateway type:** This provider currently supports **MuleSoft Managed Omni Gateway** (CloudHub 2.0) only. Self-managed Omni Gateway will be supported in a future release.
+-> **Gateway type:** This resource manages a **MuleSoft Managed Omni Gateway** (CloudHub 2.0), where the platform provisions and runs the gateway for you. For a **self-managed (connected-mode) Flex/Omni Gateway** that you run on your own infrastructure, use [`anypoint_self_managed_gateway`](anypoint_self_managed_gateway.md) instead.
 
 -> **Connected App:** This resource requires a **standard connected app** (client credentials). An admin connected app is not needed. The connected app must have relevant scopes.
 

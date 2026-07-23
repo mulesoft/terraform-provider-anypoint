@@ -372,12 +372,15 @@ func (r *APIInstanceResource) Schema(_ context.Context, _ resource.SchemaRequest
 						},
 					},
 					"type": schema.StringAttribute{
-						Description: "Endpoint protocol type. Valid values: 'http', 'rest', 'raml'.",
-						Optional:    true,
-						Computed:    true,
-						Default:     stringdefault.StaticString("http"),
+						Description: "Endpoint protocol type. Valid values: 'http', 'rest', 'raml', 'wsdl', " +
+							"'graphql', 'grpc', 'websocket'. The value must be compatible with the backing " +
+							"Exchange asset's type — e.g. a 'graphql' Exchange asset requires endpoint type " +
+							"'graphql', and a 'grpc-api' asset requires 'grpc'. Defaults to 'http'.",
+						Optional: true,
+						Computed: true,
+						Default:  stringdefault.StaticString("http"),
 						Validators: []validator.String{
-							stringvalidator.OneOf("http", "rest", "raml"),
+							stringvalidator.OneOf("http", "rest", "raml", "wsdl", "graphql", "grpc", "websocket"),
 						},
 					},
 					"base_path": schema.StringAttribute{

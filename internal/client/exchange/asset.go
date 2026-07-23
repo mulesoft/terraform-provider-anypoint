@@ -37,20 +37,6 @@ func NewAssetClient(config *client.Config) (*AssetClient, error) {
 	}, nil
 }
 
-// NewAssetClientFromUserConfig creates a new Exchange AssetClient using password grant.
-// Deprecated: use NewAssetClient with client_credentials instead.
-func NewAssetClientFromUserConfig(config *client.UserClientConfig) (*AssetClient, error) {
-	userClient, err := client.NewUserAnypointClient(config)
-	if err != nil {
-		return nil, err
-	}
-	return &AssetClient{
-		BaseURL:    userClient.BaseURL,
-		Token:      userClient.Token,
-		HTTPClient: userClient.HTTPClient,
-	}, nil
-}
-
 // --- Domain Models ---
 
 // Asset represents an Exchange asset version (response from GET).
@@ -185,12 +171,19 @@ type AssetFileUpload struct {
 
 // UpdateAssetRequest represents the request to update asset metadata.
 // These are the only mutable fields after publish.
+//
+// NOTE: `manager` is deliberately absent. Although the Exchange asset object HAS a
+// manager field (see Asset.Manager, which we READ), the metadata PATCH endpoint does
+// not accept a manager value: LIVE-VERIFIED (2026-07-22) that PATCH
+// {"manager":"<username>"} returns HTTP 403 and {"manager":"<uuid>"} returns HTTP 400
+// ("must be equal to one of the allowed values: ,  ... must match exactly one schema
+// in oneOf"). There is no supported way to SET it from automation, so it is not a
+// writable field here — exposing it only produced apply-time failures.
 type UpdateAssetRequest struct {
 	Name         *string `json:"name,omitempty"`
 	Description  *string `json:"description,omitempty"`
 	ContactName  *string `json:"contactName,omitempty"`
 	ContactEmail *string `json:"contactEmail,omitempty"`
-	Manager      *string `json:"manager,omitempty"`
 }
 
 // --- CRUD Operations ---
@@ -432,6 +425,86 @@ func (c *AssetClient) ListAssets(ctx context.Context, req *ListAssetsRequest) ([
 	}
 
 	return assets, nil
+}
+
+// exchangeAssetsMaxPageSize is the maximum number of assets the Exchange assets
+// endpoint returns in a single request. LIVE-VERIFIED (2026-07-21): limit>250
+// returns HTTP 400 with body {"name":"Bad Request","status":400,"message":
+// "request/query/limit must be <= 250"}. We request the max per page to minimize
+// round-trips.
+const exchangeAssetsMaxPageSize = 250
+
+// ListAllAssets lists assets in the organization, following offset pagination to
+// completion so callers are never silently truncated at a single page.
+//
+// The Exchange assets endpoint (GET /exchange/api/v2/assets) pages via limit+offset
+// and returns a BARE JSON array — there is NO envelope and NO total-count header
+// (LIVE-VERIFIED 2026-07-21). The ONLY reliable end-of-list signal is therefore a
+// SHORT page: a response with fewer items than the page size we requested. Offset
+// advances correctly with no page overlap, and an out-of-range offset returns HTTP
+// 200 with an empty array (which is also "short", so the boundary is covered).
+//
+// req.Limit is interpreted as an OPTIONAL caller cap on the TOTAL number of assets
+// returned (NOT a per-request page size):
+//   - req.Limit <= 0 : return ALL matching assets (walk every page to completion).
+//   - req.Limit  > 0 : return at most req.Limit assets, paginating as needed and
+//     never returning more than the cap.
+//
+// This MUST paginate. A naive single-request implementation silently truncates any
+// org with more matching assets than one page — the same bug class as the roles /
+// team-roles / self-managed-gateway pagination fixes. For a data source that a user
+// scans to find an asset, a match beyond the first page would simply be invisible.
+func (c *AssetClient) ListAllAssets(ctx context.Context, req *ListAssetsRequest) ([]Asset, error) {
+	var all []Asset
+	offset := 0
+
+	for {
+		// Per-request page size: the server max (250), unless a caller cap is set and
+		// the remaining budget is smaller, in which case only fetch what's left.
+		pageSize := exchangeAssetsMaxPageSize
+		if req.Limit > 0 {
+			remaining := req.Limit - len(all)
+			if remaining <= 0 {
+				break
+			}
+			if remaining < pageSize {
+				pageSize = remaining
+			}
+		}
+
+		// Build a fresh per-page request so the caller's struct is never mutated and
+		// the search/type filters are forwarded identically on every page.
+		pageReq := &ListAssetsRequest{
+			OrganizationID: req.OrganizationID,
+			Limit:          pageSize,
+			Offset:         offset,
+			Search:         req.Search,
+			Type:           req.Type,
+		}
+
+		page, err := c.ListAssets(ctx, pageReq)
+		if err != nil {
+			return nil, err
+		}
+
+		all = append(all, page...)
+
+		// A short page (fewer than we asked for) is the authoritative last page — the
+		// endpoint has no envelope/total to consult. An empty page (out-of-range
+		// offset) is a special case of "short", so this also terminates the loop.
+		if len(page) < pageSize {
+			break
+		}
+		offset += pageSize
+	}
+
+	// Defensive trim: if a cap was requested and the server ever ignored our per-page
+	// limit (returning more than asked), never hand back more than the cap.
+	if req.Limit > 0 && len(all) > req.Limit {
+		all = all[:req.Limit]
+	}
+
+	return all, nil
 }
 
 // --- Status & Tags Operations ---

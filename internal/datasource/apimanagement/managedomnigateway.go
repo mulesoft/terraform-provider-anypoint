@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client/apimanagement"
@@ -30,10 +31,13 @@ type ManagedOmniGatewayDataSourceModel struct {
 }
 
 // ManagedOmniGatewayItemModel reflects the fields returned by the api/v1 list endpoint.
+// target_type is not returned by the list endpoint; the data source enriches it
+// from the deployment-targets list (see Read).
 type ManagedOmniGatewayItemModel struct {
 	ID          types.String `tfsdk:"id"`
 	Name        types.String `tfsdk:"name"`
 	TargetID    types.String `tfsdk:"target_id"`
+	TargetType  types.String `tfsdk:"target_type"`
 	Status      types.String `tfsdk:"status"`
 	DateCreated types.String `tfsdk:"date_created"`
 	LastUpdated types.String `tfsdk:"last_updated"`
@@ -78,8 +82,14 @@ func (d *ManagedOmniGatewayDataSource) Schema(_ context.Context, _ datasource.Sc
 							Computed:    true,
 						},
 						"target_id": schema.StringAttribute{
-							Description: "The target (private space) ID the gateway is deployed to.",
-							Computed:    true,
+							Description: "The target ID the gateway is deployed to. A private space UUID " +
+								"or, for a CloudHub 2.0 shared space, a region slug (e.g. 'cloudhub-us-east-1').",
+							Computed: true,
+						},
+						"target_type": schema.StringAttribute{
+							Description: "The type of the deployment target: 'private-space' or 'shared-space'. " +
+								"Resolved from the deployment-targets list; empty if the target could not be resolved.",
+							Computed: true,
 						},
 						"status": schema.StringAttribute{
 							Description: "The current status of the gateway (e.g. APPLIED, RUNNING).",
@@ -150,6 +160,19 @@ func (d *ManagedOmniGatewayDataSource) Read(ctx context.Context, req datasource.
 		return
 	}
 
+	// The list endpoint does not return target_type. Enrich it with a single
+	// deployment-targets lookup (targetId -> type). Best-effort: if the lookup
+	// fails, leave target_type empty rather than failing the whole data source.
+	targetTypeByID := map[string]string{}
+	if targets, terr := d.client.ListTargets(ctx, orgID); terr != nil {
+		tflog.Warn(ctx, "Could not list deployment targets to resolve target_type; leaving it empty",
+			map[string]interface{}{"error": terr.Error()})
+	} else {
+		for _, t := range targets {
+			targetTypeByID[t.ID] = t.Type
+		}
+	}
+
 	data.ID = types.StringValue(orgID + "/" + envID)
 	data.OrganizationID = types.StringValue(orgID)
 	data.Gateways = make([]ManagedOmniGatewayItemModel, len(gateways))
@@ -159,6 +182,7 @@ func (d *ManagedOmniGatewayDataSource) Read(ctx context.Context, req datasource.
 			ID:          types.StringValue(gw.ID),
 			Name:        types.StringValue(gw.Name),
 			TargetID:    types.StringValue(gw.TargetID),
+			TargetType:  types.StringValue(targetTypeByID[gw.TargetID]),
 			Status:      types.StringValue(gw.Status),
 			DateCreated: types.StringValue(gw.DateCreated),
 			LastUpdated: types.StringValue(gw.LastUpdated),
