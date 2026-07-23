@@ -36,7 +36,7 @@ output "rest_api_asset_ids" {
 
 ### Optional
 
-- `limit` (Number) Maximum number of assets to return (default: 20, max: 200).
+- `limit` (Number) Optional cap on the total number of assets to return. When **omitted**, ALL matching assets are returned (the data source paginates through every page automatically). When set to a positive value, at most that many assets are returned.
 - `search` (String) Free-text search query to filter assets by name or description.
 - `type` (String) Filter by asset type (`rest-api`, `http-api`, `evented-api`, `graphql-api`, `custom`, `connector`, `app`, `template`, `example`, `policy`, `agent`, `llm`, `mcp`).
 

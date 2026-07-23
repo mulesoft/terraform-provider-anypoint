@@ -13,7 +13,7 @@ A comprehensive Terraform provider for managing your Anypoint Platform resources
 - **Improve Collaboration:** Use version control to manage your infrastructure, making it easier for teams to collaborate and review changes
 - **Increase Agility:** Spin up or tear down entire environments in minutes, not hours, allowing you to innovate faster
 - **Enhance Governance:** Enforce standards and policies across all your environments by defining them in code
-- **Complete Coverage:** 25 base resources + 96 typed API policy resources across 6 modules supporting the full Anypoint Platform lifecycle
+- **Complete Coverage:** 28 base resources + 96 typed API policy resources across 6 modules supporting the full Anypoint Platform lifecycle
 
 ## Table of Contents
 
@@ -97,14 +97,15 @@ provider "anypoint" {
 
 ## Resources Overview
 
-The provider supports **25 base resources** plus **96 typed API policy resources** across **6 main categories**:
+The provider supports **28 base resources** plus **96 typed API policy resources** across **6 main categories**:
 
 | Category | Resources | Description |
 |----------|-----------|-------------|
 | **Access Management** | 6 | Organizations, environments, teams, role groups, and connected apps (roles, permissions, members, and scopes managed inline) |
-| **API Management** | 4 + 96 typed policies | API instances, generic policy, SLA tiers, Omni Gateways, and dedicated per-policy-type resources |
-| **CloudHub 2.0** | 6 | Private spaces, VPNs, firewall rules, TLS contexts, and associations |
+| **API Management** | 5 + 96 typed policies | API instances, generic policy, SLA tiers, managed + self-managed Omni Gateways, and dedicated per-policy-type resources |
+| **CloudHub 2.0** | 7 | Private spaces, VPNs, TLS contexts, associations, upgrades, and Transit Gateway connections |
 | **Agents & Tools** | 2 | Agent instances and MCP servers |
+| **Exchange** | 1 | Exchange assets (metadata, spec files, docs pages, categories, custom fields, and external instances) |
 | **Secrets Management** | 7 | Secret groups, certificates, keystores, truststores, TLS contexts, and shared secrets |
 
 ## Provider Configuration
@@ -219,6 +220,7 @@ resource "anypoint_vpn_connection" "on_prem" {
 | `anypoint_api_policy` | Apply a generic policy to an API instance |
 | `anypoint_api_instance_sla_tier` | Configure SLA tiers for API access control |
 | `anypoint_managed_omni_gateway` | Deploy managed Omni Gateway instances |
+| `anypoint_self_managed_gateway` | Register a self-managed (connected-mode) Flex/Omni Gateway you run on your own infrastructure |
 
 In addition, each known policy type has a dedicated typed resource of the form `anypoint_api_policy_<type>` (hyphens replaced with underscores). The 96 available types are:
 
@@ -254,6 +256,7 @@ In addition, each known policy type has a dedicated typed resource of the form `
 | `anypoint_private_space_association` | Associate environments with private spaces |
 | `anypoint_private_space_upgrade` | Schedule private space runtime upgrades |
 | `anypoint_privatespace_advanced_config` | Configure advanced private space settings |
+| `anypoint_transit_gateway_connection` | Manage a Transit Gateway connection (attachment) with inline routes |
 
 **Example:** [CloudHub 2.0 Examples](./examples/cloudhub2)
 
@@ -309,14 +312,21 @@ The provider includes data sources for reading existing resources:
 | Data Source | Description |
 |-------------|-------------|
 | `anypoint_tls_context` | Read TLS context details |
+| `anypoint_private_spaces` | List private spaces in the organization |
+| `anypoint_private_space_config` | Read a private space's configuration |
+| `anypoint_privatespace_advanced_config` | Read a private space's advanced configuration |
 | `anypoint_private_space_associations` | List private space associations |
 | `anypoint_private_space_upgrade` | Read private space upgrade details |
+| `anypoint_transit_gateway_connection` | Read a single Transit Gateway connection by ID |
+| `anypoint_transit_gateway_connections` | List Transit Gateway connections in a private space |
 
 ### API Management
 | Data Source | Description |
 |-------------|-------------|
 | `anypoint_managed_omni_gateways` | List managed Omni Gateway instances |
 | `anypoint_managed_omni_gateway` | Read a single Omni Gateway instance |
+| `anypoint_self_managed_gateways` | List self-managed (connected-mode) Flex gateways that have registered |
+| `anypoint_self_managed_gateway` | Read a single self-managed (connected-mode) Flex gateway by ID |
 | `anypoint_api_instances` | List API instances in an environment |
 | `anypoint_api_upstreams` | Read upstreams for an API instance |
 

@@ -184,7 +184,7 @@ even for list queries; the official provider distinguishes singular vs plural):
 | `anypoint_apim_instance` | `anypoint_api_instance` | Renamed. |
 | `anypoint_apim_instance_policies` | — | Use the `anypoint_api_policy*` resources as the source of truth. |
 | `anypoint_secretgroups` | — | Not supported as a data source. |
-| `anypoint_omnigateway_registration_token` | — | Not supported. |
+| `anypoint_omnigateway_registration_token` | `anypoint_self_managed_gateway` (resource) | The token-minting concept is now a first-class resource. `anypoint_self_managed_gateway` mints the connected-mode registration token, tracks the gateway once your Flex runtime self-registers, and deletes it. Use the `anypoint_self_managed_gateways` data source to list registered gateways. |
 | `anypoint_exchange_policy_template*` | — | Not needed — the official provider ships strongly-typed policy resources for every supported policy. |
 
 Data sources unique to the official provider:

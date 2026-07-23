@@ -9,7 +9,7 @@ description: |-
 
 Manages an API instance in Anypoint API Manager. An API instance represents an API specification deployed to a Omni Gateway target with routing rules and upstream backends.
 
--> **Supported gateway type:** This provider currently supports **MuleSoft Managed Omni Gateway** (CloudHub 2.0) only. Self-managed Omni Gateway will be supported in a future release.
+-> **Gateway type:** The provider supports both **MuleSoft Managed Omni Gateway** (CloudHub 2.0, via [`anypoint_managed_omni_gateway`](anypoint_managed_omni_gateway.md)) and **self-managed (connected-mode) Flex/Omni Gateway** that you run on your own infrastructure (via [`anypoint_self_managed_gateway`](anypoint_self_managed_gateway.md)).
 
 -> **Connected App:** This resource requires a **standard connected app** (client credentials). An admin connected app is not needed. The connected app must have relevant scopes.
 

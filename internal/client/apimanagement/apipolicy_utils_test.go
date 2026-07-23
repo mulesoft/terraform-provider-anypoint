@@ -114,3 +114,78 @@ func TestLookupPolicy_AllKnown(t *testing.T) {
 		}
 	}
 }
+
+// TestLookupPolicy_GraphQLAndWebSocket asserts the GraphQL Gateway and
+// WebSockets & Streaming policies are registered with the coordinates pulled
+// from Exchange (group 68ef9520-…, version 1.0.0, inbound). Regression guard so
+// these five policy_type aliases cannot be silently dropped.
+func TestLookupPolicy_GraphQLAndWebSocket(t *testing.T) {
+	const muleGroup = "68ef9520-24e9-4cf2-b2f5-620025690913"
+	want := []string{
+		"graphql-schema-validation",
+		"graphql-operation-limits",
+		"graphql-introspection-control",
+		"graphql-static-query-complexity",
+		"websocket-connection-limit",
+	}
+	for _, pt := range want {
+		info, ok := LookupPolicy(pt)
+		if !ok {
+			t.Errorf("LookupPolicy(%q) returned false, want registered", pt)
+			continue
+		}
+		if info.GroupID != muleGroup {
+			t.Errorf("LookupPolicy(%q).GroupID = %q, want %q", pt, info.GroupID, muleGroup)
+		}
+		if info.AssetID != pt {
+			t.Errorf("LookupPolicy(%q).AssetID = %q, want %q", pt, info.AssetID, pt)
+		}
+		if info.DefaultVersion != "1.0.0" {
+			t.Errorf("LookupPolicy(%q).DefaultVersion = %q, want 1.0.0", pt, info.DefaultVersion)
+		}
+		if !info.InboundPolicy {
+			t.Errorf("LookupPolicy(%q) should be an inbound policy", pt)
+		}
+		if info.OutboundPolicy {
+			t.Errorf("LookupPolicy(%q) should not be an outbound policy", pt)
+		}
+	}
+}
+
+// TestValidatePolicyConfiguration_StaticQueryComplexity verifies the one field
+// that Exchange marks required (maximumComplexity) is enforced, and that an
+// unknown field is rejected — the config schema wiring for the new policies.
+func TestValidatePolicyConfiguration_StaticQueryComplexity(t *testing.T) {
+	// Missing the required maximumComplexity → one error.
+	errs := ValidatePolicyConfiguration("graphql-static-query-complexity", map[string]interface{}{})
+	if len(errs) == 0 {
+		t.Error("expected a validation error when maximumComplexity is missing, got none")
+	}
+
+	// Present + only-known fields → no error.
+	errs = ValidatePolicyConfiguration("graphql-static-query-complexity", map[string]interface{}{
+		"maximumComplexity": 100,
+	})
+	if len(errs) != 0 {
+		t.Errorf("expected no validation errors, got %v", errs)
+	}
+
+	// Unknown field → rejected.
+	errs = ValidatePolicyConfiguration("graphql-static-query-complexity", map[string]interface{}{
+		"maximumComplexity": 100,
+		"bogusField":        true,
+	})
+	if len(errs) == 0 {
+		t.Error("expected a validation error for an unknown field, got none")
+	}
+}
+
+// TestApplyPolicyDefaults_WebSocketConnectionLimit checks the int default is
+// injected when the user omits it.
+func TestApplyPolicyDefaults_WebSocketConnectionLimit(t *testing.T) {
+	config := map[string]interface{}{}
+	ApplyPolicyDefaults("websocket-connection-limit", config)
+	if config["maximumConnections"] != 100 {
+		t.Errorf("maximumConnections default = %v, want 100", config["maximumConnections"])
+	}
+}

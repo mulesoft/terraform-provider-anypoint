@@ -664,6 +664,13 @@ var KnownPolicies = map[string]PolicyInfo{
 	"a2a-schema-validation": {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "a-two-a-schema-validation", DefaultVersion: "1.0.1", InboundPolicy: true},
 	"a2a-token-rate-limit":  {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "a-two-a-token-rate-limit", DefaultVersion: "1.0.0", InboundPolicy: true},
 	"a2a-prompt-decorator":  {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "a-two-a-prompt-decorator", DefaultVersion: "1.0.1", InboundPolicy: true},
+	// GraphQL Gateway policies (Flex/Omni Gateway; apply to GraphQL-typed APIs)
+	"graphql-schema-validation":       {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "graphql-schema-validation", DefaultVersion: "1.0.0", InboundPolicy: true},
+	"graphql-operation-limits":        {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "graphql-operation-limits", DefaultVersion: "1.0.0", InboundPolicy: true},
+	"graphql-introspection-control":   {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "graphql-introspection-control", DefaultVersion: "1.0.0", InboundPolicy: true},
+	"graphql-static-query-complexity": {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "graphql-static-query-complexity", DefaultVersion: "1.0.0", InboundPolicy: true},
+	// WebSockets & Streaming policy
+	"websocket-connection-limit": {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "websocket-connection-limit", DefaultVersion: "1.0.0", InboundPolicy: true},
 }
 
 // LookupPolicy resolves a policy_type name to its Exchange coordinates.
@@ -806,9 +813,9 @@ var KnownPolicySchemas = map[string]map[string]PolicySchemaField{
 		"loggingConfiguration": {Required: true, Type: "array"},
 	},
 	"cors": {
-		"publicResource":       {Required: false, Type: "bool"},
-		"supportCredentials":   {Required: false, Type: "bool"},
-		"originGroups":         {Required: true, Type: "array"},
+		"publicResource":      {Required: false, Type: "bool"},
+		"supportCredentials":  {Required: false, Type: "bool"},
+		"originGroups":        {Required: true, Type: "array"},
 		"accessControlMaxAge": {Required: false, Type: "int"},
 	},
 	"header-injection": {
@@ -988,21 +995,21 @@ var KnownPolicySchemas = map[string]map[string]PolicySchemaField{
 		"customHeader": {Required: false, Type: "string"},
 	},
 	"credential-injection-oauth2-obo": {
-		"flow":                 {Required: true, Type: "string"},
-		"clientId":             {Required: true, Type: "string"},
-		"clientSecret":         {Required: true, Type: "string"},
-		"tokenEndpoint":        {Required: true, Type: "string"},
-		"scope":                {Required: false, Type: "string"},
-		"timeout":              {Required: false, Type: "int"},
-		"distributed":          {Required: false, Type: "bool"},
-		"cibaEnabled":          {Required: false, Type: "bool"},
-		"cibaEndpoint":         {Required: false, Type: "string"},
-		"cibaBindingMessage":   {Required: false, Type: "string"},
-		"cibaLoginHintClaim":   {Required: false, Type: "string"},
-		"subjectTokenType":     {Required: false, Type: "string"},
-		"requestedTokenType":   {Required: false, Type: "string"},
-		"targetValue":          {Required: false, Type: "string"},
-		"targetType":           {Required: false, Type: "string"},
+		"flow":               {Required: true, Type: "string"},
+		"clientId":           {Required: true, Type: "string"},
+		"clientSecret":       {Required: true, Type: "string"},
+		"tokenEndpoint":      {Required: true, Type: "string"},
+		"scope":              {Required: false, Type: "string"},
+		"timeout":            {Required: false, Type: "int"},
+		"distributed":        {Required: false, Type: "bool"},
+		"cibaEnabled":        {Required: false, Type: "bool"},
+		"cibaEndpoint":       {Required: false, Type: "string"},
+		"cibaBindingMessage": {Required: false, Type: "string"},
+		"cibaLoginHintClaim": {Required: false, Type: "string"},
+		"subjectTokenType":   {Required: false, Type: "string"},
+		"requestedTokenType": {Required: false, Type: "string"},
+		"targetValue":        {Required: false, Type: "string"},
+		"targetType":         {Required: false, Type: "string"},
 	},
 	"idle-timeout": {
 		"timeout": {Required: true, Type: "int"},
@@ -1129,6 +1136,35 @@ var KnownPolicySchemas = map[string]map[string]PolicySchemaField{
 	"a-two-a-prompt-decorator": {
 		"textDecorators": {Required: false, Type: "array"},
 		"fileDecorators": {Required: false, Type: "array"},
+	},
+	// GraphQL Gateway policies. Field names/types/defaults taken from each policy's
+	// Exchange policy-definition YAML (group 68ef9520-…, version 1.0.0).
+	"graphql-schema-validation": {
+		"blockOperation": {Required: false, Type: "bool", Default: boolPtr(true)},
+	},
+	"graphql-operation-limits": {
+		"maxDepth":      {Required: false, Type: "int", DefaultInt: intPtr(-1)},
+		"maxAliases":    {Required: false, Type: "int", DefaultInt: intPtr(-1)},
+		"maxRootFields": {Required: false, Type: "int", DefaultInt: intPtr(-1)},
+		"maxDirectives": {Required: false, Type: "int", DefaultInt: intPtr(-1)},
+	},
+	"graphql-introspection-control": {
+		"blockSchema":   {Required: false, Type: "bool", Default: boolPtr(false)},
+		"blockType":     {Required: false, Type: "bool", Default: boolPtr(false)},
+		"blockTypename": {Required: false, Type: "bool", Default: boolPtr(false)},
+	},
+	"graphql-static-query-complexity": {
+		"maximumComplexity":    {Required: true, Type: "int"},
+		"defaultFieldCost":     {Required: false, Type: "int", DefaultInt: intPtr(1)},
+		"blockOperation":       {Required: false, Type: "bool", Default: boolPtr(true)},
+		"rejectUnboundedLists": {Required: false, Type: "bool", Default: boolPtr(true)},
+		"directiveName":        {Required: false, Type: "string"},
+		"valueArgument":        {Required: false, Type: "string"},
+		"multipliersArgument":  {Required: false, Type: "string"},
+	},
+	// WebSockets & Streaming policy.
+	"websocket-connection-limit": {
+		"maximumConnections": {Required: false, Type: "int", DefaultInt: intPtr(100)},
 	},
 }
 

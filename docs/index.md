@@ -65,6 +65,7 @@ All resources provided by `terraform-provider-anypoint`, grouped by subcategory.
 | [anypoint_api_instance_sla_tier](resources/anypoint_api_instance_sla_tier.md) | Manages an SLA tier for an API instance in Anypoint API Manager. |
 | [anypoint_api_policy](resources/anypoint_api_policy.md) | Manages a policy applied to an API instance. Supports both known policies (via `policy_type`) and custom policies (via `group_id` + `asset_id`). |
 | [anypoint_managed_omni_gateway](resources/anypoint_managed_omni_gateway.md) | Manages a CloudHub 2.0 Managed Omni Gateway instance in Anypoint Platform. |
+| [anypoint_self_managed_gateway](resources/anypoint_self_managed_gateway.md) | Manages a self-managed (connected-mode) Flex/Omni Gateway that you run on your own infrastructure; mints the registration token and tracks the gateway once its runtime self-registers. |
 
 ### Agents & Tools
 
@@ -84,6 +85,12 @@ All resources provided by `terraform-provider-anypoint`, grouped by subcategory.
 | [anypoint_tls_context](resources/anypoint_tls_context.md) | Manages a CloudHub 2.0 TLS Context with support for both PEM and JKS keystores. |
 | [anypoint_vpn_connection](resources/anypoint_vpn_connection.md) | Creates a VPN connection in a CloudHub 2.0 private space. |
 | [anypoint_transit_gateway_connection](resources/anypoint_transit_gateway_connection.md) | Manages a Transit Gateway connection (attachment) linking a CloudHub 2.0 private space to an AWS Transit Gateway, with inline routes. |
+
+### Exchange
+
+| Resource | Description |
+|----------|-------------|
+| [anypoint_exchange_asset](resources/anypoint_exchange_asset.md) | Publishes and manages an Exchange asset (metadata, spec/multi-file upload, docs pages, categories, custom fields, and external instances). Asset versions are immutable. |
 
 ### Secrets Management
 

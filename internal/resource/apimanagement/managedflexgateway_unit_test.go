@@ -5,11 +5,11 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
-	"github.com/hashicorp/terraform-plugin-go/tftypes"
-	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	anypointclient "github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	apimgmtclient "github.com/mulesoft/terraform-provider-anypoint/internal/client/apimanagement"
@@ -65,6 +65,40 @@ func TestReconcileTracing(t *testing.T) {
 		result := reconcileTracing(plan, types.ObjectUnknown(tracingAttrTypes))
 		if !result.Equal(plan) {
 			t.Error("Expected plan when fromAPI is unknown")
+		}
+	})
+
+	// REGRESSION (tracing-unknown-after-apply): the user OMITS `tracing`, an
+	// Optional+Computed nested object. On Create the framework hands us an UNKNOWN
+	// plan value (nothing in prior state for UseStateForUnknown to copy). The old
+	// code hit the `planAttrs == nil → return plan` branch and returned that
+	// UNKNOWN plan, leaving a Computed attribute unknown after apply — which the
+	// framework rejects with "Provider returned invalid result object after apply".
+	// The known flattened API value must win.
+	t.Run("unknown plan returns known API value (omitted tracing on create)", func(t *testing.T) {
+		fromAPI := makeTracingObj(false, 1) // flatten output: computed defaults
+		result := reconcileTracing(types.ObjectUnknown(tracingAttrTypes), fromAPI)
+		if result.IsUnknown() || result.IsNull() {
+			t.Fatalf("result must be concrete when plan is unknown (unknown=%v null=%v); "+
+				"an unknown Computed attr after apply is a framework error",
+				result.IsUnknown(), result.IsNull())
+		}
+		if !result.Equal(fromAPI) {
+			t.Errorf("expected the known API value to win over an unknown plan; got %#v", result)
+		}
+	})
+
+	// A null plan (block explicitly absent, no computed backfill) similarly must
+	// not become the authoritative value when the API produced a concrete object.
+	t.Run("null plan returns known API value", func(t *testing.T) {
+		fromAPI := makeTracingObj(false, 1)
+		result := reconcileTracing(types.ObjectNull(tracingAttrTypes), fromAPI)
+		if result.IsUnknown() || result.IsNull() {
+			t.Fatalf("result must be concrete when plan is null; got unknown=%v null=%v",
+				result.IsUnknown(), result.IsNull())
+		}
+		if !result.Equal(fromAPI) {
+			t.Errorf("expected the known API value to win over a null plan; got %#v", result)
 		}
 	})
 }
@@ -263,6 +297,7 @@ func TestManagedOmniGatewayResource_ImportState_IDParsing(t *testing.T) {
 		"organization_id": tftypes.NewValue(tftypes.String, nil),
 		"environment_id":  tftypes.NewValue(tftypes.String, nil),
 		"target_id":       tftypes.NewValue(tftypes.String, nil),
+		"target_type":     tftypes.NewValue(tftypes.String, nil),
 		"runtime_version": tftypes.NewValue(tftypes.String, nil),
 		"release_channel": tftypes.NewValue(tftypes.String, nil),
 		"size":            tftypes.NewValue(tftypes.String, nil),
@@ -370,6 +405,7 @@ func TestManagedOmniGatewayResource_Read_Error(t *testing.T) {
 		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
 		"environment_id":  tftypes.NewValue(tftypes.String, "test-env-id"),
 		"target_id":       tftypes.NewValue(tftypes.String, "t"),
+		"target_type":     tftypes.NewValue(tftypes.String, nil),
 		"runtime_version": tftypes.NewValue(tftypes.String, nil),
 		"release_channel": tftypes.NewValue(tftypes.String, nil),
 		"size":            tftypes.NewValue(tftypes.String, nil),

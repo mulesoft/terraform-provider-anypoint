@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -484,6 +485,249 @@ func TestAssetClient_DeleteType_Header(t *testing.T) {
 	}
 }
 
+// pagedAssetsHandler returns an http handler that simulates the LIVE-VERIFIED
+// Exchange assets contract: GET /exchange/api/v2/assets paged by limit+offset,
+// responding with a BARE JSON array (no envelope, no total header). It serves a
+// synthetic corpus of `total` assets, honoring the requested offset/limit window,
+// and records every (offset,limit) pair it was asked for so tests can assert the
+// client's paging behavior. It also enforces the server's real max-limit cap (250):
+// a request for limit>250 is answered 400, exactly like production.
+func pagedAssetsHandler(total int, sawOffsets, sawLimits *[]int, sawSearch, sawTypes *[]string) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		offset, _ := strconv.Atoi(q.Get("offset"))
+		limit, _ := strconv.Atoi(q.Get("limit"))
+		*sawOffsets = append(*sawOffsets, offset)
+		*sawLimits = append(*sawLimits, limit)
+		if sawSearch != nil {
+			*sawSearch = append(*sawSearch, q.Get("search"))
+		}
+		if sawTypes != nil {
+			*sawTypes = append(*sawTypes, q.Get("types"))
+		}
+
+		// Live cap: the real endpoint rejects limit>250 with HTTP 400.
+		if limit > 250 {
+			testutil.ErrorResponse(w, http.StatusBadRequest, "request/query/limit must be <= 250")
+			return
+		}
+
+		page := make([]Asset, 0)
+		for i := offset; i < offset+limit && i < total; i++ {
+			page = append(page, Asset{
+				GroupID: "g",
+				AssetID: fmt.Sprintf("asset-%d", i),
+				Version: "1.0.0",
+				Name:    fmt.Sprintf("Asset %d", i),
+				Type:    "custom",
+			})
+		}
+		// Bare JSON array — NO envelope, NO total-count header (matches production).
+		testutil.JSONResponse(w, http.StatusOK, page)
+	}
+}
+
+// TestAssetClient_ListAllAssets_Paginates is the regression guard for the single-page
+// truncation bug in the plural exchange_assets data source (same bug class as the
+// ListTeamRoles / ListRoleAssignments / ListSelfManagedGateways pagination fixes).
+//
+// The Exchange assets endpoint pages via limit+offset and returns a bare JSON array
+// with NO total-count, so the ONLY reliable end-of-list signal is a short page. A
+// naive single-request implementation silently truncates any org with more matching
+// assets than one page — and because the response has no total, the truncation is
+// invisible. This corpus (600 assets) spans THREE pages at the max page size (250),
+// so it proves the client walks 250 -> 250 -> 100(short=stop) and concatenates all.
+func TestAssetClient_ListAllAssets_Paginates(t *testing.T) {
+	const total = 600 // 250 + 250 + 100 -> three pages, last is short
+	var sawOffsets, sawLimits []int
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		"/exchange/api/v2/assets": pagedAssetsHandler(total, &sawOffsets, &sawLimits, nil, nil),
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+	client := &AssetClient{BaseURL: server.URL, Token: "mock-token", HTTPClient: &http.Client{}}
+
+	assets, err := client.ListAllAssets(context.Background(), &ListAssetsRequest{
+		OrganizationID: "org-1",
+		// Limit unset (0) => fetch ALL.
+	})
+	if err != nil {
+		t.Fatalf("ListAllAssets() unexpected error = %v", err)
+	}
+
+	if len(assets) != total {
+		t.Fatalf("len(assets) = %d, want %d (all pages concatenated)", len(assets), total)
+	}
+	// Spot-check that items from the LAST page are present (the ones a truncating impl drops).
+	if assets[total-1].AssetID != fmt.Sprintf("asset-%d", total-1) {
+		t.Errorf("last asset AssetID = %q, want %q", assets[total-1].AssetID, fmt.Sprintf("asset-%d", total-1))
+	}
+	// Exactly three requests: offsets 0, 250, 500 (stops on the short third page).
+	wantOffsets := []int{0, 250, 500}
+	if len(sawOffsets) != len(wantOffsets) {
+		t.Fatalf("made %d requests (offsets %v), want %d", len(sawOffsets), sawOffsets, len(wantOffsets))
+	}
+	for i, want := range wantOffsets {
+		if sawOffsets[i] != want {
+			t.Errorf("request %d offset = %d, want %d", i, sawOffsets[i], want)
+		}
+	}
+	// Every request must use the max supported page size (250) to minimize round-trips.
+	for i, l := range sawLimits {
+		if l != 250 {
+			t.Errorf("request %d limit = %d, want 250 (max page size)", i, l)
+		}
+	}
+}
+
+// TestAssetClient_ListAllAssets_ExactMultipleStops verifies the empty-page boundary:
+// when the corpus is an EXACT multiple of the page size, the final full page is NOT a
+// short page, so the client must make one more request that returns an empty array and
+// stop there — without that trailing empty page it could not know the list had ended.
+func TestAssetClient_ListAllAssets_ExactMultipleStops(t *testing.T) {
+	const total = 500 // 250 + 250 -> both full; needs a 3rd (empty) request to terminate
+	var sawOffsets, sawLimits []int
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		"/exchange/api/v2/assets": pagedAssetsHandler(total, &sawOffsets, &sawLimits, nil, nil),
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+	client := &AssetClient{BaseURL: server.URL, Token: "mock-token", HTTPClient: &http.Client{}}
+
+	assets, err := client.ListAllAssets(context.Background(), &ListAssetsRequest{OrganizationID: "org-1"})
+	if err != nil {
+		t.Fatalf("ListAllAssets() unexpected error = %v", err)
+	}
+	if len(assets) != total {
+		t.Fatalf("len(assets) = %d, want %d", len(assets), total)
+	}
+	// offsets 0, 250, 500 — the third returns empty and terminates the loop.
+	wantOffsets := []int{0, 250, 500}
+	if len(sawOffsets) != len(wantOffsets) {
+		t.Fatalf("made %d requests (offsets %v), want %d (incl. trailing empty page)", len(sawOffsets), sawOffsets, len(wantOffsets))
+	}
+	for i, want := range wantOffsets {
+		if sawOffsets[i] != want {
+			t.Errorf("request %d offset = %d, want %d", i, sawOffsets[i], want)
+		}
+	}
+}
+
+// TestAssetClient_ListAllAssets_RespectsCap verifies the OPTIONAL caller cap: when
+// req.Limit is a positive value the client returns at most that many assets, and it
+// must NOT over-fetch. A cap smaller than one page requests exactly the cap; a cap
+// spanning pages walks pages until the cap is met, shrinking the final page request to
+// the remaining budget (never fetching a whole extra page it would then discard).
+func TestAssetClient_ListAllAssets_RespectsCap(t *testing.T) {
+	const total = 600
+
+	t.Run("cap smaller than one page", func(t *testing.T) {
+		var sawOffsets, sawLimits []int
+		handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+			"/exchange/api/v2/assets": pagedAssetsHandler(total, &sawOffsets, &sawLimits, nil, nil),
+		}
+		server := testutil.MockHTTPServer(t, handlers)
+		client := &AssetClient{BaseURL: server.URL, Token: "mock-token", HTTPClient: &http.Client{}}
+
+		assets, err := client.ListAllAssets(context.Background(), &ListAssetsRequest{OrganizationID: "org-1", Limit: 10})
+		if err != nil {
+			t.Fatalf("ListAllAssets() unexpected error = %v", err)
+		}
+		if len(assets) != 10 {
+			t.Fatalf("len(assets) = %d, want 10 (cap honored)", len(assets))
+		}
+		// A single request sized to the cap (10), not the max page size.
+		if len(sawOffsets) != 1 {
+			t.Fatalf("made %d requests, want 1 (cap fits in one page)", len(sawOffsets))
+		}
+		if sawLimits[0] != 10 {
+			t.Errorf("request 0 limit = %d, want 10 (page shrunk to cap)", sawLimits[0])
+		}
+	})
+
+	t.Run("cap spanning multiple pages", func(t *testing.T) {
+		var sawOffsets, sawLimits []int
+		handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+			"/exchange/api/v2/assets": pagedAssetsHandler(total, &sawOffsets, &sawLimits, nil, nil),
+		}
+		server := testutil.MockHTTPServer(t, handlers)
+		client := &AssetClient{BaseURL: server.URL, Token: "mock-token", HTTPClient: &http.Client{}}
+
+		// Cap = 300 -> page0 (250) + page1 (remaining 50). Never over-fetches.
+		assets, err := client.ListAllAssets(context.Background(), &ListAssetsRequest{OrganizationID: "org-1", Limit: 300})
+		if err != nil {
+			t.Fatalf("ListAllAssets() unexpected error = %v", err)
+		}
+		if len(assets) != 300 {
+			t.Fatalf("len(assets) = %d, want 300 (cap honored)", len(assets))
+		}
+		wantOffsets := []int{0, 250}
+		if len(sawOffsets) != len(wantOffsets) {
+			t.Fatalf("made %d requests (offsets %v), want %d", len(sawOffsets), sawOffsets, len(wantOffsets))
+		}
+		if sawLimits[0] != 250 {
+			t.Errorf("request 0 limit = %d, want 250 (full page)", sawLimits[0])
+		}
+		if sawLimits[1] != 50 {
+			t.Errorf("request 1 limit = %d, want 50 (remaining budget, no over-fetch)", sawLimits[1])
+		}
+	})
+}
+
+// TestAssetClient_ListAllAssets_EmptyCorpus verifies an org with zero matching assets
+// makes exactly one request and returns an empty slice (no infinite loop on offset 0).
+func TestAssetClient_ListAllAssets_EmptyCorpus(t *testing.T) {
+	var sawOffsets, sawLimits []int
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		"/exchange/api/v2/assets": pagedAssetsHandler(0, &sawOffsets, &sawLimits, nil, nil),
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+	client := &AssetClient{BaseURL: server.URL, Token: "mock-token", HTTPClient: &http.Client{}}
+
+	assets, err := client.ListAllAssets(context.Background(), &ListAssetsRequest{OrganizationID: "org-1"})
+	if err != nil {
+		t.Fatalf("ListAllAssets() unexpected error = %v", err)
+	}
+	if len(assets) != 0 {
+		t.Errorf("len(assets) = %d, want 0", len(assets))
+	}
+	if len(sawOffsets) != 1 {
+		t.Errorf("made %d requests, want exactly 1 (single empty page, no loop)", len(sawOffsets))
+	}
+}
+
+// TestAssetClient_ListAllAssets_ForwardsFilters verifies the search and type filters are
+// forwarded IDENTICALLY on every page request — a paginating client that dropped the
+// filter on page 2+ would return unfiltered results mixed in.
+func TestAssetClient_ListAllAssets_ForwardsFilters(t *testing.T) {
+	const total = 600
+	var sawOffsets, sawLimits []int
+	var sawSearch, sawTypes []string
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		"/exchange/api/v2/assets": pagedAssetsHandler(total, &sawOffsets, &sawLimits, &sawSearch, &sawTypes),
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+	client := &AssetClient{BaseURL: server.URL, Token: "mock-token", HTTPClient: &http.Client{}}
+
+	_, err := client.ListAllAssets(context.Background(), &ListAssetsRequest{
+		OrganizationID: "org-1",
+		Search:         "payments",
+		Type:           "rest-api",
+	})
+	if err != nil {
+		t.Fatalf("ListAllAssets() unexpected error = %v", err)
+	}
+	if len(sawSearch) < 2 {
+		t.Fatalf("expected multiple page requests, got %d", len(sawSearch))
+	}
+	for i := range sawSearch {
+		if sawSearch[i] != "payments" {
+			t.Errorf("request %d search = %q, want payments (filter must be forwarded on every page)", i, sawSearch[i])
+		}
+		if sawTypes[i] != "rest-api" {
+			t.Errorf("request %d types = %q, want rest-api (filter must be forwarded on every page)", i, sawTypes[i])
+		}
+	}
+}
+
 func TestAsset_JSONSerialization(t *testing.T) {
 	asset := &Asset{
 		GroupID:      "test-group",
@@ -552,6 +796,42 @@ func TestUpdateAssetRequest_JSONSerialization(t *testing.T) {
 	}
 	if *decoded.Description != *req.Description {
 		t.Errorf("Unmarshaled Description = %v, want %v", *decoded.Description, *req.Description)
+	}
+}
+
+// TestUpdateAssetRequest_OmitsManager pins #65 at the wire layer: the metadata PATCH body
+// must NEVER carry a `manager` key. The Exchange endpoint rejects any manager value (HTTP 403
+// for a username, HTTP 400 for a uuid — LIVE-VERIFIED 2026-07-22), so `manager` was removed
+// from UpdateAssetRequest entirely. Marshaling every OTHER mutable field and asserting the
+// serialized keys contain no "manager" guards against it being reintroduced. (If the field is
+// ever added back to the struct, this decode into a map still catches the resulting key.)
+func TestUpdateAssetRequest_OmitsManager(t *testing.T) {
+	req := &UpdateAssetRequest{
+		Name:         testutil.StringPtr("Some Asset"),
+		Description:  testutil.StringPtr("Some description"),
+		ContactName:  testutil.StringPtr("Ada Lovelace"),
+		ContactEmail: testutil.StringPtr("ada@example.com"),
+	}
+
+	data, err := json.Marshal(req)
+	if err != nil {
+		t.Fatalf("Failed to marshal update request: %v", err)
+	}
+
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("Failed to unmarshal update request into a map: %v", err)
+	}
+	if _, present := m["manager"]; present {
+		t.Errorf("UpdateAssetRequest JSON must NOT contain a \"manager\" key (the PATCH endpoint 403/400s on it); got %s", string(data))
+	}
+
+	// Sanity: the mutable fields we DO support are present, so the test is actually
+	// exercising a populated body (not passing vacuously on an all-omitempty struct).
+	for _, want := range []string{"name", "description", "contactName", "contactEmail"} {
+		if _, present := m[want]; !present {
+			t.Errorf("expected mutable field %q in the PATCH body; got %s", want, string(data))
+		}
 	}
 }
 
