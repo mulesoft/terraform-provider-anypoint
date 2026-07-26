@@ -33,15 +33,36 @@ type SelfManagedGatewaySingleDataSource struct {
 // It reuses SelfManagedGatewayReplicaModel (defined alongside the plural data source) for
 // the per-replica status buckets so both data sources report replicas identically.
 type SelfManagedGatewaySingleDataSourceModel struct {
-	ID             types.String                     `tfsdk:"id"`
-	OrganizationID types.String                     `tfsdk:"organization_id"`
-	EnvironmentID  types.String                     `tfsdk:"environment_id"`
-	Name           types.String                     `tfsdk:"name"`
-	Status         types.String                     `tfsdk:"status"`
-	LastUpdate     types.String                     `tfsdk:"last_update"`
-	Tags           []types.String                   `tfsdk:"tags"`
-	Versions       []types.String                   `tfsdk:"versions"`
-	Replicas       []SelfManagedGatewayReplicaModel `tfsdk:"replicas"`
+	ID             types.String                           `tfsdk:"id"`
+	OrganizationID types.String                           `tfsdk:"organization_id"`
+	EnvironmentID  types.String                           `tfsdk:"environment_id"`
+	Name           types.String                           `tfsdk:"name"`
+	Status         types.String                           `tfsdk:"status"`
+	LastUpdate     types.String                           `tfsdk:"last_update"`
+	Tags           []types.String                         `tfsdk:"tags"`
+	Versions       []types.String                         `tfsdk:"versions"`
+	Replicas       []SelfManagedGatewayReplicaModel       `tfsdk:"replicas"`
+	ReplicaDetails []SelfManagedGatewayReplicaDetailModel `tfsdk:"replica_details"`
+}
+
+// SelfManagedGatewayReplicaDetailModel is the RICH per-replica detail surfaced by the
+// singular data source — one entry per concrete runtime node, backing the Runtime Manager
+// "Replicas" tab. It is distinct from SelfManagedGatewayReplicaModel (the coarse
+// status-bucket summary in `replicas`).
+type SelfManagedGatewayReplicaDetailModel struct {
+	ID                        types.String `tfsdk:"id"`
+	NodeID                    types.String `tfsdk:"node_id"`
+	Name                      types.String `tfsdk:"name"`
+	TargetID                  types.String `tfsdk:"target_id"`
+	GatewayVersion            types.String `tfsdk:"gateway_version"`
+	Status                    types.String `tfsdk:"status"`
+	ConnectedAt               types.String `tfsdk:"connected_at"`
+	DisconnectedAt            types.String `tfsdk:"disconnected_at"`
+	ConfigurationStatus       types.String `tfsdk:"configuration_status"`
+	ConfigurationMessage      types.String `tfsdk:"configuration_message"`
+	CertificateExpirationDate types.String `tfsdk:"certificate_expiration_date"`
+	Cid                       types.String `tfsdk:"cid"`
+	Provider                  types.String `tfsdk:"provider"`
 }
 
 func NewSelfManagedGatewaySingleDataSource() datasource.DataSource {
@@ -100,7 +121,8 @@ func (d *SelfManagedGatewaySingleDataSource) Schema(_ context.Context, _ datasou
 			},
 			"replicas": schema.ListNestedAttribute{
 				Description: "Replica (runtime instance) status buckets reported by the gateway. " +
-					"The platform reports one entry per connectivity status with a running count.",
+					"The platform reports one entry per connectivity status with a running count. " +
+					"This is the coarse summary; for per-node detail use `replica_details`.",
 				Computed: true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
@@ -116,6 +138,71 @@ func (d *SelfManagedGatewaySingleDataSource) Schema(_ context.Context, _ datasou
 							Description: "Certificate expiration timestamps reported by replicas in this bucket.",
 							Computed:    true,
 							ElementType: types.StringType,
+						},
+					},
+				},
+			},
+			"replica_details": schema.ListNestedAttribute{
+				Description: "Rich per-replica detail — one entry per concrete Flex runtime node " +
+					"registered against this gateway, as shown in the Runtime Manager \"Replicas\" tab. " +
+					"Unlike the coarse `replicas` status buckets, each entry here identifies an individual " +
+					"node with its version, connect/disconnect timestamps, per-node certificate expiry, " +
+					"and configuration-sync status.",
+				Computed: true,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"id": schema.StringAttribute{
+							Description: "The unique identifier of this replica.",
+							Computed:    true,
+						},
+						"node_id": schema.StringAttribute{
+							Description: "The node identifier of this replica (typically equal to `id`).",
+							Computed:    true,
+						},
+						"name": schema.StringAttribute{
+							Description: "The replica's reported name (e.g. \"d6c016e2693e.default\").",
+							Computed:    true,
+						},
+						"target_id": schema.StringAttribute{
+							Description: "The gateway (deployment target) id this replica belongs to.",
+							Computed:    true,
+						},
+						"gateway_version": schema.StringAttribute{
+							Description: "The Flex runtime version this replica is running.",
+							Computed:    true,
+						},
+						"status": schema.StringAttribute{
+							Description: "The connectivity status of this replica (e.g. CONNECTED, DISCONNECTED).",
+							Computed:    true,
+						},
+						"connected_at": schema.StringAttribute{
+							Description: "Timestamp when this replica last connected (RFC 3339). Empty if never connected.",
+							Computed:    true,
+						},
+						"disconnected_at": schema.StringAttribute{
+							Description: "Timestamp when this replica last disconnected (RFC 3339). Empty while connected.",
+							Computed:    true,
+						},
+						"configuration_status": schema.StringAttribute{
+							Description: "The configuration-sync status of this replica (e.g. UP_TO_DATE).",
+							Computed:    true,
+						},
+						"configuration_message": schema.StringAttribute{
+							Description: "A human-readable message accompanying the configuration status. " +
+								"Empty when the replica configuration is up to date.",
+							Computed: true,
+						},
+						"certificate_expiration_date": schema.StringAttribute{
+							Description: "This replica's client-certificate expiration timestamp (RFC 3339).",
+							Computed:    true,
+						},
+						"cid": schema.StringAttribute{
+							Description: "The internal connection identifier reported for this replica.",
+							Computed:    true,
+						},
+						"provider": schema.StringAttribute{
+							Description: "The runtime provider reported for this replica (e.g. RR).",
+							Computed:    true,
 						},
 					},
 				},
@@ -216,5 +303,47 @@ func (d *SelfManagedGatewaySingleDataSource) Read(ctx context.Context, req datas
 	}
 	data.Replicas = replicas
 
+	// Fetch the RICH per-replica detail from the dedicated /replicas endpoint (the data behind
+	// the Runtime Manager "Replicas" tab). The gateway itself already resolved above, so a
+	// NotFound here is treated as "no queryable replica detail" (e.g. a soft-deleted tombstone,
+	// which this data source explicitly supports inspecting) rather than a hard error; any other
+	// failure is surfaced so incomplete data never passes silently.
+	details, err := d.client.GetSelfManagedGatewayReplicas(ctx, orgID, envID, gatewayID)
+	if err != nil && !client.IsNotFound(err) {
+		resp.Diagnostics.AddError(
+			"Error reading self-managed gateway replica details",
+			"Could not read replica details for self-managed gateway "+gatewayID+": "+err.Error(),
+		)
+		return
+	}
+	replicaDetails := make([]SelfManagedGatewayReplicaDetailModel, 0, len(details))
+	for _, rd := range details {
+		replicaDetails = append(replicaDetails, SelfManagedGatewayReplicaDetailModel{
+			ID:                        types.StringValue(rd.ID),
+			NodeID:                    types.StringValue(rd.NodeID),
+			Name:                      types.StringValue(rd.Name),
+			TargetID:                  types.StringValue(rd.TargetID),
+			GatewayVersion:            types.StringValue(rd.GatewayVersion),
+			Status:                    types.StringValue(rd.Status),
+			ConnectedAt:               stringOrEmpty(rd.ConnectedAt),
+			DisconnectedAt:            stringOrEmpty(rd.DisconnectedAt),
+			ConfigurationStatus:       types.StringValue(rd.ConfigurationStatus.Status),
+			ConfigurationMessage:      stringOrEmpty(rd.ConfigurationStatus.Message),
+			CertificateExpirationDate: stringOrEmpty(rd.CertificateExpirationDate),
+			Cid:                       types.StringValue(rd.Cid),
+			Provider:                  types.StringValue(rd.Provider),
+		})
+	}
+	data.ReplicaDetails = replicaDetails
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}
+
+// stringOrEmpty converts a nullable API string field to a types.String, mapping a nil pointer
+// to the empty string so a Computed attribute is never left unknown/null in state.
+func stringOrEmpty(s *string) types.String {
+	if s == nil {
+		return types.StringValue("")
+	}
+	return types.StringValue(*s)
 }

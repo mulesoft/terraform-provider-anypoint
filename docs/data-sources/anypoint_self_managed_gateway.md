@@ -27,6 +27,15 @@ Use it to reference an existing gateway's live status, tags, replica health, or 
 runtime versions from elsewhere in your configuration. Referencing an id that does not exist
 is a configuration error and fails the plan.
 
+Replica information is exposed at two levels of detail:
+
+- `replicas` — the coarse **status-bucket summary** embedded in the gateway object (one
+  entry per connectivity status, with a running `count`).
+- `replica_details` — the **rich per-node detail** shown in the Runtime Manager "Replicas"
+  tab (one entry per concrete Flex runtime node, with its version, connect/disconnect
+  timestamps, per-node certificate expiry, and configuration-sync status). This is fetched
+  from the dedicated per-gateway replicas endpoint.
+
 ## Example Usage
 
 ```terraform
@@ -40,11 +49,19 @@ output "gateway_status" {
   value = data.anypoint_self_managed_gateway.one.status
 }
 
-# Total running replicas across all connectivity buckets.
+# Total running replicas across all connectivity buckets (coarse summary).
 output "running_replicas" {
   value = sum([
     for r in data.anypoint_self_managed_gateway.one.replicas : r.count
   ])
+}
+
+# Per-node detail: ids of the individual replicas that are currently connected.
+output "connected_replica_ids" {
+  value = [
+    for r in data.anypoint_self_managed_gateway.one.replica_details : r.id
+    if r.status == "CONNECTED"
+  ]
 }
 ```
 
@@ -66,7 +83,8 @@ output "running_replicas" {
 - `last_update` (String) Timestamp of the gateway's last status update (RFC 3339).
 - `tags` (List of String) Tags associated with the gateway.
 - `versions` (List of String) Runtime versions reported by the gateway's replicas. Empty until a replica reports a version. Not exposed by the plural data source.
-- `replicas` (List of Object) Replica (runtime instance) status buckets reported by the gateway. The platform reports one entry per connectivity status with a running count. See [`replicas`](#nestedschema--replicas) below.
+- `replicas` (List of Object) Replica (runtime instance) status buckets reported by the gateway. The platform reports one entry per connectivity status with a running count. This is the coarse summary; for per-node detail see [`replica_details`](#nestedschema--replica_details). See [`replicas`](#nestedschema--replicas) below.
+- `replica_details` (List of Object) Rich per-node detail — one entry per concrete Flex runtime node registered against this gateway, as shown in the Runtime Manager "Replicas" tab. See [`replica_details`](#nestedschema--replica_details) below.
 
 <a id="nestedschema--replicas"></a>
 ### Nested Schema for `replicas`
@@ -76,3 +94,22 @@ Read-Only:
 - `status` (String) The connectivity status of this replica bucket (e.g. `CONNECTED`, `DISCONNECTED`).
 - `count` (Number) The number of replicas currently in this status.
 - `certificate_expiration_dates` (List of String) Certificate expiration timestamps reported by replicas in this bucket.
+
+<a id="nestedschema--replica_details"></a>
+### Nested Schema for `replica_details`
+
+Read-Only:
+
+- `id` (String) The unique identifier of this replica.
+- `node_id` (String) The node identifier of this replica (typically equal to `id`).
+- `name` (String) The replica's reported name (e.g. `d6c016e2693e.default`).
+- `target_id` (String) The gateway (deployment target) id this replica belongs to.
+- `gateway_version` (String) The Flex runtime version this replica is running.
+- `status` (String) The connectivity status of this replica (e.g. `CONNECTED`, `DISCONNECTED`).
+- `connected_at` (String) Timestamp when this replica last connected (RFC 3339). Empty if never connected.
+- `disconnected_at` (String) Timestamp when this replica last disconnected (RFC 3339). Empty while connected.
+- `configuration_status` (String) The configuration-sync status of this replica (e.g. `UP_TO_DATE`).
+- `configuration_message` (String) A human-readable message accompanying the configuration status. Empty when the replica configuration is up to date.
+- `certificate_expiration_date` (String) This replica's client-certificate expiration timestamp (RFC 3339).
+- `cid` (String) The internal connection identifier reported for this replica.
+- `provider` (String) The runtime provider reported for this replica (e.g. `RR`).
