@@ -3,6 +3,7 @@ package apimanagement
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -71,6 +72,7 @@ type EndpointModel struct {
 	DeploymentType  types.String `tfsdk:"deployment_type"`
 	Type            types.String `tfsdk:"type"`
 	BasePath        types.String `tfsdk:"base_path"`
+	Port            types.Int64  `tfsdk:"port"`
 	ResponseTimeout types.Int64  `tfsdk:"response_timeout"`
 }
 
@@ -92,6 +94,7 @@ var endpointAttrTypes = map[string]attr.Type{
 	"deployment_type":  types.StringType,
 	"type":             types.StringType,
 	"base_path":        types.StringType,
+	"port":             types.Int64Type,
 	"response_timeout": types.Int64Type,
 }
 
@@ -106,6 +109,7 @@ func endpointFromObject(obj types.Object) *EndpointModel {
 		DeploymentType:  attrs["deployment_type"].(types.String),
 		Type:            attrs["type"].(types.String),
 		BasePath:        attrs["base_path"].(types.String),
+		Port:            attrs["port"].(types.Int64),
 		ResponseTimeout: attrs["response_timeout"].(types.Int64),
 	}
 }
@@ -120,12 +124,58 @@ func endpointToObject(ep *EndpointModel) types.Object {
 		"deployment_type":  ep.DeploymentType,
 		"type":             ep.Type,
 		"base_path":        ep.BasePath,
+		"port":             ep.Port,
 		"response_timeout": ep.ResponseTimeout,
 	})
 	if diags.HasError() {
 		return types.ObjectNull(endpointAttrTypes)
 	}
 	return obj
+}
+
+// defaultProxyPort is the Omni/Flex Gateway listener port used when the endpoint
+// does not specify one. The platform's "Add API" flow also defaults to 8081.
+const defaultProxyPort int64 = 8081
+
+// buildProxyURI constructs the Omni/Flex Gateway proxy URI the platform expects
+// for an API instance: http://0.0.0.0:<port>/<base_path>. The port defaults to
+// 8081 when the endpoint's port is null/unknown so that instances written before
+// the port field existed (and configs that omit it) keep their historical URI.
+// A leading slash on base_path is trimmed so callers can write "/my-api" or
+// "my-api" interchangeably.
+func buildProxyURI(ep *EndpointModel) string {
+	port := defaultProxyPort
+	if ep != nil && !ep.Port.IsNull() && !ep.Port.IsUnknown() {
+		port = ep.Port.ValueInt64()
+	}
+	basePath := ""
+	if ep != nil && !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
+		basePath = strings.TrimPrefix(ep.BasePath.ValueString(), "/")
+	}
+	return fmt.Sprintf("http://0.0.0.0:%d/%s", port, basePath)
+}
+
+// parseProxyURI recovers the base_path and listener port from a proxy URI the
+// platform returns (e.g. "http://0.0.0.0:8082/my-api"). It parses generically so
+// that instances on any port — not just the legacy hardcoded 8081 — round-trip
+// correctly. When the port cannot be determined it falls back to 8081. basePath
+// is returned as a bare path with no leading slash (empty string for a root "/"
+// listener), mirroring what buildProxyURI accepts.
+func parseProxyURI(proxyURI string) (basePath string, port int64) {
+	port = defaultProxyPort
+	u, err := url.Parse(proxyURI)
+	if err != nil {
+		// Fall back to the legacy literal-prefix strip so a malformed but
+		// 8081-shaped URI still yields a sensible base path.
+		return strings.TrimPrefix(proxyURI, "http://0.0.0.0:8081/"), port
+	}
+	basePath = strings.TrimPrefix(u.Path, "/")
+	if p := u.Port(); p != "" {
+		if pi, e := strconv.ParseInt(p, 10, 64); e == nil {
+			port = pi
+		}
+	}
+	return basePath, port
 }
 
 // deploymentAttrTypes maps DeploymentModel field names to their Terraform types.
@@ -385,8 +435,19 @@ func (r *APIInstanceResource) Schema(_ context.Context, _ resource.SchemaRequest
 					},
 					"base_path": schema.StringAttribute{
 						Description: "API base path for the Omni Gateway proxy listener (e.g. 'my-api'). " +
-							"The provider constructs the full proxy URI as http://0.0.0.0:8081/<base_path>.",
+							"The provider constructs the full proxy URI as http://0.0.0.0:<port>/<base_path> " +
+							"(see 'port' for the listener port). A single gateway can host multiple API " +
+							"instances either on distinct ports or on the same port under distinct, non-root " +
+							"base paths; a base path of '/' is a catch-all that monopolizes the whole port.",
 						Optional: true,
+					},
+					"port": schema.Int64Attribute{
+						Description: "Listener port for the Omni/Flex Gateway proxy (the port in the constructed " +
+							"proxy URI http://0.0.0.0:<port>/<base_path>). Defaults to 8081. Set a distinct " +
+							"port to host multiple API instances on the same gateway without sharing a base path.",
+						Optional: true,
+						Computed: true,
+						Default:  int64default.StaticInt64(8081),
 					},
 					"response_timeout": schema.Int64Attribute{
 						Description: "Response timeout in milliseconds.",
@@ -1022,11 +1083,7 @@ func (r *APIInstanceResource) expandCreateRequest(ctx context.Context, data APII
 
 		req.Endpoint.TLSContexts = &apimanagement.APIInstanceTLSContexts{}
 
-		basePath := ""
-		if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
-			basePath = strings.TrimPrefix(ep.BasePath.ValueString(), "/")
-		}
-		proxyURI := "http://0.0.0.0:8081/" + basePath
+		proxyURI := buildProxyURI(ep)
 		req.Endpoint.ProxyURI = &proxyURI
 	}
 
@@ -1081,11 +1138,7 @@ func (r *APIInstanceResource) expandUpdateRequest(ctx context.Context, data APII
 
 		req.Endpoint.TLSContexts = &apimanagement.APIInstanceTLSContexts{}
 
-		basePath := ""
-		if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
-			basePath = strings.TrimPrefix(ep.BasePath.ValueString(), "/")
-		}
-		proxyURI := "http://0.0.0.0:8081/" + basePath
+		proxyURI := buildProxyURI(ep)
 		req.Endpoint.ProxyURI = &proxyURI
 	}
 
@@ -1473,9 +1526,12 @@ func (r *APIInstanceResource) flattenInstance(_ context.Context, inst *apimanage
 		}
 
 		if inst.Endpoint.ProxyURI != nil && *inst.Endpoint.ProxyURI != "" {
-			ep.BasePath = types.StringValue(strings.TrimPrefix(*inst.Endpoint.ProxyURI, "http://0.0.0.0:8081/"))
+			basePath, port := parseProxyURI(*inst.Endpoint.ProxyURI)
+			ep.BasePath = types.StringValue(basePath)
+			ep.Port = types.Int64Value(port)
 		} else {
 			ep.BasePath = types.StringNull()
+			ep.Port = types.Int64Value(defaultProxyPort)
 		}
 
 		if inst.Endpoint.ResponseTimeout != nil {

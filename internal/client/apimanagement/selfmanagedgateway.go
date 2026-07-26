@@ -95,6 +95,52 @@ type SelfManagedGatewayReplica struct {
 	CertificateExpirationDates []string `json:"certificateExpirationDates,omitempty"`
 }
 
+// SelfManagedGatewayReplicaConfigStatus is the per-replica configuration-sync status
+// nested inside a replica-detail entry (the "configurationStatus" object).
+//
+// LIVE-VERIFIED shape (2026-07-26): { "status":"UP_TO_DATE", "message":null }. The
+// message is null while the replica's applied configuration matches the desired state;
+// it carries a human-readable reason when the replica is drifting or failed to apply.
+type SelfManagedGatewayReplicaConfigStatus struct {
+	Status  string  `json:"status,omitempty"`
+	Message *string `json:"message"`
+}
+
+// SelfManagedGatewayReplicaDetail is ONE concrete replica (a single running/registered
+// Flex runtime node) as reported by the dedicated per-gateway /replicas endpoint that
+// backs the Runtime Manager "Replicas" tab.
+//
+// This is deliberately DISTINCT from SelfManagedGatewayReplica: that coarse struct is the
+// status-BUCKET summary embedded in the gateway object (one entry per connectivity status
+// with a running count), whereas this struct is the RICH per-node detail — one entry per
+// actual replica, with identity (id/nodeId/name/cid), version, connect/disconnect
+// timestamps, per-replica certificate expiry, and configuration-sync status.
+//
+// LIVE-VERIFIED field set (2026-07-26) against a real registered gateway with two nodes:
+//
+//	{ "id":"…", "targetId":"<gatewayId>", "gatewayVersion":"1.13.3",
+//	  "status":"CONNECTED", "connectedAt":"…", "disconnectedAt":null,
+//	  "configurationStatus":{"status":"UP_TO_DATE","message":null},
+//	  "name":"d6c016e2693e.default", "cid":"arm-mcm2-service-…",
+//	  "certificateExpirationDate":"2027-10-31T15:31:46.00Z", "nodeId":"…", "provider":"RR" }
+//
+// disconnectedAt is null for a currently-connected replica. Unknown fields are ignored on
+// decode, so this remains forward-compatible if new keys appear.
+type SelfManagedGatewayReplicaDetail struct {
+	ID                        string                                `json:"id"`
+	TargetID                  string                                `json:"targetId,omitempty"`
+	GatewayVersion            string                                `json:"gatewayVersion,omitempty"`
+	Status                    string                                `json:"status,omitempty"`
+	ConnectedAt               *string                               `json:"connectedAt"`
+	DisconnectedAt            *string                               `json:"disconnectedAt"`
+	ConfigurationStatus       SelfManagedGatewayReplicaConfigStatus `json:"configurationStatus"`
+	Name                      string                                `json:"name,omitempty"`
+	Cid                       string                                `json:"cid,omitempty"`
+	CertificateExpirationDate *string                               `json:"certificateExpirationDate"`
+	NodeID                    string                                `json:"nodeId,omitempty"`
+	Provider                  string                                `json:"provider,omitempty"`
+}
+
 // SelfManagedGateway represents a self-managed (connected-mode) Flex gateway object
 // as returned by the standalone gateways endpoint.
 //
@@ -129,6 +175,21 @@ type SelfManagedGatewayListResponse struct {
 	PageSize      int                  `json:"pageSize"`
 	PageNumber    int                  `json:"pageNumber"`
 	TotalElements int                  `json:"totalElements"`
+}
+
+// SelfManagedGatewayReplicaListResponse wraps the paginated list response from the
+// dedicated per-gateway /replicas endpoint.
+//
+// LIVE-VERIFIED envelope (2026-07-26): { "content":[...], "totalElements":N,
+// "pageNumber":P, "pageSize":S, "gateway":{...} }. The envelope also echoes the parent
+// "gateway" object (the same coarse shape returned by GetSelfManagedGateway); we ignore
+// it here because the caller already has the gateway and only wants the rich per-replica
+// content.
+type SelfManagedGatewayReplicaListResponse struct {
+	Content       []SelfManagedGatewayReplicaDetail `json:"content"`
+	PageSize      int                               `json:"pageSize"`
+	PageNumber    int                               `json:"pageNumber"`
+	TotalElements int                               `json:"totalElements"`
 }
 
 // RegistrationTokenResponse is the response from the token-mint endpoint.
@@ -305,6 +366,83 @@ func (c *SelfManagedGatewayClient) GetSelfManagedGateway(ctx context.Context, or
 	}
 
 	return &gw, nil
+}
+
+// GetSelfManagedGatewayReplicas returns the RICH per-replica detail for a gateway, following
+// pagination to completion. This backs the Runtime Manager "Replicas" tab and is distinct
+// from the coarse status-bucket replicas embedded in the gateway object (GetSelfManagedGateway):
+// it returns one entry per concrete runtime node with identity, version, connect/disconnect
+// timestamps, per-replica certificate expiry, and configuration-sync status.
+//
+// Contract (live-verified 200, 2026-07-26):
+//
+//	GET {BASE}/standalone/api/v1/organizations/{org}/environments/{env}/gateways/{id}/replicas?pageSize=100&pageNumber=N
+//	-> { "content":[{id,targetId,gatewayVersion,status,connectedAt,disconnectedAt,
+//	                 configurationStatus:{status,message},name,cid,
+//	                 certificateExpirationDate,nodeId,provider}, ...],
+//	     "totalElements":M, "pageNumber":N, "pageSize":S, "gateway":{...} }
+//
+// Pagination matches the /gateways endpoint EXACTLY (live-verified 2026-07-26): default
+// pageSize=30, MAXIMUM pageSize=100 (pageSize>=200 → HTTP 400 "Wrong page size"), and an
+// out-of-range pageNumber returns HTTP 200 with an empty content array. We therefore request
+// the max page size (reusing selfManagedGatewayPageSize) and stop on a SHORT (or empty) page.
+// We deliberately do NOT bound the loop on totalElements: like /gateways, an out-of-range page
+// is a clean empty 200, so the short-page signal is the authoritative last-page condition.
+//
+// A 404 (gateway id absent) is surfaced as a NotFoundError so the data source can distinguish
+// "gateway gone" from a transport error, mirroring GetSelfManagedGateway.
+func (c *SelfManagedGatewayClient) GetSelfManagedGatewayReplicas(ctx context.Context, orgID, envID, gatewayID string) ([]SelfManagedGatewayReplicaDetail, error) {
+	var all []SelfManagedGatewayReplicaDetail
+	pageNumber := 0
+
+	for {
+		url := fmt.Sprintf("%s%s/organizations/%s/environments/%s/gateways/%s/replicas?pageSize=%d&pageNumber=%d",
+			c.BaseURL, selfManagedBasePath, orgID, envID, gatewayID, selfManagedGatewayPageSize, pageNumber)
+
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("Authorization", "Bearer "+c.Token)
+		req.Header.Set("X-ANYPNT-ORG-ID", orgID)
+		req.Header.Set("X-ANYPNT-ENV-ID", envID)
+
+		resp, err := c.HTTPClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to send request: %w", err)
+		}
+
+		if resp.StatusCode == http.StatusNotFound {
+			_ = resp.Body.Close()
+			return nil, client.NewNotFoundError("self-managed gateway")
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			return nil, fmt.Errorf("failed to get self-managed gateway replicas with status %d: %s", resp.StatusCode, string(body))
+		}
+
+		var listResp SelfManagedGatewayReplicaListResponse
+		if err := json.NewDecoder(resp.Body).Decode(&listResp); err != nil {
+			_ = resp.Body.Close()
+			return nil, fmt.Errorf("failed to decode response: %w", err)
+		}
+		_ = resp.Body.Close()
+
+		all = append(all, listResp.Content...)
+
+		// A short (or empty) page is the last page. Out-of-range pages return an empty 200,
+		// so this is the authoritative stop condition (totalElements is not a reliable bound).
+		if len(listResp.Content) < selfManagedGatewayPageSize {
+			break
+		}
+		pageNumber++
+	}
+
+	return all, nil
 }
 
 // DeleteSelfManagedGateway deletes a registered self-managed gateway by ID.

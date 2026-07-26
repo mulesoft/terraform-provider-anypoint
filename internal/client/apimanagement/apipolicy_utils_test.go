@@ -189,3 +189,59 @@ func TestApplyPolicyDefaults_WebSocketConnectionLimit(t *testing.T) {
 		t.Errorf("maximumConnections default = %v, want 100", config["maximumConnections"])
 	}
 }
+
+// TestApplyPolicyDefaults_CredentialInjectionOverwrite is a regression guard for
+// the credential-injection outbound family. The live Platform schema marks
+// `overwrite` as a REQUIRED property and returns HTTP 400
+// ("must have required property 'overwrite'") if a create/update payload omits
+// it — even though the provider exposes it as an optional field. Because
+// ApplyPolicyDefaults runs on both the Create and Update paths (see
+// apipolicy_known.go), a user who leaves `overwrite` unset still gets it sent as
+// its schema default (false), so the typed resource never triggers that 400.
+// This test locks that behaviour in for the whole credential-injection family.
+func TestApplyPolicyDefaults_CredentialInjectionOverwrite(t *testing.T) {
+	t.Run("basic-auth injects overwrite=false when omitted", func(t *testing.T) {
+		config := map[string]interface{}{
+			"username": "svc-user",
+			"password": "svc-pass",
+		}
+		ApplyPolicyDefaults("credential-injection-basic-auth", config)
+		got, ok := config["overwrite"]
+		if !ok {
+			t.Fatal("overwrite was not injected; Platform would return HTTP 400 'must have required property overwrite'")
+		}
+		if got != false {
+			t.Errorf("overwrite default = %v, want false", got)
+		}
+	})
+
+	t.Run("oauth2 injects overwrite + sibling defaults when omitted", func(t *testing.T) {
+		config := map[string]interface{}{
+			"oauthService": "svc",
+			"clientId":     "cid",
+			"clientSecret": "secret",
+		}
+		ApplyPolicyDefaults("credential-injection-oauth2", config)
+		if got, ok := config["overwrite"]; !ok || got != false {
+			t.Errorf("overwrite = %v (present=%v), want false", got, ok)
+		}
+		if got, ok := config["allowRequestWithoutCredential"]; !ok || got != false {
+			t.Errorf("allowRequestWithoutCredential = %v (present=%v), want false", got, ok)
+		}
+		if got, ok := config["tokenFetchTimeout"]; !ok || got != 10000 {
+			t.Errorf("tokenFetchTimeout = %v (present=%v), want 10000", got, ok)
+		}
+	})
+
+	t.Run("explicit overwrite=true is preserved, not clobbered by default", func(t *testing.T) {
+		config := map[string]interface{}{
+			"username":  "svc-user",
+			"password":  "svc-pass",
+			"overwrite": true,
+		}
+		ApplyPolicyDefaults("credential-injection-basic-auth", config)
+		if config["overwrite"] != true {
+			t.Errorf("overwrite = %v, want true (user value must win over default)", config["overwrite"])
+		}
+	})
+}

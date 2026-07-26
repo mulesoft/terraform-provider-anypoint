@@ -354,6 +354,206 @@ func TestSelfManagedGatewayClient_GetSelfManagedGateway_NotFound(t *testing.T) {
 	}
 }
 
+// --- GetSelfManagedGatewayReplicas ---
+
+func TestSelfManagedGatewayClient_GetSelfManagedGatewayReplicas(t *testing.T) {
+	path := "/standalone/api/v1/organizations/test-org-id/environments/test-env-id/gateways/gw-1/replicas"
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		path: func(w http.ResponseWriter, r *http.Request) {
+			// Rich per-replica detail envelope LIVE-VERIFIED (2026-07-26). A CONNECTED node
+			// has connectedAt set / disconnectedAt null, and configurationStatus.message null
+			// while up to date; the DISCONNECTED node inverts those.
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"content": []map[string]interface{}{
+					{
+						"id":                        "rep-1",
+						"targetId":                  "gw-1",
+						"gatewayVersion":            "1.13.3",
+						"status":                    "CONNECTED",
+						"connectedAt":               "2026-07-25T11:24:34.39Z",
+						"disconnectedAt":            nil,
+						"configurationStatus":       map[string]interface{}{"status": "UP_TO_DATE", "message": nil},
+						"name":                      "node-1.default",
+						"cid":                       "arm-mcm2-service-1",
+						"certificateExpirationDate": "2027-10-31T15:31:46.00Z",
+						"nodeId":                    "rep-1",
+						"provider":                  "RR",
+					},
+					{
+						"id":                        "rep-2",
+						"targetId":                  "gw-1",
+						"gatewayVersion":            "1.13.3",
+						"status":                    "DISCONNECTED",
+						"connectedAt":               "2026-07-25T11:18:21.56Z",
+						"disconnectedAt":            "2026-07-25T11:25:21.56Z",
+						"configurationStatus":       map[string]interface{}{"status": "APPLYING", "message": "syncing"},
+						"name":                      "node-2.default",
+						"cid":                       "arm-mcm2-service-2",
+						"certificateExpirationDate": "2027-10-31T15:31:46.00Z",
+						"nodeId":                    "rep-2",
+						"provider":                  "RR",
+					},
+				},
+				"totalElements": 2, "pageNumber": 0, "pageSize": 100,
+				// The envelope echoes the parent gateway; the client must ignore it.
+				"gateway": map[string]interface{}{"id": "gw-1", "name": "flex-a"},
+			})
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+	c := newTestSelfManagedClient(server.URL)
+
+	reps, err := c.GetSelfManagedGatewayReplicas(context.Background(), "test-org-id", "test-env-id", "gw-1")
+	if err != nil {
+		t.Fatalf("GetSelfManagedGatewayReplicas() error: %v", err)
+	}
+	if len(reps) != 2 {
+		t.Fatalf("len = %d, want 2", len(reps))
+	}
+	c0 := reps[0]
+	if c0.ID != "rep-1" || c0.NodeID != "rep-1" || c0.Name != "node-1.default" {
+		t.Errorf("reps[0] identity = %+v, unexpected", c0)
+	}
+	if c0.TargetID != "gw-1" || c0.GatewayVersion != "1.13.3" || c0.Provider != "RR" || c0.Cid != "arm-mcm2-service-1" {
+		t.Errorf("reps[0] = %+v, unexpected metadata", c0)
+	}
+	if c0.Status != "CONNECTED" {
+		t.Errorf("reps[0].Status = %q, want CONNECTED", c0.Status)
+	}
+	if c0.ConnectedAt == nil || *c0.ConnectedAt != "2026-07-25T11:24:34.39Z" {
+		t.Errorf("reps[0].ConnectedAt = %v, want 2026-07-25T11:24:34.39Z", c0.ConnectedAt)
+	}
+	// disconnectedAt null for a connected node -> nil pointer (distinct from empty string).
+	if c0.DisconnectedAt != nil {
+		t.Errorf("reps[0].DisconnectedAt = %v, want nil", *c0.DisconnectedAt)
+	}
+	if c0.ConfigurationStatus.Status != "UP_TO_DATE" || c0.ConfigurationStatus.Message != nil {
+		t.Errorf("reps[0].ConfigurationStatus = %+v, want {UP_TO_DATE nil}", c0.ConfigurationStatus)
+	}
+	if c0.CertificateExpirationDate == nil || *c0.CertificateExpirationDate != "2027-10-31T15:31:46.00Z" {
+		t.Errorf("reps[0].CertificateExpirationDate = %v, unexpected", c0.CertificateExpirationDate)
+	}
+	// Inverse case: disconnected node has disconnectedAt set and a non-null config message.
+	c1 := reps[1]
+	if c1.DisconnectedAt == nil || *c1.DisconnectedAt != "2026-07-25T11:25:21.56Z" {
+		t.Errorf("reps[1].DisconnectedAt = %v, want 2026-07-25T11:25:21.56Z", c1.DisconnectedAt)
+	}
+	if c1.ConfigurationStatus.Status != "APPLYING" || c1.ConfigurationStatus.Message == nil || *c1.ConfigurationStatus.Message != "syncing" {
+		t.Errorf("reps[1].ConfigurationStatus = %+v, want {APPLYING syncing}", c1.ConfigurationStatus)
+	}
+}
+
+// TestSelfManagedGatewayClient_GetSelfManagedGatewayReplicas_Paginates guards against the same
+// single-page truncation bug class as ListSelfManagedGateways: the /replicas endpoint pages via
+// pageSize+pageNumber (default 30, max 100, out-of-range page => empty 200). A naive
+// single-request implementation would silently drop replicas on page 2+, under-reporting a
+// large gateway's fleet. This serves two full pages (100 each) then a short page, and asserts
+// the client walks all three, concatenates every replica, and requests the max pageSize (100).
+func TestSelfManagedGatewayClient_GetSelfManagedGatewayReplicas_Paginates(t *testing.T) {
+	const pageSize = 100
+	path := "/standalone/api/v1/organizations/test-org-id/environments/test-env-id/gateways/gw-1/replicas"
+
+	pages := map[string]int{"0": pageSize, "1": pageSize, "2": 7}
+	total := pageSize + pageSize + 7
+
+	var sawPageSizes, sawPageNumbers []string
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		path: func(w http.ResponseWriter, r *http.Request) {
+			q := r.URL.Query()
+			sawPageSizes = append(sawPageSizes, q.Get("pageSize"))
+			pageNumber := q.Get("pageNumber")
+			sawPageNumbers = append(sawPageNumbers, pageNumber)
+			pageNumberInt, _ := strconv.Atoi(pageNumber)
+
+			n, ok := pages[pageNumber]
+			if !ok {
+				// Beyond the last page: real API returns 200 + empty content.
+				testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+					"content": []map[string]interface{}{}, "totalElements": total,
+					"pageNumber": pageNumberInt, "pageSize": pageSize,
+				})
+				return
+			}
+			content := make([]map[string]interface{}, 0, n)
+			for i := 0; i < n; i++ {
+				content = append(content, map[string]interface{}{
+					"id":     fmt.Sprintf("rep-%s-%d", pageNumber, i),
+					"status": "CONNECTED",
+				})
+			}
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"content": content, "totalElements": total,
+				"pageNumber": pageNumberInt, "pageSize": pageSize,
+			})
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+	c := newTestSelfManagedClient(server.URL)
+
+	reps, err := c.GetSelfManagedGatewayReplicas(context.Background(), "test-org-id", "test-env-id", "gw-1")
+	if err != nil {
+		t.Fatalf("GetSelfManagedGatewayReplicas() error: %v", err)
+	}
+	if len(reps) != total {
+		t.Fatalf("len = %d, want %d (all pages concatenated)", len(reps), total)
+	}
+	if reps[total-1].ID != "rep-2-6" {
+		t.Errorf("last replica ID = %q, want rep-2-6 (item from final page)", reps[total-1].ID)
+	}
+	if len(sawPageNumbers) != 3 {
+		t.Fatalf("requested %d pages (%v), want 3", len(sawPageNumbers), sawPageNumbers)
+	}
+	for i, want := range []string{"0", "1", "2"} {
+		if sawPageNumbers[i] != want {
+			t.Errorf("request %d pageNumber = %q, want %q", i, sawPageNumbers[i], want)
+		}
+	}
+	for i, ps := range sawPageSizes {
+		if ps != "100" {
+			t.Errorf("request %d pageSize = %q, want 100", i, ps)
+		}
+	}
+}
+
+func TestSelfManagedGatewayClient_GetSelfManagedGatewayReplicas_NotFound(t *testing.T) {
+	path := "/standalone/api/v1/organizations/test-org-id/environments/test-env-id/gateways/missing/replicas"
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		path: func(w http.ResponseWriter, r *http.Request) {
+			testutil.ErrorResponse(w, http.StatusNotFound, "Gateway not found by id")
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+	c := newTestSelfManagedClient(server.URL)
+
+	_, err := c.GetSelfManagedGatewayReplicas(context.Background(), "test-org-id", "test-env-id", "missing")
+	if err == nil {
+		t.Fatal("expected error for missing gateway")
+	}
+	if !client.IsNotFound(err) {
+		t.Errorf("expected NotFound error, got %v", err)
+	}
+}
+
+func TestSelfManagedGatewayClient_GetSelfManagedGatewayReplicas_Error(t *testing.T) {
+	path := "/standalone/api/v1/organizations/test-org-id/environments/test-env-id/gateways/gw-1/replicas"
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		path: func(w http.ResponseWriter, r *http.Request) {
+			testutil.ErrorResponse(w, http.StatusForbidden, "nope")
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+	c := newTestSelfManagedClient(server.URL)
+
+	_, err := c.GetSelfManagedGatewayReplicas(context.Background(), "test-org-id", "test-env-id", "gw-1")
+	if err == nil {
+		t.Fatal("expected error on 403, got nil")
+	}
+	if client.IsNotFound(err) {
+		t.Errorf("403 must not be reported as NotFound; got %v", err)
+	}
+}
+
 // --- DeleteSelfManagedGateway ---
 
 // The real delete is an async soft-delete that returns HTTP 202 Accepted. (200/204 are also
