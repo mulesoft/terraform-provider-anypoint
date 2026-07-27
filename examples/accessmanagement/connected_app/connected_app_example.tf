@@ -19,7 +19,7 @@ provider "anypoint" {
 # Create a connected app that acts on its own behalf (client_credentials)
 # with inline scopes using display names from the UI.
 resource "anypoint_connected_app" "service_app" {
-  client_name = "My Service Application"
+  name        = "My Service Application"
   grant_types = ["client_credentials"]
   audience    = "internal"
   enabled     = true
@@ -43,7 +43,7 @@ resource "anypoint_connected_app" "service_app" {
 # For user-behalf apps, scopes are stored in the app body (flat field) — the provider
 # handles this transparently. redirect_uris and client_uri are required by the UI.
 resource "anypoint_connected_app" "user_app" {
-  client_name = "My User-Facing Application"
+  name        = "My User-Facing Application"
   grant_types = ["authorization_code", "password"]
   audience    = "internal"
   enabled     = true
@@ -72,7 +72,7 @@ resource "anypoint_connected_app" "user_app" {
 # Create a connected app with JWT Bearer grant (for service-to-service auth).
 # redirect_uris and client_uri are required for user-behalf apps to be editable in the UI.
 resource "anypoint_connected_app" "jwt_app" {
-  client_name   = "JWT Bearer Service"
+  name          = "JWT Bearer Service"
   grant_types   = ["urn:ietf:params:oauth:grant-type:jwt-bearer"]
   redirect_uris = ["https://jwt-service.example.com/callback"]
   client_uri    = "https://jwt-service.example.com"
@@ -92,7 +92,7 @@ resource "anypoint_connected_app" "jwt_app" {
 
 # Create a public app that can be used by anyone
 resource "anypoint_connected_app" "public_app" {
-  client_name = "Public API Client"
+  name        = "Public API Client"
   grant_types = ["client_credentials"]
   audience    = "everyone"
   client_uri  = "https://public-docs.example.com"

@@ -305,7 +305,7 @@ func (r *AssetResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				},
 			},
 			"api_version": schema.StringAttribute{
-				Description: "The API version (properties.apiVersion). Used for API spec asset types.",
+				Description: "The API version (properties.apiVersion), e.g. \"v1\". REQUIRED at create for the API-spec types rest-api, evented-api, and grpc-api — publishing one of these without api_version fails with `400 MISSING_REQUIRED_PROPERTIES: apiVersion`. This is the human-facing API contract version, distinct from the immutable GAV version.",
 				Optional:    true,
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{
@@ -643,10 +643,11 @@ func (r *AssetResource) Configure(_ context.Context, req resource.ConfigureReque
 // policy, agent, llm (live-verified fileless 2026-07-16), mcp, http-api, and any
 // future/unknown type. Extend this map only when a type is confirmed to require a file.
 //
-// NOTE: evented-api and grpc-api ALSO require properties.apiVersion (a fileless-or-
-// versionless config 400s MISSING_REQUIRED_PROPERTIES), but that is a distinct
-// constraint not modeled by this file-only allowlist; the api_version omission still
-// surfaces only at apply. See the E2E report Finding B.
+// NOTE: rest-api, evented-api and grpc-api ALSO require properties.apiVersion (a
+// versionless publish 400s MISSING_REQUIRED_PROPERTIES: apiVersion) — a distinct
+// constraint from this file-only allowlist. It is modeled separately by
+// assetTypesRequiringAPIVersion / the api_version guard in ModifyPlan (below).
+// See the E2E report Finding B.
 var assetTypesRequiringFile = map[string]bool{
 	"rest-api":    true,
 	"soap-api":    true,
@@ -660,6 +661,36 @@ var assetTypesRequiringFile = map[string]bool{
 // with an uploaded spec file. Unknown/unlisted types return false (never blocked).
 func assetTypeRequiresFile(t string) bool {
 	return assetTypesRequiringFile[strings.ToLower(strings.TrimSpace(t))]
+}
+
+// assetTypesRequiringAPIVersion lists asset types whose multipart CREATE publish is
+// rejected when properties.apiVersion is omitted, with
+// `400 MISSING_REQUIRED_PROPERTIES: apiVersion`. This is a SEPARATE constraint from
+// assetTypesRequiringFile (a type can need a file, an apiVersion, or both), so it is
+// modeled as its own allowlist rather than reusing that map.
+//
+// As with the file allowlist, membership is conservative — ONLY types whose apiVersion
+// requirement was verified against the platform's own 400 body are listed, so the guard
+// can never be a false positive for a type that legitimately publishes without one:
+//   - rest-api    — live-verified 2026-07-27: create without properties.apiVersion 400s
+//     MISSING_REQUIRED_PROPERTIES: apiVersion (both mainFile and apiVersion when both omitted).
+//   - evented-api — live-verified 2026-07-16 (E2E report Finding B).
+//   - grpc-api    — live-verified 2026-07-16 (E2E report Finding B).
+//
+// Deliberately EXCLUDED (no confirmed apiVersion requirement — blocking them would be a
+// false positive): soap-api and graphql-api (file-backed but apiVersion not confirmed
+// mandatory), and every fileless type (custom/app/template/policy/llm/mcp/http-api/…).
+// Extend this map only when a type is confirmed to reject a versionless publish.
+var assetTypesRequiringAPIVersion = map[string]bool{
+	"rest-api":    true,
+	"evented-api": true,
+	"grpc-api":    true,
+}
+
+// assetTypeRequiresAPIVersion reports whether the given asset type's create publish
+// requires properties.apiVersion. Unknown/unlisted types return false (never blocked).
+func assetTypeRequiresAPIVersion(t string) bool {
+	return assetTypesRequiringAPIVersion[strings.ToLower(strings.TrimSpace(t))]
 }
 
 // stringChanged reports whether a KNOWN planned value differs from the prior state
@@ -782,6 +813,55 @@ func (r *AssetResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 				"status = \"development\" (change the version attribute, which forces replacement) "+
 				"rather than editing the status of an already-published version in place.",
 		)
+	}
+
+	// --- Guard #1.5: API-spec types need api_version on create/replace. ---
+	// rest-api / evented-api / grpc-api reject a versionless multipart publish with
+	// `400 MISSING_REQUIRED_PROPERTIES: apiVersion`. Like the file_path guard this only
+	// bites when Exchange (re)publishes the version — CREATE or REPLACE — and on a
+	// REPLACE (version bump) the old version is destroyed BEFORE the failing publish, so
+	// raising it at plan time (before any destroy) is strictly safer than the raw
+	// apply-time 400. Skipped when the type is unknown (can't classify) and for any type
+	// not on the confirmed assetTypesRequiringAPIVersion allowlist. Falls through (no
+	// early return) so the file_path guard below can also report on the same plan.
+	//
+	// The provided-check reads CONFIG, not plan — this is the key difference from the
+	// file_path guard. api_version is Optional+Computed, so an UNCONFIGURED value plans
+	// as Unknown; but so does a value bound to another resource's not-yet-known output.
+	// Those two are indistinguishable in the PLAN, so a plan-based check would false-
+	// positive on a legitimate reference and block a valid apply. In the CONFIG they ARE
+	// distinct: omitted => null, unresolved reference => unknown, literal => known. Fire
+	// only when the user genuinely supplied nothing (config null or empty ""); when it is
+	// an unresolved reference (config unknown) defer to apply (the server 400 is the
+	// backstop) rather than risk a false positive. (file_path is Optional-only, not
+	// Computed, so an omitted file_path is already null in the plan — hence that guard can
+	// safely read the plan directly.)
+	if (creating || replacing) && !plan.Type.IsUnknown() &&
+		assetTypeRequiresAPIVersion(plan.Type.ValueString()) {
+		var cfgAPIVersion types.String
+		resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("api_version"), &cfgAPIVersion)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if !cfgAPIVersion.IsUnknown() && (cfgAPIVersion.IsNull() || cfgAPIVersion.ValueString() == "") {
+			apiVersionAction := "created"
+			if replacing {
+				apiVersionAction = "replaced (destroyed and recreated)"
+			}
+			resp.Diagnostics.AddAttributeError(
+				path.Root("api_version"),
+				"Missing api_version for an API-spec asset type",
+				fmt.Sprintf(
+					"Asset type %q requires api_version (properties.apiVersion) when it is published, "+
+						"but api_version is not set. When the asset version is %s, Exchange rejects the "+
+						"publish with \"400 MISSING_REQUIRED_PROPERTIES: apiVersion\".\n\n"+
+						"Set api_version to the API contract version (for example \"v1\"). On a version "+
+						"change this is especially important: the version attribute forces replacement, so "+
+						"the failing publish can occur after the previous version has already been destroyed.",
+					plan.Type.ValueString(), apiVersionAction,
+				),
+			)
+		}
 	}
 
 	// --- Guard #2: file-backed types need a file on create/replace. ---

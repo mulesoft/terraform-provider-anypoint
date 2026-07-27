@@ -167,7 +167,7 @@ resource "anypoint_exchange_asset" "petstore" {
 - `keywords` (String) Comma-separated keywords for search discovery.
 - `contact_name` (String) Contact person name for this asset. **Group-scoped** — shared across all versions.
 - `contact_email` (String) Contact email for this asset. **Group-scoped** — shared across all versions.
-- `api_version` (String) The API version (`properties.apiVersion`). Used for API spec asset types.
+- `api_version` (String) The API version (`properties.apiVersion`), e.g. `v1`. REQUIRED at create for the API-spec types `rest-api`, `evented-api`, and `grpc-api` — publishing one of these without api_version fails with `400 MISSING_REQUIRED_PROPERTIES: apiVersion`. This is the human-facing API contract version, distinct from the immutable GAV `version`.
 - `classifier` (String) The file classifier: `custom`, `raml`, `oas`, `wsdl`, `graphql`, etc. Required when `file_path` is set.
 - `file_path` (String) Path to the file to upload (JAR, ZIP, RAML, OAS, etc.). Used only at creation time. After import, one apply settles this field (non-destructive). Changing to a different value triggers replacement.
 - `main_file` (String) The main file within the uploaded archive (`properties.mainFile`). Used for multi-file specs.

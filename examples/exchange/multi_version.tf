@@ -58,12 +58,20 @@ locals {
       file_path = "test-assets/petstore.json"
       status    = "published"
       tags      = ["terraform", "petstore", "v1", "stable"]
+      # api_version is REQUIRED at create for API-spec asset types (rest-api,
+      # soap-api, graphql-api, evented-api, grpc-api). Omitting it makes the
+      # publish fail with `400 MISSING_REQUIRED_PROPERTIES: apiVersion`
+      # (live-verified against production). It is the human-facing API contract
+      # version (distinct from the GAV `version`) and is VERSION-scoped, so each
+      # entry sets its own.
+      api_version = "v1"
     }
     v2 = {
-      version   = "2.0.0"
-      file_path = "test-assets/petstore-v2.json" # a genuinely different spec (adds /vaccinations)
-      status    = "published"
-      tags      = ["terraform", "petstore", "v2", "adds-vaccinations"]
+      version     = "2.0.0"
+      file_path   = "test-assets/petstore-v2.json" # a genuinely different spec (adds /vaccinations)
+      status      = "published"
+      tags        = ["terraform", "petstore", "v2", "adds-vaccinations"]
+      api_version = "v2"
     }
   }
 }
@@ -83,6 +91,11 @@ resource "anypoint_exchange_asset" "petstore" {
   main_file = basename(each.value.file_path)
   status    = each.value.status
   tags      = each.value.tags
+
+  # REQUIRED for API-spec types (rest-api here). The publish call rejects a
+  # create without it: `400 MISSING_REQUIRED_PROPERTIES: apiVersion`. It is
+  # version-scoped, so it comes from each map entry.
+  api_version = each.value.api_version
 
   # ---- GROUP-scoped: identical across every entry (see caveat #2) ----
   name          = local.petstore_group.name
