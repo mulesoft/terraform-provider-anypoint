@@ -84,12 +84,19 @@ There is no separate "asset version" resource — one `anypoint_exchange_asset` 
 - **Remove a map key** → hard-deletes **that version only** (the others are untouched).
 - **Edit a key's `version` string in place** → forces **replacement** of that entry (the destructive path — see the caveats).
 
-Use a stable, human-meaningful map key (e.g. `v1`, `v2`) rather than the version number, so bumping `version` does not change the key (which would destroy and recreate under a new key instead of tracking the same instance).
+Key the map by the **version number** itself (`"1.0.0"`, `"1.0.1"`, `"2.0.0"`); HCL map keys may be quoted strings, so dotted version numbers are fine, and the resource addresses read `anypoint_exchange_asset.petstore["1.0.0"]`. (If you started with handle keys like `v1`/`v2`, migrate to version-number keys with [`moved` blocks](https://developer.hashicorp.com/terraform/language/modules/develop/refactoring) — a pure state rename, no republish.)
+
+Not every field is stored per version. There are **three scopes** — get this wrong and a later publish silently rewrites an earlier version, which then drifts on every `plan`:
+
+| Scope | Fields | Stored… |
+|---|---|---|
+| **Version** (independent per GAV) | `file_path`, `classifier`, `api_version`, `status` | per version |
+| **Version-group** (shared within a **major** line) | `tags`, external `instances` | once per major (`versionGroup`) |
+| **Group** (shared across the **whole asset**) | `name`, `description`, `contact_name`, `contact_email`, `manager` | once per asset |
 
 ```terraform
 locals {
-  # GROUP-scoped fields — declared ONCE and reused by every entry so they are
-  # guaranteed identical across versions (see caveat 1 below).
+  # GROUP scope — identical across the whole asset (caveat 1).
   petstore_group = {
     name          = "TF Demo Petstore API (multi-version)"
     description   = "Petstore API published by Terraform, managed across versions with for_each."
@@ -97,20 +104,19 @@ locals {
     contact_email = "platform@example.com"
   }
 
-  # VERSION-scoped fields — may differ freely between versions.
+  # VERSION-GROUP scope — one entry per MAJOR line. tags live HERE, not on the
+  # individual version, because Exchange stores labels once per major (caveat 2).
+  petstore_majors = {
+    "1" = { tags = ["terraform", "petstore", "v1"] }
+    "2" = { tags = ["terraform", "petstore", "v2", "adds-vaccinations"] }
+  }
+
+  # VERSION scope — one entry per published version. `major` links each patch to
+  # its version group above. Only genuinely per-version fields belong here.
   petstore_versions = {
-    v1 = {
-      version   = "1.0.0"
-      file_path = "test-assets/petstore.json"
-      status    = "published"
-      tags      = ["terraform", "petstore", "v1", "stable"]
-    }
-    v2 = {
-      version   = "2.0.0"
-      file_path = "test-assets/petstore-v2.json" # a genuinely different spec
-      status    = "published"
-      tags      = ["terraform", "petstore", "v2", "adds-vaccinations"]
-    }
+    "1.0.0" = { major = "1", file_path = "test-assets/petstore.json", status = "published", api_version = "v1" }
+    "1.0.1" = { major = "1", file_path = "test-assets/petstore-v1_0_1.json", status = "published", api_version = "v1" }
+    "2.0.0" = { major = "2", file_path = "test-assets/petstore-v2.json", status = "published", api_version = "v2" }
   }
 }
 
@@ -123,12 +129,15 @@ resource "anypoint_exchange_asset" "petstore" {
   type            = "rest-api"
   classifier      = "oas"
 
-  # VERSION-scoped — independent per version.
-  version   = each.value.version
-  file_path = "${path.module}/${each.value.file_path}"
-  main_file = basename(each.value.file_path)
-  status    = each.value.status
-  tags      = each.value.tags
+  # VERSION-scoped — independent per version. The map key IS the version number.
+  version     = each.key
+  file_path   = "${path.module}/${each.value.file_path}"
+  main_file   = basename(each.value.file_path)
+  status      = each.value.status
+  api_version = each.value.api_version # REQUIRED at create for API-spec types
+
+  # VERSION-GROUP-scoped — from the MAJOR, shared by every patch in it (caveat 2).
+  tags = local.petstore_majors[each.value.major].tags
 
   # GROUP-scoped — identical across every entry (caveat 1).
   name          = local.petstore_group.name
@@ -136,18 +145,19 @@ resource "anypoint_exchange_asset" "petstore" {
   contact_name  = local.petstore_group.contact_name
   contact_email = local.petstore_group.contact_email
 
-  # Recreate safety for the destructive path (caveat 3).
+  # Recreate safety for the destructive path (caveat 4).
   lifecycle {
     create_before_destroy = true
   }
 }
 ```
 
-**Caveats** (all three were verified against the live platform):
+**Caveats** (all verified against the live platform):
 
 1. **Group-scoped fields must be identical across every entry.** `name`, `description`, `contact_name`, `contact_email`, and `manager` are stored **once per asset**, not per version. If entries disagree, the platform silently keeps the existing group value and drops the others. Factor them into `locals` (as above) so they can never drift apart.
-2. **External `instances` are shared within a major version.** Instances live at the version-group (major) level, so all versions that share a major (e.g. `1.0.0` and `1.1.0`) share one instance set. Define instances on a single entry per major (or keep them identical within a major) to avoid a tug-of-war between entries.
-3. **`version` is replacement-forcing, so editing a version string in place is destructive.** Prefer adding/removing map keys (purely additive / version-scoped delete). When you must bump a version, `create_before_destroy = true` publishes the new GAV before hard-deleting the old one (safe because a version bump yields a distinct, coexisting GAV), and the `status` `OneOf` validator catches typos like `"Published"` at **plan** time — before any destroy runs.
+2. **`tags` and external `instances` are shared within a major version — source them from the major, not the patch.** Exchange stores labels **once per version-group (major line)**, so `1.0.0` and `1.0.1` share one tag set and the **last publish wins**. If two same-major entries set different tags they silently clobber each other, and the loser then shows perpetual drift on every `plan`. Keying tags off the major (as above) makes disagreement impossible. Only `file_path` / `classifier` / `api_version` / `status` may safely differ between two versions that share a major.
+3. **`api_version` is required at create for `rest-api`, `evented-api`, and `grpc-api`.** Omitting it fails the publish with `400 MISSING_REQUIRED_PROPERTIES: apiVersion`, and the provider blocks it at **plan** time for these three types. (`soap-api` and `graphql-api` need a spec *file* but not `api_version`.) It is the human-facing API contract version, distinct from the GAV `version`, and is version-scoped — so it may legitimately differ between two versions that share a major.
+4. **`version` is replacement-forcing, so editing a version string in place is destructive.** Prefer adding/removing map keys (purely additive / version-scoped delete). When you must bump a version, `create_before_destroy = true` publishes the new GAV before hard-deleting the old one (safe because a version bump yields a distinct, coexisting GAV), and the `status` `OneOf` validator catches typos like `"Published"` at **plan** time — before any destroy runs.
 
 ## Schema
 
