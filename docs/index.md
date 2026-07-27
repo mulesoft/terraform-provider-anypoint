@@ -214,3 +214,13 @@ All resources provided by `terraform-provider-anypoint`, grouped by subcategory.
 | [anypoint_api_policy_a2a_prompt_decorator](resources/anypoint_api_policy_a2a_prompt_decorator.md) | Manages an A2A Prompt Decorator policy on an Anypoint API instance. |
 | [anypoint_api_policy_a2a_schema_validation](resources/anypoint_api_policy_a2a_schema_validation.md) | Manages an A2A Schema Validation policy on an Anypoint API instance. |
 | [anypoint_api_policy_a2a_token_rate_limit](resources/anypoint_api_policy_a2a_token_rate_limit.md) | Manages an A2A Token Rate Limit policy on an Anypoint API instance. |
+
+### API Policies — GraphQL & WebSocket
+
+| Resource | Description |
+|----------|-------------|
+| [anypoint_api_policy_graphql_schema_validation](resources/anypoint_api_policy_graphql_schema_validation.md) | Manages a GraphQL Schema Validation policy on an Anypoint API instance. |
+| [anypoint_api_policy_graphql_operation_limits](resources/anypoint_api_policy_graphql_operation_limits.md) | Manages a GraphQL Operation Limits policy on an Anypoint API instance. |
+| [anypoint_api_policy_graphql_static_query_complexity](resources/anypoint_api_policy_graphql_static_query_complexity.md) | Manages a GraphQL Static Query Complexity policy on an Anypoint API instance. |
+| [anypoint_api_policy_graphql_introspection_control](resources/anypoint_api_policy_graphql_introspection_control.md) | Manages a GraphQL Introspection Control policy on an Anypoint API instance. |
+| [anypoint_api_policy_websocket_connection_limit](resources/anypoint_api_policy_websocket_connection_limit.md) | Manages a WebSocket Connection Limit policy on an Anypoint API instance. |

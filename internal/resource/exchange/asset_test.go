@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -1219,8 +1220,15 @@ func TestAssetResource_ModifyPlan_FilePathGuard(t *testing.T) {
 			wantErr:  false,
 		},
 		{
-			name:     "create file-backed type WITH file_path is allowed",
-			planRaw:  raw(withFilePath(map[string]tftypes.Value{"type": tftypes.NewValue(tftypes.String, "rest-api")}, "spec.json")),
+			name: "create file-backed type WITH file_path is allowed",
+			// api_version is set too: a rest-api create requires BOTH a spec file and
+			// api_version, so a case asserting a well-formed create is "allowed" must
+			// satisfy both — otherwise the sibling api_version guard (which also runs on
+			// create) would fire and this would no longer isolate the file_path guard.
+			planRaw: raw(withFilePath(map[string]tftypes.Value{
+				"type":        tftypes.NewValue(tftypes.String, "rest-api"),
+				"api_version": tftypes.NewValue(tftypes.String, "v1"),
+			}, "spec.json")),
 			stateRaw: nullObj,
 			wantErr:  false,
 		},
@@ -1314,6 +1322,232 @@ func TestAssetResource_ModifyPlan_FilePathGuard(t *testing.T) {
 			}
 			if !strings.Contains(detail, wantType) {
 				t.Errorf("diagnostic detail should name the offending type %q; got %q", wantType, detail)
+			}
+		})
+	}
+}
+
+// TestAssetTypeRequiresAPIVersion pins the api_version-required allowlist (#143). The
+// multipart CREATE publish for these API-spec types 400s with
+// MISSING_REQUIRED_PROPERTIES: apiVersion when properties.apiVersion is omitted —
+// rest-api live-verified 2026-07-27; evented-api/grpc-api 2026-07-16 (E2E Finding B).
+// The excluded types either don't require it (soap-api/graphql-api — file-backed but
+// apiVersion not confirmed mandatory) or are fileless and unrelated; blocking any of them
+// would be a false positive. The lookup must normalize case and surrounding whitespace.
+func TestAssetTypeRequiresAPIVersion(t *testing.T) {
+	requires := []string{"rest-api", "evented-api", "grpc-api"}
+	// Types the allowlist must NEVER block. soap-api/graphql-api are deliberately here:
+	// they are file-backed (so the file_path guard covers them) but their apiVersion
+	// requirement is not confirmed, so this guard must leave them alone.
+	notRequired := []string{"soap-api", "graphql-api", "custom", "app", "template", "policy", "ruleset", "llm", "mcp", "http-api", "", "some-future-type"}
+
+	for _, ty := range requires {
+		if !assetTypeRequiresAPIVersion(ty) {
+			t.Errorf("assetTypeRequiresAPIVersion(%q) = false, want true (API-spec type requires apiVersion at create)", ty)
+		}
+	}
+	for _, ty := range notRequired {
+		if assetTypeRequiresAPIVersion(ty) {
+			t.Errorf("assetTypeRequiresAPIVersion(%q) = true, want false (must never be blocked — unconfirmed/unrelated type)", ty)
+		}
+	}
+
+	if !assetTypeRequiresAPIVersion("  Rest-API  ") {
+		t.Error("assetTypeRequiresAPIVersion should normalize case+whitespace for an API-spec type")
+	}
+	if assetTypeRequiresAPIVersion("  SOAP-API  ") {
+		t.Error("assetTypeRequiresAPIVersion should normalize case+whitespace for an excluded type (must stay false)")
+	}
+}
+
+// TestAssetResource_ModifyPlan_APIVersionGuard covers the #143 plan-time guard: an API-spec
+// type (rest-api/evented-api/grpc-api) CREATED or REPLACED without api_version is rejected by
+// Exchange at apply with "400 MISSING_REQUIRED_PROPERTIES: apiVersion". On a version bump
+// (RequiresReplace) the old version is destroyed BEFORE that failure, so — exactly like the
+// file_path guard — raising it at plan time is strictly safer.
+//
+// The guard reads CONFIG, not plan, which this test models faithfully by giving each case a
+// SEPARATE config and plan raw. api_version is Optional+Computed, so an UNCONFIGURED value and
+// a value bound to another resource's not-yet-known output are BOTH Unknown in the plan — but
+// they differ in the config (omitted => null; unresolved reference => unknown). The guard must
+// fire on the omission and DEFER on the reference; the two "unknown in plan, differ in config"
+// cases below are the crux that proves it. The guard must also NEVER fire on: a type not on the
+// allowlist (soap-api/graphql-api/custom), an unresolved (unknown) type, an in-place update
+// (post-import steady state), or a destroy plan. A file_path is always present so the sibling
+// file_path guard can never fire and any diagnostic here is unambiguously the api_version guard.
+func TestAssetResource_ModifyPlan_APIVersionGuard(t *testing.T) {
+	res := NewAssetResource().(*AssetResource)
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	objType := schemaResp.Schema.Type().TerraformType(ctx).(tftypes.Object)
+
+	raw := func(overrides map[string]tftypes.Value) tftypes.Value {
+		return assetRawValue(ctx, schemaResp.Schema, overrides)
+	}
+	nullObj := tftypes.NewValue(objType, nil)
+
+	unknown := tftypes.NewValue(tftypes.String, tftypes.UnknownValue)
+	nullStr := tftypes.NewValue(tftypes.String, nil)
+	str := func(s string) tftypes.Value { return tftypes.NewValue(tftypes.String, s) }
+
+	// obj builds an asset object at a version + type, always WITH a file_path (so the sibling
+	// file_path guard can never fire) and with the api_version cell set to exactly the caller's
+	// value — so a case can put a different cell in the plan vs the config, which is the whole
+	// point (Unknown-in-plan can be either null or unknown in config).
+	obj := func(version, assetType string, apiVer tftypes.Value) tftypes.Value {
+		return raw(map[string]tftypes.Value{
+			"organization_id": str("org"),
+			"group_id":        str("grp"),
+			"asset_id":        str("asset"),
+			"version":         str(version),
+			"type":            str(assetType),
+			"file_path":       str("spec.json"),
+			"api_version":     apiVer,
+		})
+	}
+
+	tests := []struct {
+		name      string
+		planRaw   tftypes.Value
+		configRaw tftypes.Value
+		stateRaw  tftypes.Value
+		wantErr   bool
+		wantType  string // type expected in the diagnostic detail when wantErr
+	}{
+		{
+			// OMITTED: plan computes to unknown, config is null. This is the multi_version.tf bug.
+			name:      "create rest-api with api_version OMITTED is blocked",
+			planRaw:   obj("1.0.0", "rest-api", unknown),
+			configRaw: obj("1.0.0", "rest-api", nullStr),
+			stateRaw:  nullObj,
+			wantErr:   true,
+			wantType:  "rest-api",
+		},
+		{
+			// REFERENCE: plan AND config are unknown (bound to a not-yet-known output). The guard
+			// must DEFER (not fire) — blocking here would be a false positive on valid config.
+			// Contrast with the OMITTED case above: identical plan, config is the discriminator.
+			name:      "create rest-api with api_version from unresolved reference is deferred (not blocked)",
+			planRaw:   obj("1.0.0", "rest-api", unknown),
+			configRaw: obj("1.0.0", "rest-api", unknown),
+			stateRaw:  nullObj,
+			wantErr:   false,
+		},
+		{
+			name:      "create rest-api with empty api_version is blocked",
+			planRaw:   obj("1.0.0", "rest-api", str("")),
+			configRaw: obj("1.0.0", "rest-api", str("")),
+			stateRaw:  nullObj,
+			wantErr:   true,
+			wantType:  "rest-api",
+		},
+		{
+			name:      "create rest-api WITH api_version is allowed",
+			planRaw:   obj("1.0.0", "rest-api", str("v1")),
+			configRaw: obj("1.0.0", "rest-api", str("v1")),
+			stateRaw:  nullObj,
+			wantErr:   false,
+		},
+		{
+			name:      "create evented-api with api_version OMITTED is blocked",
+			planRaw:   obj("1.0.0", "evented-api", unknown),
+			configRaw: obj("1.0.0", "evented-api", nullStr),
+			stateRaw:  nullObj,
+			wantErr:   true,
+			wantType:  "evented-api",
+		},
+		{
+			name:      "create grpc-api with api_version OMITTED is blocked",
+			planRaw:   obj("1.0.0", "grpc-api", unknown),
+			configRaw: obj("1.0.0", "grpc-api", nullStr),
+			stateRaw:  nullObj,
+			wantErr:   true,
+			wantType:  "grpc-api",
+		},
+		{
+			name:      "replace (version bump) rest-api with api_version OMITTED is blocked",
+			planRaw:   obj("2.0.0", "rest-api", unknown),
+			configRaw: obj("2.0.0", "rest-api", nullStr),
+			stateRaw:  obj("1.0.0", "rest-api", str("v1")),
+			wantErr:   true,
+			wantType:  "rest-api",
+		},
+		{
+			// In-place update (same version): creating=false, replacing=false, so the guard block
+			// is skipped entirely — api_version being absent from config is the normal post-import
+			// steady state and must never error.
+			name:      "in-place update rest-api without api_version is allowed (post-import steady state)",
+			planRaw:   obj("1.0.0", "rest-api", str("v1")),
+			configRaw: obj("1.0.0", "rest-api", nullStr),
+			stateRaw:  obj("1.0.0", "rest-api", str("v1")),
+			wantErr:   false,
+		},
+		{
+			name:      "create soap-api without api_version is allowed (not on allowlist)",
+			planRaw:   obj("1.0.0", "soap-api", unknown),
+			configRaw: obj("1.0.0", "soap-api", nullStr),
+			stateRaw:  nullObj,
+			wantErr:   false,
+		},
+		{
+			name:      "create graphql-api without api_version is allowed (not on allowlist)",
+			planRaw:   obj("1.0.0", "graphql-api", unknown),
+			configRaw: obj("1.0.0", "graphql-api", nullStr),
+			stateRaw:  nullObj,
+			wantErr:   false,
+		},
+		{
+			name: "create with unknown type is skipped (cannot classify)",
+			planRaw: raw(map[string]tftypes.Value{
+				"type":        unknown,
+				"api_version": unknown,
+			}),
+			configRaw: raw(map[string]tftypes.Value{
+				"type":        unknown,
+				"api_version": nullStr,
+			}),
+			stateRaw: nullObj,
+			wantErr:  false,
+		},
+		{
+			name:      "destroy plan (null plan) is skipped without panic",
+			planRaw:   nullObj,
+			configRaw: nullObj,
+			stateRaw:  obj("1.0.0", "rest-api", str("v1")),
+			wantErr:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := resource.ModifyPlanRequest{
+				Plan:   tfsdk.Plan{Schema: schemaResp.Schema, Raw: tt.planRaw},
+				State:  tfsdk.State{Schema: schemaResp.Schema, Raw: tt.stateRaw},
+				Config: tfsdk.Config{Schema: schemaResp.Schema, Raw: tt.configRaw},
+			}
+			resp := &resource.ModifyPlanResponse{}
+			res.ModifyPlan(ctx, req, resp)
+
+			if !tt.wantErr {
+				if resp.Diagnostics.HasError() {
+					t.Fatalf("expected no error, got: %v", resp.Diagnostics.Errors())
+				}
+				return
+			}
+
+			var detail string
+			found := false
+			for _, d := range resp.Diagnostics {
+				if strings.Contains(d.Summary(), "Missing api_version for an API-spec asset type") {
+					detail, found = d.Detail(), true
+				}
+			}
+			if !found {
+				t.Fatalf("expected the api_version guard diagnostic, got: %v", resp.Diagnostics.Errors())
+			}
+			if !strings.Contains(detail, tt.wantType) {
+				t.Errorf("diagnostic detail should name the offending type %q; got %q", tt.wantType, detail)
 			}
 		})
 	}
@@ -2585,4 +2819,626 @@ func TestAssetResource_ReadPagesIntoState_HomePageFiltering(t *testing.T) {
 			}
 		})
 	}
+}
+
+// mvFake is a stateful, multi-version-aware fake Exchange server backing
+// TestAssetResource_MultiVersion_ForEach_ImportRoundTrip. Unlike the single-version
+// fake in TestAssetResource_Lifecycle_Hermetic, it stores a MAP of versions for ONE
+// (group, asset) pair so the test can prove the three properties the `for_each`-over-
+// versions design (#75/#122) actually rests on:
+//
+//	(1) VERSION scope is independent — each version keeps its own file classifier,
+//	    mainFile, tags, and status. This is why N map entries == N genuinely distinct
+//	    objects and the import of v2 must NOT bleed v1's metadata (or vice versa).
+//	(2) GROUP scope is shared — name/description live once per (group, asset), so the
+//	    PATCH endpoint mutates BOTH versions' group metadata at once. The fake models
+//	    this by storing name/description on the parent, not per version.
+//	(3) DELETE is version-scoped — removing one map key hard-deletes ONLY that GAV; the
+//	    sibling version survives and still reads back cleanly.
+//
+// The subject is type="rest-api", classifier="oas" — the file-backed path the example
+// (examples/exchange/multi_version.tf) actually ships — so the fake also exercises the
+// files[] → classifier/main_file extraction that the import Read path depends on to
+// seed state without forcing a spurious replacement. Files are written to a temp dir so
+// the real multipart upload (buildAssetMultipart → os.ReadFile) runs end to end.
+type mvFake struct {
+	mu sync.Mutex
+	// Group-scoped (shared across ALL versions of this asset).
+	name        string
+	description string
+	// Version-scoped store, keyed by version string.
+	versions map[string]*mvVersion
+	// Audit trail.
+	deletedVersions []string
+	deleteTypes     map[string]string
+}
+
+type mvVersion struct {
+	classifier string // as the API stores it — bundled "fat-oas" for oas uploads
+	mainFile   string
+	status     string
+	tags       []string
+	posted     bool
+}
+
+// TestAssetResource_MultiVersion_ForEach_ImportRoundTrip is the end-to-end hermetic
+// proof for multi-version version handling. It closes the coverage gap that the
+// single-version TestAssetResource_Lifecycle_Hermetic left open: the `for_each` lifecycle
+// (two versions of one asset side by side) and the per-version import round-trip that
+// underpins `terraform import` / `-generate-config-out`.
+//
+// It runs, in order:
+//
+//	CREATE v1 (1.0.0, oas, tags=[a,v1], published)   — like for_each publishing key "v1"
+//	CREATE v2 (2.0.0, oas, tags=[a,v2], published)   — like for_each publishing key "v2"
+//	  → also asserts CREATE with status="deprecated" is REJECTED (create accepts only
+//	    development/published — the #68 create/update asymmetry).
+//	UPDATE v2 status published → deprecated              — via the real PUT /status path
+//	  → the only faithful route to "deprecated"; proves status is version-scoped on update.
+//	  → asserts the two GAVs coexist and each settles to ITS OWN version-scoped state,
+//	    while sharing the one group-scoped name/description.
+//	IMPORT v2 by "g/a/2.0.0", then READ                — the round-trip that feeds generated config
+//	  → asserts the imported+read state reproduces v2's classifier/main_file/tags/status
+//	    (NOT v1's) and the shared group name/description, with ZERO drift on the immutable
+//	    identity (group_id/asset_id/version/id/type). This is exactly what a user would get
+//	    from `terraform import anypoint_exchange_asset.petstore[\"v2\"] g/a/2.0.0` followed
+//	    by a plan, so "does the generated config match" reduces to "does this state match".
+//	DELETE v1                                          — like removing the "v1" map key
+//	  → asserts a version-scoped hard delete of ONLY 1.0.0; v2 still reads back intact.
+func TestAssetResource_MultiVersion_ForEach_ImportRoundTrip(t *testing.T) {
+	const (
+		orgID   = "test-org-id"
+		groupID = "g"
+		assetID = "a"
+		v1      = "1.0.0"
+		v2      = "2.0.0"
+		// Group-scoped: identical for every version (the example factors these into
+		// locals precisely so they cannot drift apart — caveat #2 in multi_version.tf).
+		groupName = "TF Demo Petstore API (multi-version)"
+		groupDesc = "Petstore API managed across versions with for_each."
+	)
+
+	fa := &mvFake{
+		name:        groupName,
+		description: groupDesc,
+		versions:    map[string]*mvVersion{},
+		deleteTypes: map[string]string{},
+	}
+
+	// Two genuinely different local spec files so the multipart upload + files[]
+	// extraction is real, not stubbed. main_file differs per version to prove the
+	// import read surfaces the RIGHT version's file metadata.
+	tmp := t.TempDir()
+	v1File := tmp + "/petstore.json"
+	v2File := tmp + "/petstore-v2.json"
+	if err := os.WriteFile(v1File, []byte(`{"openapi":"3.0.0","info":{"title":"petstore","version":"1.0.0"}}`), 0o600); err != nil {
+		t.Fatalf("write v1 spec: %v", err)
+	}
+	if err := os.WriteFile(v2File, []byte(`{"openapi":"3.0.0","info":{"title":"petstore","version":"2.0.0"},"paths":{"/vaccinations":{}}}`), 0o600); err != nil {
+		t.Fatalf("write v2 spec: %v", err)
+	}
+
+	// assetJSON renders the GET body for one stored version. The files[] array carries
+	// the API-bundled "fat-oas" classifier so the Read path's normalizeClassifier /
+	// apiClassifierToUserClassifier ("fat-" strip) is exercised on the import branch.
+	assetJSON := func(version string, vv *mvVersion) map[string]interface{} {
+		return map[string]interface{}{
+			"groupId":      groupID,
+			"assetId":      assetID,
+			"version":      version,
+			"name":         fa.name,        // group-scoped
+			"description":  fa.description, // group-scoped
+			"type":         "rest-api",
+			"status":       vv.status, // version-scoped
+			"isPublic":     false,
+			"isSnapshot":   false,
+			"minorVersion": version[:strings.LastIndex(version, ".")],
+			"versionGroup": version[:strings.Index(version, ".")], // major → shared instance scope
+			"createdDate":  "2024-01-01T00:00:00Z",
+			"updatedDate":  "2024-01-01T00:00:00Z",
+			"contactName":  nil,
+			"contactEmail": nil,
+			"manager":      nil,
+			"labels":       toIfaceSlice(vv.tags), // version-scoped
+			"categories":   []interface{}{},
+			"customFields": []interface{}{},
+			"files": []interface{}{
+				// user-uploaded file — the one extractFileMetadata should pick up.
+				map[string]interface{}{
+					"classifier":  vv.classifier,
+					"packaging":   "json",
+					"mainFile":    vv.mainFile,
+					"isGenerated": false,
+				},
+				// an auto-generated file that extractFileMetadata must SKIP.
+				map[string]interface{}{
+					"classifier":  "fat-oas",
+					"packaging":   "json",
+					"mainFile":    vv.mainFile,
+					"isGenerated": true,
+				},
+			},
+			"dependencies": []interface{}{},
+			"instances":    []interface{}{},
+			"attributes":   []interface{}{},
+		}
+	}
+
+	base := "/exchange/api/v2"
+	// Per-version POST publish endpoints (org-scoped).
+	postV1 := base + "/organizations/" + orgID + "/assets/" + groupID + "/" + assetID + "/" + v1
+	postV2 := base + "/organizations/" + orgID + "/assets/" + groupID + "/" + assetID + "/" + v2
+	// A throwaway publish endpoint used ONLY to prove the create-side status guard fires
+	// (a real route so the 400 comes from the status check, not a missing handler / 404).
+	postReject := base + "/organizations/" + orgID + "/assets/" + groupID + "/" + assetID + "/9.9.9"
+	// Per-version GET/DELETE + tags + pages endpoints.
+	verV1 := base + "/assets/" + groupID + "/" + assetID + "/" + v1
+	verV2 := base + "/assets/" + groupID + "/" + assetID + "/" + v2
+	metaPath := base + "/assets/" + groupID + "/" + assetID // group-scoped PATCH
+
+	// publishHandler records a multipart publish for the given version.
+	publishHandler := func(version string) func(http.ResponseWriter, *http.Request) {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				testutil.ErrorResponse(w, http.StatusMethodNotAllowed, "want POST")
+				return
+			}
+			if err := r.ParseMultipartForm(10 << 20); err != nil {
+				testutil.ErrorResponse(w, http.StatusBadRequest, "bad multipart: "+err.Error())
+				return
+			}
+			fa.mu.Lock()
+			defer fa.mu.Unlock()
+			// The multipart type must be rest-api for BOTH versions (same asset type).
+			if got := r.FormValue("type"); got != "rest-api" {
+				testutil.ErrorResponse(w, http.StatusBadRequest, "unexpected type: "+got)
+				return
+			}
+			// Live create/update asymmetry (#68, version-scoping-live-proof.md §4):
+			// multipart CREATE accepts only {development, published}. "deprecated" 400s at
+			// create and is reachable ONLY via the PUT /status update path. Model that
+			// faithfully so the test cannot silently rely on an impossible create.
+			if st := r.FormValue("status"); st != "" && st != "development" && st != "published" {
+				testutil.ErrorResponse(w, http.StatusBadRequest,
+					"INVALID_ASSET_STATUS: "+st+" doesn't have a valid value (development, published).")
+				return
+			}
+			// Discover the uploaded file field name: files.oas.json (from writeAssetFilePart).
+			// Its presence proves the version-scoped file upload actually happened.
+			mainFile := ""
+			if r.MultipartForm != nil {
+				for field, fhs := range r.MultipartForm.File {
+					if strings.HasPrefix(field, "files.oas.") && len(fhs) > 0 {
+						mainFile = fhs[0].Filename
+					}
+				}
+			}
+			vv := &mvVersion{
+				// API bundles an oas upload as "fat-oas"; the Read path must strip it.
+				classifier: "fat-oas",
+				mainFile:   mainFile,
+				status:     r.FormValue("status"),
+				posted:     true,
+			}
+			fa.versions[version] = vv
+			// Group metadata is shared: a publish may (re)assert name/description.
+			if n := r.FormValue("name"); n != "" {
+				fa.name = n
+			}
+			if d := r.FormValue("description"); d != "" {
+				fa.description = d
+			}
+			w.WriteHeader(http.StatusCreated)
+		}
+	}
+
+	// versionHandler serves GET (readback) + DELETE (version-scoped hard delete) + the
+	// tags sub-path (PUT) for one version.
+	versionHandler := func(version string) func(http.ResponseWriter, *http.Request) {
+		return func(w http.ResponseWriter, r *http.Request) {
+			// tags sub-path: /assets/g/a/{version}/tags
+			if strings.HasSuffix(r.URL.Path, "/tags") {
+				if r.Method != http.MethodPut {
+					testutil.ErrorResponse(w, http.StatusMethodNotAllowed, "want PUT for tags")
+					return
+				}
+				var tagReqs []map[string]interface{}
+				if err := json.NewDecoder(r.Body).Decode(&tagReqs); err != nil {
+					testutil.ErrorResponse(w, http.StatusBadRequest, "bad tags json: "+err.Error())
+					return
+				}
+				fa.mu.Lock()
+				if vv := fa.versions[version]; vv != nil {
+					vv.tags = vv.tags[:0]
+					for _, tr := range tagReqs {
+						if val, ok := tr["value"].(string); ok {
+							vv.tags = append(vv.tags, val)
+						}
+					}
+				}
+				fa.mu.Unlock()
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			// status sub-path: /assets/g/a/{version}/status. This is the ONLY route to
+			// "deprecated" — the create multipart rejects it (see publishHandler). The PUT
+			// mutates ONLY this version's status, proving status is version-scoped on the
+			// UPDATE path too, and it completes the create/update asymmetry by REJECTING
+			// "development" on update (#68 / version-scoping-live-proof.md §4: PUT /status
+			// accepts only {published, deprecated}).
+			if strings.HasSuffix(r.URL.Path, "/status") {
+				if r.Method != http.MethodPut {
+					testutil.ErrorResponse(w, http.StatusMethodNotAllowed, "want PUT for status")
+					return
+				}
+				var statusReq map[string]interface{}
+				if err := json.NewDecoder(r.Body).Decode(&statusReq); err != nil {
+					testutil.ErrorResponse(w, http.StatusBadRequest, "bad status json: "+err.Error())
+					return
+				}
+				newStatus, _ := statusReq["status"].(string)
+				if newStatus != "published" && newStatus != "deprecated" {
+					testutil.ErrorResponse(w, http.StatusBadRequest,
+						"INVALID_ASSET_STATUS: "+newStatus+" not allowed on update (published, deprecated).")
+					return
+				}
+				fa.mu.Lock()
+				if vv := fa.versions[version]; vv != nil {
+					vv.status = newStatus
+				}
+				fa.mu.Unlock()
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			// pages sub-path: keep readPagesIntoState on its clean, empty path.
+			if strings.HasSuffix(r.URL.Path, "/portal/pages") {
+				testutil.JSONResponse(w, http.StatusOK, []interface{}{})
+				return
+			}
+			switch r.Method {
+			case http.MethodGet:
+				fa.mu.Lock()
+				vv := fa.versions[version]
+				var body map[string]interface{}
+				if vv != nil {
+					body = assetJSON(version, vv)
+				}
+				fa.mu.Unlock()
+				if vv == nil {
+					testutil.ErrorResponse(w, http.StatusNotFound, "version not found")
+					return
+				}
+				testutil.JSONResponse(w, http.StatusOK, body)
+			case http.MethodDelete:
+				fa.mu.Lock()
+				delete(fa.versions, version)
+				fa.deletedVersions = append(fa.deletedVersions, version)
+				fa.deleteTypes[version] = r.Header.Get("x-delete-type")
+				fa.mu.Unlock()
+				w.WriteHeader(http.StatusNoContent)
+			default:
+				testutil.ErrorResponse(w, http.StatusMethodNotAllowed, "want GET/DELETE")
+			}
+		}
+	}
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		postV1:     publishHandler(v1),
+		postV2:     publishHandler(v2),
+		postReject: publishHandler("9.9.9"),
+		// A ServeMux longest-prefix match sends /tags and /portal/pages here too.
+		verV1 + "/": versionHandler(v1),
+		verV2 + "/": versionHandler(v2),
+		verV1:       versionHandler(v1),
+		verV2:       versionHandler(v2),
+		metaPath: func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPatch {
+				testutil.ErrorResponse(w, http.StatusMethodNotAllowed, "want PATCH")
+				return
+			}
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				testutil.ErrorResponse(w, http.StatusBadRequest, "bad json: "+err.Error())
+				return
+			}
+			fa.mu.Lock()
+			if v, ok := body["name"].(string); ok {
+				fa.name = v // group-scoped: mutates the parent, affecting BOTH versions
+			}
+			if v, ok := body["description"].(string); ok {
+				fa.description = v
+			}
+			fa.mu.Unlock()
+			w.WriteHeader(http.StatusNoContent)
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	res := NewAssetResource().(*AssetResource)
+	res.client = &exchange.AssetClient{
+		BaseURL:    server.URL,
+		Token:      "mock-token",
+		HTTPClient: &http.Client{},
+	}
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+
+	// planRawFor builds the config the way for_each would render ONE map entry: all
+	// VERSION-scoped fields from the entry, the GROUP-scoped name/description shared.
+	planRawFor := func(version, filePath, status string, tags []string) tftypes.Value {
+		tagVals := make([]tftypes.Value, len(tags))
+		for i, tg := range tags {
+			tagVals[i] = tftypes.NewValue(tftypes.String, tg)
+		}
+		return assetRawValue(ctx, schemaResp.Schema, map[string]tftypes.Value{
+			"organization_id": tftypes.NewValue(tftypes.String, orgID),
+			"group_id":        tftypes.NewValue(tftypes.String, groupID),
+			"asset_id":        tftypes.NewValue(tftypes.String, assetID),
+			"version":         tftypes.NewValue(tftypes.String, version),
+			"type":            tftypes.NewValue(tftypes.String, "rest-api"),
+			"classifier":      tftypes.NewValue(tftypes.String, "oas"),
+			"file_path":       tftypes.NewValue(tftypes.String, filePath),
+			"main_file":       tftypes.NewValue(tftypes.String, filePathBase(filePath)),
+			"name":            tftypes.NewValue(tftypes.String, groupName),
+			"description":     tftypes.NewValue(tftypes.String, groupDesc),
+			"status":          tftypes.NewValue(tftypes.String, status),
+			"tags": tftypes.NewValue(
+				tftypes.List{ElementType: tftypes.String}, tagVals,
+			),
+		})
+	}
+
+	// createVersion runs one Create the way for_each would for a single map entry.
+	createVersion := func(version, filePath, status string, tags []string) AssetResourceModel {
+		t.Helper()
+		planRaw := planRawFor(version, filePath, status, tags)
+		createReq := resource.CreateRequest{Plan: tfsdk.Plan{Schema: schemaResp.Schema, Raw: planRaw}}
+		createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+		res.Create(ctx, createReq, createResp)
+		if createResp.Diagnostics.HasError() {
+			t.Fatalf("Create(%s) errors: %v", version, createResp.Diagnostics.Errors())
+		}
+		var m AssetResourceModel
+		if diags := createResp.State.Get(ctx, &m); diags.HasError() {
+			t.Fatalf("Create(%s) State.Get errors: %v", version, diags.Errors())
+		}
+		return m
+	}
+
+	// updateStatusVersion drives the REAL Update path (asset.go Update → client.UpdateStatus
+	// → PUT /status) to transition one version's status. This is the only faithful way to
+	// reach "deprecated": the create multipart rejects it (create/update asymmetry, #68).
+	// Only `status` differs from prior state, so Update fires UpdateStatus and nothing else.
+	updateStatusVersion := func(prior AssetResourceModel, version, filePath, newStatus string, tags []string) AssetResourceModel {
+		t.Helper()
+		planRaw := planRawFor(version, filePath, newStatus, tags)
+		priorState := tfsdk.State{Schema: schemaResp.Schema}
+		if diags := priorState.Set(ctx, &prior); diags.HasError() {
+			t.Fatalf("seed update state(%s): %v", version, diags.Errors())
+		}
+		updateReq := resource.UpdateRequest{
+			Plan:  tfsdk.Plan{Schema: schemaResp.Schema, Raw: planRaw},
+			State: priorState,
+		}
+		updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+		res.Update(ctx, updateReq, updateResp)
+		if updateResp.Diagnostics.HasError() {
+			t.Fatalf("Update(%s → %s) errors: %v", version, newStatus, updateResp.Diagnostics.Errors())
+		}
+		var m AssetResourceModel
+		if diags := updateResp.State.Get(ctx, &m); diags.HasError() {
+			t.Fatalf("Update(%s) State.Get errors: %v", version, diags.Errors())
+		}
+		return m
+	}
+
+	// --- CREATE both versions (for_each over {v1, v2}) ------------------------
+	// Both are created "published" — the ONLY multi-version-friendly create status the
+	// platform accepts (development/published). v2 is then transitioned to "deprecated"
+	// via the update path below, exactly as a user would flip a version's status.
+	created1 := createVersion(v1, v1File, "published", []string{"petstore", "v1"})
+	created2Pub := createVersion(v2, v2File, "published", []string{"petstore", "v2"})
+	// Guard: "deprecated" at CREATE must be rejected by the platform (and our fake). This
+	// asserts the create-side of the asymmetry so the test can't silently regress into
+	// relying on an impossible create.
+	rejectReq := resource.CreateRequest{Plan: tfsdk.Plan{Schema: schemaResp.Schema,
+		Raw: planRawFor("9.9.9", v2File, "deprecated", []string{"nope"})}}
+	rejectResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	res.Create(ctx, rejectReq, rejectResp)
+	if !rejectResp.Diagnostics.HasError() {
+		t.Fatal("Create with status=deprecated must fail (create accepts only development/published)")
+	}
+	// Now flip v2 → deprecated through the real Update → PUT /status path.
+	created2 := updateStatusVersion(created2Pub, v2, v2File, "deprecated", []string{"petstore", "v2"})
+
+	// Both GAVs must coexist in the fake — additive, NOT destroy-and-recreate.
+	fa.mu.Lock()
+	if len(fa.versions) != 2 || fa.versions[v1] == nil || fa.versions[v2] == nil {
+		t.Fatalf("expected both versions to coexist, got %d: %v", len(fa.versions), fa.versions)
+	}
+	if len(fa.deletedVersions) != 0 {
+		t.Fatalf("Create must never delete a version; deleted=%v", fa.deletedVersions)
+	}
+	fa.mu.Unlock()
+
+	// Distinct composite IDs.
+	if created1.ID.ValueString() != "g/a/1.0.0" {
+		t.Errorf("v1 ID = %q, want g/a/1.0.0", created1.ID.ValueString())
+	}
+	if created2.ID.ValueString() != "g/a/2.0.0" {
+		t.Errorf("v2 ID = %q, want g/a/2.0.0", created2.ID.ValueString())
+	}
+	// VERSION-scoped fields must be independent per version.
+	if created1.Status.ValueString() != "published" {
+		t.Errorf("v1 status = %q, want published", created1.Status.ValueString())
+	}
+	if created2.Status.ValueString() != "deprecated" {
+		t.Errorf("v2 status = %q, want deprecated", created2.Status.ValueString())
+	}
+	if got := tagStrings(t, ctx, created1.Tags); !equalStringSets(got, []string{"petstore", "v1"}) {
+		t.Errorf("v1 tags = %v, want [petstore v1]", got)
+	}
+	if got := tagStrings(t, ctx, created2.Tags); !equalStringSets(got, []string{"petstore", "v2"}) {
+		t.Errorf("v2 tags = %v, want [petstore v2]", got)
+	}
+	// classifier round-trips back to the user-facing "oas" (API stored "fat-oas").
+	if created1.Classifier.ValueString() != "oas" {
+		t.Errorf("v1 classifier = %q, want oas (fat- must be stripped)", created1.Classifier.ValueString())
+	}
+	// main_file must be the version's own uploaded file, independent per version.
+	if created1.MainFile.ValueString() != "petstore.json" {
+		t.Errorf("v1 main_file = %q, want petstore.json", created1.MainFile.ValueString())
+	}
+	if created2.MainFile.ValueString() != "petstore-v2.json" {
+		t.Errorf("v2 main_file = %q, want petstore-v2.json", created2.MainFile.ValueString())
+	}
+	// GROUP-scoped fields must be identical across versions.
+	if created1.Name.ValueString() != groupName || created2.Name.ValueString() != groupName {
+		t.Errorf("group name diverged: v1=%q v2=%q", created1.Name.ValueString(), created2.Name.ValueString())
+	}
+	if created1.Description.ValueString() != groupDesc || created2.Description.ValueString() != groupDesc {
+		t.Errorf("group description diverged: v1=%q v2=%q", created1.Description.ValueString(), created2.Description.ValueString())
+	}
+
+	// --- IMPORT v2, then READ (the generated-config round-trip) ---------------
+	// This is the crux: `terraform import ...["v2"] g/a/2.0.0` seeds identity, then a
+	// Read fills the rest. The resulting state is exactly what -generate-config-out
+	// would render, so it MUST reflect v2 — never v1 — for every version-scoped field.
+	importReq := resource.ImportStateRequest{ID: "g/a/2.0.0"}
+	importResp := &resource.ImportStateResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: assetRawValue(ctx, schemaResp.Schema, nil)}}
+	res.ImportState(ctx, importReq, importResp)
+	if importResp.Diagnostics.HasError() {
+		t.Fatalf("ImportState(v2) errors: %v", importResp.Diagnostics.Errors())
+	}
+
+	readReq := resource.ReadRequest{State: importResp.State}
+	readResp := &resource.ReadResponse{State: importResp.State}
+	res.Read(ctx, readReq, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("Read after import(v2) errors: %v", readResp.Diagnostics.Errors())
+	}
+	if readResp.State.Raw.IsNull() {
+		t.Fatal("Read after import removed the resource from state")
+	}
+	var imported AssetResourceModel
+	if diags := readResp.State.Get(ctx, &imported); diags.HasError() {
+		t.Fatalf("imported State.Get errors: %v", diags.Errors())
+	}
+
+	// Identity: the imported GAV is v2, not v1.
+	if imported.Version.ValueString() != v2 {
+		t.Errorf("import: version = %q, want %q", imported.Version.ValueString(), v2)
+	}
+	if imported.ID.ValueString() != "g/a/2.0.0" {
+		t.Errorf("import: id = %q, want g/a/2.0.0", imported.ID.ValueString())
+	}
+	if imported.GroupID.ValueString() != groupID || imported.AssetID.ValueString() != assetID {
+		t.Errorf("import: group/asset = %q/%q, want g/a", imported.GroupID.ValueString(), imported.AssetID.ValueString())
+	}
+	if imported.Type.ValueString() != "rest-api" {
+		t.Errorf("import: type = %q, want rest-api", imported.Type.ValueString())
+	}
+	// VERSION-scoped fields reflect v2 specifically (the bleed-guard: NOT v1's values).
+	if imported.Status.ValueString() != "deprecated" {
+		t.Errorf("import: status = %q, want deprecated (v2's own status, not v1's published)", imported.Status.ValueString())
+	}
+	if imported.MainFile.ValueString() != "petstore-v2.json" {
+		t.Errorf("import: main_file = %q, want petstore-v2.json (v2's file, not v1's petstore.json)", imported.MainFile.ValueString())
+	}
+	if imported.Classifier.ValueString() != "oas" {
+		t.Errorf("import: classifier = %q, want oas (fat- stripped on import)", imported.Classifier.ValueString())
+	}
+	if got := tagStrings(t, ctx, imported.Tags); !equalStringSets(got, []string{"petstore", "v2"}) {
+		t.Errorf("import: tags = %v, want [petstore v2] (v2's own tags)", got)
+	}
+	// GROUP-scoped fields present and shared.
+	if imported.Name.ValueString() != groupName {
+		t.Errorf("import: name = %q, want %q", imported.Name.ValueString(), groupName)
+	}
+	if imported.Description.ValueString() != groupDesc {
+		t.Errorf("import: description = %q, want %q", imported.Description.ValueString(), groupDesc)
+	}
+
+	// --- DELETE v1 only (removing the "v1" map key) ---------------------------
+	// Uses created1's state, exactly as Terraform would when the "v1" entry is dropped.
+	delState := tfsdk.State{Schema: schemaResp.Schema}
+	if diags := delState.Set(ctx, &created1); diags.HasError() {
+		t.Fatalf("seed delete state: %v", diags.Errors())
+	}
+	deleteReq := resource.DeleteRequest{State: delState}
+	deleteResp := &resource.DeleteResponse{State: delState}
+	res.Delete(ctx, deleteReq, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf("Delete(v1) errors: %v", deleteResp.Diagnostics.Errors())
+	}
+
+	fa.mu.Lock()
+	defer fa.mu.Unlock()
+	// ONLY v1 was deleted, and as a HARD delete (tombstone-free, reusable GAV).
+	if len(fa.deletedVersions) != 1 || fa.deletedVersions[0] != v1 {
+		t.Errorf("delete: deletedVersions = %v, want [1.0.0] only", fa.deletedVersions)
+	}
+	if fa.deleteTypes[v1] != "hard-delete" {
+		t.Errorf("delete: v1 x-delete-type = %q, want hard-delete", fa.deleteTypes[v1])
+	}
+	// v2 MUST survive — version-scoped delete never touches the sibling.
+	if fa.versions[v2] == nil {
+		t.Error("delete(v1) collaterally removed v2; version-scoped delete must leave siblings intact")
+	}
+	if fa.versions[v1] != nil {
+		t.Error("delete(v1) did not remove v1 from the store")
+	}
+}
+
+// --- helpers for the multi-version test ---
+
+// filePathBase returns the trailing file name of a path (avoids importing path/filepath
+// solely for basename in the test; the resource itself uses filepath.Base at runtime).
+func filePathBase(p string) string {
+	if i := strings.LastIndexByte(p, '/'); i >= 0 {
+		return p[i+1:]
+	}
+	return p
+}
+
+// toIfaceSlice converts a []string to []interface{} for JSON body construction.
+func toIfaceSlice(ss []string) []interface{} {
+	out := make([]interface{}, len(ss))
+	for i, s := range ss {
+		out[i] = s
+	}
+	return out
+}
+
+// tagStrings extracts a []string from a types.List of strings.
+func tagStrings(t *testing.T, ctx context.Context, l types.List) []string {
+	t.Helper()
+	if l.IsNull() || l.IsUnknown() {
+		return nil
+	}
+	var out []string
+	if diags := l.ElementsAs(ctx, &out, false); diags.HasError() {
+		t.Fatalf("tagStrings ElementsAs: %v", diags.Errors())
+	}
+	return out
+}
+
+// equalStringSets compares two string slices as unordered sets (tags carry
+// UseStateForUnknown + reorder, so order is not part of the contract here).
+func equalStringSets(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	m := make(map[string]int, len(a))
+	for _, s := range a {
+		m[s]++
+	}
+	for _, s := range b {
+		m[s]--
+		if m[s] < 0 {
+			return false
+		}
+	}
+	return true
 }
