@@ -142,7 +142,7 @@ Required:
 
 Optional:
 
-- `context_params` (Map of String) Context parameters for the scope. Always include `org`; add `envId` for environment-scoped scopes.
+- `context_params` (Map of String) Context parameters for the scope. For `client_credentials` apps, `org` is **required** on every scope (validated at plan time); add `envId` for environment-scoped scopes (e.g. Read Applications). User-behalf apps ignore `context_params`.
 
 ## Import
 
