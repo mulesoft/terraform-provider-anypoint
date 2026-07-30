@@ -28,9 +28,10 @@ import (
 
 // Ensure the implementation satisfies the expected interfaces
 var (
-	_ resource.Resource                = &ConnectedAppResource{}
-	_ resource.ResourceWithConfigure   = &ConnectedAppResource{}
-	_ resource.ResourceWithImportState = &ConnectedAppResource{}
+	_ resource.Resource                   = &ConnectedAppResource{}
+	_ resource.ResourceWithConfigure      = &ConnectedAppResource{}
+	_ resource.ResourceWithImportState    = &ConnectedAppResource{}
+	_ resource.ResourceWithValidateConfig = &ConnectedAppResource{}
 )
 
 // ConnectedAppResource is the resource implementation.
@@ -224,8 +225,10 @@ func (r *ConnectedAppResource) Schema(_ context.Context, _ resource.SchemaReques
 							Required: true,
 						},
 						"context_params": schema.MapAttribute{
-							Description: "Context parameters for the scope. Always include 'org'; add 'envId' for " +
-								"environment-scoped scopes.",
+							Description: "Context parameters for the scope. For client_credentials apps, 'org' is " +
+								"required on every scope; add 'envId' for environment-scoped scopes (e.g. Read Applications). " +
+								"The provider validates this at plan time. User-behalf apps ignore context_params " +
+								"(platform derives context from the token).",
 							Optional:    true,
 							ElementType: types.StringType,
 						},
@@ -273,6 +276,41 @@ func (r *ConnectedAppResource) Configure(_ context.Context, req resource.Configu
 	r.scopesClient = scopesClient
 }
 
+// ValidateConfig rejects incomplete context_params at plan time for client_credentials
+// apps (org required; envId required for known environment-scoped scopes). This avoids
+// creating the app and then failing on a cryptic Accounts RAML 400.
+func (r *ConnectedAppResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var config ConnectedAppResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if config.Scopes.IsNull() || config.Scopes.IsUnknown() {
+		return
+	}
+
+	// context_params only matter for client_credentials (context-aware /scopes).
+	// If grant_types is unknown/omitted we still validate — safer than shipping a
+	// bad scopes block through plan; user-behalf configs that omit org will need
+	// to add a dummy org or we only validate when grant_types is known CC.
+	if !config.GrantTypes.IsNull() && !config.GrantTypes.IsUnknown() {
+		var grantTypes []string
+		resp.Diagnostics.Append(config.GrantTypes.ElementsAs(ctx, &grantTypes, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if !isClientCredentials(grantTypes) {
+			return
+		}
+	} else {
+		// grant_types unknown: skip — Create-time validateAndResolveScopes still runs for CC.
+		return
+	}
+
+	resp.Diagnostics.Append(validateScopeContextParams(config.Scopes)...)
+}
+
 // Create creates a connected app.
 func (r *ConnectedAppResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan ConnectedAppResourceModel
@@ -309,6 +347,24 @@ func (r *ConnectedAppResource) Create(ctx context.Context, req resource.CreateRe
 		resp.Diagnostics.Append(plan.PublicKeys.ElementsAs(ctx, &publicKeys, false)...)
 		if resp.Diagnostics.HasError() {
 			return
+		}
+	}
+
+	manageScopes := !plan.Scopes.IsNull() && !plan.Scopes.IsUnknown()
+
+	// Validate scopes up front so an invalid name fails before creating the app —
+	// mirrors role/team (no orphaned parent for a config-time mistake).
+	if manageScopes {
+		if isClientCredentials(grantTypes) {
+			if _, diags := validateAndResolveScopes(plan.Scopes); diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			}
+		} else {
+			if _, diags := resolveUserBehalfScopes(plan.Scopes); diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			}
 		}
 	}
 
@@ -352,48 +408,9 @@ func (r *ConnectedAppResource) Create(ctx context.Context, req resource.CreateRe
 	// Always set client_uri to avoid "unknown after apply" errors
 	plan.ClientURI = types.StringValue(app.ClientURI)
 
-	// Apply inline scopes if the block is set. Null => unmanaged.
-	// Per RAML spec: context-aware /scopes endpoint is ONLY for client_credentials.
-	// User-behalf apps use the flat body `scopes` field via PATCH.
-	if !plan.Scopes.IsNull() && !plan.Scopes.IsUnknown() {
-		if isClientCredentials(grantTypes) {
-			// client_credentials: use context-aware PUT /scopes endpoint
-			if diags := r.applyScopes(ctx, app.ClientID, plan.Scopes); diags.HasError() {
-				resp.Diagnostics.Append(diags...)
-				return
-			}
-		} else {
-			// user-behalf: resolve scopes and PATCH the body field
-			resolved, diags := resolveUserBehalfScopes(plan.Scopes)
-			if diags.HasError() {
-				resp.Diagnostics.Append(diags...)
-				return
-			}
-			if len(resolved) > 0 {
-				orgIDForUpdate := app.OrgID
-				if orgIDForUpdate == "" {
-					orgIDForUpdate = r.client.OrgID
-				}
-				updateReq := &accessmanagement.UpdateConnectedAppRequest{Scopes: resolved}
-				if _, err := r.client.UpdateConnectedApp(ctx, orgIDForUpdate, app.ClientID, updateReq); err != nil {
-					resp.Diagnostics.AddError(
-						"Error setting connected app scopes",
-						"Could not set scopes via PATCH: "+err.Error(),
-					)
-					return
-				}
-			}
-		}
-	}
-
-	tflog.Trace(ctx, "created connected app", map[string]interface{}{
-		"client_id": app.ClientID,
-		"name":      app.ClientName,
-	})
-
-	// For unmanaged scopes (config omitted → plan is unknown), populate from API
-	// so state is concrete. With Optional+Computed, Terraform needs a value.
-	if plan.Scopes.IsNull() || plan.Scopes.IsUnknown() {
+	// Unmanaged scopes (config omitted → plan unknown): populate from API so the
+	// partial State.Set below is fully known. Managed scopes keep the plan values.
+	if !manageScopes {
 		if isClientCredentials(grantTypes) {
 			reconciled, diags := r.reconcileScopesIntoState(ctx, app.ClientID, plan.Scopes)
 			resp.Diagnostics.Append(diags...)
@@ -411,7 +428,105 @@ func (r *ConnectedAppResource) Create(ctx context.Context, req resource.CreateRe
 		}
 	}
 
+	// Persist partial state now so a later scopes failure doesn't orphan the app
+	// (live client_id/secret with nothing in Terraform state). Same pattern as
+	// anypoint_role / anypoint_team.
+	//
+	// NOTE: returning an error after State.Set marks the resource tainted, so a
+	// naive re-apply will destroy+recreate (new credentials). To assign scopes to
+	// THIS app instead: `terraform untaint <address>` then `terraform apply`
+	// (Update runs applyScopes in place). Prefer fixing context_params at plan
+	// time — ValidateConfig rejects missing org/envId before Create.
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Apply inline scopes if the block is set. Null => unmanaged.
+	// Per RAML spec: context-aware /scopes endpoint is ONLY for client_credentials.
+	// User-behalf apps use the flat body `scopes` field via PATCH.
+	if manageScopes {
+		if isClientCredentials(grantTypes) {
+			if diags := r.applyScopes(ctx, app.ClientID, plan.Scopes); diags.HasError() {
+				r.refreshScopesIntoStateBestEffort(ctx, &plan, app.ClientID, grantTypes)
+				resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+				resp.Diagnostics.Append(diags...)
+				resp.Diagnostics.AddError(
+					"Connected app created but scopes were not applied",
+					fmt.Sprintf(
+						"The app exists in Terraform state as id %q. Terraform will mark it tainted, so the next apply destroys and recreates it (new client_id/secret). "+
+							"To keep this app and retry scopes in place:\n"+
+							"  terraform untaint <this resource address>\n"+
+							"  terraform apply\n"+
+							"Also ensure every scope has context_params.org (and envId for environment-scoped scopes) — validated at plan time.",
+						app.ClientID,
+					),
+				)
+				return
+			}
+		} else {
+			resolved, diags := resolveUserBehalfScopes(plan.Scopes)
+			if diags.HasError() {
+				r.refreshScopesIntoStateBestEffort(ctx, &plan, app.ClientID, grantTypes)
+				resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+				resp.Diagnostics.Append(diags...)
+				return
+			}
+			if len(resolved) > 0 {
+				orgIDForUpdate := app.OrgID
+				if orgIDForUpdate == "" {
+					orgIDForUpdate = r.client.OrgID
+				}
+				updateReq := &accessmanagement.UpdateConnectedAppRequest{Scopes: resolved}
+				if _, err := r.client.UpdateConnectedApp(ctx, orgIDForUpdate, app.ClientID, updateReq); err != nil {
+					r.refreshScopesIntoStateBestEffort(ctx, &plan, app.ClientID, grantTypes)
+					resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+					resp.Diagnostics.AddError(
+						"Error setting connected app scopes",
+						"Could not set scopes via PATCH: "+err.Error(),
+					)
+					resp.Diagnostics.AddError(
+						"Connected app created but scopes were not applied",
+						fmt.Sprintf(
+							"The app exists in Terraform state as id %q. To keep this app and retry scopes in place: terraform untaint <address> && terraform apply",
+							app.ClientID,
+						),
+					)
+					return
+				}
+			}
+		}
+	}
+
+	tflog.Trace(ctx, "created connected app", map[string]interface{}{
+		"client_id": app.ClientID,
+		"name":      app.ClientName,
+	})
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+// refreshScopesIntoStateBestEffort reloads live scopes into plan after a failed
+// scope apply so state reflects the platform (not the unapplied desired set).
+// Failures here are swallowed — the original apply error is what the user sees.
+func (r *ConnectedAppResource) refreshScopesIntoStateBestEffort(ctx context.Context, plan *ConnectedAppResourceModel, clientID string, grantTypes []string) {
+	if isClientCredentials(grantTypes) {
+		if reconciled, diags := r.reconcileScopesIntoState(ctx, clientID, plan.Scopes); !diags.HasError() {
+			plan.Scopes = reconciled
+		}
+		return
+	}
+	orgID := plan.OrganizationID.ValueString()
+	if orgID == "" {
+		orgID = r.client.OrgID
+	}
+	app, err := r.client.GetConnectedApp(ctx, orgID, clientID)
+	if err != nil {
+		return
+	}
+	if reconciled, diags := reconcileUserBehalfScopesIntoState(app.Scopes, plan.Scopes); !diags.HasError() {
+		plan.Scopes = reconciled
+	}
 }
 
 // Read refreshes the Terraform state with the latest data.
@@ -843,13 +958,82 @@ func validateAndResolveScopes(scopeSet types.Set) ([]accessmanagement.Scope, dia
 			continue
 		}
 
+		cpMap := mapToStringMap(attrs["context_params"].(types.Map))
+		if errDetail := scopeContextParamsError(typed, resolved, cpMap); errDetail != "" {
+			diags.AddAttributeError(
+				path.Root("scopes"),
+				"Invalid Scope context_params",
+				fmt.Sprintf("scopes[%d] (%q): %s", i, typed, errDetail),
+			)
+			continue
+		}
+
 		cp := map[string]interface{}{}
-		for k, v := range mapToStringMap(attrs["context_params"].(types.Map)) {
+		for k, v := range cpMap {
 			cp[k] = v
 		}
 		out = append(out, accessmanagement.Scope{Scope: resolved, ContextParams: cp})
 	}
 	return out, diags
+}
+
+// validateScopeContextParams checks org / envId requirements without resolving for apply.
+// Used by ValidateConfig (plan time). Unknown nested values are skipped.
+func validateScopeContextParams(scopeSet types.Set) diag.Diagnostics {
+	var diags diag.Diagnostics
+	if scopeSet.IsNull() || scopeSet.IsUnknown() {
+		return diags
+	}
+	for i, el := range scopeSet.Elements() {
+		if el.IsNull() || el.IsUnknown() {
+			continue
+		}
+		attrs := el.(types.Object).Attributes()
+		scopeAttr := attrs["scope"].(types.String)
+		if scopeAttr.IsNull() || scopeAttr.IsUnknown() {
+			continue
+		}
+		typed := scopeAttr.ValueString()
+		resolved, ok := constants.ResolveScopeIdentifier(typed)
+		if !ok {
+			// Name validity is handled by validateAndResolveScopes at apply; don't
+			// double-report here when the identifier is wrong.
+			continue
+		}
+		cpAttr := attrs["context_params"].(types.Map)
+		if cpAttr.IsUnknown() {
+			continue
+		}
+		cpMap := mapToStringMap(cpAttr)
+		if errDetail := scopeContextParamsError(typed, resolved, cpMap); errDetail != "" {
+			diags.AddAttributeError(
+				path.Root("scopes"),
+				"Invalid Scope context_params",
+				fmt.Sprintf("scopes[%d] (%q): %s", i, typed, errDetail),
+			)
+		}
+	}
+	return diags
+}
+
+// scopeContextParamsError returns a user-facing reason when context_params are incomplete
+// for a client_credentials context-aware scope, or "" if OK.
+func scopeContextParamsError(typed, resolved string, cp map[string]string) string {
+	org := strings.TrimSpace(cp["org"])
+	if org == "" {
+		return "context_params.org is required for client_credentials scopes. " +
+			"Example: context_params = { org = var.org_id }"
+	}
+	if constants.ScopesRequiringEnvID[resolved] {
+		if strings.TrimSpace(cp["envId"]) == "" {
+			return fmt.Sprintf(
+				"scope %q requires context_params.envId (environment-scoped). "+
+					"Example: context_params = { org = var.org_id, envId = var.env_id }",
+				typed,
+			)
+		}
+	}
+	return ""
 }
 
 // applyScopes reconciles the connected app's scopes to exactly `scopeSet` (authoritative).

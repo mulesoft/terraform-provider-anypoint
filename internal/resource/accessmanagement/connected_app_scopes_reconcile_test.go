@@ -3,6 +3,7 @@ package accessmanagement
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -30,7 +31,7 @@ func TestValidateAndResolveScopes_ResolvesIdentifiersAndDisplayNames(t *testing.
 		scope  string
 		params map[string]attr.Value
 	}{
-		{scope: "read:applications", params: map[string]attr.Value{"org": types.StringValue("o1")}},
+		{scope: "read:applications", params: map[string]attr.Value{"org": types.StringValue("o1"), "envId": types.StringValue("e1")}},
 		{scope: "Cloudhub Organization Admin", params: map[string]attr.Value{"org": types.StringValue("o1")}}, // display name
 	})
 
@@ -50,6 +51,63 @@ func TestValidateAndResolveScopes_ResolvesIdentifiersAndDisplayNames(t *testing.
 	}
 	if !byScope["admin:cloudhub"] {
 		t.Errorf("display name 'Cloudhub Organization Admin' not resolved to admin:cloudhub: %+v", got)
+	}
+}
+
+func TestValidateAndResolveScopes_RequiresOrg(t *testing.T) {
+	set := makeScopeSet(t, []struct {
+		scope  string
+		params map[string]attr.Value
+	}{
+		{scope: "read:organization", params: nil},
+	})
+	_, diags := validateAndResolveScopes(set)
+	if !diags.HasError() {
+		t.Fatal("expected error for missing org")
+	}
+	found := false
+	for _, d := range diags.Errors() {
+		if strings.Contains(d.Detail(), "context_params.org is required") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected org-required detail, got: %v", diags.Errors())
+	}
+}
+
+func TestValidateAndResolveScopes_RequiresEnvIdForEnvScoped(t *testing.T) {
+	set := makeScopeSet(t, []struct {
+		scope  string
+		params map[string]attr.Value
+	}{
+		{scope: "read:applications", params: map[string]attr.Value{"org": types.StringValue("o1")}},
+	})
+	_, diags := validateAndResolveScopes(set)
+	if !diags.HasError() {
+		t.Fatal("expected error for missing envId on read:applications")
+	}
+	found := false
+	for _, d := range diags.Errors() {
+		if strings.Contains(d.Detail(), "requires context_params.envId") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected envId-required detail, got: %v", diags.Errors())
+	}
+}
+
+func TestValidateScopeContextParams_PlanTime(t *testing.T) {
+	set := makeScopeSet(t, []struct {
+		scope  string
+		params map[string]attr.Value
+	}{
+		{scope: "read:organization", params: map[string]attr.Value{}},
+	})
+	diags := validateScopeContextParams(set)
+	if !diags.HasError() {
+		t.Fatal("expected plan-time error for empty context_params")
 	}
 }
 

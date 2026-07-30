@@ -355,6 +355,42 @@ var ValidScopes = map[string]bool{
 	ScopeCreateOmniGenAI:             true,
 }
 
+// ScopesRequiringEnvID lists context-aware scopes that the Accounts API rejects unless
+// context_params includes envId (in addition to org). Verified against the platform /
+// docs examples — incomplete lists still fail at apply with a clear API message, but
+// these are caught at plan time.
+var ScopesRequiringEnvID = map[string]bool{
+	ScopeCreateApplications:         true,
+	ScopeDeleteApplications:         true,
+	ScopeDownloadApplications:       true,
+	ScopeManageAPIAlerts:            true,
+	ScopeManageAPIConfiguration:     true,
+	ScopeManageAPIContracts:         true,
+	ScopeManageAPIPolicies:          true,
+	ScopeManageAPIProxies:           true,
+	ScopeManageAPIs:                 true,
+	ScopeManageApplicationAlerts:    true,
+	ScopeManageApplicationData:      true,
+	ScopeManageApplicationFlows:     true,
+	ScopeManageApplicationQueues:    true,
+	ScopeManageApplicationSchedules: true,
+	ScopeManageApplicationSettings:  true,
+	ScopeManageSecretGroups:         true,
+	ScopeManageSecrets:              true,
+	ScopeManageServers:              true,
+	ScopeReadAPIAlerts:              true,
+	ScopeReadAPIConfiguration:       true,
+	ScopeReadAPIContracts:           true,
+	ScopeReadAPIPolicies:            true,
+	ScopeReadApplicationAlerts:      true,
+	ScopeReadApplications:           true,
+	ScopeReadSecrets:                true,
+	ScopeReadSecretsMetadata:        true,
+	ScopeReadServers:                true,
+	ScopeRestartApplications:        true,
+	ScopeViewEnvironment:            true,
+}
+
 // DisplayNameToScope maps the EXACT display names from the Anypoint Platform
 // scopes catalog API (GET /accounts/api/cs/scopes) to scope identifiers.
 // These names match what users see in the Anypoint UI when adding scopes.
