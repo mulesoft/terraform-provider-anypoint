@@ -230,6 +230,7 @@ func (p *AnypointProvider) Resources(_ context.Context) []func() resource.Resour
 		// Agents Tools resources
 		resourceAgentsTools.NewAgentInstanceResource,
 		resourceAgentsTools.NewMCPServerResource,
+		resourceAgentsTools.NewMCPBridgeResource,
 		// Exchange resources
 		resourceExchange.NewAssetResource,
 		// Secrets Management resources
@@ -291,6 +292,9 @@ func (p *AnypointProvider) DataSources(_ context.Context) []func() datasource.Da
 		dsAgentsTools.NewAgentInstanceSingleDataSource,
 		dsAgentsTools.NewMCPServerDataSource,
 		dsAgentsTools.NewMCPServerSingleDataSource,
+		dsAgentsTools.NewMCPToolsDataSource,
+		dsAgentsTools.NewMCPBridgeDataSource,
+		dsAgentsTools.NewMCPBridgesDataSource,
 		// Exchange data sources
 		dsExchange.NewAssetDataSource,
 		dsExchange.NewAssetsDataSource,
