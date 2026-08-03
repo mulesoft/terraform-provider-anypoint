@@ -94,6 +94,10 @@ type CreateOutboundAPIPolicyRequest struct {
 	AssetVersion      string                 `json:"assetVersion"`
 	Label             string                 `json:"label,omitempty"`
 	UpstreamIDs       []string               `json:"upstreamIds"`
+	// APIVersionID is the numeric API-instance id. Most outbound policies leave it
+	// zero (omitted), but the MCP-bridge per-upstream mcp-transcoding policy requires
+	// it in the body (LIVE + BFF source): the Platform 400s without it.
+	APIVersionID int `json:"apiVersionId,omitempty"`
 }
 
 // UpdateOutboundAPIPolicyRequest is the payload for updating an outbound policy.
@@ -646,6 +650,10 @@ var KnownPolicies = map[string]PolicyInfo{
 	"mcp-global-access-policy": {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "mcp-global-access-policy", DefaultVersion: "1.0.0", InboundPolicy: true},
 	"mcp-tool-mapping":         {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "mcp-tool-mapping", DefaultVersion: "1.0.0", InboundPolicy: true},
 	"mcp-transcoding-router":   {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "mcp-transcoding-router", DefaultVersion: "1.0.1-20260414150102", InboundPolicy: true},
+	// mcp-transcoding is the per-upstream OUTBOUND transcoding policy attached to
+	// each source API of an MCP bridge. Its POST additionally requires apiVersionId
+	// (the bridge instance id) + upstreamIds — see CreateOutboundAPIPolicyRequest.
+	"mcp-transcoding": {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "mcp-transcoding", DefaultVersion: "1.0.0", OutboundPolicy: true},
 	// LLM Gateway policies
 	"semantic-routing-policy-huggingface": {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "semantic-routing-policy-huggingface", DefaultVersion: "1.0.0-20260130095514", InboundPolicy: true},
 	"llm-proxy-core-policy":               {GroupID: "68ef9520-24e9-4cf2-b2f5-620025690913", AssetID: "llm-proxy-core-policy", DefaultVersion: "1.0.0-20260108100848", InboundPolicy: true},
@@ -1063,6 +1071,9 @@ var KnownPolicySchemas = map[string]map[string]PolicySchemaField{
 	"mcp-transcoding-router": {
 		"transcodingPath": {Required: false, Type: "string"},
 		"routes":          {Required: true, Type: "array"},
+	},
+	"mcp-transcoding": {
+		"tools": {Required: true, Type: "array"},
 	},
 	// LLM Gateway policies
 	"semantic-routing-policy-huggingface": {

@@ -158,8 +158,20 @@ type CreateAssetRequest struct {
 	APIVersion string // properties.apiVersion
 	MainFile   string // properties.mainFile
 
+	// Properties holds arbitrary extra `properties.{key}` form fields (e.g.
+	// {"platform": "mulesoft"} for generated MCP assets). APIVersion/MainFile
+	// remain dedicated fields for backward compatibility; anything here is
+	// written in addition to them.
+	Properties map[string]string
+
 	// Optional keywords
 	Keywords string // comma-separated
+
+	// InMemoryFiles holds files whose bytes are built at runtime rather than read
+	// from a local path (e.g. an MCP bridge's generated mcp-metadata.json). Each is
+	// written as its own `files.{classifier}.{ext}` part, exactly like FilePath /
+	// ExtraFiles, so the multipart field-name contract is identical for all files.
+	InMemoryFiles []AssetInMemoryFile
 }
 
 // AssetFileUpload is one additional local file to attach to a publish request.
@@ -167,6 +179,16 @@ type CreateAssetRequest struct {
 type AssetFileUpload struct {
 	FilePath   string // local file path to upload
 	Classifier string // e.g. metadata, policy-definition
+}
+
+// AssetInMemoryFile is a file whose content is already in memory (not on disk).
+// Used by generated-asset publishers (e.g. MCP bridge) that construct the file
+// content at runtime. The field name derives from FileName's extension exactly
+// like the disk-based path: `files.{classifier}.{ext}`.
+type AssetInMemoryFile struct {
+	Classifier string // e.g. mcp-metadata
+	FileName   string // e.g. mcp-metadata.json (extension drives the packaging suffix)
+	Content    []byte
 }
 
 // UpdateAssetRequest represents the request to update asset metadata.
@@ -1189,6 +1211,13 @@ func buildAssetMultipart(req *CreateAssetRequest) (*bytes.Buffer, string, error)
 		}
 	}
 
+	// Arbitrary extra properties (e.g. properties.platform for generated MCP assets).
+	for k, v := range req.Properties {
+		if err := writer.WriteField("properties."+k, v); err != nil {
+			return nil, "", fmt.Errorf("failed to write properties.%s field: %w", k, err)
+		}
+	}
+
 	// File upload (optional — some asset types like "custom" without files are valid).
 	// The primary file comes from FilePath/Classifier; multi-file types (e.g. policy)
 	// attach further files via ExtraFiles. Each file is written as its own
@@ -1204,6 +1233,16 @@ func buildAssetMultipart(req *CreateAssetRequest) (*bytes.Buffer, string, error)
 			continue
 		}
 		if err := writeAssetFilePart(writer, f.FilePath, f.Classifier); err != nil {
+			return nil, "", err
+		}
+	}
+
+	// In-memory files (content built at runtime, e.g. generated mcp-metadata.json).
+	for _, f := range req.InMemoryFiles {
+		if len(f.Content) == 0 {
+			continue
+		}
+		if err := writeAssetFilePartBytes(writer, f.Classifier, f.FileName, f.Content); err != nil {
 			return nil, "", err
 		}
 	}
@@ -1224,8 +1263,15 @@ func writeAssetFilePart(writer *multipart.Writer, filePath, classifier string) e
 	if err != nil {
 		return fmt.Errorf("failed to read file %s: %w", filePath, err)
 	}
+	return writeAssetFilePartBytes(writer, classifier, filepath.Base(filePath), fileContent)
+}
 
-	fileName := filepath.Base(filePath)
+// writeAssetFilePartBytes writes already-in-memory file content to the multipart
+// writer using the identical `files.{classifier}.{ext}` field-name contract as
+// the disk-based path. This lets generated assets (e.g. an MCP bridge's runtime
+// mcp-metadata.json) publish without staging a temp file. `ext` is derived from
+// fileName's extension, falling back to the classifier when there is none.
+func writeAssetFilePartBytes(writer *multipart.Writer, classifier, fileName string, content []byte) error {
 	if classifier == "" {
 		classifier = "custom"
 	}
@@ -1244,7 +1290,7 @@ func writeAssetFilePart(writer *multipart.Writer, filePath, classifier string) e
 		return fmt.Errorf("failed to create form file: %w", err)
 	}
 
-	if _, err := part.Write(fileContent); err != nil {
+	if _, err := part.Write(content); err != nil {
 		return fmt.Errorf("failed to write file content: %w", err)
 	}
 	return nil
