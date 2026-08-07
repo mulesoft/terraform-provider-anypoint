@@ -29,7 +29,32 @@ provider "anypoint" {
 
 ## Authentication
 
-The provider authenticates against Anypoint Platform using a [Connected App](https://docs.mulesoft.com/access-management/connected-apps-overview) with the `client_credentials` grant type. Create a Connected App in your root org with the scopes required for the resources you intend to manage, then provide its `client_id` / `client_secret` to the provider.
+The provider supports two authentication modes, selected with `auth_type`:
+
+| `auth_type` | Grant | Credentials | Token principal |
+|-------------|-------|-------------|-----------------|
+| `connected_app` (default) | `client_credentials` | `client_id` + `client_secret` | the **Connected App** (no user) |
+| `user` | `password` | `client_id` + `client_secret` + `username` + `password` | a **user** (the app acts on the user's behalf) |
+
+For `connected_app`, create a [Connected App](https://docs.mulesoft.com/access-management/connected-apps-overview) in your root org with the scopes required for the resources you intend to manage.
+
+### Control-plane resources need the right scopes (important)
+
+A `client_credentials` Connected App works for **every** resource in this provider — including the CloudHub 2.0 and Gateway control-plane resources — **as long as the Connected App is granted the scopes those APIs require.** A `HTTP 401`/`403` from one of these APIs almost always means the Connected App is **missing a scope**, not that you must switch authentication modes.
+
+> Verified live on Anypoint: with a properly scoped `client_credentials` token, `runtimefabric/.../privatespaces`, `gatewaymanager/api/v1/.../gateways`, and `standalone/api/v1/.../gateways` all return `200`. Without the required scopes they return `401`/`403`. Using `auth_type = "user"` tends to "just work" only because a human admin already holds those permissions — it is a convenient alternative, **not a requirement**.
+
+Scopes required by the control-plane API families:
+
+| API family | Endpoint (base) | Required Connected App scopes | Resources |
+|------------|-----------------|-------------------------------|-----------|
+| **CloudHub 2.0 private spaces** | `runtimefabric/api/...` | **Cloudhub Organization Admin** (`admin:cloudhub`), plus **Manage Runtime Fabrics** for some operations | `anypoint_private_space_config`, `anypoint_private_space_association`, `anypoint_private_space_upgrade`, `anypoint_privatespace_advanced_config`, `anypoint_tls_context`, `anypoint_vpn_connection`, `anypoint_transit_gateway_connection` |
+| **Gateway Manager** (managed Omni Gateway) | `gatewaymanager/api/v1/...` | **Manage Servers** + **Read Servers** + **View Organization**; for Omni Gateway operations also API Manager scopes (**Manage APIs Configuration**, **Manage Policies**, **View Policies**, **Deploy API Proxies**) and **Exchange Viewer** | `anypoint_managed_omni_gateway`, and any resource that pre-flights a `gateway_id`: `anypoint_api_instance`, `anypoint_api_policy`, `anypoint_api_instance_sla_tier`, `anypoint_mcp_server`, `anypoint_mcp_bridge`, `anypoint_agent_instance` |
+| **Standalone / self-managed gateways** | `standalone/api/v1/...` | **Manage Servers** + **Read Servers** + **View Organization** | `anypoint_self_managed_gateway` (mint / list / get) |
+
+If a `client_credentials` app is missing these scopes, `terraform apply` fails **before creating anything** — the gateway `gateway_id` pre-flight (or the private-space call) returns `401`/`403`. The provider surfaces this as an explicit error naming the scopes to grant, rather than an opaque status code. The fix is to **add the scopes above to your Connected App** (or use `auth_type = "user"` with a user that already has them).
+
+~> **Tip:** you can grant all of the above scopes to a single Connected App and use `auth_type = "connected_app"` everywhere. `auth_type = "user"` remains available as an alternative when you'd rather rely on an existing admin user's permissions.
 
 ## Schema
 
@@ -40,6 +65,9 @@ The provider authenticates against Anypoint Platform using a [Connected App](htt
 
 ### Optional
 
+- `auth_type` (String) – Authentication type. Valid values: `connected_app` (default) for the client-credentials flow, or `user` for the password-grant flow. Both work for all resources; the control-plane resources listed above simply require the appropriate Connected App scopes (see above). May also be provided via `ANYPOINT_AUTH_TYPE`.
+- `username` (String) – Username for user authentication (only required when `auth_type = "user"`). May also be provided via `ANYPOINT_USERNAME`.
+- `password` (String, Sensitive) – Password for user authentication (only required when `auth_type = "user"`). May also be provided via `ANYPOINT_PASSWORD`.
 - `base_url` (String) – Anypoint Platform base URL. Defaults to `https://anypoint.mulesoft.com`. Override for EU (`https://eu1.anypoint.mulesoft.com`), GovCloud, or staging environments.
 
 ## Resources by Category

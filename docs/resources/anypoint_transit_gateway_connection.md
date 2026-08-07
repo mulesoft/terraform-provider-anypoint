@@ -13,6 +13,8 @@ Routes are managed **inline** via the `routes` attribute and can be **updated in
 
 -> **Prerequisites:** A Private Space with its network provisioned, and an AWS Transit Gateway shared to MuleSoft's AWS account via AWS RAM. The `routes` CIDRs must not overlap with the Private Space CIDR. You can discover the `private_space_id` with the [`anypoint_private_spaces`](../data-sources/anypoint_private_spaces.md) data source. The `resource_share_id` and `resource_share_account` come from your AWS RAM share.
 
+-> **Authentication:** This resource calls the **CloudHub 2.0 private-space (Runtime Manager) control-plane API**. A `client_credentials` Connected App works — grant it the **Cloudhub Organization Admin** (`admin:cloudhub`) scope (plus **Manage Runtime Fabrics** for some operations). A Connected App missing these scopes is rejected with `HTTP 401`/`403` before anything is created; the fix is to add the scopes (or use `auth_type = "user"` with a user that has the equivalent permissions). See [Authentication](../index.md#control-plane-resources-need-the-right-scopes-important).
+
 ## Example Usage
 
 ```terraform

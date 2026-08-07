@@ -9,7 +9,7 @@ description: |-
 
 Manages an MCP server in Anypoint API Manager. An MCP server represents an MCP server specification deployed to a Omni Gateway target with routing rules and upstream backends.
 
--> **Connected App:** This resource requires a **standard connected app** (client credentials). An admin connected app is not needed. The connected app must have relevant scopes.
+-> **Authentication:** This resource calls **Gateway Manager / API Manager control-plane APIs** (the gateway lifecycle and/or the `gateway_id` pre-flight). A `client_credentials` Connected App works — grant it **Manage Servers**, **Read Servers**, and **View Organization** (plus API Manager scopes such as **Manage APIs Configuration**, **Manage Policies**, **Deploy API Proxies**, and **Exchange Viewer** for Omni Gateway operations). A Connected App missing these scopes is rejected with `HTTP 401`/`403` before anything is created; the fix is to add the scopes (or use `auth_type = "user"` with a user that has the equivalent permissions). See [Authentication](../index.md#control-plane-resources-need-the-right-scopes-important).
 
 -> **Status after create:** After a successful `terraform apply` the `status` field is populated from a GET request made immediately after the POST. The Platform typically returns `status = "active"` right away.
 

@@ -35,9 +35,21 @@ runs on **your own infrastructure**. The platform never provisions a runtime, so
 `flexctl` and never leave it, so **no key material is ever written to Terraform state**. The
 provider only mints the enrollment token and tracks/deletes the resulting gateway object.
 
--> **Connected App:** This resource requires a **standard connected app** (client credentials).
-An admin connected app is not needed. The connected app must have the relevant API Manager /
-gateway scopes.
+-> **Authentication:** This resource calls the **standalone (self-managed) gateway control-plane
+API** — token mint, gateway list/get, and delete all ride
+`standalone/api/v1/organizations/{org}/environments/{env}/gateways`. A `client_credentials`
+Connected App works — grant it **Manage Servers**, **Read Servers**, and **View Organization**
+(the Runtime Manager server scopes). A Connected App missing these scopes is rejected with
+`HTTP 401`/`403`; the fix is to add the scopes (or use `auth_type = "user"` with a user that has
+the equivalent permissions). See
+[Authentication](../index.md#control-plane-resources-need-the-right-scopes-important).
+
+-> **Read/list route (managed vs self-managed):** Self-managed gateways are read from the
+**standalone** service above. The **managed** Gateway Manager route
+(`gatewaymanager/api/v1/.../gateways`) lists only *managed* Omni Gateways and returns an empty
+`content` array for self-managed ones, so it cannot be used to verify a self-managed gateway.
+(The unified Anypoint UI list is a facade served by
+`gatewaymanager/xapi/v1/.../gateways?kind=selfManaged`.)
 
 ~> **`registration_token` is a one-shot secret:** It is marked sensitive, is only returned when
 the token is minted (during `apply`), and **cannot be recovered on import**. Capture it from the

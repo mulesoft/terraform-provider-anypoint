@@ -168,6 +168,12 @@ func (c *ManagedOmniGatewayClient) CreateManagedOmniGateway(ctx context.Context,
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		// Gateway Manager requires the connected app to hold Runtime Manager server
+		// scopes (Manage/Read Servers, View Organization); a token missing them is
+		// rejected with 401/403. Surface actionable scope guidance, not a bare status.
+		if authErr := client.AuthContextErrorIfUnauthorized(resp.StatusCode, url, string(body)); authErr != nil {
+			return nil, authErr
+		}
 		return nil, fmt.Errorf("failed to create managed omni gateway with status %d: %s", resp.StatusCode, string(body))
 	}
 

@@ -236,6 +236,12 @@ func (c *SelfManagedGatewayClient) MintRegistrationToken(ctx context.Context, or
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
+		// The standalone gateway API needs the connected app's Runtime Manager server
+		// scopes (Manage/Read Servers, View Organization); a token missing them is
+		// rejected with 401/403. Surface actionable scope guidance.
+		if authErr := client.AuthContextErrorIfUnauthorized(resp.StatusCode, url, string(body)); authErr != nil {
+			return nil, authErr
+		}
 		return nil, fmt.Errorf("failed to mint self-managed gateway registration token with status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -303,6 +309,12 @@ func (c *SelfManagedGatewayClient) ListSelfManagedGateways(ctx context.Context, 
 		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)
 			_ = resp.Body.Close()
+			// The standalone gateway API needs the connected app's Runtime Manager server
+			// scopes (Manage/Read Servers, View Organization); a token missing them is
+			// rejected with 401/403. Surface actionable scope guidance.
+			if authErr := client.AuthContextErrorIfUnauthorized(resp.StatusCode, url, string(body)); authErr != nil {
+				return nil, authErr
+			}
 			return nil, fmt.Errorf("failed to list self-managed gateways with status %d: %s", resp.StatusCode, string(body))
 		}
 
