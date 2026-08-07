@@ -171,14 +171,27 @@ resource "anypoint_exchange_asset" "petstore" {
 
 ### Optional
 
-- `type` (String) The asset type: `custom`, `rest-api`, `http-api`, `evented-api` (AsyncAPI), `graphql-api`, `connector`, `app`, `template`, `example`, `policy`, `agent`, `llm`, `mcp`.
+- `type` (String) The Exchange asset type. This is a **free-form** value forwarded as-is to Exchange — it is **not** restricted to a fixed enum, so any type Exchange accepts works. Common values: `custom`, `rest-api`, `http-api`, `evented-api` (AsyncAPI), `graphql-api`, `grpc-api`, `soap-api`, `connector`, `app`, `template`, `example`, `policy`, `ruleset`, `agent`, `llm`, `mcp`. API-spec **fragments** (RAML/OAS fragments) are not a distinct type — publish them as an API-spec asset and select the fragment via `classifier` (e.g. `raml-fragment`, `oas-fragment`/`oas-components`).
 - `status` (String) The lifecycle status of this asset **version**. One of `development`, `published` (default), or `deprecated`. **Case-sensitive** (`Published` is rejected). The Exchange API is asymmetric — validated both at plan time (via a `OneOf` validator) and by a plan-time guard: `development` is accepted **only when first publishing a version** and *cannot* be set on an existing version (the platform rejects an in-place change to `development` with HTTP 400); `deprecated` can only be set on an existing version, not at initial publish; `published` is valid in both cases. To move a published version back to `development`, publish a new version (bump `version`) rather than editing status in place.
 - `description` (String) A description of the asset. **Group-scoped** — shared across all versions of the asset (see the multi-version note below).
 - `keywords` (String) Comma-separated keywords for search discovery.
 - `contact_name` (String) Contact person name for this asset. **Group-scoped** — shared across all versions.
 - `contact_email` (String) Contact email for this asset. **Group-scoped** — shared across all versions.
 - `api_version` (String) The API version (`properties.apiVersion`), e.g. `v1`. REQUIRED at create for the API-spec types `rest-api`, `evented-api`, and `grpc-api` — publishing one of these without api_version fails with `400 MISSING_REQUIRED_PROPERTIES: apiVersion`. This is the human-facing API contract version, distinct from the immutable GAV `version`.
-- `classifier` (String) The file classifier: `custom`, `raml`, `oas`, `wsdl`, `graphql`, etc. Required when `file_path` is set.
+- `classifier` (String) The **file** classifier (the file kind, *not* the asset type — for the spec types it does not equal `type`). Required when `file_path` is set. Fragment assets are published by setting this to a fragment classifier (e.g. `raml-fragment`). Exchange bundles the spec and stores it as `fat-<classifier>`; the provider normalizes it back on read. Type → classifier mapping:
+
+  | `type`        | `classifier`                          | file? | `api_version` at create? |
+  |---------------|---------------------------------------|-------|--------------------------|
+  | `rest-api`    | `oas` or `raml`                       | yes   | yes                      |
+  | `soap-api`    | `wsdl`                                | yes   | no                       |
+  | `graphql-api` | `graphql`                             | yes   | no                       |
+  | `grpc-api`    | `proto`                               | yes   | yes                      |
+  | `evented-api` | `evented-api` (**not** `asyncapi`)    | yes   | yes                      |
+  | `http-api`    | — (metadata-only, no file)            | no    | yes                      |
+  | `custom`      | `custom`                              | opt.  | no                       |
+  | fragments     | `raml-fragment`, `oas-fragment`/`oas-components` | yes | no             |
+
+  > **AsyncAPI gotcha:** the `evented-api` classifier is literally `evented-api` (Exchange stores it as `fat-evented-api`). Passing `classifier = "asyncapi"` fails with `400 COULD_NOT_DETERMINE_ASSET_TYPE`.
 - `file_path` (String) Path to the file to upload (JAR, ZIP, RAML, OAS, etc.). Used only at creation time. After import, one apply settles this field (non-destructive). Changing to a different value triggers replacement.
 - `main_file` (String) The main file within the uploaded archive (`properties.mainFile`). Used for multi-file specs.
 - `additional_file` (Block List) Extra files uploaded **alongside** `file_path` in the *same* publish request, for multi-file asset types. The canonical case is `type = "policy"`, which requires two files — e.g. `(mule-policy.jar + policy-definition.yaml)` or `(schema.json + metadata.yaml)`. Like `file_path`, this is a create-time, upload-only field (preserved from state on read, never reconciled from the API) and is **replacement-forcing** — except the non-destructive null→value settle on the first apply after import. See [`additional_file`](#nestedschema--additional_file) below.

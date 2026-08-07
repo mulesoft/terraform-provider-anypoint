@@ -69,6 +69,24 @@ resource "anypoint_exchange_asset" "graphql_api" {
   ]
 }
 
+# AsyncAPI (evented-api) backed by an AsyncAPI spec file.
+# IMPORTANT: the classifier is `evented-api` (same as the type), NOT `asyncapi`.
+# Using classifier = "asyncapi" fails with 400 COULD_NOT_DETERMINE_ASSET_TYPE.
+# Like rest-api/grpc-api, evented-api REQUIRES api_version at create.
+resource "anypoint_exchange_asset" "evented_api" {
+  organization_id = var.org_id
+  group_id        = var.org_id
+  asset_id        = "tf-demo-evented-api"
+  version         = "1.0.0"
+  name            = "TF Demo AsyncAPI"
+  type            = "evented-api"
+
+  classifier  = "evented-api"
+  api_version = "v1"
+  file_path   = "${path.module}/asyncapi-sample.yaml"
+  main_file   = "asyncapi-sample.yaml"
+}
+
 # SOAP API backed by a WSDL.
 resource "anypoint_exchange_asset" "soap_api" {
   organization_id = var.org_id

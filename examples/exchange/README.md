@@ -41,6 +41,13 @@ terraform apply
 - **Classifier normalization.** Set the user-facing `classifier` (e.g. `oas`).
   Exchange stores it bundled as `fat-oas`; the provider strips the prefix on read
   so there is no perpetual plan diff.
+- **Classifier is the FILE kind, not the type.** For spec assets the `classifier`
+  is usually different from `type`: `rest-api`→`oas`/`raml`, `soap-api`→`wsdl`,
+  `graphql-api`→`graphql`, `grpc-api`→`proto`. The one that trips people up is
+  **AsyncAPI**: `type = "evented-api"` uses `classifier = "evented-api"` (same
+  string) — `classifier = "asyncapi"` is rejected with
+  `400 COULD_NOT_DETERMINE_ASSET_TYPE`. `evented-api`, `rest-api`, and `grpc-api`
+  also require `api_version` at create.
 - **External instances are authoritative.** Instances removed from the `instances`
   list are deleted from Anypoint's api-metadata-service on the next apply, and are
   removed on `terraform destroy` before the asset version is hard-deleted — so no

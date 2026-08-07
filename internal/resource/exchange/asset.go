@@ -197,7 +197,7 @@ func (r *AssetResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				},
 			},
 			"type": schema.StringAttribute{
-				Description: "The asset type: custom, rest-api, http-api, evented-api (AsyncAPI), graphql-api, connector, app, template, example, policy, agent, llm, mcp.",
+				Description: "The Exchange asset type. This is a free-form value forwarded as-is to Exchange — it is NOT restricted to a fixed enum, so any type Exchange accepts works. Common values: custom, rest-api, http-api, evented-api (AsyncAPI), graphql-api, grpc-api, soap-api, connector, app, template, example, policy, ruleset, agent, llm, mcp. API-spec fragments (RAML/OAS fragments) are not a distinct type: publish them as an API-spec asset and select the fragment via `classifier` (e.g. raml-fragment, oas-fragment/oas-components).",
 				Optional:    true,
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{
@@ -251,7 +251,7 @@ func (r *AssetResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				},
 			},
 			"classifier": schema.StringAttribute{
-				Description: "The file classifier: custom, raml, oas, wsdl, graphql, etc. Required when file_path is set.",
+				Description: "The file classifier — it is the FILE kind, not the asset type, and for the spec types it does NOT equal the type. Common values: custom, oas (rest-api), raml (rest-api), wsdl (soap-api), graphql (graphql-api), proto (grpc-api), evented-api (evented-api / AsyncAPI — the classifier equals the type here; `asyncapi` is NOT accepted and yields 400 COULD_NOT_DETERMINE_ASSET_TYPE), raml-fragment, oas-fragment/oas-components. Required when file_path is set. Fragment assets are published by setting this to a fragment classifier (e.g. raml-fragment). Exchange bundles the spec and stores it as `fat-<classifier>`; the provider normalizes it back on read.",
 				Optional:    true,
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{
@@ -632,7 +632,11 @@ func (r *AssetResource) Configure(_ context.Context, req resource.ConfigureReque
 //   - soap-api    (WSDL)      — WSDL is mandatory for SOAP
 //   - graphql-api (SDL)       — a GraphQL schema is mandatory
 //   - evented-api (AsyncAPI)  — live-verified 2026-07-16: fileless publish 400s
-//     COULD_NOT_DETERMINE_ASSET_TYPE (classifier=evented-api)
+//     COULD_NOT_DETERMINE_ASSET_TYPE. The correct file classifier is `evented-api`
+//     (same string as the type; Exchange stores it as fat-evented-api) — NOT
+//     `asyncapi`, which also 400s COULD_NOT_DETERMINE_ASSET_TYPE. Confirmed
+//     2026-08-06 from a real prod evented-api asset (files[].classifier=evented-api)
+//     and a devx publish with classifier=evented-api returning 201.
 //   - grpc-api    (protobuf)  — live-verified 2026-07-16: fileless publish 400s
 //     MISSING_FILES_ERROR (protobuf.proto|protobuf.zip)
 //   - ruleset     (profile)   — live-verified 2026-07-16: fileless publish 400s
