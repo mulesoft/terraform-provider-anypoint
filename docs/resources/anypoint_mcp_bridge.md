@@ -13,7 +13,7 @@ Manages an **MCP bridge** in Anypoint API Manager. Unlike [`anypoint_mcp_server`
 2. creates the Flex / Self-Managed Gateway instance with **one route per source API** (matched by the `X-UPSTREAM-NAME` header) and its upstream backend,
 3. attaches the MCP transcoding policies that map each MCP tool call to the underlying REST call.
 
--> **Connected App:** This resource requires a **standard connected app** (client credentials) with API Manager, Exchange, and Gateway scopes. An admin connected app is not needed.
+-> **Authentication:** This resource orchestrates **Exchange** (asset publish) and **Gateway Manager / API Manager** control-plane APIs (the `gateway_id` pre-flight, instance create, policy attach). A `client_credentials` Connected App works — grant it **Manage Servers**, **Read Servers**, **View Organization**, the API Manager scopes (**Manage APIs Configuration**, **Manage Policies**, **Deploy API Proxies**), and **Exchange Viewer**/**Exchange Contributor**. A Connected App missing these scopes is rejected with `HTTP 401`/`403` during the gateway pre-flight, before anything is created; the fix is to add the scopes (or use `auth_type = "user"` with a user that has the equivalent permissions). See [Authentication](../index.md#control-plane-resources-need-the-right-scopes-important).
 
 -> **Gateway must be running:** The target gateway must be connected and running before apply. If the gateway is not ready the platform returns `GatewayNotReadyError`; the provider retries briefly, but a persistently disconnected gateway will fail the create.
 

@@ -193,6 +193,13 @@ func (c *APIInstanceClient) GetGatewayInfo(ctx context.Context, orgID, envID, ga
 	}
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		// Gateway Manager requires the connected app to hold Runtime Manager server
+		// scopes (Manage/Read Servers, View Organization); a token missing them is
+		// rejected with 401/403 during this pre-flight, before the API instance is
+		// created. Surface actionable scope guidance.
+		if authErr := client.AuthContextErrorIfUnauthorized(resp.StatusCode, url, string(body)); authErr != nil {
+			return nil, authErr
+		}
 		return nil, fmt.Errorf("failed to get gateway info with status %d: %s", resp.StatusCode, string(body))
 	}
 

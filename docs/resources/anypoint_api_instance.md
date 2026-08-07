@@ -11,7 +11,7 @@ Manages an API instance in Anypoint API Manager. An API instance represents an A
 
 -> **Gateway type:** The provider supports both **MuleSoft Managed Omni Gateway** (CloudHub 2.0, via [`anypoint_managed_omni_gateway`](anypoint_managed_omni_gateway.md)) and **self-managed (connected-mode) Flex/Omni Gateway** that you run on your own infrastructure (via [`anypoint_self_managed_gateway`](anypoint_self_managed_gateway.md)).
 
--> **Connected App:** This resource requires a **standard connected app** (client credentials). An admin connected app is not needed. The connected app must have relevant scopes.
+-> **Authentication:** This resource calls **Gateway Manager / API Manager control-plane APIs** (the gateway lifecycle and/or the `gateway_id` pre-flight). A `client_credentials` Connected App works — grant it **Manage Servers**, **Read Servers**, and **View Organization** (plus API Manager scopes such as **Manage APIs Configuration**, **Manage Policies**, **Deploy API Proxies**, and **Exchange Viewer** for Omni Gateway operations). A Connected App missing these scopes is rejected with `HTTP 401`/`403` before anything is created; the fix is to add the scopes (or use `auth_type = "user"` with a user that has the equivalent permissions). See [Authentication](../index.md#control-plane-resources-need-the-right-scopes-important).
 
 ## Example Usage
 

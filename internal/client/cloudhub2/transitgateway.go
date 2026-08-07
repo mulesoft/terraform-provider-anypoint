@@ -118,6 +118,12 @@ func (c *TransitGatewayClient) CreateTransitGateway(ctx context.Context, orgID, 
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		// CloudHub 2.0 private spaces need the connected app's 'Cloudhub Organization
+		// Admin' scope; a token missing it is rejected with 401/403. Surface actionable
+		// scope guidance instead of a bare status error.
+		if authErr := client.AuthContextErrorIfUnauthorized(resp.StatusCode, url, string(body)); authErr != nil {
+			return nil, authErr
+		}
 		return nil, fmt.Errorf("failed to create transit gateway with status %d: %s", resp.StatusCode, string(body))
 	}
 

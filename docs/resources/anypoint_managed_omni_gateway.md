@@ -11,7 +11,9 @@ Manages a CloudHub 2.0 Managed Omni Gateway instance in Anypoint Platform.
 
 -> **Gateway type:** This resource manages a **MuleSoft Managed Omni Gateway** (CloudHub 2.0), where the platform provisions and runs the gateway for you. For a **self-managed (connected-mode) Flex/Omni Gateway** that you run on your own infrastructure, use [`anypoint_self_managed_gateway`](anypoint_self_managed_gateway.md) instead.
 
--> **Connected App:** This resource requires a **standard connected app** (client credentials). An admin connected app is not needed. The connected app must have relevant scopes.
+-> **Authentication:** This resource calls **Gateway Manager / API Manager control-plane APIs** (the gateway lifecycle and/or the `gateway_id` pre-flight). A `client_credentials` Connected App works — grant it **Manage Servers**, **Read Servers**, and **View Organization** (plus API Manager scopes such as **Manage APIs Configuration**, **Manage Policies**, **Deploy API Proxies**, and **Exchange Viewer** for Omni Gateway operations). A Connected App missing these scopes is rejected with `HTTP 401`/`403` before anything is created; the fix is to add the scopes (or use `auth_type = "user"` with a user that has the equivalent permissions). See [Authentication](../index.md#control-plane-resources-need-the-right-scopes-important).
+
+-> **Read/list route (managed vs self-managed):** Managed Omni Gateways are read from the Gateway Manager route (`gatewaymanager/api/v1/.../gateways`), which lists *only* managed gateways. Self-managed gateways do **not** appear there — they are read from the standalone route (`standalone/api/v1/.../gateways`); see [`anypoint_self_managed_gateway`](anypoint_self_managed_gateway.md).
 
 -> **Tracing note:** The Gateway Manager API does not echo back `configuration.tracing` in POST/PUT responses. The provider retains the plan-requested value in state after create/update so that `tracing.enabled = true` works correctly. On the next `terraform refresh` or `plan`, the provider reads the live value from the API for accurate drift detection.
 
