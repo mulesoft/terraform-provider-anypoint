@@ -26,6 +26,49 @@ import (
 	"github.com/mulesoft/terraform-provider-anypoint/internal/testutil"
 )
 
+// errString is a minimal string-backed error for table tests.
+type errString string
+
+func (e errString) Error() string { return string(e) }
+
+func TestIsAssetVersionConflict(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"nil", nil, false},
+		{"pre-conditions code", errString("failed to create asset with status 409: {\"code\":\"ASSET_PRE_CONDITIONS_FAILED\"}"), true},
+		{"409 already exists", errString("failed to create asset with status 409: an asset already exists with this version"), true},
+		// Exact body captured from a live devx republish (2026-08-10) — regression fixture.
+		{"real devx 409 body", errString(`failed to create asset with status 409: {"status":409,"code":"ASSET_PRE_CONDITIONS_FAILED","message":"Cannot create a new asset with the provided groupId, assetId, version, state","details":{"errors":["An asset already exists with this version and published lifecycle state."]}}`), true},
+		{"other 409", errString("failed to create asset with status 409: something else"), false},
+		{"400 missing prop", errString("failed to create asset with status 400: MISSING_REQUIRED_PROPERTIES"), false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isAssetVersionConflict(tc.err); got != tc.want {
+				t.Errorf("isAssetVersionConflict(%v) = %v, want %v", tc.err, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestNextPatchVersionHint(t *testing.T) {
+	cases := map[string]string{
+		"1.0.0":          "1.0.1",
+		"2.3.9":          "2.3.10",
+		"1":              "2",
+		"1.0.0-SNAPSHOT": "1.0.1",
+		"1.0.x":          "1.0.x-2",
+	}
+	for in, want := range cases {
+		if got := nextPatchVersionHint(in); got != want {
+			t.Errorf("nextPatchVersionHint(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestNewAssetResource(t *testing.T) {
 	r := NewAssetResource()
 

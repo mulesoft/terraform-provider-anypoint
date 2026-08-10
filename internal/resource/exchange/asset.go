@@ -1019,6 +1019,47 @@ func (r *AssetResource) fillComputedChildrenFromState(ctx context.Context, state
 	}
 }
 
+// isAssetVersionConflict reports whether a CreateAsset error is the Exchange
+// "this version already exists" precondition failure (HTTP 409
+// ASSET_PRE_CONDITIONS_FAILED). The client returns a formatted error carrying
+// the status code and response body, so we match on the stable error code plus
+// the 409 status as a fallback.
+func isAssetVersionConflict(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "ASSET_PRE_CONDITIONS_FAILED") {
+		return true
+	}
+	return strings.Contains(msg, "status 409") && strings.Contains(msg, "already exists")
+}
+
+// nextPatchVersionHint suggests the next patch version for the "bump the version"
+// guidance (e.g. "1.0.0" -> "1.0.1"). It is best-effort: when the current value
+// is not a dotted numeric version it falls back to appending a suffix.
+func nextPatchVersionHint(version string) string {
+	parts := strings.Split(version, ".")
+	last := parts[len(parts)-1]
+	// Strip any pre-release/build suffix (e.g. "1-SNAPSHOT") before incrementing.
+	num := last
+	if i := strings.IndexAny(last, "-+"); i >= 0 {
+		num = last[:i]
+	}
+	n := 0
+	for _, c := range num {
+		if c < '0' || c > '9' {
+			return version + "-2"
+		}
+		n = n*10 + int(c-'0')
+	}
+	if num == "" {
+		return version + "-2"
+	}
+	parts[len(parts)-1] = fmt.Sprintf("%d", n+1)
+	return strings.Join(parts, ".")
+}
+
 func (r *AssetResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan AssetResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -1058,6 +1099,33 @@ func (r *AssetResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	asset, err := r.client.CreateAsset(ctx, createReq)
 	if err != nil {
+		// Exchange versions are immutable AND non-reusable: once a version is
+		// published it is reserved forever, and a soft-delete does NOT free it up.
+		// Re-publishing the same group/asset/version (e.g. after changing the
+		// file, classifier, or tags, which forces a destroy+recreate) fails with
+		// 409 ASSET_PRE_CONDITIONS_FAILED. Surface actionable "bump the version"
+		// guidance instead of the raw platform error.
+		if isAssetVersionConflict(err) {
+			resp.Diagnostics.AddError(
+				"Exchange asset version already exists",
+				fmt.Sprintf(
+					"Version %q of asset %q already exists in Exchange and cannot be reused. "+
+						"Exchange versions are immutable and are reserved permanently — even after the "+
+						"asset version is deleted, the same version number cannot be re-published "+
+						"(the platform returns 409 ASSET_PRE_CONDITIONS_FAILED).\n\n"+
+						"To publish new content (a different file, classifier, or tags), bump the "+
+						"`version` to a new value (e.g. %q). Changing `version`, `classifier`, or "+
+						"`file_path` already forces Terraform to replace this resource; give it a "+
+						"fresh version number so the replacement can publish.\n\n"+
+						"Original error: %s",
+					plan.Version.ValueString(),
+					plan.AssetID.ValueString(),
+					nextPatchVersionHint(plan.Version.ValueString()),
+					err.Error(),
+				),
+			)
+			return
+		}
 		resp.Diagnostics.AddError(
 			"Error creating exchange asset",
 			"Could not publish asset: "+err.Error(),
@@ -1796,14 +1864,12 @@ func (r *AssetResource) ImportState(ctx context.Context, req resource.ImportStat
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("main_file"), mainFile)...)
 	}
 
-	// Seed api_version from the attributes array
+	// Seed api_version from the attributes array. For GraphQL and some types
+	// api-version is not present there (the API stores it as properties.apiVersion);
+	// in that case there is nothing to seed here — Read reconciles the value from
+	// config during plan via the custom plan modifier.
 	if apiVer := extractAttributeValue(asset.Attributes, "api-version"); apiVer != "" {
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("api_version"), apiVer)...)
-	} else {
-		// For GraphQL and some types, api-version is not in attributes.
-		// Check properties.apiVersion in the asset metadata (stored differently by API).
-		// Use the version string as a fallback marker — Read will reconcile from config.
-		// We set it to the config value during plan reconciliation via the custom modifier.
 	}
 
 	// Seed file_path as a sentinel value so RequiresReplace doesn't trigger.
