@@ -17,6 +17,8 @@ Manages a CloudHub 2.0 Managed Omni Gateway instance in Anypoint Platform.
 
 -> **Tracing note:** The Gateway Manager API does not echo back `configuration.tracing` in POST/PUT responses. The provider retains the plan-requested value in state after create/update so that `tracing.enabled = true` works correctly. On the next `terraform refresh` or `plan`, the provider reads the live value from the API for accurate drift detection.
 
+~> **`name` is immutable.** Gateway Manager treats a managed gateway's name as fixed after creation and rejects an in-place rename with `400 cannot change gateway name`. The provider detects a name change at **plan time** and fails with a clear error instead of crashing mid-apply. To change the name, **replace** the gateway (`terraform apply -replace=anypoint_managed_omni_gateway.<name>`); note that a replacement provisions a new instance (new `id`, and for a shared space a new platform-assigned `public_url`).
+
 ## Example Usage
 
 ```terraform
@@ -53,7 +55,7 @@ resource "anypoint_managed_omni_gateway" "example" {
 
 ### Required
 
-- `name` (String) The name of the managed Omni Gateway.
+- `name` (String) The name of the managed Omni Gateway. **Immutable after creation** — Gateway Manager rejects an in-place rename with `400 cannot change gateway name`; the provider raises a plan-time error and directs you to replace the gateway (`terraform apply -replace=<address>`) to change it.
 - `environment_id` (String) The environment ID where the gateway will be deployed.
 - `target_id` (String) The target (private space) ID for the gateway deployment.
 

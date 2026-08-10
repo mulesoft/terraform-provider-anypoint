@@ -28,6 +28,7 @@ var (
 	_ resource.Resource                = &ManagedOmniGatewayResource{}
 	_ resource.ResourceWithConfigure   = &ManagedOmniGatewayResource{}
 	_ resource.ResourceWithImportState = &ManagedOmniGatewayResource{}
+	_ resource.ResourceWithModifyPlan  = &ManagedOmniGatewayResource{}
 )
 
 // attr type maps — used to build and validate types.Object values for nested blocks.
@@ -104,8 +105,10 @@ func (r *ManagedOmniGatewayResource) Schema(_ context.Context, _ resource.Schema
 				},
 			},
 			"name": schema.StringAttribute{
-				Description: "The name of the managed Omni Gateway.",
-				Required:    true,
+				Description: "The name of the managed Omni Gateway. Immutable after creation — " +
+					"Gateway Manager rejects an in-place rename with `400 cannot change gateway name`. " +
+					"To change the name, replace the gateway (`terraform apply -replace=<address>`).",
+				Required: true,
 			},
 			"organization_id": schema.StringAttribute{
 				Description: "The organization ID. If not specified, uses the organization from provider credentials.",
@@ -340,6 +343,62 @@ func (r *ManagedOmniGatewayResource) Configure(_ context.Context, req resource.C
 	r.client = gwClient
 }
 
+// ModifyPlan converts the platform's mid-apply "cannot change gateway name"
+// crash into a clear, actionable plan-time error.
+//
+// The Gateway Manager API treats a managed gateway's name as IMMUTABLE after
+// creation: a PUT that changes it is rejected with
+// `400 {"message":"cannot change gateway name"}`, which would otherwise abort
+// `terraform apply` mid-run. This resource shipped in the original provider with
+// `name` as an in-place-mutable Required attribute, so flipping it to
+// RequiresReplace (destroy+recreate) is a breaking schema-contract change on a
+// RELEASED resource. Per the maintainers' decision (Ankit, 2026-08-10) we take
+// the NON-BREAKING path: keep the schema as-is and reject a rename at plan time
+// with guidance to recreate instead. No `ForceNew`, no contract change — only
+// users who actually rename (which crashes today) are affected, and they now get
+// a helpful message before any change is attempted.
+func (r *ManagedOmniGatewayResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	// Only an in-place update can rename: skip create (no prior state) and
+	// destroy (no plan).
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+		return
+	}
+
+	var plan, state ManagedOmniGatewayResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Compare only KNOWN concrete values so an unresolved computed value is never
+	// mistaken for a rename.
+	if plan.Name.IsNull() || plan.Name.IsUnknown() ||
+		state.Name.IsNull() || state.Name.IsUnknown() {
+		return
+	}
+	if plan.Name.Equal(state.Name) {
+		return
+	}
+
+	resp.Diagnostics.AddAttributeError(
+		path.Root("name"),
+		"Managed Omni Gateway name is immutable",
+		fmt.Sprintf(
+			"The gateway name cannot be changed after creation. Gateway Manager treats "+
+				"the name as immutable and rejects an in-place rename with "+
+				"`400 cannot change gateway name`.\n\n"+
+				"You are trying to rename %q to %q. To change the name, replace the gateway "+
+				"(destroy and recreate it) instead of editing it in place:\n"+
+				"  terraform apply -replace=<this resource's address>\n\n"+
+				"Note that replacing the gateway provisions a NEW instance (new id and, for a "+
+				"shared space, a new platform-assigned public URL). If you only want to keep the "+
+				"old name, revert the `name` change in your configuration.",
+			state.Name.ValueString(), plan.Name.ValueString(),
+		),
+	)
+}
+
 // --- CRUD ---
 
 func (r *ManagedOmniGatewayResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -500,6 +559,21 @@ func (r *ManagedOmniGatewayResource) Update(ctx context.Context, req resource.Up
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Defense in depth: the name is immutable (see ModifyPlan). ModifyPlan already
+	// blocks a rename at plan time, but guard here too so we never send the PUT
+	// that Gateway Manager rejects with `400 cannot change gateway name`.
+	if !plan.Name.IsNull() && !plan.Name.IsUnknown() &&
+		!state.Name.IsNull() && !state.Name.IsUnknown() &&
+		!plan.Name.Equal(state.Name) {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("name"),
+			"Managed Omni Gateway name is immutable",
+			"The gateway name cannot be changed after creation. Replace the gateway "+
+				"(terraform apply -replace=<address>) to change its name.",
+		)
 		return
 	}
 
