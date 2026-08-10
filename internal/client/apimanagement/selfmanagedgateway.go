@@ -67,6 +67,7 @@ const (
 	// (agent registration) and certificate renewal. Not used by the provider today
 	// (see design note in the resource), reserved for when/if the provider performs the
 	// full enrollment. Kept here so the whole contract lives in one file.
+	//nolint:unused // reserved: documents the enrollment endpoint for future use.
 	registrationFacadeBasePath = "/amc/registration-facade/api/v1"
 )
 
