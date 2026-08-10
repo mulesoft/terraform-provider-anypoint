@@ -371,6 +371,92 @@ func TestManagedOmniGatewayResource_ImportState_IDParsing(t *testing.T) {
 	})
 }
 
+// --- ManagedOmniGatewayResource.ModifyPlan: name immutability (Q1/MOGW-03) ---
+
+func TestManagedOmniGatewayResource_ModifyPlan_NameImmutable(t *testing.T) {
+	r := NewManagedOmniGatewayResource().(*ManagedOmniGatewayResource)
+	ctx := context.Background()
+
+	schemaResp := &resource.SchemaResponse{}
+	r.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+	objType := stateType.(tftypes.Object)
+
+	// rawWithName builds a full object value with the given name; other attrs are
+	// null (ModifyPlan only inspects name). A nil name yields a null string.
+	rawWithName := func(name interface{}) tftypes.Value {
+		var nameVal tftypes.Value
+		if name == nil {
+			nameVal = tftypes.NewValue(tftypes.String, nil)
+		} else {
+			nameVal = tftypes.NewValue(tftypes.String, name)
+		}
+		return tftypes.NewValue(stateType, map[string]tftypes.Value{
+			"id":              tftypes.NewValue(tftypes.String, "gw-1"),
+			"name":            nameVal,
+			"organization_id": tftypes.NewValue(tftypes.String, "org-1"),
+			"environment_id":  tftypes.NewValue(tftypes.String, "env-1"),
+			"target_id":       tftypes.NewValue(tftypes.String, "target-1"),
+			"target_type":     tftypes.NewValue(tftypes.String, nil),
+			"runtime_version": tftypes.NewValue(tftypes.String, nil),
+			"release_channel": tftypes.NewValue(tftypes.String, nil),
+			"size":            tftypes.NewValue(tftypes.String, nil),
+			"status":          tftypes.NewValue(tftypes.String, nil),
+			"ingress":         tftypes.NewValue(objType.AttributeTypes["ingress"], nil),
+			"properties":      tftypes.NewValue(objType.AttributeTypes["properties"], nil),
+			"logging":         tftypes.NewValue(objType.AttributeTypes["logging"], nil),
+			"tracing":         tftypes.NewValue(objType.AttributeTypes["tracing"], nil),
+		})
+	}
+
+	call := func(stateRaw, planRaw tftypes.Value) *resource.ModifyPlanResponse {
+		req := resource.ModifyPlanRequest{
+			State: tfsdk.State{Schema: schemaResp.Schema, Raw: stateRaw},
+			Plan:  tfsdk.Plan{Schema: schemaResp.Schema, Raw: planRaw},
+		}
+		resp := &resource.ModifyPlanResponse{Plan: tfsdk.Plan{Schema: schemaResp.Schema, Raw: planRaw}}
+		r.ModifyPlan(ctx, req, resp)
+		return resp
+	}
+
+	t.Run("rename is rejected at plan time", func(t *testing.T) {
+		resp := call(rawWithName("old-name"), rawWithName("new-name"))
+		if !resp.Diagnostics.HasError() {
+			t.Fatal("expected a plan-time error when name changes, got none")
+		}
+		found := false
+		for _, d := range resp.Diagnostics.Errors() {
+			if d.Summary() == "Managed Omni Gateway name is immutable" {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("expected immutability error, got: %v", resp.Diagnostics.Errors())
+		}
+	})
+
+	t.Run("unchanged name is allowed", func(t *testing.T) {
+		resp := call(rawWithName("same-name"), rawWithName("same-name"))
+		if resp.Diagnostics.HasError() {
+			t.Errorf("unchanged name must not error, got: %v", resp.Diagnostics.Errors())
+		}
+	})
+
+	t.Run("create (null state) is not blocked", func(t *testing.T) {
+		resp := call(tftypes.NewValue(stateType, nil), rawWithName("brand-new"))
+		if resp.Diagnostics.HasError() {
+			t.Errorf("create must not be blocked, got: %v", resp.Diagnostics.Errors())
+		}
+	})
+
+	t.Run("destroy (null plan) is not blocked", func(t *testing.T) {
+		resp := call(rawWithName("old-name"), tftypes.NewValue(stateType, nil))
+		if resp.Diagnostics.HasError() {
+			t.Errorf("destroy must not be blocked, got: %v", resp.Diagnostics.Errors())
+		}
+	})
+}
+
 // --- ManagedOmniGatewayResource.Read with server error ---
 
 func TestManagedOmniGatewayResource_Read_Error(t *testing.T) {
