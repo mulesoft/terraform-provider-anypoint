@@ -282,6 +282,86 @@ func TestTransitGatewayClient_GetTransitGateway_NotFoundType(t *testing.T) {
 	}
 }
 
+// TestTransitGatewayClient_GetTransitGateway_DetachedType pins W-23819332: a
+// detached-but-registered attachment makes the PS-scoped by-id GET return 400
+// "attachment is not attached to the private space". That specific 400 must map
+// to the typed ErrTransitGatewayDetached (so Read/Import can keep the resource
+// and surface a Detached status), while an UNRELATED 400 must stay a plain error
+// (never misclassified as detached) and a 404 must remain NotFound, not detached.
+func TestTransitGatewayClient_GetTransitGateway_DetachedType(t *testing.T) {
+	const tgwPath = "/runtimefabric/api/organizations/test-org-id/privatespaces/test-ps-id/transitgateways/tgw-123"
+
+	tests := []struct {
+		name       string
+		status     int
+		body       string
+		wantDetach bool
+		wantErrSub string
+		wantNotFnd bool
+	}{
+		{
+			name:       "detached 400 maps to typed detached error",
+			status:     http.StatusBadRequest,
+			body:       "attachment is not attached to the private space",
+			wantDetach: true,
+			wantErrSub: "detached",
+		},
+		{
+			name:       "detached 400 with different casing still matches",
+			status:     http.StatusBadRequest,
+			body:       `{"message":"Attachment is NOT Attached To The Private Space"}`,
+			wantDetach: true,
+		},
+		{
+			name:       "unrelated 400 stays a generic error",
+			status:     http.StatusBadRequest,
+			body:       "some other validation failure",
+			wantDetach: false,
+			wantErrSub: "failed to get transit gateway with status 400",
+		},
+		{
+			name:       "404 stays NotFound, not detached",
+			status:     http.StatusNotFound,
+			body:       "not found",
+			wantDetach: false,
+			wantNotFnd: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+				tgwPath: func(w http.ResponseWriter, r *http.Request) {
+					testutil.ErrorResponse(w, tt.status, tt.body)
+				},
+			}
+			server := testutil.MockHTTPServer(t, handlers)
+
+			c := &TransitGatewayClient{
+				AnypointClient: &client.AnypointClient{
+					BaseURL:    server.URL,
+					Token:      "mock-token",
+					HTTPClient: &http.Client{},
+				},
+			}
+
+			_, err := c.GetTransitGateway(context.Background(), "test-org-id", "test-ps-id", "tgw-123")
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if got := IsTransitGatewayDetached(err); got != tt.wantDetach {
+				t.Errorf("IsTransitGatewayDetached = %v, want %v (err=%v)", got, tt.wantDetach, err)
+			}
+			if got := client.IsNotFound(err); got != tt.wantNotFnd {
+				t.Errorf("IsNotFound = %v, want %v (err=%v)", got, tt.wantNotFnd, err)
+			}
+			if tt.wantErrSub != "" && !strings.Contains(err.Error(), tt.wantErrSub) {
+				t.Errorf("error = %v, want containing %q", err, tt.wantErrSub)
+			}
+		})
+	}
+}
+
 // TestTransitGatewayClient_UpdateTransitGateway_OrgScopedNameOnly pins the rename
 // contract that the Anypoint UI uses (confirmed live 2026-07-17 via browser
 // DevTools):

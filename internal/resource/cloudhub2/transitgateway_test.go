@@ -246,6 +246,156 @@ func TestTransitGatewayResource_Read_NotFound(t *testing.T) {
 	}
 }
 
+// TestTransitGatewayResource_Read_Detached pins W-23819332: when the attachment
+// is detached-but-registered, the PS-scoped by-id GET returns 400 "attachment is
+// not attached to the private space". Read must NOT hard-error (that strands the
+// resource with no clean teardown). Instead it keeps the resource in state,
+// surfaces a "Detached" status, and preserves the other fields from prior state
+// so a subsequent plan/destroy can proceed.
+func TestTransitGatewayResource_Read_Detached(t *testing.T) {
+	tgwPath := "/runtimefabric/api/organizations/test-org-id/privatespaces/test-ps-id/transitgateways/tgw-detached"
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		tgwPath: func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"status":400,"message":"attachment is not attached to the private space"}`))
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	mockClient := &anypointclient.AnypointClient{
+		BaseURL:    server.URL,
+		Token:      "mock-token",
+		HTTPClient: &http.Client{},
+		OrgID:      "test-org-id",
+	}
+	res := NewTransitGatewayResource().(*TransitGatewayResource)
+	res.client = &ch2client.TransitGatewayClient{AnypointClient: mockClient}
+
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+
+	priorStateRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"id":                     tftypes.NewValue(tftypes.String, "tgw-detached"),
+		"name":                   tftypes.NewValue(tftypes.String, "my-tgw"),
+		"aws_transit_gateway_id": tftypes.NewValue(tftypes.String, "tgw-0abc123def456"),
+		"resource_share_id":      tftypes.NewValue(tftypes.String, "share-uuid-123"),
+		"resource_share_account": tftypes.NewValue(tftypes.String, "123456789012"),
+		"routes": tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, []tftypes.Value{
+			tftypes.NewValue(tftypes.String, "10.0.0.0/8"),
+		}),
+		"private_space_id": tftypes.NewValue(tftypes.String, "test-ps-id"),
+		"organization_id":  tftypes.NewValue(tftypes.String, "test-org-id"),
+		"status":           tftypes.NewValue(tftypes.String, "available"),
+	})
+
+	req := resource.ReadRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
+	resp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
+	res.Read(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("Read() must not error on a detached-but-registered 400, got: %v", resp.Diagnostics.Errors())
+	}
+	if resp.State.Raw.IsNull() {
+		t.Fatal("Read() must KEEP the resource in state on detached (so destroy still works), not remove it")
+	}
+
+	var got TransitGatewayResourceModel
+	if diags := resp.State.Get(ctx, &got); diags.HasError() {
+		t.Fatalf("State.Get errors: %v", diags.Errors())
+	}
+	if got.Status.ValueString() != "Detached" {
+		t.Errorf("Expected Status 'Detached', got %q", got.Status.ValueString())
+	}
+	// Other fields must be preserved from prior state (the failing GET can't refresh them).
+	if got.Name.ValueString() != "my-tgw" {
+		t.Errorf("Expected preserved Name 'my-tgw', got %q", got.Name.ValueString())
+	}
+	if got.ResourceShareID.ValueString() != "share-uuid-123" {
+		t.Errorf("Expected preserved ResourceShareID 'share-uuid-123', got %q", got.ResourceShareID.ValueString())
+	}
+	var routes []string
+	if diags := got.Routes.ElementsAs(ctx, &routes, false); diags.HasError() {
+		t.Fatalf("Routes.ElementsAs errors: %v", diags.Errors())
+	}
+	if len(routes) != 1 || routes[0] != "10.0.0.0/8" {
+		t.Errorf("Expected preserved routes [10.0.0.0/8], got %v", routes)
+	}
+}
+
+// TestTransitGatewayResource_ImportState_Detached pins that importing a
+// detached-but-registered attachment (W-23819332) does not hard-fail: the
+// PS-scoped GET 400s so routes can't be seeded, but the import must still bind
+// the identity and mark it Detached so the user can plan/destroy it.
+func TestTransitGatewayResource_ImportState_Detached(t *testing.T) {
+	tgwPath := "/runtimefabric/api/organizations/org-123/privatespaces/ps-456/transitgateways/tgw-detached"
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		tgwPath: func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"status":400,"message":"attachment is not attached to the private space"}`))
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	mockClient := &anypointclient.AnypointClient{
+		BaseURL:    server.URL,
+		Token:      "mock-token",
+		HTTPClient: &http.Client{},
+		OrgID:      "org-123",
+	}
+	res := NewTransitGatewayResource().(*TransitGatewayResource)
+	res.client = &ch2client.TransitGatewayClient{AnypointClient: mockClient}
+
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+
+	initialState := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"id":                     tftypes.NewValue(tftypes.String, ""),
+		"name":                   tftypes.NewValue(tftypes.String, ""),
+		"aws_transit_gateway_id": tftypes.NewValue(tftypes.String, ""),
+		"resource_share_id":      tftypes.NewValue(tftypes.String, ""),
+		"resource_share_account": tftypes.NewValue(tftypes.String, ""),
+		"routes":                 tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, []tftypes.Value{}),
+		"private_space_id":       tftypes.NewValue(tftypes.String, ""),
+		"organization_id":        tftypes.NewValue(tftypes.String, ""),
+		"status":                 tftypes.NewValue(tftypes.String, ""),
+	})
+
+	req := resource.ImportStateRequest{ID: "org-123/ps-456/tgw-detached"}
+	resp := &resource.ImportStateResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: initialState}}
+
+	res.ImportState(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("ImportState() must not error when importing a detached attachment, got: %v", resp.Diagnostics.Errors())
+	}
+
+	var got TransitGatewayResourceModel
+	if diags := resp.State.Get(ctx, &got); diags.HasError() {
+		t.Fatalf("State.Get errors: %v", diags.Errors())
+	}
+	if got.ID.ValueString() != "tgw-detached" {
+		t.Errorf("Expected id 'tgw-detached', got %q", got.ID.ValueString())
+	}
+	if got.Status.ValueString() != "Detached" {
+		t.Errorf("Expected Status 'Detached', got %q", got.Status.ValueString())
+	}
+	var routes []string
+	if diags := got.Routes.ElementsAs(ctx, &routes, false); diags.HasError() {
+		t.Fatalf("Routes.ElementsAs errors: %v", diags.Errors())
+	}
+	if len(routes) != 0 {
+		t.Errorf("Expected empty routes on detached import, got %v", routes)
+	}
+}
+
 func TestTransitGatewayResource_ImportState(t *testing.T) {
 	r := NewTransitGatewayResource()
 	if _, ok := r.(resource.ResourceWithImportState); !ok {

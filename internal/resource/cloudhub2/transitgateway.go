@@ -23,6 +23,12 @@ var (
 	_ resource.ResourceWithImportState = &TransitGatewayResource{}
 )
 
+// transitGatewayStatusDetached is the synthetic status surfaced when the platform
+// reports the attachment as detached-but-registered (the PS-scoped GET-by-id
+// 400s). It keeps Read from hard-erroring so plan/destroy still work on an
+// attachment that was detached out-of-band (W-23819332).
+const transitGatewayStatusDetached = "Detached"
+
 // TransitGatewayResource implements the anypoint_transit_gateway_connection resource.
 type TransitGatewayResource struct {
 	client *cloudhub2.TransitGatewayClient
@@ -113,8 +119,11 @@ func (r *TransitGatewayResource) Schema(_ context.Context, _ resource.SchemaRequ
 				},
 			},
 			"status": schema.StringAttribute{
-				Description: "The current status of the transit gateway attachment (e.g. 'Pending', 'Available').",
-				Computed:    true,
+				Description: "The current status of the transit gateway attachment (e.g. 'Pending', 'Available'). " +
+					"Reads 'Detached' when the attachment has been detached from the private space out-of-band " +
+					"but is still registered; in that state the connection can no longer be used and should be " +
+					"destroyed (or replaced) via Terraform.",
+				Computed: true,
 			},
 		},
 	}
@@ -201,6 +210,19 @@ func (r *TransitGatewayResource) Read(ctx context.Context, req resource.ReadRequ
 		if client.IsNotFound(err) {
 			tflog.Warn(ctx, "Transit gateway not found, removing from state")
 			resp.State.RemoveResource(ctx)
+			return
+		}
+		// Detached-but-registered (W-23819332): the PS-scoped by-id GET 400s with
+		// "attachment is not attached to the private space". This is NOT a transient
+		// error and NOT a full delete — the object still exists org-wide. Keep the
+		// resource in state and surface a Detached status (preserving the other
+		// fields, which cannot be refreshed from the failing GET) so refresh,
+		// plan, and destroy keep working instead of the resource being stranded.
+		if cloudhub2.IsTransitGatewayDetached(err) {
+			tflog.Warn(ctx, "Transit gateway attachment detached from private space; surfacing Detached status so plan/destroy still work",
+				map[string]interface{}{"id": state.ID.ValueString()})
+			state.Status = types.StringValue(transitGatewayStatusDetached)
+			resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 			return
 		}
 		resp.Diagnostics.AddError(
@@ -311,6 +333,18 @@ func (r *TransitGatewayResource) Update(ctx context.Context, req resource.Update
 	// 3. Re-read the connection to capture the latest computed status/aws id.
 	tgw, err := r.client.GetTransitGateway(ctx, orgID, psID, state.ID.ValueString())
 	if err != nil {
+		// If the attachment detached out-of-band between the PATCH and this re-read,
+		// don't fail the whole update — surface the Detached status and keep the
+		// applied plan values (W-23819332).
+		if cloudhub2.IsTransitGatewayDetached(err) {
+			tflog.Warn(ctx, "Transit gateway detached during update re-read; surfacing Detached status",
+				map[string]interface{}{"id": state.ID.ValueString()})
+			plan.ID = state.ID
+			plan.AwsTransitGatewayID = state.AwsTransitGatewayID
+			plan.Status = types.StringValue(transitGatewayStatusDetached)
+			resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+			return
+		}
 		resp.Diagnostics.AddError(
 			"Error reading transit gateway connection after update",
 			"Could not read transit gateway connection: "+err.Error(),
@@ -370,6 +404,20 @@ func (r *TransitGatewayResource) ImportState(ctx context.Context, req resource.I
 	// imported resource matches what's actually deployed (no first-plan drift).
 	tgw, err := r.client.GetTransitGateway(ctx, orgID, psID, tgwID)
 	if err != nil {
+		// Allow importing a detached-but-registered attachment (W-23819332): the
+		// PS-scoped GET 400s so routes can't be seeded, but the import must still
+		// bind so the user can plan/destroy it. Seed an empty route set and a
+		// Detached status; the follow-up Read reconciles the rest via the same
+		// detached path.
+		if cloudhub2.IsTransitGatewayDetached(err) {
+			tflog.Warn(ctx, "Importing detached transit gateway; seeding empty routes and Detached status",
+				map[string]interface{}{"id": tgwID})
+			emptyRoutes, diags := types.ListValueFrom(ctx, types.StringType, []string{})
+			resp.Diagnostics.Append(diags...)
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("routes"), emptyRoutes)...)
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("status"), transitGatewayStatusDetached)...)
+			return
+		}
 		resp.Diagnostics.AddError(
 			"Error Reading Transit Gateway During Import",
 			"Could not read transit gateway to seed routes: "+err.Error(),

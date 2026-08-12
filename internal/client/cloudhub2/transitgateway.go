@@ -4,12 +4,39 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 )
+
+// ErrTransitGatewayDetached signals that a PS-scoped GET-by-id returned HTTP 400
+// because the attachment has been DETACHED from the private space but is NOT yet
+// de-registered (the object still exists org-wide). This is a recoverable,
+// terminal-ish state — distinct from a 404 (fully gone) — so callers should
+// surface a "Detached" status and keep the resource in state rather than
+// hard-erroring, otherwise refresh 400s and the resource is stranded with no
+// clean IaC teardown (W-23819332). Wrapped with %w so callers use errors.Is via
+// IsTransitGatewayDetached.
+var ErrTransitGatewayDetached = errors.New("transit gateway attachment detached from private space")
+
+// IsTransitGatewayDetached reports whether err is (or wraps) the detached-400
+// signal from GetTransitGateway.
+func IsTransitGatewayDetached(err error) bool {
+	return errors.Is(err, ErrTransitGatewayDetached)
+}
+
+// isDetachedBody matches the platform's PS-scoped GET-by-id 400 body for a
+// detached-but-registered attachment. The stable phrase is "not attached to the
+// private space"; matched case-insensitively so minor wording/casing drift does
+// not defeat detection. It is deliberately specific so an unrelated 400 (bad
+// request, validation, auth) is NOT misclassified as detached.
+func isDetachedBody(body string) bool {
+	return strings.Contains(strings.ToLower(body), "not attached to the private space")
+}
 
 // TransitGatewayClient wraps the AnypointClient for transit gateway operations.
 type TransitGatewayClient struct {
@@ -188,6 +215,14 @@ func (c *TransitGatewayClient) GetTransitGateway(ctx context.Context, orgID, pri
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		// Detached-but-registered attachment: the PS-scoped by-id GET returns 400
+		// "attachment is not attached to the private space". Signal it as a typed,
+		// recoverable error so Read/Import can surface a Detached status and keep
+		// the resource (plan/destroy stay working) instead of hard-erroring on
+		// refresh (W-23819332). Any OTHER 400 stays a generic error.
+		if resp.StatusCode == http.StatusBadRequest && isDetachedBody(string(body)) {
+			return nil, fmt.Errorf("%w: %s", ErrTransitGatewayDetached, strings.TrimSpace(string(body)))
+		}
 		return nil, fmt.Errorf("failed to get transit gateway with status %d: %s", resp.StatusCode, string(body))
 	}
 
