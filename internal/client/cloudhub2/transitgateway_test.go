@@ -488,3 +488,111 @@ func TestTransitGatewayClient_UpdateTransitGateway_ArrayResponse(t *testing.T) {
 		t.Errorf("expected name 'new-name', got %q", tgw.Name)
 	}
 }
+
+// TestTransitGatewayClient_DeleteTransitGateway_DetachedFallsBackToOrgScoped pins
+// the destroy-side half of W-23819332. A detached-but-registered attachment makes
+// the PS-scoped DELETE 400 "attachment is not attached to the private space" — the
+// object is off the private space but still exists org-wide. Delete must then fall
+// back to the ORG-scoped DELETE to de-register it so destroy succeeds instead of
+// stranding the resource. Normal deletes (204/404) must NOT touch the org-scoped
+// endpoint, and an UNRELATED 400 must stay a hard error (never trigger the
+// org-scoped fallback).
+func TestTransitGatewayClient_DeleteTransitGateway_DetachedFallsBackToOrgScoped(t *testing.T) {
+	const psPath = "/runtimefabric/api/organizations/test-org-id/privatespaces/test-ps-id/transitgateways/tgw-123"
+	const orgPath = "/runtimefabric/api/organizations/test-org-id/transitgateways/tgw-123"
+	const detachedMsg = "attachment is not attached to the private space"
+
+	tests := []struct {
+		name        string
+		psStatus    int
+		psBody      string
+		orgStatus   int
+		wantErr     bool
+		errContains string
+		wantOrgHit  bool
+	}{
+		{
+			name:       "normal PS delete 204 does not touch org-scoped",
+			psStatus:   http.StatusNoContent,
+			wantOrgHit: false,
+		},
+		{
+			name:       "PS delete 404 is idempotent success, no org-scoped call",
+			psStatus:   http.StatusNotFound,
+			psBody:     "not found",
+			wantOrgHit: false,
+		},
+		{
+			name:       "detached 400 falls back to org-scoped delete (204)",
+			psStatus:   http.StatusBadRequest,
+			psBody:     detachedMsg,
+			orgStatus:  http.StatusNoContent,
+			wantOrgHit: true,
+		},
+		{
+			name:       "detached 400 then org-scoped 404 is still success",
+			psStatus:   http.StatusBadRequest,
+			psBody:     detachedMsg,
+			orgStatus:  http.StatusNotFound,
+			wantOrgHit: true,
+		},
+		{
+			name:        "detached 400 then org-scoped error surfaces org-scoped error",
+			psStatus:    http.StatusBadRequest,
+			psBody:      detachedMsg,
+			orgStatus:   http.StatusInternalServerError,
+			wantErr:     true,
+			errContains: "org-scoped de-register",
+			wantOrgHit:  true,
+		},
+		{
+			name:        "unrelated 400 stays a hard error, never falls back",
+			psStatus:    http.StatusBadRequest,
+			psBody:      "some other validation failure",
+			wantErr:     true,
+			errContains: "failed to delete transit gateway with status 400",
+			wantOrgHit:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			orgHit := false
+			handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+				psPath: func(w http.ResponseWriter, r *http.Request) {
+					testutil.AssertHTTPRequest(t, r, http.MethodDelete, psPath)
+					testutil.ErrorResponse(w, tt.psStatus, tt.psBody)
+				},
+				orgPath: func(w http.ResponseWriter, r *http.Request) {
+					orgHit = true
+					testutil.AssertHTTPRequest(t, r, http.MethodDelete, orgPath)
+					testutil.ErrorResponse(w, tt.orgStatus, "org-scoped")
+				},
+			}
+			server := testutil.MockHTTPServer(t, handlers)
+
+			c := &TransitGatewayClient{
+				AnypointClient: &client.AnypointClient{
+					BaseURL:    server.URL,
+					Token:      "mock-token",
+					HTTPClient: &http.Client{},
+				},
+			}
+
+			err := c.DeleteTransitGateway(context.Background(), "test-org-id", "test-ps-id", "tgw-123")
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("error = %v, want containing %q", err, tt.errContains)
+				}
+			} else if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if orgHit != tt.wantOrgHit {
+				t.Errorf("org-scoped delete hit = %v, want %v", orgHit, tt.wantOrgHit)
+			}
+		})
+	}
+}
