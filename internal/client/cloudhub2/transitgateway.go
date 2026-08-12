@@ -337,29 +337,75 @@ func decodeTransitGatewayObjectOrArray(body []byte, wantID string) (*TransitGate
 func (c *TransitGatewayClient) DeleteTransitGateway(ctx context.Context, orgID, privateSpaceID, transitGatewayID string) error {
 	url := fmt.Sprintf("%s/runtimefabric/api/organizations/%s/privatespaces/%s/transitgateways/%s", c.BaseURL, orgID, privateSpaceID, transitGatewayID)
 
+	status, body, err := c.doDeleteTransitGateway(ctx, url)
+	if err != nil {
+		return err
+	}
+
+	if isTransitGatewayDeleteGone(status) {
+		return nil
+	}
+
+	// Detached-but-registered attachment: the PS-scoped DELETE can't act because
+	// the attachment is no longer on the private space, so it 400s "attachment is
+	// not attached to the private space" (the same signal GetTransitGateway maps
+	// to ErrTransitGatewayDetached). The object still exists ORG-wide, though, so
+	// fall back to the org-scoped DELETE to fully de-register it. Without this,
+	// destroy 400s and the resource is stranded in state with no clean teardown
+	// (W-23819332, destroy-side). Any OTHER 400 stays a hard error.
+	if status == http.StatusBadRequest && isDetachedBody(body) {
+		return c.deleteTransitGatewayOrgScoped(ctx, orgID, transitGatewayID)
+	}
+
+	return fmt.Errorf("failed to delete transit gateway with status %d: %s", status, body)
+}
+
+// deleteTransitGatewayOrgScoped issues the ORG-scoped DELETE, which fully
+// de-registers a transit gateway object org-wide. It is the teardown counterpart
+// of the org-scoped rename endpoint (see UpdateTransitGateway): the RAML does not
+// document it, but it is what the platform uses to remove a
+// detached-but-still-registered object. A 404/204/200 all mean "gone".
+// API: DELETE /runtimefabric/api/organizations/{orgId}/transitgateways/{tgwId}
+func (c *TransitGatewayClient) deleteTransitGatewayOrgScoped(ctx context.Context, orgID, transitGatewayID string) error {
+	url := fmt.Sprintf("%s/runtimefabric/api/organizations/%s/transitgateways/%s", c.BaseURL, orgID, transitGatewayID)
+
+	status, body, err := c.doDeleteTransitGateway(ctx, url)
+	if err != nil {
+		return err
+	}
+
+	if isTransitGatewayDeleteGone(status) {
+		return nil
+	}
+
+	return fmt.Errorf("failed to delete transit gateway (org-scoped de-register) with status %d: %s", status, body)
+}
+
+// doDeleteTransitGateway issues a bearer-authenticated DELETE against url and
+// returns (status, body, transportErr). It centralizes the request plumbing so
+// both the PS-scoped and org-scoped delete paths share identical wire behaviour.
+func (c *TransitGatewayClient) doDeleteTransitGateway(ctx context.Context, url string) (int, string, error) {
 	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return 0, "", fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+c.Token)
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
+		return 0, "", fmt.Errorf("failed to send request: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode == http.StatusNotFound {
-		return nil // Already deleted
-	}
+	body, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, string(body), nil
+}
 
-	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to delete transit gateway with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	return nil
+// isTransitGatewayDeleteGone reports whether a DELETE status means the object is
+// gone (idempotent success): 204/200 (deleted now) or 404 (already deleted).
+func isTransitGatewayDeleteGone(status int) bool {
+	return status == http.StatusNoContent || status == http.StatusOK || status == http.StatusNotFound
 }
 
 // ListTransitGateways lists all transit gateways in a Private Space.
