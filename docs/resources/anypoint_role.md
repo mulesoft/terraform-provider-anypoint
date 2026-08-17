@@ -14,9 +14,9 @@ assignments) and **members** inline. You do not need separate resources for thos
 — assign permissions by their UI display name and add members by username,
 directly on this resource.
 
-~> **Note:** This is an Access Management resource and requires the **admin provider** (`anypoint.admin`), which uses admin user credentials along with the `client_id` and `client_secret` of a connected app to authenticate on behalf of the user (`auth_type = "user"`). You must set `provider = anypoint.admin` on this resource. The default provider (connected app credentials only) does not have sufficient privileges for Access Management operations.
+~> **Authentication:** This Access Management resource works with a standard **client_credentials** connected app configured in the provider block — the same auth path as `anypoint_team`; a separate admin/user provider is **not** required. What matters is that the connected app holds the right **scopes / organization permissions** for the operation; a missing scope surfaces as `HTTP 401`/`403` (that is a missing-scope error, not a wrong auth mode). For role groups specifically, grant the connected app **`admin:access_controls`**, **`view:access_controls`**, and **`read:organization`** (each with `context_params` set to the target `org`). Note that `admin:access_controls` alone is enough to read/write teams but **not** role groups — reading or writing role groups also requires `view:access_controls`. See [Authentication](../index.md).
 
--> **Connected App:** This resource requires an **admin connected app** configured with `auth_type = "user"` (user credentials + connected app client credentials). Use the `anypoint.admin` provider alias. A standard connected app (client credentials only) does not have sufficient privileges for Access Management operations.
+-> **User-based alternative (optional):** If you would rather rely on a user's permissions than grant the connected app the scopes directly, you can use an admin connected app with `auth_type = "user"` via the `anypoint.admin` provider alias (shown in the example below). This is optional — a client_credentials app with the right scopes is sufficient.
 
 ## Example Usage
 

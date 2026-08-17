@@ -48,9 +48,19 @@ terraform apply
   string) — `classifier = "asyncapi"` is rejected with
   `400 COULD_NOT_DETERMINE_ASSET_TYPE`. `evented-api`, `rest-api`, and `grpc-api`
   also require `api_version` at create.
+- **mule-plugin family uses `type = "extension"`.** Exchange stores the whole
+  mule-plugin family (policies and connectors, `classifier = "mule-plugin"`)
+  under the generic `extension` super-type. Declare `type = "extension"` — it is
+  the canonical, round-trip-stable value (an imported asset reads back as
+  `extension`). The provider also accepts `policy` and `connector` as aliases and
+  normalizes them so there is no post-apply `type` drift, but `extension` is
+  recommended.
 - **External instances are authoritative.** Instances removed from the `instances`
   list are deleted from Anypoint's api-metadata-service on the next apply, and are
   removed on `terraform destroy` before the asset version is hard-deleted — so no
   orphaned instances remain to block a later recreate at the same version group.
-- **Hard delete.** Deleting an asset frees its GAV coordinates (hard delete), so
-  the same `asset_id`/`version` can be published again without a `409` tombstone.
+- **Hard delete, not a soft tombstone.** Delete uses a hard delete
+  (`x-delete-type: hard-delete`) rather than a soft-delete tombstone. To publish
+  new content, **bump `version`** — republishing onto a `group/asset/version`
+  that still exists is rejected with `409 ASSET_PRE_CONDITIONS_FAILED`, which the
+  provider surfaces at plan time (before any destroy) and again at apply.

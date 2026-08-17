@@ -82,4 +82,3 @@ Read-Only:
 - `query_params` (List of String) Query parameter names exposed as tool inputs.
 - `header_params` (List of String) Header parameter names exposed as tool inputs.
 - `has_body` (Boolean) Whether the operation takes a request body.
-```

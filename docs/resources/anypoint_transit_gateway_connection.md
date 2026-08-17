@@ -66,13 +66,15 @@ resource "anypoint_transit_gateway_connection" "main" {
 - `name` (String) The name of the transit gateway attachment.
 - `resource_share_id` (String) The AWS RAM resource share ID in UUID format (e.g. `e8e330a8-4f8c-452b-afd0-7810c41287f1`).
 - `resource_share_account` (String) The AWS account ID that owns the Transit Gateway.
-- `routes` (List of String) CIDR routes for the transit gateway connection (at least one required). Routes are managed inline and can be updated in place; updating them replaces the full set of routes on the connection.
+- `routes` (List of String) CIDR routes for the transit gateway connection. The attribute is required (it must be present in the configuration) but may be empty: set `routes = []` to clear all routes, which is also the zero-diff shape when importing a detached connection. Routes are managed inline and can be updated in place; updating them replaces the full set of routes on the connection.
 
 ### Read-Only
 
 - `id` (String) The unique identifier of the transit gateway attachment.
 - `status` (String) The current status of the transit gateway attachment (e.g. `Pending`, `Available`).
 - `aws_transit_gateway_id` (String) The AWS Transit Gateway ID discovered by the platform from the resource share. This is a computed value set after the TGW attachment is created.
+
+-> **Replacement (ForceNew):** Changing `organization_id`, `private_space_id`, `resource_share_id`, or `resource_share_account` forces the connection to be replaced (destroy + create). `routes` is updated in place. Consider `lifecycle { create_before_destroy = true }` so a replacement stands up the new attachment before tearing down the old one.
 
 ## Import
 
