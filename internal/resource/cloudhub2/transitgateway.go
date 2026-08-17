@@ -98,9 +98,11 @@ func (r *TransitGatewayResource) Schema(_ context.Context, _ resource.SchemaRequ
 				},
 			},
 			"routes": schema.ListAttribute{
-				Description: "CIDR routes for the transit gateway connection (at least one required). " +
-					"Routes are managed inline and can be updated in place; updating them replaces " +
-					"the full set of routes on the connection.",
+				Description: "CIDR routes for the transit gateway connection. The attribute is required " +
+					"(it must be present in the configuration) but may be empty: set `routes = []` to " +
+					"clear all routes, which is also the zero-diff shape when importing a detached " +
+					"connection. Routes are managed inline and can be updated in place; updating them " +
+					"replaces the full set of routes on the connection.",
 				Required:    true,
 				ElementType: types.StringType,
 			},

@@ -92,7 +92,7 @@ func (d *ManagedOmniGatewayDataSource) Schema(_ context.Context, _ datasource.Sc
 							Computed: true,
 						},
 						"status": schema.StringAttribute{
-							Description: "The current status of the gateway (e.g. APPLIED, RUNNING).",
+							Description: "The current status of the gateway (e.g. APPLYING while provisioning, RUNNING once ready).",
 							Computed:    true,
 						},
 						"date_created": schema.StringAttribute{

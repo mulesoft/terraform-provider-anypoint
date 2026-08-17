@@ -92,7 +92,7 @@ resource "anypoint_mcp_server" "advanced" {
 - `technology` (String) The gateway technology. Only `omniGateway` is currently supported. Defaults to `omniGateway`.
 - `provider_id` (String) The identity provider ID for the MCP server.
 - `instance_label` (String) A human-readable label for this MCP server.
-- `approval_method` (String) Client approval method. Valid values: `manual`, `automatic`. Defaults to null (no approval required).
+- `approval_method` (String) Client approval method. Valid values: `manual`. Defaults to null (no approval required). **Note:** `automatic` approval is no longer supported.
 - `endpoint` (Block) Endpoint / proxy configuration for the MCP server. See [`endpoint`](#nestedschema--endpoint) below.
 - `consumer_endpoint` (String) Consumer-facing endpoint URI (the public URL clients use to reach the MCP server). Maps to top-level endpointUri in the MCP server. For MCP, this is the proxy_uri that clients connect to.
 - `upstream_uri` (String) Shorthand for a single-upstream routing configuration. When set, the provider constructs routing as `[{upstreams: [{weight: 100, uri: <value>}]}]`. Mutually exclusive with the `routing` block. For MCP servers, this is typically the upstream MCP server URI that the proxy_uri forwards to.

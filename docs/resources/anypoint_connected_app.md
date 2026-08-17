@@ -9,9 +9,9 @@ description: |-
 
 Creates and manages an Anypoint Connected Application. Connected apps provide a framework for programmatic access to the Anypoint Platform APIs. Two types are supported: 'App acts on behalf of a user' (authorization_code/password/jwt_bearer grants) and 'App acts on its own behalf' (client_credentials grant).
 
-~> **Note:** This is an Access Management resource and requires the **admin provider** (`anypoint.admin`), which uses admin user credentials along with the `client_id` and `client_secret` of a connected app to authenticate on behalf of the user (`auth_type = "user"`). You must set `provider = anypoint.admin` on this resource. The default provider (connected app credentials only) does not have sufficient privileges for Access Management operations.
+~> **Authentication:** This Access Management resource works with a standard **client_credentials** connected app configured in the provider block — the same auth path as `anypoint_team`; a separate admin/user provider is **not** required. What matters is that the connected app holds the right **scopes / organization permissions** for the operation; a missing scope surfaces as `HTTP 401`/`403` (that is a missing-scope error, not a wrong auth mode). See [Authentication](../index.md).
 
--> **Connected App:** This resource requires an **admin connected app** configured with `auth_type = "user"` (user credentials + connected app client credentials). Use the `anypoint.admin` provider alias. A standard connected app (client credentials only) does not have sufficient privileges for Access Management operations.
+-> **User-based alternative (optional):** If you would rather rely on a user's permissions than grant the connected app the scopes directly, you can use an admin connected app with `auth_type = "user"` via the `anypoint.admin` provider alias (shown in the example below). This is optional — a client_credentials app with the right scopes is sufficient.
 
 ## Example Usage
 
