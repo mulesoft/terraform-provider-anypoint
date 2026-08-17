@@ -29,13 +29,32 @@ func IsTransitGatewayDetached(err error) bool {
 	return errors.Is(err, ErrTransitGatewayDetached)
 }
 
-// isDetachedBody matches the platform's PS-scoped GET-by-id 400 body for a
-// detached-but-registered attachment. The stable phrase is "not attached to the
-// private space"; matched case-insensitively so minor wording/casing drift does
-// not defeat detection. It is deliberately specific so an unrelated 400 (bad
-// request, validation, auth) is NOT misclassified as detached.
+// isDetachedBody matches the platform's PS-scoped 400 body for a
+// detached-but-registered attachment. The platform phrases this DIFFERENTLY on
+// the two PS-scoped verbs (both confirmed live):
+//   - GET-by-id:  "attachment is not attached to the private space"
+//   - DELETE:     "Transit gateway: <id> is not attached to private space <name>"
+//
+// i.e. the DELETE variant drops the article ("the") and appends the space name.
+// Matching only the GET phrasing (with "the") silently missed the DELETE case,
+// so destroy 400'd instead of falling back (W-23819332 retest, 2026-08-12). We
+// therefore match on the two stable tokens present in BOTH — "not attached to"
+// and "private space" — case-insensitively. This stays specific enough that an
+// unrelated 400 (bad request, validation, auth) is NOT misclassified as detached.
 func isDetachedBody(body string) bool {
-	return strings.Contains(strings.ToLower(body), "not attached to the private space")
+	lower := strings.ToLower(body)
+	return strings.Contains(lower, "not attached to") && strings.Contains(lower, "private space")
+}
+
+// isResourceShareConflict matches the create-time error the platform returns when
+// the AWS RAM resource share is still bound to an existing attachment, e.g.
+// "Transit gateway attachment with the same resource share id already exists".
+// Matched on the two stable tokens ("resource share" + "already exists"),
+// case-insensitively, so wording drift does not defeat it. Used to convert a bare
+// 400/409 into actionable de-register guidance (W-23819332, create-side).
+func isResourceShareConflict(body string) bool {
+	lower := strings.ToLower(body)
+	return strings.Contains(lower, "resource share") && strings.Contains(lower, "already exists")
 }
 
 // TransitGatewayClient wraps the AnypointClient for transit gateway operations.
@@ -150,6 +169,21 @@ func (c *TransitGatewayClient) CreateTransitGateway(ctx context.Context, orgID, 
 		// scope guidance instead of a bare status error.
 		if authErr := client.AuthContextErrorIfUnauthorized(resp.StatusCode, url, string(body)); authErr != nil {
 			return nil, authErr
+		}
+		// A create against an AWS RAM share that's still bound to an existing
+		// attachment 400/409s "...resource share id already exists". The usual
+		// cause is a detached-but-org-registered "ghost" holding the share (a
+		// normal PS-scoped delete detaches but doesn't de-register — the very gap
+		// the two-step DeleteTransitGateway now closes). Older builds could strand
+		// such ghosts, so pre-existing ones may still block a recreate until they
+		// are de-registered. Turn the bare status error into actionable guidance
+		// instead of a dead end (W-23819332, create-side).
+		if isResourceShareConflict(string(body)) {
+			return nil, fmt.Errorf(
+				"failed to create transit gateway: the AWS RAM resource share is still bound to an existing transit gateway attachment in this organization "+
+					"(commonly a detached-but-org-registered attachment left by an earlier delete). De-register that attachment "+
+					"(destroy it via Terraform, or org-scoped delete .../organizations/%s/transitgateways/{tgwId}) before recreating with the same resource share. Underlying error (status %d): %s",
+				orgID, resp.StatusCode, strings.TrimSpace(string(body)))
 		}
 		return nil, fmt.Errorf("failed to create transit gateway with status %d: %s", resp.StatusCode, string(body))
 	}
@@ -332,39 +366,51 @@ func decodeTransitGatewayObjectOrArray(body []byte, wantID string) (*TransitGate
 	return &tgw, nil
 }
 
-// DeleteTransitGateway deletes a transit gateway attachment.
+// DeleteTransitGateway tears a transit gateway attachment down COMPLETELY, in two
+// steps, because the platform models "attached to a private space" and
+// "registered org-wide" as two separate bindings:
+//
+//  1. PS-scoped DELETE  — detaches the attachment from the private space.
+//  2. Org-scoped DELETE — de-registers the object org-wide.
+//
+// A PS-scoped DELETE alone only does step 1: it detaches but leaves the object
+// registered org-wide with status=null (an "org ghost"). That ghost still holds
+// the AWS RAM resource share, so a later create against the same TGW/share 400s
+// "resource share id already exists" — i.e. a normal create→destroy silently
+// bricks re-create. We therefore ALWAYS run step 2 as well, not just when step 1
+// reports the attachment already detached (W-23819332, destroy-side + happy-path
+// ghost, retest 2026-08-12).
+//
+// Idempotency: on both steps 204/200/404 mean "gone"; a PS-scoped 400 whose body
+// says the attachment is not attached to the private space means step 1 is
+// already done (e.g. an imported detached object or a destroy retry), so we treat
+// it as success and proceed to step 2. Any other status is a hard error.
 // API: DELETE /runtimefabric/api/organizations/{orgId}/privatespaces/{psId}/transitgateways/{tgwId}
 func (c *TransitGatewayClient) DeleteTransitGateway(ctx context.Context, orgID, privateSpaceID, transitGatewayID string) error {
-	url := fmt.Sprintf("%s/runtimefabric/api/organizations/%s/privatespaces/%s/transitgateways/%s", c.BaseURL, orgID, privateSpaceID, transitGatewayID)
+	psURL := fmt.Sprintf("%s/runtimefabric/api/organizations/%s/privatespaces/%s/transitgateways/%s", c.BaseURL, orgID, privateSpaceID, transitGatewayID)
 
-	status, body, err := c.doDeleteTransitGateway(ctx, url)
+	status, body, err := c.doDeleteTransitGateway(ctx, psURL)
 	if err != nil {
 		return err
 	}
 
-	if isTransitGatewayDeleteGone(status) {
-		return nil
+	// Step 1 must have either detached the attachment now or already be detached.
+	detachedOK := isTransitGatewayDeleteGone(status) || (status == http.StatusBadRequest && isDetachedBody(body))
+	if !detachedOK {
+		return fmt.Errorf("failed to detach transit gateway from private space with status %d: %s", status, body)
 	}
 
-	// Detached-but-registered attachment: the PS-scoped DELETE can't act because
-	// the attachment is no longer on the private space, so it 400s "attachment is
-	// not attached to the private space" (the same signal GetTransitGateway maps
-	// to ErrTransitGatewayDetached). The object still exists ORG-wide, though, so
-	// fall back to the org-scoped DELETE to fully de-register it. Without this,
-	// destroy 400s and the resource is stranded in state with no clean teardown
-	// (W-23819332, destroy-side). Any OTHER 400 stays a hard error.
-	if status == http.StatusBadRequest && isDetachedBody(body) {
-		return c.deleteTransitGatewayOrgScoped(ctx, orgID, transitGatewayID)
-	}
-
-	return fmt.Errorf("failed to delete transit gateway with status %d: %s", status, body)
+	// Step 2: always de-register org-wide so we never strand a share-holding ghost.
+	return c.deleteTransitGatewayOrgScoped(ctx, orgID, transitGatewayID)
 }
 
 // deleteTransitGatewayOrgScoped issues the ORG-scoped DELETE, which fully
 // de-registers a transit gateway object org-wide. It is the teardown counterpart
 // of the org-scoped rename endpoint (see UpdateTransitGateway): the RAML does not
 // document it, but it is what the platform uses to remove a
-// detached-but-still-registered object. A 404/204/200 all mean "gone".
+// detached-but-still-registered object. 404/204/200 all mean "gone"; a 400 whose
+// body still reports "not attached to private space" means the object is already
+// off the space and effectively de-registered, so we treat it as gone too.
 // API: DELETE /runtimefabric/api/organizations/{orgId}/transitgateways/{tgwId}
 func (c *TransitGatewayClient) deleteTransitGatewayOrgScoped(ctx context.Context, orgID, transitGatewayID string) error {
 	url := fmt.Sprintf("%s/runtimefabric/api/organizations/%s/transitgateways/%s", c.BaseURL, orgID, transitGatewayID)
@@ -374,7 +420,7 @@ func (c *TransitGatewayClient) deleteTransitGatewayOrgScoped(ctx context.Context
 		return err
 	}
 
-	if isTransitGatewayDeleteGone(status) {
+	if isTransitGatewayDeleteGone(status) || (status == http.StatusBadRequest && isDetachedBody(body)) {
 		return nil
 	}
 
@@ -403,9 +449,13 @@ func (c *TransitGatewayClient) doDeleteTransitGateway(ctx context.Context, url s
 }
 
 // isTransitGatewayDeleteGone reports whether a DELETE status means the object is
-// gone (idempotent success): 204/200 (deleted now) or 404 (already deleted).
+// gone / the delete was accepted (idempotent success): ANY 2xx or 404 (already
+// deleted). 204 No Content and 200 OK are the common acks, but accepting the whole
+// 2xx band also covers a 202 Accepted async de-register — a realistic platform
+// response that must NOT be mis-read as a destroy failure — and any 200-with-body
+// ack. A 404 means it was already deleted out-of-band.
 func isTransitGatewayDeleteGone(status int) bool {
-	return status == http.StatusNoContent || status == http.StatusOK || status == http.StatusNotFound
+	return (status >= 200 && status < 300) || status == http.StatusNotFound
 }
 
 // ListTransitGateways lists all transit gateways in a Private Space.
