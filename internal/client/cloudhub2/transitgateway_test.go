@@ -313,6 +313,12 @@ func TestTransitGatewayClient_GetTransitGateway_DetachedType(t *testing.T) {
 			wantDetach: true,
 		},
 		{
+			name:       "detached 400 DELETE-verb phrasing (no 'the') still matches",
+			status:     http.StatusBadRequest,
+			body:       `{"message":"Transit gateway: tgw-123 is not attached to private space rf-p2-private-space"}`,
+			wantDetach: true,
+		},
+		{
 			name:       "unrelated 400 stays a generic error",
 			status:     http.StatusBadRequest,
 			body:       "some other validation failure",
@@ -489,18 +495,32 @@ func TestTransitGatewayClient_UpdateTransitGateway_ArrayResponse(t *testing.T) {
 	}
 }
 
-// TestTransitGatewayClient_DeleteTransitGateway_DetachedFallsBackToOrgScoped pins
-// the destroy-side half of W-23819332. A detached-but-registered attachment makes
-// the PS-scoped DELETE 400 "attachment is not attached to the private space" — the
-// object is off the private space but still exists org-wide. Delete must then fall
-// back to the ORG-scoped DELETE to de-register it so destroy succeeds instead of
-// stranding the resource. Normal deletes (204/404) must NOT touch the org-scoped
-// endpoint, and an UNRELATED 400 must stay a hard error (never trigger the
-// org-scoped fallback).
-func TestTransitGatewayClient_DeleteTransitGateway_DetachedFallsBackToOrgScoped(t *testing.T) {
+// TestTransitGatewayClient_DeleteTransitGateway_AlwaysDeregistersOrgScoped pins
+// the full destroy contract for W-23819332. The platform models "attached to a
+// private space" and "registered org-wide" as two separate bindings, so a
+// complete teardown needs BOTH a PS-scoped detach AND an org-scoped de-register:
+//
+//   - A PS-scoped DELETE alone only detaches; the object lingers org-wide holding
+//     the AWS RAM share, and a later create against the same TGW/share 400s
+//     "resource share id already exists". So EVERY successful delete — even a
+//     healthy 204 — must go on to hit the org-scoped endpoint (happy-path ghost).
+//   - The PS-scoped 400 for an already-detached attachment is phrased WITHOUT the
+//     article on the DELETE verb: "...is not attached to private space <name>"
+//     (the GET verb says "...to THE private space"). Both must be tolerated as
+//     "already detached, proceed to de-register", not treated as a hard error —
+//     the article-only mismatch is exactly what made the earlier build's fallback
+//     never fire (retest 2026-08-12).
+//
+// A genuine PS-scoped failure (unrelated 400, 5xx) must stay a hard error and
+// must NOT reach the org-scoped call.
+func TestTransitGatewayClient_DeleteTransitGateway_AlwaysDeregistersOrgScoped(t *testing.T) {
 	const psPath = "/runtimefabric/api/organizations/test-org-id/privatespaces/test-ps-id/transitgateways/tgw-123"
 	const orgPath = "/runtimefabric/api/organizations/test-org-id/transitgateways/tgw-123"
-	const detachedMsg = "attachment is not attached to the private space"
+	// GET-verb phrasing (with "the").
+	const detachedGetMsg = "attachment is not attached to the private space"
+	// DELETE-verb phrasing (no "the", trailing space name) — the exact string
+	// Lisandro's STGX destroy returned; the earlier matcher missed this.
+	const detachedDeleteMsg = "Transit gateway: tgw-123 is not attached to private space rf-p2-private-space"
 
 	tests := []struct {
 		name        string
@@ -512,45 +532,66 @@ func TestTransitGatewayClient_DeleteTransitGateway_DetachedFallsBackToOrgScoped(
 		wantOrgHit  bool
 	}{
 		{
-			name:       "normal PS delete 204 does not touch org-scoped",
+			name:       "healthy PS 204 STILL de-registers org-wide (no ghost left)",
 			psStatus:   http.StatusNoContent,
-			wantOrgHit: false,
-		},
-		{
-			name:       "PS delete 404 is idempotent success, no org-scoped call",
-			psStatus:   http.StatusNotFound,
-			psBody:     "not found",
-			wantOrgHit: false,
-		},
-		{
-			name:       "detached 400 falls back to org-scoped delete (204)",
-			psStatus:   http.StatusBadRequest,
-			psBody:     detachedMsg,
 			orgStatus:  http.StatusNoContent,
 			wantOrgHit: true,
 		},
 		{
-			name:       "detached 400 then org-scoped 404 is still success",
+			name:       "PS 404 (already off space) still de-registers org-wide",
+			psStatus:   http.StatusNotFound,
+			psBody:     "not found",
+			orgStatus:  http.StatusNoContent,
+			wantOrgHit: true,
+		},
+		{
+			name:       "detached 400 GET-phrasing (the private space) proceeds to org de-register",
 			psStatus:   http.StatusBadRequest,
-			psBody:     detachedMsg,
+			psBody:     detachedGetMsg,
+			orgStatus:  http.StatusNoContent,
+			wantOrgHit: true,
+		},
+		{
+			name:       "detached 400 DELETE-phrasing (no 'the') proceeds to org de-register",
+			psStatus:   http.StatusBadRequest,
+			psBody:     detachedDeleteMsg,
+			orgStatus:  http.StatusNoContent,
+			wantOrgHit: true,
+		},
+		{
+			name:       "org-scoped 404 (already de-registered) is idempotent success",
+			psStatus:   http.StatusNoContent,
 			orgStatus:  http.StatusNotFound,
 			wantOrgHit: true,
 		},
 		{
-			name:        "detached 400 then org-scoped error surfaces org-scoped error",
-			psStatus:    http.StatusBadRequest,
-			psBody:      detachedMsg,
+			name:       "202 Accepted (async delete) on both steps is success",
+			psStatus:   http.StatusAccepted,
+			orgStatus:  http.StatusAccepted,
+			wantOrgHit: true,
+		},
+		{
+			name:        "org-scoped error surfaces as a de-register failure",
+			psStatus:    http.StatusNoContent,
 			orgStatus:   http.StatusInternalServerError,
 			wantErr:     true,
 			errContains: "org-scoped de-register",
 			wantOrgHit:  true,
 		},
 		{
-			name:        "unrelated 400 stays a hard error, never falls back",
+			name:        "unrelated PS 400 stays a hard error, never reaches org-scoped",
 			psStatus:    http.StatusBadRequest,
 			psBody:      "some other validation failure",
 			wantErr:     true,
-			errContains: "failed to delete transit gateway with status 400",
+			errContains: "failed to detach transit gateway from private space with status 400",
+			wantOrgHit:  false,
+		},
+		{
+			name:        "PS 5xx stays a hard error, never reaches org-scoped",
+			psStatus:    http.StatusInternalServerError,
+			psBody:      "boom",
+			wantErr:     true,
+			errContains: "failed to detach transit gateway from private space with status 500",
 			wantOrgHit:  false,
 		},
 	}
@@ -592,6 +633,81 @@ func TestTransitGatewayClient_DeleteTransitGateway_DetachedFallsBackToOrgScoped(
 			}
 			if orgHit != tt.wantOrgHit {
 				t.Errorf("org-scoped delete hit = %v, want %v", orgHit, tt.wantOrgHit)
+			}
+		})
+	}
+}
+
+// TestTransitGatewayClient_CreateTransitGateway_ShareConflict pins the create-side
+// half of W-23819332. When the AWS RAM resource share is still bound to an existing
+// (often detached-but-org-registered) attachment, create fails with
+// "...resource share id already exists". A bare status error is a dead end for the
+// user; the client must instead surface actionable de-register guidance (mention
+// the org-scoped delete) so a stranded ghost from an earlier build can be cleared.
+// This runs whether the platform reports the conflict as 400 or 409. An UNRELATED
+// error must keep the plain message (not the share-conflict guidance).
+func TestTransitGatewayClient_CreateTransitGateway_ShareConflict(t *testing.T) {
+	const createPath = "/runtimefabric/api/organizations/test-org-id/privatespaces/test-ps-id/transitgateways"
+
+	tests := []struct {
+		name        string
+		status      int
+		body        string
+		wantGuide   bool
+		errContains string
+	}{
+		{
+			name:        "409 share-already-exists yields de-register guidance",
+			status:      http.StatusConflict,
+			body:        "Transit gateway attachment with the same resource share id already exists",
+			wantGuide:   true,
+			errContains: "De-register that attachment",
+		},
+		{
+			name:        "400 share-already-exists also yields guidance",
+			status:      http.StatusBadRequest,
+			body:        `{"message":"Transit gateway attachment with the same Resource Share id already exists"}`,
+			wantGuide:   true,
+			errContains: "org-scoped delete",
+		},
+		{
+			name:        "unrelated 400 keeps the plain error, no guidance",
+			status:      http.StatusBadRequest,
+			body:        "some other validation failure",
+			wantGuide:   false,
+			errContains: "failed to create transit gateway with status 400",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+				createPath: func(w http.ResponseWriter, r *http.Request) {
+					testutil.AssertHTTPRequest(t, r, http.MethodPost, createPath)
+					testutil.ErrorResponse(w, tt.status, tt.body)
+				},
+			}
+			server := testutil.MockHTTPServer(t, handlers)
+
+			c := &TransitGatewayClient{
+				AnypointClient: &client.AnypointClient{
+					BaseURL:    server.URL,
+					Token:      "mock-token",
+					HTTPClient: &http.Client{},
+				},
+			}
+
+			_, err := c.CreateTransitGateway(context.Background(), "test-org-id", "test-ps-id",
+				&CreateTransitGatewayRequest{Name: "my-tgw", ResourceShareID: "share-uuid", ResourceShareAccount: "123456789012", Routes: []string{"10.0.0.0/8"}})
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), tt.errContains) {
+				t.Errorf("error = %v, want containing %q", err, tt.errContains)
+			}
+			gotGuide := strings.Contains(err.Error(), "resource share is still bound")
+			if gotGuide != tt.wantGuide {
+				t.Errorf("share-conflict guidance present = %v, want %v (err=%v)", gotGuide, tt.wantGuide, err)
 			}
 		})
 	}
