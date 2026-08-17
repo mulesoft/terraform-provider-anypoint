@@ -197,7 +197,7 @@ func (r *AssetResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				},
 			},
 			"type": schema.StringAttribute{
-				Description: "The Exchange asset type. This is a free-form value forwarded as-is to Exchange — it is NOT restricted to a fixed enum, so any type Exchange accepts works. Common values: custom, rest-api, http-api, evented-api (AsyncAPI), graphql-api, grpc-api, soap-api, connector, app, template, example, policy, ruleset, agent, llm, mcp. API-spec fragments (RAML/OAS fragments) are not a distinct type: publish them as an API-spec asset and select the fragment via `classifier` (e.g. raml-fragment, oas-fragment/oas-components).",
+				Description: "The Exchange asset type. This is a free-form value forwarded as-is to Exchange — it is NOT restricted to a fixed enum, so any type Exchange accepts works. Common values: custom, rest-api, http-api, evented-api (AsyncAPI), graphql-api, grpc-api, soap-api, connector, app, template, example, policy, ruleset, agent, llm, mcp, extension. API-spec fragments (RAML/OAS fragments) are not a distinct type: publish them as an API-spec asset and select the fragment via `classifier` (e.g. raml-fragment, oas-fragment/oas-components). The mule-plugin family (a JAR with classifier `mule-plugin`, e.g. a `policy` or `connector`) is stored by Exchange under the single super-type `extension`; you may declare the semantic type (`policy`/`connector`) and the provider preserves it (no drift), or declare `extension` directly — both apply cleanly. A bare `terraform import` of such an asset surfaces the stored `extension` (the semantic sub-type cannot be recovered from the API); you can then set `type = \"policy\"` (or `connector`) in config and the provider treats it as the SAME asset — the change is reconciled in place, NOT as a destroy+recreate, because both normalize to `extension`.",
 				Optional:    true,
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{
@@ -212,11 +212,18 @@ func (r *AssetResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 					// Safe against "inconsistent result after apply": type is immutable, so on
 					// an in-place update Read maps the API type back to the same state value
 					// (normalizeType), and on a genuine type change the plan value is KNOWN
-					// (not unknown) so UseStateForUnknown no-ops and RequiresReplace still
+					// (not unknown) so UseStateForUnknown no-ops and the replace modifier still
 					// forces replacement. On replacement, create re-plans with null prior
 					// state so this no-ops and the value is recomputed fresh.
+					//
+					// RequiresReplaceOnTypeChange (not the built-in RequiresReplace) compares
+					// the API-NORMALIZED type, so alias members of the same super-type are NOT
+					// treated as a change: declaring `type = "policy"` against an imported state
+					// of `extension` (the only thing a bare import can surface for the
+					// mule-plugin family) reconciles in place instead of destroying+recreating
+					// the asset. A real cross-type change (rest-api -> soap-api) still replaces.
 					stringplanmodifier.UseStateForUnknown(),
-					stringplanmodifier.RequiresReplace(),
+					RequiresReplaceOnTypeChange(),
 				},
 			},
 			"status": schema.StringAttribute{
@@ -770,6 +777,13 @@ func (r *AssetResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 		replacing = assetReplaceTriggered(&state, &plan)
 	}
 
+	// --- Guard #0: version-collision pre-check (Q-PROV-1 Option B). ---
+	// Catch, at PLAN time, a create (or version bump) that targets a GAV already
+	// published in Exchange — before any destroy runs — instead of letting apply hit
+	// the raw 409 ASSET_PRE_CONDITIONS_FAILED. Adds a diagnostic only; falls through so
+	// the file/api_version/status guards can also report on the same plan.
+	r.checkVersionCollisionAtPlan(ctx, creating, &state, &plan, resp)
+
 	// --- #67: keyed UseStateForUnknown for computed children of CONFIGURED lists. ---
 	// pages (page_path) and instances (instance_id, is_public) are Optional+Computed
 	// nested lists. The list-level UseStateForUnknown only fires when the WHOLE list is
@@ -1058,6 +1072,81 @@ func nextPatchVersionHint(version string) string {
 	}
 	parts[len(parts)-1] = fmt.Sprintf("%d", n+1)
 	return strings.Join(parts, ".")
+}
+
+// checkVersionCollisionAtPlan raises a PLAN-TIME error when a create — or a version
+// bump — targets a group/asset/version that ALREADY exists in Exchange. Exchange
+// versions are immutable and permanently reserved, so publishing onto an existing GAV
+// fails at apply with 409 ASSET_PRE_CONDITIONS_FAILED. On a version bump the OLD version
+// is destroyed BEFORE that failing publish (version is RequiresReplace), so surfacing the
+// collision at plan time — before any destroy — is strictly safer than the apply-time
+// 409 (this is "Option B" for Q-PROV-1; the friendly apply-time message in Create stays
+// as the backstop).
+//
+// Scope — mirrors the file_path / api_version guards, with a same-version carve-out:
+//   - Fires ONLY when the plan will PUBLISH onto a not-yet-owned version: a create (null
+//     prior state) or a genuine version change. A SAME-version replace (e.g. a
+//     classifier or file_path edit that forces replacement without changing the version
+//     number) is deliberately NOT flagged — that path destroys the current version
+//     first (hard-delete frees the GAV) and republishes at the same number, which the
+//     platform allows, so blocking it would be a false positive.
+//   - Requires group_id / asset_id / version all KNOWN. An unresolved reference (unknown
+//     value) defers to apply, exactly like the api_version guard, to avoid false
+//     positives on a legitimate cross-resource reference.
+//   - Requires a configured client (nil in pure-schema unit tests → skip).
+//   - A NotFound (404) means the version is free → proceed silently. Any OTHER GET error
+//     (network, auth, 5xx) is NON-fatal: we never block a plan on a transient probe
+//     failure; the apply-time 409 remains the backstop.
+func (r *AssetResource) checkVersionCollisionAtPlan(ctx context.Context, creating bool, state, plan *AssetResourceModel, resp *resource.ModifyPlanResponse) {
+	if r.client == nil {
+		return
+	}
+	// Only a create or a real version change publishes onto a new, un-owned version.
+	if !creating && !stringChanged(state.Version, plan.Version) {
+		return
+	}
+	g, a, v := plan.GroupID, plan.AssetID, plan.Version
+	if g.IsNull() || g.IsUnknown() || a.IsNull() || a.IsUnknown() || v.IsNull() || v.IsUnknown() {
+		return
+	}
+
+	_, err := r.client.GetAsset(ctx, g.ValueString(), a.ValueString(), v.ValueString())
+	if err != nil {
+		if !client.IsNotFound(err) {
+			// Transient / non-404: never block the plan on it — apply's 409 is the backstop.
+			tflog.Warn(ctx, "exchange asset plan-time version-collision probe failed; deferring to apply", map[string]interface{}{
+				"group_id": g.ValueString(),
+				"asset_id": a.ValueString(),
+				"version":  v.ValueString(),
+				"error":    err.Error(),
+			})
+		}
+		return
+	}
+
+	// GET 200 → the version already exists in Exchange and we do not own it at this
+	// version (create, or a bump onto a taken number). The apply would 409.
+	action := "created"
+	if !creating {
+		action = "published at this new version"
+	}
+	resp.Diagnostics.AddAttributeError(
+		path.Root("version"),
+		"Exchange asset version already exists",
+		fmt.Sprintf(
+			"Version %q of asset %q/%q already exists in Exchange, so this plan would fail at "+
+				"apply time when the version is %s: Exchange versions are immutable and permanently "+
+				"reserved, and the publish is rejected with 409 ASSET_PRE_CONDITIONS_FAILED.\n\n"+
+				"This is caught at plan time (before any destroy) so a version bump cannot delete the "+
+				"old version and then fail to publish the new one. Resolve it by either:\n"+
+				"  - bump `version` to a new value (e.g. %q) to publish fresh content, or\n"+
+				"  - import the existing version instead of creating it:\n"+
+				"      terraform import <address> %s/%s/%s",
+			v.ValueString(), g.ValueString(), a.ValueString(), action,
+			nextPatchVersionHint(v.ValueString()),
+			g.ValueString(), a.ValueString(), v.ValueString(),
+		),
+	)
 }
 
 func (r *AssetResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -1887,10 +1976,29 @@ var apiTypeToUserType = map[string]string{
 	"graphql": "graphql-api",
 }
 
-// userTypeToAPIType maps user-facing type names to what the API stores/returns.
-// Used during import to recognize API response types.
+// userTypeToAPIType maps user-facing type names to what the API stores/returns,
+// so normalizeType can PRESERVE the user's declared type when Exchange normalizes
+// it to a different stored value on publish.
+//
+// The "extension" super-type: Exchange stores the whole mule-plugin family under
+// the single stored type "extension". A policy or a connector is a JAR published
+// with the mule-plugin bundle classifier; users declare the semantically
+// meaningful "policy"/"connector", but the API stores AND returns "extension".
+// Without a mapping, Create's readback rewrites state to "extension" and Terraform
+// fails the post-apply check: `inconsistent result after apply: .type: was
+// "policy", but now "extension"` (STGX EXC-01i, 2026-08-13). Mapping these to
+// "extension" makes normalizeType return the user's value instead.
+//
+// This is SAFE even if a given member is NOT actually normalized on some tenant
+// (i.e. stored as-is): normalizeType's identity branch (userType == apiType) still
+// returns the user's value, so the mapping can only ADD tolerance, never break the
+// as-is case. NOTE the inverse is intentionally ambiguous — "extension" maps back
+// to several user types — so it is NOT added to apiTypeToUserType; a bare import of
+// a mule-plugin asset therefore surfaces the stored "extension" (see normalizeType).
 var userTypeToAPIType = map[string]string{
 	"graphql-api": "graphql",
+	"policy":      "extension",
+	"connector":   "extension",
 }
 
 // normalizeType resolves the API response type to the canonical user-facing type.
@@ -2964,6 +3072,72 @@ func (m requiresReplaceExceptOnImport) PlanModifyString(ctx context.Context, req
 // (which occur after import) do NOT trigger replacement.
 func RequiresReplaceExceptOnImport() planmodifier.String {
 	return requiresReplaceExceptOnImport{}
+}
+
+// apiTypeFor returns the API-STORED type for a user-facing type name, so that alias
+// members of the same Exchange super-type compare equal. The mule-plugin family
+// (policy, connector) is all stored as "extension" (see userTypeToAPIType), so
+// apiTypeFor("policy") == apiTypeFor("connector") == apiTypeFor("extension") ==
+// "extension". Any type without a mapping passes through unchanged (identity), so a
+// plain type like "rest-api" is only ever equal to itself.
+func apiTypeFor(userType string) string {
+	if api, ok := userTypeToAPIType[userType]; ok {
+		return api
+	}
+	return userType
+}
+
+// requiresReplaceOnTypeChange forces replacement when the asset `type` changes to a
+// GENUINELY different Exchange type — comparing the API-normalized form (apiTypeFor)
+// rather than the raw string. Exchange versions are immutable, so a real cross-type
+// change (rest-api -> soap-api) must destroy+recreate. But members of the same
+// super-type are NOT a real change: Exchange stores the whole mule-plugin family
+// (policy, connector) as "extension", and a bare `terraform import` can only ever
+// surface the stored "extension" (the semantic sub-type is unrecoverable from the
+// API). Declaring `type = "policy"` against an imported state of "extension" therefore
+// used to force a destroy+recreate of a live asset — catastrophic and pointless, since
+// the platform object is identical. Comparing the normalized form makes that edit an
+// in-place reconcile (Update path), which mapAssetToState+normalizeType then settle
+// back to the user's declared "policy" with no drift.
+type requiresReplaceOnTypeChange struct{}
+
+func (m requiresReplaceOnTypeChange) Description(_ context.Context) string {
+	return "Requires replacement only when the API-normalized asset type actually changes; mule-plugin aliases (policy/connector/extension) are equivalent and reconcile in place."
+}
+
+func (m requiresReplaceOnTypeChange) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (m requiresReplaceOnTypeChange) PlanModifyString(_ context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	// Create (no prior state): nothing to compare; value is computed fresh.
+	if req.State.Raw.IsNull() {
+		return
+	}
+	// Destroy: no plan value to compare.
+	if req.Plan.Raw.IsNull() {
+		return
+	}
+	// Plan still unknown (e.g. config omitted type before UseStateForUnknown ran):
+	// can't compare yet, and the omit path must never force replacement.
+	if req.PlanValue.IsUnknown() {
+		return
+	}
+	// Post-import state can be null/unknown for some fields; be defensive.
+	if req.StateValue.IsNull() || req.StateValue.IsUnknown() {
+		return
+	}
+	// Replace ONLY when the normalized (API-stored) types differ. This is what lets
+	// policy/connector/extension coexist without a spurious replace after import.
+	if apiTypeFor(req.PlanValue.ValueString()) != apiTypeFor(req.StateValue.ValueString()) {
+		resp.RequiresReplace = true
+	}
+}
+
+// RequiresReplaceOnTypeChange returns a plan modifier that requires replacement only
+// when the API-normalized asset type changes. See requiresReplaceOnTypeChange.
+func RequiresReplaceOnTypeChange() planmodifier.String {
+	return requiresReplaceOnTypeChange{}
 }
 
 // requiresReplaceListExceptOnImport is the List-typed sibling of

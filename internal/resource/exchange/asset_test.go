@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"sync"
@@ -820,6 +821,42 @@ func TestAssetResource_ChurnFields_UseStateForUnknown(t *testing.T) {
 	})
 }
 
+// TestNormalizeType_ExtensionFamily pins the fix for STGX EXC-01i (2026-08-13):
+// Exchange stores the mule-plugin family (policy, connector) under the single
+// super-type "extension". When the user declares the semantic type, Create's
+// readback receives "extension" from the API; normalizeType MUST return the user's
+// declared value so the applied state equals the plan (otherwise Terraform fails
+// with `inconsistent result after apply: .type: was "policy", but now "extension"`).
+// It must also: preserve the identity case if a member is NOT normalized on some
+// tenant; preserve the existing graphql-api<->graphql mapping; and, on a bare
+// import (no prior state), surface the stored "extension" because the semantic
+// sub-type is unrecoverable from the API.
+func TestNormalizeType_ExtensionFamily(t *testing.T) {
+	tests := []struct {
+		name      string
+		apiType   string
+		stateType types.String
+		want      string
+	}{
+		{"policy declared, api normalized to extension -> preserve policy", "extension", types.StringValue("policy"), "policy"},
+		{"connector declared, api normalized to extension -> preserve connector", "extension", types.StringValue("connector"), "connector"},
+		{"extension declared, api extension -> extension", "extension", types.StringValue("extension"), "extension"},
+		{"policy declared, api NOT normalized (returns policy) -> policy (identity)", "policy", types.StringValue("policy"), "policy"},
+		{"import (null state), api extension -> extension (sub-type unrecoverable)", "extension", types.StringNull(), "extension"},
+		{"import (null state), api graphql -> graphql-api (reverse map)", "graphql", types.StringNull(), "graphql-api"},
+		{"graphql-api declared, api returns graphql -> preserve graphql-api", "graphql", types.StringValue("graphql-api"), "graphql-api"},
+		{"plain rest-api identity", "rest-api", types.StringValue("rest-api"), "rest-api"},
+		{"unknown state falls through to api type", "extension", types.StringUnknown(), "extension"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := normalizeType(tt.apiType, tt.stateType); got != tt.want {
+				t.Errorf("normalizeType(%q, %v) = %q, want %q", tt.apiType, tt.stateType, got, tt.want)
+			}
+		})
+	}
+}
+
 // TestAssetResource_TypeField_NoReplaceOnImport is a targeted regression guard for a
 // HIGH-SEVERITY bug: importing an existing asset (or any plan where `type` is omitted from
 // config) used to force a DESTROY+RECREATE of the live asset.
@@ -836,13 +873,17 @@ func TestAssetResource_ChurnFields_UseStateForUnknown(t *testing.T) {
 // reorder regression that reintroduces the replace is caught by the churn scenario).
 //
 // Unlike classifier/api_version/main_file (which use the custom RequiresReplaceExceptOnImport),
-// `type` uses the BUILT-IN RequiresReplace, so it is NOT covered by the replaceFields loop in
-// TestAssetResource_ChurnFields_UseStateForUnknown — it needs its own coverage.
+// `type` uses the custom RequiresReplaceOnTypeChange, so it is NOT covered by the replaceFields
+// loop in TestAssetResource_ChurnFields_UseStateForUnknown — it needs its own coverage.
 //
 // Safe against "inconsistent result after apply": `type` is immutable, so on an in-place
 // update Read maps the API type back to the same state value (normalizeType), and on a
-// genuine type change the plan value is KNOWN (not unknown) so USFU no-ops and RequiresReplace
-// still forces replacement — proven by the real-change scenario below.
+// genuine type change the plan value is KNOWN (not unknown) so USFU no-ops and the replace
+// modifier still forces replacement — proven by the real-change scenario below.
+//
+// RequiresReplaceOnTypeChange additionally compares the API-NORMALIZED type, so the
+// mule-plugin aliases (policy/connector/extension, all stored as "extension") are treated as
+// the SAME type and do NOT force replacement — proven by the extension-family scenario below.
 func TestAssetResource_TypeField_NoReplaceOnImport(t *testing.T) {
 	res := NewAssetResource()
 	ctx := context.Background()
@@ -939,6 +980,241 @@ func TestAssetResource_TypeField_NoReplaceOnImport(t *testing.T) {
 		}
 		if resp.RequiresReplace {
 			t.Errorf("type: create scenario must NOT force replacement")
+		}
+	})
+
+	// (4) EXTENSION-FAMILY scenario — the import limitation fix (STGX EXC-01i, 2026-08-13).
+	// A bare import can only surface the stored super-type "extension" for a mule-plugin
+	// asset. When the user then declares the semantic sub-type (policy/connector), the plan
+	// value is KNOWN and differs textually from state "extension" — the BUILT-IN
+	// RequiresReplace would destroy+recreate a live asset. RequiresReplaceOnTypeChange
+	// compares the API-normalized form (all three -> "extension"), so it must NOT replace.
+	// A genuine cross-type change (extension -> rest-api) must STILL replace.
+	extensionFamily := []struct {
+		name        string
+		stateType   string
+		planType    string
+		wantReplace bool
+	}{
+		{"import extension -> declare policy: reconcile in place", "extension", "policy", false},
+		{"import extension -> declare connector: reconcile in place", "extension", "connector", false},
+		{"import extension -> declare extension: identity, no replace", "extension", "extension", false},
+		{"policy -> extension: same super-type, no replace", "policy", "extension", false},
+		{"policy -> connector: same super-type, no replace", "policy", "connector", false},
+		{"extension -> rest-api: real cross-type change, replace", "extension", "rest-api", true},
+		{"policy -> rest-api: real cross-type change, replace", "policy", "rest-api", true},
+	}
+	for _, tc := range extensionFamily {
+		t.Run(tc.name, func(t *testing.T) {
+			req := planmodifier.StringRequest{
+				State:       nonNullState,
+				Plan:        tfsdk.Plan{Raw: tftypes.NewValue(tftypes.String, "exists")},
+				StateValue:  types.StringValue(tc.stateType),
+				PlanValue:   types.StringValue(tc.planType),
+				ConfigValue: types.StringValue(tc.planType),
+			}
+			resp := &planmodifier.StringResponse{PlanValue: req.PlanValue}
+			for _, m := range sa.PlanModifiers {
+				req.PlanValue = resp.PlanValue
+				m.PlanModifyString(ctx, req, resp)
+			}
+			if resp.RequiresReplace != tc.wantReplace {
+				t.Errorf("type: %s -> %s: RequiresReplace = %v, want %v",
+					tc.stateType, tc.planType, resp.RequiresReplace, tc.wantReplace)
+			}
+		})
+	}
+}
+
+// TestAssetResource_TypeNormalization_Hermetic is the end-to-end regression guard for
+// STGX EXC-01i (2026-08-13): declaring a mule-plugin sub-type (policy/connector) used to
+// fail Terraform's post-apply consistency check because Exchange stores the whole family
+// as the super-type "extension" and the create readback rewrote state to "extension"
+// (`inconsistent result after apply: .type: was "policy", but now "extension"`).
+//
+// It drives the resource's REAL Create and Read methods against an in-process, stateful
+// fake Exchange whose GET readback ALWAYS returns type="extension" — i.e. it reproduces
+// the exact normalization the live platform performs. The assertion IS the consistency
+// invariant Terraform core enforces: for a KNOWN planned value, the applied state value
+// must equal it. So asserting created state .type == the declared type (policy/connector/
+// extension) proves the apply is consistent and would not error under real Terraform.
+//
+// It also pins the KNOWN LIMITATION as an explicit expectation: a bare import (state
+// .type == null, as ImportState leaves it) resolves to "extension", because the semantic
+// sub-type is unrecoverable from the API. The companion fix (RequiresReplaceOnTypeChange,
+// covered by TestAssetResource_TypeField_NoReplaceOnImport) makes that recoverable in
+// place — set type=policy in config afterward and it reconciles WITHOUT a destroy+recreate.
+func TestAssetResource_TypeNormalization_Hermetic(t *testing.T) {
+	const (
+		orgID   = "test-org-id"
+		groupID = "g"
+		assetID = "a"
+		version = "1.0.0"
+	)
+
+	// The fake stores the mule-plugin family the way Exchange does: whatever sub-type the
+	// provider publishes, the GET readback reports the normalized super-type "extension".
+	// This is precisely what makes a naive provider drift policy -> extension on apply.
+	assetJSON := func(name string) map[string]interface{} {
+		return map[string]interface{}{
+			"groupId":       groupID,
+			"assetId":       assetID,
+			"version":       version,
+			"name":          name,
+			"description":   "",
+			"type":          "extension", // <-- Exchange's normalization, always.
+			"status":        "published",
+			"isPublic":      false,
+			"isSnapshot":    false,
+			"minorVersion":  "1.0",
+			"versionGroup":  version,
+			"createdDate":   "2024-01-01T00:00:00Z",
+			"updatedDate":   "2024-01-01T00:00:00Z",
+			"contactName":   nil,
+			"contactEmail":  nil,
+			"manager":       nil,
+			"labels":        []interface{}{},
+			"categories":    []interface{}{},
+			"customFields":  []interface{}{},
+			"files":         []interface{}{},
+			"dependencies":  []interface{}{},
+			"instances":     []interface{}{},
+			"attributes":    []interface{}{},
+			"rating":        0,
+			"numberOfRates": 0,
+		}
+	}
+
+	postPath := "/exchange/api/v2/organizations/" + orgID + "/assets/" + groupID + "/" + assetID + "/" + version
+	versionPath := "/exchange/api/v2/assets/" + groupID + "/" + assetID + "/" + version
+	metaPath := "/exchange/api/v2/assets/" + groupID + "/" + assetID
+	pagesPath := versionPath + "/portal/pages"
+
+	var mu sync.Mutex
+	name := ""
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		postPath: func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				testutil.ErrorResponse(w, http.StatusMethodNotAllowed, "want POST")
+				return
+			}
+			if err := r.ParseMultipartForm(10 << 20); err != nil {
+				testutil.ErrorResponse(w, http.StatusBadRequest, "bad multipart: "+err.Error())
+				return
+			}
+			mu.Lock()
+			name = r.FormValue("name")
+			mu.Unlock()
+			w.WriteHeader(http.StatusCreated)
+		},
+		versionPath: func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodGet:
+				mu.Lock()
+				body := assetJSON(name)
+				mu.Unlock()
+				testutil.JSONResponse(w, http.StatusOK, body)
+			case http.MethodDelete:
+				w.WriteHeader(http.StatusNoContent)
+			default:
+				testutil.ErrorResponse(w, http.StatusMethodNotAllowed, "want GET/DELETE")
+			}
+		},
+		metaPath: func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNoContent)
+		},
+		pagesPath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, []interface{}{})
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	res := NewAssetResource().(*AssetResource)
+	res.client = &exchange.AssetClient{
+		BaseURL:    server.URL,
+		Token:      "mock-token",
+		HTTPClient: &http.Client{},
+	}
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+
+	// --- Part 1: CREATE with the semantic sub-type must NOT drift ---------------
+	// Declared type is a KNOWN planned value; the fake normalizes it to "extension" on
+	// readback; the applied state .type must come back EQUAL to the declared value or
+	// real Terraform would fail the post-apply consistency check.
+	for _, declared := range []string{"policy", "connector", "extension"} {
+		t.Run("create_"+declared+"_no_drift", func(t *testing.T) {
+			planRaw := assetRawValue(ctx, schemaResp.Schema, map[string]tftypes.Value{
+				"organization_id": tftypes.NewValue(tftypes.String, orgID),
+				"group_id":        tftypes.NewValue(tftypes.String, groupID),
+				"asset_id":        tftypes.NewValue(tftypes.String, assetID),
+				"version":         tftypes.NewValue(tftypes.String, version),
+				"name":            tftypes.NewValue(tftypes.String, "policy asset"),
+				"type":            tftypes.NewValue(tftypes.String, declared),
+				"status":          tftypes.NewValue(tftypes.String, "published"),
+			})
+			createReq := resource.CreateRequest{Plan: tfsdk.Plan{Schema: schemaResp.Schema, Raw: planRaw}}
+			createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+			res.Create(ctx, createReq, createResp)
+			if createResp.Diagnostics.HasError() {
+				t.Fatalf("Create(type=%s) errors: %v", declared, createResp.Diagnostics.Errors())
+			}
+			var m AssetResourceModel
+			if diags := createResp.State.Get(ctx, &m); diags.HasError() {
+				t.Fatalf("Create(type=%s) State.Get errors: %v", declared, diags.Errors())
+			}
+			if got := m.Type.ValueString(); got != declared {
+				t.Errorf("applied state .type = %q, want %q — the platform normalized to "+
+					"\"extension\" and the provider failed to preserve the declared type "+
+					"(this is the `inconsistent result after apply` regression)", got, declared)
+			}
+
+			// A follow-up refresh Read on that state must ALSO stay put (no perpetual diff).
+			readReq := resource.ReadRequest{State: createResp.State}
+			readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+			res.Read(ctx, readReq, readResp)
+			if readResp.Diagnostics.HasError() {
+				t.Fatalf("Read(type=%s) errors: %v", declared, readResp.Diagnostics.Errors())
+			}
+			var rm AssetResourceModel
+			if diags := readResp.State.Get(ctx, &rm); diags.HasError() {
+				t.Fatalf("Read(type=%s) State.Get errors: %v", declared, diags.Errors())
+			}
+			if got := rm.Type.ValueString(); got != declared {
+				t.Errorf("refresh Read .type = %q, want %q — normalizeType did not preserve "+
+					"the declared type on refresh (perpetual drift)", got, declared)
+			}
+		})
+	}
+
+	// --- Part 2: KNOWN LIMITATION — a bare import surfaces "extension" ----------
+	// ImportState seeds ids but leaves .type null; the first Read then resolves it from
+	// the API, which only knows "extension". This asserts the documented behavior so it
+	// can't silently change. The RequiresReplaceOnTypeChange fix (separate test) is what
+	// lets the user set type=policy afterward WITHOUT a destroy+recreate.
+	t.Run("bare_import_surfaces_extension", func(t *testing.T) {
+		importedRaw := assetRawValue(ctx, schemaResp.Schema, map[string]tftypes.Value{
+			"organization_id": tftypes.NewValue(tftypes.String, orgID),
+			"group_id":        tftypes.NewValue(tftypes.String, groupID),
+			"asset_id":        tftypes.NewValue(tftypes.String, assetID),
+			"version":         tftypes.NewValue(tftypes.String, version),
+			"id":              tftypes.NewValue(tftypes.String, groupID+"/"+assetID+"/"+version),
+			// type deliberately omitted (null) — exactly what ImportState leaves behind.
+		})
+		readReq := resource.ReadRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: importedRaw}}
+		readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+		res.Read(ctx, readReq, readResp)
+		if readResp.Diagnostics.HasError() {
+			t.Fatalf("Read(import) errors: %v", readResp.Diagnostics.Errors())
+		}
+		var m AssetResourceModel
+		if diags := readResp.State.Get(ctx, &m); diags.HasError() {
+			t.Fatalf("Read(import) State.Get errors: %v", diags.Errors())
+		}
+		if got := m.Type.ValueString(); got != "extension" {
+			t.Errorf("bare import .type = %q, want \"extension\" — the API cannot recover the "+
+				"semantic sub-type, so import must surface the stored super-type", got)
 		}
 	})
 }
@@ -1365,6 +1641,93 @@ func TestAssetResource_ModifyPlan_FilePathGuard(t *testing.T) {
 			}
 			if !strings.Contains(detail, wantType) {
 				t.Errorf("diagnostic detail should name the offending type %q; got %q", wantType, detail)
+			}
+		})
+	}
+}
+
+// TestAssetResource_ModifyPlan_VersionCollisionGuard covers Guard #0 (Q-PROV-1 Option B):
+// a CREATE — or a version BUMP — onto a GAV that ALREADY exists in Exchange is rejected at
+// PLAN time (before any destroy) instead of hitting the raw apply-time 409
+// ASSET_PRE_CONDITIONS_FAILED. The guard probes GetAsset; a mock server returns 200 for the
+// "taken" version and 404 for anything else. A fileless type ("custom") is used so neither the
+// file_path nor api_version sibling guard can fire — any diagnostic here is unambiguously the
+// version-collision guard. It must NOT fire on: a create onto a FREE version, an in-place
+// update (same version, we own it), a version bump onto a FREE version, a destroy plan, or an
+// unknown version (deferred to apply). The nil-client path is covered implicitly by every
+// other ModifyPlan test (they construct the resource without a client and never probe).
+func TestAssetResource_ModifyPlan_VersionCollisionGuard(t *testing.T) {
+	res := NewAssetResource().(*AssetResource)
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	objType := schemaResp.Schema.Type().TerraformType(ctx).(tftypes.Object)
+	nullObj := tftypes.NewValue(objType, nil)
+
+	// Mock Exchange: GET .../assets/grp/asset/1.0.0 -> 200 (taken); everything else 404.
+	const takenVersion = "1.0.0"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/assets/grp/asset/"+takenVersion) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"groupId":"grp","assetId":"asset","version":"1.0.0","type":"custom"}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"status":404,"message":"not found"}`))
+	}))
+	defer server.Close()
+	res.client = &exchange.AssetClient{BaseURL: server.URL, Token: "mock-token", HTTPClient: &http.Client{}}
+
+	str := func(s string) tftypes.Value { return tftypes.NewValue(tftypes.String, s) }
+	unknown := tftypes.NewValue(tftypes.String, tftypes.UnknownValue)
+
+	// obj builds a fileless "custom" asset at the given version with fixed group/asset ids.
+	obj := func(versionVal tftypes.Value) tftypes.Value {
+		return assetRawValue(ctx, schemaResp.Schema, map[string]tftypes.Value{
+			"organization_id": str("org"),
+			"group_id":        str("grp"),
+			"asset_id":        str("asset"),
+			"type":            str("custom"),
+			"version":         versionVal,
+		})
+	}
+
+	tests := []struct {
+		name     string
+		planRaw  tftypes.Value
+		stateRaw tftypes.Value
+		wantErr  bool
+	}{
+		{name: "create onto a TAKEN version is blocked", planRaw: obj(str(takenVersion)), stateRaw: nullObj, wantErr: true},
+		{name: "create onto a FREE version is allowed", planRaw: obj(str("9.9.9")), stateRaw: nullObj, wantErr: false},
+		{name: "version bump ONTO a taken version is blocked", planRaw: obj(str(takenVersion)), stateRaw: obj(str("0.9.0")), wantErr: true},
+		{name: "version bump onto a FREE version is allowed", planRaw: obj(str("9.9.9")), stateRaw: obj(str("0.9.0")), wantErr: false},
+		{name: "in-place update (same version we own) is allowed even though it exists", planRaw: obj(str(takenVersion)), stateRaw: obj(str(takenVersion)), wantErr: false},
+		{name: "unknown version defers to apply (no probe, no error)", planRaw: obj(unknown), stateRaw: nullObj, wantErr: false},
+		{name: "destroy plan is skipped", planRaw: nullObj, stateRaw: obj(str(takenVersion)), wantErr: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := resource.ModifyPlanRequest{
+				Plan:   tfsdk.Plan{Schema: schemaResp.Schema, Raw: tt.planRaw},
+				State:  tfsdk.State{Schema: schemaResp.Schema, Raw: tt.stateRaw},
+				Config: tfsdk.Config{Schema: schemaResp.Schema, Raw: tt.planRaw},
+			}
+			resp := &resource.ModifyPlanResponse{}
+			res.ModifyPlan(ctx, req, resp)
+
+			hasCollision := false
+			for _, d := range resp.Diagnostics {
+				if strings.Contains(d.Summary(), "Exchange asset version already exists") {
+					hasCollision = true
+				}
+			}
+			if tt.wantErr && !hasCollision {
+				t.Fatalf("expected the version-collision diagnostic, got: %v", resp.Diagnostics.Errors())
+			}
+			if !tt.wantErr && hasCollision {
+				t.Fatalf("unexpected version-collision diagnostic: %v", resp.Diagnostics.Errors())
 			}
 		})
 	}
