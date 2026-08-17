@@ -173,7 +173,7 @@ resource "anypoint_exchange_asset" "petstore" {
 
 ### Optional
 
-- `type` (String) The Exchange asset type. This is a **free-form** value forwarded as-is to Exchange — it is **not** restricted to a fixed enum, so any type Exchange accepts works. Common values: `custom`, `rest-api`, `http-api`, `evented-api` (AsyncAPI), `graphql-api`, `grpc-api`, `soap-api`, `connector`, `app`, `template`, `example`, `policy`, `ruleset`, `agent`, `llm`, `mcp`. API-spec **fragments** (RAML/OAS fragments) are not a distinct type — publish them as an API-spec asset and select the fragment via `classifier` (e.g. `raml-fragment`, `oas-fragment`/`oas-components`).
+- `type` (String) The Exchange asset type. This is a **free-form** value forwarded as-is to Exchange — it is **not** restricted to a fixed enum, so any type Exchange accepts works. Common values: `custom`, `rest-api`, `http-api`, `evented-api` (AsyncAPI), `graphql-api`, `grpc-api`, `soap-api`, `connector`, `app`, `template`, `example`, `policy`, `ruleset`, `agent`, `llm`, `mcp`, `extension`. API-spec **fragments** (RAML/OAS fragments) are not a distinct type — publish them as an API-spec asset and select the fragment via `classifier` (e.g. `raml-fragment`, `oas-fragment`/`oas-components`). The **mule-plugin family** (a JAR with classifier `mule-plugin`, e.g. a `policy` or `connector`) is stored by Exchange under the single super-type **`extension`**. The recommended, canonical value is `type = "extension"` (it is what Exchange stores, so it round-trips through `terraform import` identically); the provider **also** accepts the semantic `policy`/`connector` and preserves them with no drift. A bare `terraform import` of such an asset surfaces the stored `extension` (the semantic sub-type cannot be recovered from the API); you can then set `type = "policy"` (or `connector`) in config and the provider treats it as the **same** asset — the change reconciles in place, **not** a destroy+recreate, because both normalize to `extension`.
 - `status` (String) The lifecycle status of this asset **version**. One of `development`, `published` (default), or `deprecated`. **Case-sensitive** (`Published` is rejected). The Exchange API is asymmetric — validated both at plan time (via a `OneOf` validator) and by a plan-time guard: `development` is accepted **only when first publishing a version** and *cannot* be set on an existing version (the platform rejects an in-place change to `development` with HTTP 400); `deprecated` can only be set on an existing version, not at initial publish; `published` is valid in both cases. To move a published version back to `development`, publish a new version (bump `version`) rather than editing status in place.
 - `description` (String) A description of the asset. **Group-scoped** — shared across all versions of the asset (see the multi-version note below).
 - `keywords` (String) Comma-separated keywords for search discovery.
@@ -196,7 +196,7 @@ resource "anypoint_exchange_asset" "petstore" {
   > **AsyncAPI gotcha:** the `evented-api` classifier is literally `evented-api` (Exchange stores it as `fat-evented-api`). Passing `classifier = "asyncapi"` fails with `400 COULD_NOT_DETERMINE_ASSET_TYPE`.
 - `file_path` (String) Path to the file to upload (JAR, ZIP, RAML, OAS, etc.). Used only at creation time. After import, one apply settles this field (non-destructive). Changing to a different value triggers replacement.
 - `main_file` (String) The main file within the uploaded archive (`properties.mainFile`). Used for multi-file specs.
-- `additional_file` (Block List) Extra files uploaded **alongside** `file_path` in the *same* publish request, for multi-file asset types. The canonical case is `type = "policy"`, which requires two files — e.g. `(mule-policy.jar + policy-definition.yaml)` or `(schema.json + metadata.yaml)`. Like `file_path`, this is a create-time, upload-only field (preserved from state on read, never reconciled from the API) and is **replacement-forcing** — except the non-destructive null→value settle on the first apply after import. See [`additional_file`](#nestedschema--additional_file) below.
+- `additional_file` (Block List) Extra files uploaded **alongside** `file_path` in the *same* publish request, for multi-file asset types. The canonical case is a mule-plugin (`type = "extension"`, e.g. a policy), which requires two files — e.g. `(mule-policy.jar + policy-definition.yaml)` or `(schema.json + metadata.yaml)`. Like `file_path`, this is a create-time, upload-only field (preserved from state on read, never reconciled from the API) and is **replacement-forcing** — except the non-destructive null→value settle on the first apply after import. See [`additional_file`](#nestedschema--additional_file) below.
 - `tags` (List of String) Search tags for the asset version. Each element is a tag value string.
 - `terms_and_conditions` (String) Terms and conditions content (markdown). Displayed as the T&C page in the asset portal.
 - `pages` (Block List) Documentation pages for the asset portal. Each page has a name and markdown content. See [`pages`](#nestedschema--pages) below.
@@ -284,6 +284,8 @@ Required:
 
 #### Example: publishing a policy (two files)
 
+Use `type = "extension"` — the super-type Exchange stores the whole mule-plugin family (policies and connectors) under, and the value that round-trips cleanly through `terraform import`. Declaring `type = "policy"` (or `connector`) is also accepted and reconciles to the same asset with no drift.
+
 ```terraform
 resource "anypoint_exchange_asset" "policy" {
   organization_id = var.org_id
@@ -291,7 +293,7 @@ resource "anypoint_exchange_asset" "policy" {
   asset_id        = "tf-demo-policy"
   version         = "1.0.0"
   name            = "TF Demo Policy"
-  type            = "policy"
+  type            = "extension" # mule-plugin super-type; "policy"/"connector" also accepted
 
   # First file.
   file_path  = "${path.module}/test-assets/mule-policy.jar"
