@@ -189,14 +189,29 @@ func (p *AnypointProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
+	authType := stringValueOrEnv(config.AuthType, "ANYPOINT_AUTH_TYPE")
+	if authType == "" {
+		authType = "connected_app"
+	}
+
 	clientConfig := &client.Config{
 		ClientID:     stringValueOrEnv(config.ClientID, "ANYPOINT_CLIENT_ID"),
 		ClientSecret: stringValueOrEnv(config.ClientSecret, "ANYPOINT_CLIENT_SECRET"),
-		Username:     stringValueOrEnv(config.Username, "ANYPOINT_USERNAME"),
-		Password:     stringValueOrEnv(config.Password, "ANYPOINT_PASSWORD"),
 		BaseURL:      stringValueOrEnv(config.BaseURL, "ANYPOINT_BASE_URL"),
 		Timeout:      int(config.Timeout.ValueInt64()),
 		Cache:        client.NewResponseCache(),
+	}
+
+	// The client picks the OAuth grant purely by Username presence (non-empty =>
+	// password grant, empty => client_credentials). Populate Username/Password ONLY
+	// for auth_type = "user", so a stray ANYPOINT_USERNAME in the environment cannot
+	// silently flip a connected_app provider to password grant (which fails against a
+	// client_credentials-only app with "400 invalid_grant: Application is missing
+	// requested grant"). This matches the schema contract: username is only required
+	// when auth_type is "user".
+	if authType == "user" {
+		clientConfig.Username = stringValueOrEnv(config.Username, "ANYPOINT_USERNAME")
+		clientConfig.Password = stringValueOrEnv(config.Password, "ANYPOINT_PASSWORD")
 	}
 
 	resp.DataSourceData = clientConfig

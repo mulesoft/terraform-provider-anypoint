@@ -496,6 +496,10 @@ func (r *MCPBridgeResource) Create(ctx context.Context, req resource.CreateReque
 
 	instance, err := r.client.GetBridge(ctx, orgID, envID, bridge.ID)
 	if err != nil {
+		// The bridge was fully created (instance + upstreams + policies); a failure on
+		// this final readback would otherwise strand it with no TF state. Roll it back
+		// like every other post-publish failure branch (Class J: never orphan).
+		r.cleanupPartialBridge(ctx, orgID, envID, bridge.ID, assetID, version)
 		resp.Diagnostics.AddError("Error reading MCP bridge after create", err.Error())
 		return
 	}

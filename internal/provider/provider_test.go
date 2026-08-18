@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"math/big"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/provider"
@@ -10,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 )
@@ -180,6 +182,135 @@ func TestAnypointProvider_Configure(t *testing.T) {
 				if clientConfig.Timeout != tt.expectedConfig.Timeout {
 					t.Errorf("Configure() Timeout = %v, want %v", clientConfig.Timeout, tt.expectedConfig.Timeout)
 				}
+			}
+		})
+	}
+}
+
+// buildProviderConfig marshals a provider model into a real tfsdk.Config so a test
+// can drive Configure() end-to-end (the framework populates the model from Raw).
+func buildProviderConfig(t *testing.T, model AnypointProviderModel) tfsdk.Config {
+	t.Helper()
+	ctx := context.Background()
+	s := getProviderSchema(t)
+	objType, ok := s.Type().TerraformType(ctx).(tftypes.Object)
+	if !ok {
+		t.Fatalf("provider schema terraform type is not an object")
+	}
+
+	strVal := func(v types.String) tftypes.Value {
+		if v.IsNull() {
+			return tftypes.NewValue(tftypes.String, nil)
+		}
+		return tftypes.NewValue(tftypes.String, v.ValueString())
+	}
+	intVal := func(v types.Int64) tftypes.Value {
+		if v.IsNull() {
+			return tftypes.NewValue(tftypes.Number, nil)
+		}
+		return tftypes.NewValue(tftypes.Number, new(big.Float).SetInt64(v.ValueInt64()))
+	}
+
+	raw := tftypes.NewValue(objType, map[string]tftypes.Value{
+		"auth_type":     strVal(model.AuthType),
+		"client_id":     strVal(model.ClientID),
+		"client_secret": strVal(model.ClientSecret),
+		"username":      strVal(model.Username),
+		"password":      strVal(model.Password),
+		"base_url":      strVal(model.BaseURL),
+		"timeout":       intVal(model.Timeout),
+	})
+	return tfsdk.Config{Schema: s, Raw: raw}
+}
+
+// TestAnypointProvider_Configure_AuthGrantGating locks the fix for the auth footgun:
+// the client picks the OAuth grant by Username presence, so Configure must populate
+// Username/Password ONLY for auth_type = "user". Otherwise a stray ANYPOINT_USERNAME
+// in the environment silently flips a connected_app provider to password grant
+// (live-repro'd on prod as "400 invalid_grant: Application is missing requested grant").
+func TestAnypointProvider_Configure_AuthGrantGating(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name         string
+		envUsername  string
+		envPassword  string
+		model        AnypointProviderModel
+		wantUsername string
+		wantPassword string
+	}{
+		{
+			name:        "connected_app default ignores stray env username",
+			envUsername: "stray-env-user",
+			envPassword: "stray-env-pass",
+			model: AnypointProviderModel{
+				ClientID:     stringValue("cc-id"),
+				ClientSecret: stringValue("cc-secret"),
+			},
+			wantUsername: "",
+			wantPassword: "",
+		},
+		{
+			name:        "explicit connected_app ignores config and env username",
+			envUsername: "stray-env-user",
+			model: AnypointProviderModel{
+				AuthType:     stringValue("connected_app"),
+				ClientID:     stringValue("cc-id"),
+				ClientSecret: stringValue("cc-secret"),
+				Username:     stringValue("cfg-user"),
+			},
+			wantUsername: "",
+			wantPassword: "",
+		},
+		{
+			name: "user auth populates username/password from config",
+			model: AnypointProviderModel{
+				AuthType:     stringValue("user"),
+				ClientID:     stringValue("id"),
+				ClientSecret: stringValue("secret"),
+				Username:     stringValue("cfg-user"),
+				Password:     stringValue("cfg-pass"),
+			},
+			wantUsername: "cfg-user",
+			wantPassword: "cfg-pass",
+		},
+		{
+			name:        "user auth falls back to env username/password",
+			envUsername: "env-user",
+			envPassword: "env-pass",
+			model: AnypointProviderModel{
+				AuthType:     stringValue("user"),
+				ClientID:     stringValue("id"),
+				ClientSecret: stringValue("secret"),
+			},
+			wantUsername: "env-user",
+			wantPassword: "env-pass",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("ANYPOINT_USERNAME", tt.envUsername)
+			t.Setenv("ANYPOINT_PASSWORD", tt.envPassword)
+			t.Setenv("ANYPOINT_AUTH_TYPE", "")
+
+			p := &AnypointProvider{}
+			req := provider.ConfigureRequest{Config: buildProviderConfig(t, tt.model)}
+			resp := &provider.ConfigureResponse{}
+			p.Configure(ctx, req, resp)
+
+			if resp.Diagnostics.HasError() {
+				t.Fatalf("Configure() unexpected error: %v", resp.Diagnostics.Errors())
+			}
+			cc, ok := resp.ResourceData.(*client.Config)
+			if !ok {
+				t.Fatalf("ResourceData is not *client.Config: %T", resp.ResourceData)
+			}
+			if cc.Username != tt.wantUsername {
+				t.Errorf("Username = %q, want %q", cc.Username, tt.wantUsername)
+			}
+			if cc.Password != tt.wantPassword {
+				t.Errorf("Password = %q, want %q", cc.Password, tt.wantPassword)
 			}
 		})
 	}

@@ -220,6 +220,15 @@ func (r *SelfManagedGatewayResource) Read(ctx context.Context, req resource.Read
 	envID := data.EnvironmentID.ValueString()
 	name := data.Name.ValueString()
 
+	// Backfill the identity fields that the 2-part passthrough import form
+	// (environment_id/name) does not set — ImportState only sets env/name, and
+	// resolveGateway only fills gateway_id/status/last_update. Without this, id and
+	// organization_id stay null after a post-import refresh (both are
+	// Computed+UseStateForUnknown, so USFU just re-freezes the null) and the first
+	// plan is not clean. Mirrors what Update already does.
+	data.OrganizationID = types.StringValue(orgID)
+	data.ID = types.StringValue(buildSelfManagedID(orgID, envID, name))
+
 	// Best-effort resolve. If the gateway has not registered yet, we keep the resource in
 	// state (the minted token is still valid / pending) rather than removing it — removing
 	// it would force a token re-mint on every apply.
