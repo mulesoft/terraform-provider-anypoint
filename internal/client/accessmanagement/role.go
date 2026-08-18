@@ -52,7 +52,8 @@ type UpdateRoleGroupRequest struct {
 
 // ListRoleGroupsResponse wraps the API list response
 type ListRoleGroupsResponse struct {
-	Data []RoleGroup `json:"data"`
+	Data  []RoleGroup `json:"data"`
+	Total int         `json:"total"`
 }
 
 // CreateRoleGroup creates a new role group in Anypoint
@@ -197,30 +198,48 @@ func (c *RoleClient) DeleteRoleGroup(ctx context.Context, orgID, roleGroupID str
 
 // ListRoleGroups lists all role groups for an organization
 func (c *RoleClient) ListRoleGroups(ctx context.Context, orgID string) ([]RoleGroup, error) {
-	url := fmt.Sprintf("%s/accounts/api/organizations/%s/rolegroups", c.BaseURL, orgID)
+	// The accounts API defaults to a 25-item page when limit is omitted, so a bare
+	// GET silently truncates for orgs with many role groups (Class C). Paginate to
+	// completion, mirroring listTeamsFromAPI.
+	var allRoleGroups []RoleGroup
+	limit := 100
+	offset := 0
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+	for {
+		url := fmt.Sprintf("%s/accounts/api/organizations/%s/rolegroups?limit=%d&offset=%d", c.BaseURL, orgID, limit, offset)
+
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+
+		req.Header.Set("Authorization", "Bearer "+c.Token)
+
+		resp, err := c.HTTPClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to send request: %w", err)
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			return nil, fmt.Errorf("failed to list role groups with status %d: %s", resp.StatusCode, string(body))
+		}
+
+		var listResp ListRoleGroupsResponse
+		if err := json.NewDecoder(resp.Body).Decode(&listResp); err != nil {
+			_ = resp.Body.Close()
+			return nil, fmt.Errorf("failed to decode response: %w", err)
+		}
+		_ = resp.Body.Close()
+
+		allRoleGroups = append(allRoleGroups, listResp.Data...)
+
+		if len(listResp.Data) < limit || len(allRoleGroups) >= listResp.Total {
+			break
+		}
+		offset += limit
 	}
 
-	req.Header.Set("Authorization", "Bearer "+c.Token)
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to list role groups with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var listResp ListRoleGroupsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&listResp); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return listResp.Data, nil
+	return allRoleGroups, nil
 }
