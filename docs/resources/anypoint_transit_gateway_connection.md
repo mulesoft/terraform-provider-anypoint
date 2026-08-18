@@ -26,11 +26,10 @@ resource "anypoint_transit_gateway_connection" "main" {
   resource_share_account = "055970264539"                         # AWS account that owns the TGW
   routes                 = ["192.168.1.0/24", "172.16.0.0/12"]    # >=1 CIDR; must not overlap the PS CIDR
 
-  # Recommended backstop: if a re-create is ever triggered, stand up the new
-  # attachment BEFORE tearing down the old one (avoids a connectivity gap).
-  lifecycle {
-    create_before_destroy = true
-  }
+  # IMPORTANT: do not set create_before_destroy here — the AWS RAM resource
+  # share is exclusive, so a replacement must destroy the old attachment first
+  # (the default order) or the new create fails with
+  # "resource share ... already exists".
 }
 
 output "transit_gateway_status" {
@@ -74,7 +73,7 @@ resource "anypoint_transit_gateway_connection" "main" {
 - `status` (String) The current status of the transit gateway attachment (e.g. `Pending`, `Available`).
 - `aws_transit_gateway_id` (String) The AWS Transit Gateway ID discovered by the platform from the resource share. This is a computed value set after the TGW attachment is created.
 
--> **Replacement (ForceNew):** Changing `organization_id`, `private_space_id`, `resource_share_id`, or `resource_share_account` forces the connection to be replaced (destroy + create). `routes` is updated in place. Consider `lifecycle { create_before_destroy = true }` so a replacement stands up the new attachment before tearing down the old one.
+-> **Replacement (ForceNew):** Changing `organization_id`, `private_space_id`, `resource_share_id`, or `resource_share_account` forces the connection to be replaced (destroy + create). `routes` is updated in place. Do **not** set `lifecycle { create_before_destroy = true }`: the AWS RAM resource share is exclusive, so creating the replacement before destroying the old attachment fails with `resource share ... already exists`. The default destroy-first order works because the provider's two-step teardown de-registers the share.
 
 ## Import
 

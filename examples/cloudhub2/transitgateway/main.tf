@@ -47,11 +47,12 @@ resource "anypoint_transit_gateway_connection" "main" {
   # change this list and re-apply to replace the full set.
   routes = var.routes
 
-  # Recommended backstop: if a re-create is ever triggered, stand up the new
-  # attachment BEFORE tearing down the old one (avoids a connectivity gap).
-  lifecycle {
-    create_before_destroy = true
-  }
+  # IMPORTANT: do NOT set create_before_destroy on this resource. The AWS RAM
+  # resource share is exclusive — one share backs exactly one attachment — so
+  # standing up a new attachment before destroying the old one fails with
+  # "resource share ... already exists". A replacement must destroy first (the
+  # default order); the provider's two-step teardown de-registers the share so
+  # the replacement can claim it.
 }
 
 output "transit_gateway_status" {

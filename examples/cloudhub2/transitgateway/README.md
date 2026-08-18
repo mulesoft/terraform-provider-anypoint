@@ -43,9 +43,12 @@ recreating it.
 
 Changing any of these forces the connection to be **replaced** (destroy +
 create): `organization_id`, `private_space_id`, `resource_share_id`,
-`resource_share_account`. `routes` is updated in place. The example sets
-`create_before_destroy = true` so a replacement stands up the new attachment
-before tearing down the old one.
+`resource_share_account`. `routes` is updated in place. Do **not** set
+`create_before_destroy` on this resource: the AWS RAM resource share is
+exclusive, so creating the new attachment before destroying the old one fails
+with `resource share ... already exists`. Let the replacement destroy first
+(the default order) — the provider's two-step teardown de-registers the share
+so the new attachment can claim it.
 
 ## Import
 
