@@ -223,11 +223,14 @@ func buildProviderConfig(t *testing.T, model AnypointProviderModel) tfsdk.Config
 	return tfsdk.Config{Schema: s, Raw: raw}
 }
 
-// TestAnypointProvider_Configure_AuthGrantGating locks the fix for the auth footgun:
-// the client picks the OAuth grant by Username presence, so Configure must populate
-// Username/Password ONLY for auth_type = "user". Otherwise a stray ANYPOINT_USERNAME
-// in the environment silently flips a connected_app provider to password grant
-// (live-repro'd on prod as "400 invalid_grant: Application is missing requested grant").
+// TestAnypointProvider_Configure_AuthGrantGating locks the BACKWARD-COMPATIBLE grant
+// selection. The client picks the OAuth grant by Username presence, so Configure must
+// keep populating Username/Password from config-or-env whenever auth_type is NOT the
+// explicit opt-out "connected_app". Gating population on auth_type=="user" (the Aug-18
+// build) silently flipped every user-auth config that omitted auth_type to
+// client_credentials and broke it (W-23914159 / W-23914162). The ONLY case that must
+// drop username is an EXPLICIT auth_type = "connected_app" (the stray-env-username
+// footgun opt-out).
 func TestAnypointProvider_Configure_AuthGrantGating(t *testing.T) {
 	ctx := context.Background()
 
@@ -240,17 +243,30 @@ func TestAnypointProvider_Configure_AuthGrantGating(t *testing.T) {
 		wantPassword string
 	}{
 		{
-			name:        "connected_app default ignores stray env username",
-			envUsername: "stray-env-user",
-			envPassword: "stray-env-pass",
+			// The classic pattern: username/password in config, no auth_type. Must still
+			// select password grant (this is the config shape the Aug-18 build broke).
+			name: "unset auth_type honors config username (backward compat)",
 			model: AnypointProviderModel{
-				ClientID:     stringValue("cc-id"),
-				ClientSecret: stringValue("cc-secret"),
+				ClientID:     stringValue("id"),
+				ClientSecret: stringValue("secret"),
+				Username:     stringValue("cfg-user"),
+				Password:     stringValue("cfg-pass"),
 			},
-			wantUsername: "",
-			wantPassword: "",
+			wantUsername: "cfg-user",
+			wantPassword: "cfg-pass",
 		},
 		{
+			// Env-var-driven user auth with no auth_type — also broke on Aug-18. Restored.
+			name:         "unset auth_type honors env username (backward compat)",
+			envUsername:  "env-user",
+			envPassword:  "env-pass",
+			model:        AnypointProviderModel{ClientID: stringValue("id"), ClientSecret: stringValue("secret")},
+			wantUsername: "env-user",
+			wantPassword: "env-pass",
+		},
+		{
+			// The one opt-out: explicit connected_app forces client_credentials and
+			// ignores any (possibly stray) username in config or environment.
 			name:        "explicit connected_app ignores config and env username",
 			envUsername: "stray-env-user",
 			model: AnypointProviderModel{

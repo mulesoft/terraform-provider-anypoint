@@ -189,10 +189,10 @@ func (p *AnypointProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
+	// Raw value ("" when unset) — do NOT coerce to "connected_app" here: an UNSET
+	// auth_type must preserve the provider's historical grant inference, whereas an
+	// EXPLICIT "connected_app" is a deliberate opt-out (see below).
 	authType := stringValueOrEnv(config.AuthType, "ANYPOINT_AUTH_TYPE")
-	if authType == "" {
-		authType = "connected_app"
-	}
 
 	clientConfig := &client.Config{
 		ClientID:     stringValueOrEnv(config.ClientID, "ANYPOINT_CLIENT_ID"),
@@ -202,14 +202,18 @@ func (p *AnypointProvider) Configure(ctx context.Context, req provider.Configure
 		Cache:        client.NewResponseCache(),
 	}
 
-	// The client picks the OAuth grant purely by Username presence (non-empty =>
-	// password grant, empty => client_credentials). Populate Username/Password ONLY
-	// for auth_type = "user", so a stray ANYPOINT_USERNAME in the environment cannot
-	// silently flip a connected_app provider to password grant (which fails against a
-	// client_credentials-only app with "400 invalid_grant: Application is missing
-	// requested grant"). This matches the schema contract: username is only required
-	// when auth_type is "user".
-	if authType == "user" {
+	// Grant selection preserves the provider's long-standing behavior: the client picks
+	// the OAuth grant by Username presence, and Username/Password come from config or
+	// environment. Every user-auth config has always relied on this — including the many
+	// that never set auth_type (the historical default inferred password grant from a
+	// username alone; gating on auth_type=="user" silently flipped those to
+	// client_credentials and broke them — W-23914159 / W-23914162 read-back drift).
+	//
+	// The ONE opt-out is an EXPLICIT auth_type = "connected_app": it forces
+	// client_credentials and ignores any (possibly stray) ANYPOINT_USERNAME in the
+	// environment. Unset auth_type therefore behaves exactly as before (no regression),
+	// while users who want to hard-pin client_credentials can now do so explicitly.
+	if authType != "connected_app" {
 		clientConfig.Username = stringValueOrEnv(config.Username, "ANYPOINT_USERNAME")
 		clientConfig.Password = stringValueOrEnv(config.Password, "ANYPOINT_PASSWORD")
 	}
