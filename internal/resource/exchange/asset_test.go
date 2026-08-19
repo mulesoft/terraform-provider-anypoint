@@ -495,6 +495,43 @@ func TestNormalizeClassifier_FatPrefix(t *testing.T) {
 	}
 }
 
+// TestDeclaredClassifierPresent locks the W-23914161 hardening: when a multi-file
+// API-spec asset comes back with several classifiers (a RAML rest-api that Exchange
+// also transcodes to oas/fat-oas/...), the readback must recognise that the user's
+// declared classifier really IS one of the returned files and preserve it verbatim,
+// so unstable file ordering across control planes cannot drift "raml" -> "oas".
+func TestDeclaredClassifierPresent(t *testing.T) {
+	// Mirrors the live prod file set for a RAML rest-api publish.
+	ramlRestAPI := []exchange.AssetFile{
+		{Classifier: "fat-oas"},
+		{Classifier: "fat-raml"},
+		{Classifier: "oas"},
+		{Classifier: "original-raml"},
+		{Classifier: "raml"},
+		{Classifier: "rest-api-metadata"},
+	}
+	tests := []struct {
+		name     string
+		files    []exchange.AssetFile
+		declared string
+		want     bool
+	}{
+		{"raml present as own classifier", ramlRestAPI, "raml", true},
+		{"oas present (transcoded sibling)", ramlRestAPI, "oas", true},
+		{"fat-only match via bundled form", []exchange.AssetFile{{Classifier: "fat-raml"}}, "raml", true},
+		{"declared not among files", ramlRestAPI, "wsdl", false},
+		{"empty declared never matches", ramlRestAPI, "", false},
+		{"no files", nil, "raml", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := declaredClassifierPresent(tc.files, tc.declared); got != tc.want {
+				t.Errorf("declaredClassifierPresent(_, %q) = %v; want %v", tc.declared, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestAPIClassifierToUserClassifier verifies the raw inverse used at import time.
 func TestAPIClassifierToUserClassifier(t *testing.T) {
 	cases := map[string]string{

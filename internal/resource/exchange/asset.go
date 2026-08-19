@@ -1505,7 +1505,19 @@ func (r *AssetResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	// heuristic could introduce if the API's file ordering ever changes.
 	if state.AdditionalFiles.IsNull() || state.AdditionalFiles.IsUnknown() {
 		classifier, mainFile := extractFileMetadata(asset.Files)
-		if classifier != "" {
+		declared := ""
+		if !state.Classifier.IsNull() && !state.Classifier.IsUnknown() {
+			declared = state.Classifier.ValueString()
+		}
+		switch {
+		case declaredClassifierPresent(asset.Files, declared):
+			// The user's declared classifier really is one of the returned files, so
+			// keep it verbatim — a multi-file API-spec asset (e.g. a RAML rest-api that
+			// Exchange also transcodes to oas/fat-oas) must never drift to a sibling
+			// classifier just because extractFileMetadata's first-match picked a
+			// differently-ordered file (W-23914161).
+			state.Classifier = types.StringValue(declared)
+		case classifier != "":
 			state.Classifier = types.StringValue(normalizeClassifier(classifier, state.Classifier))
 		}
 		// else: preserve from state (some asset types may not have user-uploaded files)
@@ -1806,9 +1818,24 @@ func (r *AssetResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	// Read for why the first-file heuristic is ambiguous with several user files.
 	if plan.AdditionalFiles.IsNull() || plan.AdditionalFiles.IsUnknown() {
 		classifierVal, mainFileVal := extractFileMetadata(asset.Files)
-		if classifierVal != "" {
+		// The reference for "what the user declared" is the plan value when known,
+		// falling back to prior state (classifier is immutable, so on an in-place
+		// update they are equal anyway).
+		declared := ""
+		if !plan.Classifier.IsNull() && !plan.Classifier.IsUnknown() {
+			declared = plan.Classifier.ValueString()
+		} else if !state.Classifier.IsNull() && !state.Classifier.IsUnknown() {
+			declared = state.Classifier.ValueString()
+		}
+		switch {
+		case declaredClassifierPresent(asset.Files, declared):
+			// Preserve the declared classifier verbatim — see the matching guard in the
+			// Create readback: multi-file API-spec assets must not drift to a sibling
+			// classifier from unstable file ordering (W-23914161).
+			plan.Classifier = types.StringValue(declared)
+		case classifierVal != "":
 			plan.Classifier = types.StringValue(normalizeClassifier(classifierVal, state.Classifier))
-		} else if plan.Classifier.IsUnknown() {
+		case plan.Classifier.IsUnknown():
 			plan.Classifier = types.StringNull()
 		}
 		if mainFileVal != "" {
@@ -2119,6 +2146,34 @@ func extractFileMetadata(files []exchange.AssetFile) (classifier string, mainFil
 		}
 	}
 	return "", ""
+}
+
+// declaredClassifierPresent reports whether the user's declared classifier is
+// actually one of the asset's returned files — either as its own classifier or in
+// the API's bundled "fat-" form.
+//
+// WHY THIS EXISTS: Exchange explodes an API-spec upload into several derived files.
+// A RAML rest-api, for example, comes back as raml, original-raml, oas, fat-oas,
+// fat-raml, rest-api-metadata, ... (confirmed live). extractFileMetadata returns
+// only the FIRST non-generated file with a classifier, and neither the file order
+// nor the per-file IsGenerated flag is guaranteed to be stable across control
+// planes. So the same config that reads back "raml" on one tenant can read back a
+// sibling classifier ("oas") on another, drifting state (W-23914161, seen on STGX
+// but not on prod for identical provider code). When the declared classifier is
+// genuinely present among the returned files we preserve it verbatim; this can only
+// REMOVE that platform-ordering ambiguity, never introduce drift, because it fires
+// only when the user's exact value is really there.
+func declaredClassifierPresent(files []exchange.AssetFile, declared string) bool {
+	if declared == "" {
+		return false
+	}
+	fat := "fat-" + declared
+	for _, f := range files {
+		if f.Classifier == declared || f.Classifier == fat {
+			return true
+		}
+	}
+	return false
 }
 
 // reorderByKey reorders apiItems so their order matches desiredKeys (matched items
