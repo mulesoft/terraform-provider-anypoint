@@ -496,10 +496,13 @@ func (r *MCPBridgeResource) Create(ctx context.Context, req resource.CreateReque
 
 	instance, err := r.client.GetBridge(ctx, orgID, envID, bridge.ID)
 	if err != nil {
-		// The bridge was fully created (instance + upstreams + policies); a failure on
-		// this final readback would otherwise strand it with no TF state. Roll it back
-		// like every other post-publish failure branch (Class J: never orphan).
-		r.cleanupPartialBridge(ctx, orgID, envID, bridge.ID, assetID, version)
+		// The bridge instance + its generated asset are already created on-platform at
+		// this point. Do NOT roll them back on a readback failure: a transient/auth GET
+		// error does not mean the bridge is gone, and deleting the backing asset here can
+		// cascade into dependent resources (mcp_server / api_policy) losing their id on
+		// the same apply (W-23914162). Surface the error and leave the bridge in place so
+		// the next refresh/apply reconciles it (worst case a recoverable orphan, never
+		// destructive data loss).
 		resp.Diagnostics.AddError("Error reading MCP bridge after create", err.Error())
 		return
 	}
