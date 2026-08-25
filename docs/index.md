@@ -38,9 +38,33 @@ The provider supports two authentication modes, selected with `auth_type`:
 
 For `connected_app`, create a [Connected App](https://docs.mulesoft.com/access-management/connected-apps-overview) in your root org with the scopes required for the resources you intend to manage.
 
+### Two Access Management operations require `auth_type = "user"`
+
+| Resource | `connected_app` (client_credentials) |
+|----------|--------------------------------------|
+| `anypoint_role` | Works fully — role groups, `permissions`, `members`. |
+| `anypoint_team` | Create, `members` and reads work; assigning most `roles` returns `403 Forbidden`. |
+| `anypoint_connected_app` | Create returns `403 Not authorized to access this resource`. |
+
+**Adding scopes does not fix this** — verified against a Connected App holding
+**Access Controls Admin**, **Access Controls Viewer** and **View Organization**. The
+same role, with the same `context_params`, assigns to a *role group* but not to a
+*team*: the two endpoints are gated differently. Only *Exchange Viewer*, *Exchange
+Administrator* and *View Organization* can be assigned to a team under
+`client_credentials`.
+
+~> `auth_type = "user"` **still requires a Connected App** — the password grant means
+the app acts *on behalf of* a user. Create it as "acts on behalf of a user" with the
+password grant enabled, or you'll get
+`invalid_grant: Application is missing requested grant`.
+
 ### Control-plane resources need the right scopes (important)
 
-A `client_credentials` Connected App works for **every** resource in this provider — including the CloudHub 2.0 and Gateway control-plane resources — **as long as the Connected App is granted the scopes those APIs require.** A `HTTP 401`/`403` from one of these APIs almost always means the Connected App is **missing a scope**, not that you must switch authentication modes.
+For the CloudHub 2.0 and Gateway control-plane resources, a `client_credentials`
+Connected App works fine **as long as it is granted the scopes those APIs require.** A
+`HTTP 401`/`403` from one of these APIs almost always means the Connected App is
+**missing a scope**, not that you must switch authentication modes. (The Access
+Management operations above are the exception to that rule.)
 
 > Verified live on Anypoint: with a properly scoped `client_credentials` token, `runtimefabric/.../privatespaces`, `gatewaymanager/api/v1/.../gateways`, and `standalone/api/v1/.../gateways` all return `200`. Without the required scopes they return `401`/`403`. Using `auth_type = "user"` tends to "just work" only because a human admin already holds those permissions — it is a convenient alternative, **not a requirement**.
 
@@ -54,7 +78,7 @@ Scopes required by the control-plane API families:
 
 If a `client_credentials` app is missing these scopes, `terraform apply` fails **before creating anything** — the gateway `gateway_id` pre-flight (or the private-space call) returns `401`/`403`. The provider surfaces this as an explicit error naming the scopes to grant, rather than an opaque status code. The fix is to **add the scopes above to your Connected App** (or use `auth_type = "user"` with a user that already has them).
 
-~> **Tip:** you can grant all of the above scopes to a single Connected App and use `auth_type = "connected_app"` everywhere. `auth_type = "user"` remains available as an alternative when you'd rather rely on an existing admin user's permissions.
+~> **Tip:** you can grant all of the above scopes to a single Connected App and use `auth_type = "connected_app"` for every resource **except** `anypoint_connected_app` and `anypoint_team` role assignment, which require `auth_type = "user"` (see above). `auth_type = "user"` also remains available as an alternative anywhere you'd rather rely on an existing admin user's permissions.
 
 ## Schema
 
@@ -65,7 +89,7 @@ If a `client_credentials` app is missing these scopes, `terraform apply` fails *
 
 ### Optional
 
-- `auth_type` (String) – Authentication type. Valid values: `connected_app` (default) for the client-credentials flow, or `user` for the password-grant flow. Both work for all resources; the control-plane resources listed above simply require the appropriate Connected App scopes (see above). May also be provided via `ANYPOINT_AUTH_TYPE`.
+- `auth_type` (String) – Authentication type. Valid values: `connected_app` (default) for the client-credentials flow, or `user` for the password-grant flow. Most resources work with either; `anypoint_connected_app` and `anypoint_team` role assignment **require** `user` (see Authentication above). May also be provided via `ANYPOINT_AUTH_TYPE`.
 - `username` (String) – Username for user authentication (only required when `auth_type = "user"`). May also be provided via `ANYPOINT_USERNAME`.
 - `password` (String, Sensitive) – Password for user authentication (only required when `auth_type = "user"`). May also be provided via `ANYPOINT_PASSWORD`.
 - `base_url` (String) – Anypoint Platform base URL. Defaults to `https://anypoint.mulesoft.com`. Override for EU (`https://eu1.anypoint.mulesoft.com`), GovCloud, or staging environments.
