@@ -9,7 +9,18 @@ description: |-
 
 Manages an Anypoint Platform team.
 
--> **Authentication:** This resource uses client_credentials authentication via the connected app configured in the provider block. No username/password is required.
+~> **Managing `roles` requires `auth_type = "user"`.** Create, `members`, read and import
+work with a `client_credentials` connected app; assigning most `roles` returns `403
+Forbidden` and **adding scopes does not fix it**. Only *Exchange Viewer*, *Exchange
+Administrator* and *View Organization* can be assigned under `client_credentials` —
+Runtime Manager, CloudHub, Design Center, API Manager, Monitoring and others all fail,
+whether organization- or environment-scoped. The symptom is an apply that creates the
+team and then fails with `failed to assign role "...": ... status 403: Forbidden`.
+See [Authentication](../index.md).
+
+-> The same roles assign fine to a **role group** via
+[`anypoint_role`](anypoint_role.md) under `client_credentials`. If you only need to grant
+permissions, that path has no such restriction.
 
 ## Example Usage
 
