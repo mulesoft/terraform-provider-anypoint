@@ -30,16 +30,15 @@ type TransitGatewayDataSourceModel struct {
 }
 
 // TransitGatewayListModel represents a single transit gateway entry.
+//
+// Routes are a plain list of CIDR strings, matching both the resource's `routes`
+// argument and the singular data source, so a value read here can be passed
+// straight back into anypoint_transit_gateway_connection without unwrapping.
 type TransitGatewayListModel struct {
-	ID     types.String               `tfsdk:"id"`
-	Name   types.String               `tfsdk:"name"`
-	Status types.String               `tfsdk:"status"`
-	Routes []TransitGatewayRouteModel `tfsdk:"routes"`
-}
-
-// TransitGatewayRouteModel represents a route on a transit gateway.
-type TransitGatewayRouteModel struct {
-	CIDR types.String `tfsdk:"cidr"`
+	ID     types.String `tfsdk:"id"`
+	Name   types.String `tfsdk:"name"`
+	Status types.String `tfsdk:"status"`
+	Routes types.List   `tfsdk:"routes"`
 }
 
 func NewTransitGatewayDataSource() datasource.DataSource {
@@ -79,17 +78,10 @@ func (d *TransitGatewayDataSource) Schema(_ context.Context, _ datasource.Schema
 							Description: "The current status (e.g. 'Pending', 'Available').",
 							Computed:    true,
 						},
-						"routes": schema.ListNestedAttribute{
-							Description: "The static routes configured on this transit gateway.",
+						"routes": schema.ListAttribute{
+							Description: "The CIDR routes configured on this transit gateway connection.",
 							Computed:    true,
-							NestedObject: schema.NestedAttributeObject{
-								Attributes: map[string]schema.Attribute{
-									"cidr": schema.StringAttribute{
-										Description: "The CIDR block of the route.",
-										Computed:    true,
-									},
-								},
-							},
+							ElementType: types.StringType,
 						},
 					},
 				},
@@ -145,21 +137,25 @@ func (d *TransitGatewayDataSource) Read(ctx context.Context, req datasource.Read
 
 	state.TransitGatewayConnections = []TransitGatewayListModel{}
 	for _, tgw := range tgws {
-		tgwModel := TransitGatewayListModel{
+		// Routes come back on the list response's status.routes field. A nil slice
+		// becomes an empty list rather than null so consumers can iterate without
+		// a null check, matching how the resource reconciles routes.
+		routes := tgw.Status.Routes
+		if routes == nil {
+			routes = []string{}
+		}
+		routesList, diags := types.ListValueFrom(ctx, types.StringType, routes)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		state.TransitGatewayConnections = append(state.TransitGatewayConnections, TransitGatewayListModel{
 			ID:     types.StringValue(tgw.ID),
 			Name:   types.StringValue(tgw.Name),
 			Status: types.StringValue(tgw.Status.Gateway),
-			Routes: []TransitGatewayRouteModel{},
-		}
-
-		// Routes are already in the list response's status.routes field
-		for _, route := range tgw.Status.Routes {
-			tgwModel.Routes = append(tgwModel.Routes, TransitGatewayRouteModel{
-				CIDR: types.StringValue(route),
-			})
-		}
-
-		state.TransitGatewayConnections = append(state.TransitGatewayConnections, tgwModel)
+			Routes: routesList,
+		})
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)

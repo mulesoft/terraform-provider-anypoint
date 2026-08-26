@@ -93,11 +93,73 @@ type ResourceShare struct {
 }
 
 // TransitGatewayStatus holds the runtime status of a transit gateway.
+//
+// TgwResource is the platform's raw value and is NOT a bare identifier — see
+// AWSTransitGatewayID, which is what callers surfacing an AWS transit gateway id
+// should use.
 type TransitGatewayStatus struct {
 	Gateway     string   `json:"gateway"`
 	Attachment  string   `json:"attachment"`
 	TgwResource string   `json:"tgwResource"`
 	Routes      []string `json:"routes"`
+}
+
+// awsTransitGatewayIDParam is the query/fragment parameter carrying the transit
+// gateway id inside the console link the platform returns.
+const awsTransitGatewayIDParam = "transitGatewayId="
+
+// AWSTransitGatewayID returns the bare AWS transit gateway identifier (tgw-...).
+//
+// The platform populates status.tgwResource with an AWS console deep link rather
+// than an identifier, e.g.
+//
+//	https://console.aws.amazon.com/vpc/home?region=us-east-2#TransitGatewayDetails:transitGatewayId=tgw-0abc
+//
+// so the id has to be recovered from the transitGatewayId parameter. It is looked
+// up by substring rather than with net/url because the parameter sits in the URL
+// fragment, not the query string, and the console has moved it between the two
+// before.
+//
+// Two deliberate fallbacks keep this from ever making things worse than the raw
+// value: a string that is already a bare identifier is returned unchanged, and a
+// string matching neither shape is returned as-is. Surfacing the platform's raw
+// value is more useful than an empty string if the console link format changes.
+func (s TransitGatewayStatus) AWSTransitGatewayID() string {
+	raw := strings.TrimSpace(s.TgwResource)
+	if raw == "" || strings.HasPrefix(raw, "tgw-") {
+		return raw
+	}
+
+	idx := strings.Index(raw, awsTransitGatewayIDParam)
+	if idx < 0 {
+		return raw
+	}
+
+	id := raw[idx+len(awsTransitGatewayIDParam):]
+	// The parameter is last in every link observed so far, but trim at the usual
+	// delimiters so it keeps working if another parameter is appended after it.
+	if cut := strings.IndexAny(id, "&;#?/ "); cut >= 0 {
+		id = id[:cut]
+	}
+	if id == "" {
+		return raw
+	}
+	return id
+}
+
+// AWSConsoleURL returns the AWS console deep link for the transit gateway, or an
+// empty string when the platform did not supply one.
+//
+// status.tgwResource carries both an identifier and a console link, and the
+// Anypoint UI presents them as two separate things — the bare id as text next to a
+// "View on AWS" hyperlink. AWSTransitGatewayID recovers the former; this recovers
+// the latter, so extracting the id does not throw the link away.
+func (s TransitGatewayStatus) AWSConsoleURL() string {
+	raw := strings.TrimSpace(s.TgwResource)
+	if strings.HasPrefix(raw, "http://") || strings.HasPrefix(raw, "https://") {
+		return raw
+	}
+	return ""
 }
 
 // CreateTransitGatewayRequest represents the request to create a transit gateway attachment.

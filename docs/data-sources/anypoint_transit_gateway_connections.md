@@ -45,11 +45,15 @@ Read-Only:
 - `id` (String) The unique identifier of the transit gateway connection.
 - `name` (String) The name of the transit gateway connection (attachment).
 - `status` (String) The current status (e.g. `Pending`, `Available`).
-- `routes` (List of Object) The static routes configured on this transit gateway connection. See [`transit_gateway_connections.routes`](#nestedschema--transit_gateway_connections--routes) below.
+- `routes` (List of String) The CIDR routes configured on this transit gateway connection. An empty
+  routes array is returned as an empty list, never null. This is the same shape as the
+  `routes` attribute on the [`anypoint_transit_gateway_connection`](anypoint_transit_gateway_connection)
+  data source and the `anypoint_transit_gateway_connection` resource, so a value read here can be
+  passed directly to the resource without unwrapping:
 
-<a id="nestedschema--transit_gateway_connections--routes"></a>
-### Nested Schema for `transit_gateway_connections.routes`
-
-Read-Only:
-
-- `cidr` (String) The CIDR block of the route.
+```terraform
+resource "anypoint_transit_gateway_connection" "copy" {
+  # ...
+  routes = data.anypoint_transit_gateway_connections.all.transit_gateway_connections[0].routes
+}
+```

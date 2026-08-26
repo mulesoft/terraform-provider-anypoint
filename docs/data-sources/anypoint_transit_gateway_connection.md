@@ -40,7 +40,8 @@ output "connection_region" {
 ### Read-Only
 
 - `name` (String) The name of the transit gateway connection.
-- `aws_transit_gateway_id` (String) The AWS Transit Gateway ID the platform discovered from the resource share.
+- `aws_transit_gateway_id` (String) The AWS Transit Gateway ID the platform discovered from the resource share, as a bare `tgw-...` identifier suitable for passing to the AWS provider.
+- `aws_console_url` (String) Deep link to this transit gateway in the AWS console, matching the Anypoint UI's "View on AWS" link. Empty when the platform does not supply one. Use `aws_transit_gateway_id` for the identifier itself.
 - `resource_share_id` (String) The AWS RAM resource share ID (UUID format).
 - `resource_share_account` (String) The AWS account ID that owns the Transit Gateway.
 - `region` (String) The AWS region of the transit gateway connection.

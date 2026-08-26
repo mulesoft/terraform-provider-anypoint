@@ -138,9 +138,13 @@ func TestTransitGatewaySingleDataSource_Read(t *testing.T) {
 					"region": "us-east-1",
 				},
 				"status": map[string]interface{}{
-					"gateway":     "available",
-					"attachment":  "attached",
-					"tgwResource": "tgw-0abc123",
+					"gateway":    "available",
+					"attachment": "attached",
+					// The platform returns a console deep link here, not a bare id.
+					// Mocking the real shape is what makes the assertion below
+					// meaningful — a bare id would pass whether or not the provider
+					// extracts anything.
+					"tgwResource": "https://console.aws.amazon.com/vpc/home?region=us-east-2#TransitGatewayDetails:transitGatewayId=tgw-0abc123",
 					"routes":      []string{"10.0.0.0/8", "172.16.0.0/12"},
 				},
 			})
@@ -168,6 +172,7 @@ func TestTransitGatewaySingleDataSource_Read(t *testing.T) {
 		"private_space_id":       tftypes.NewValue(tftypes.String, "test-ps-id"),
 		"name":                   tftypes.NewValue(tftypes.String, nil),
 		"aws_transit_gateway_id": tftypes.NewValue(tftypes.String, nil),
+		"aws_console_url":        tftypes.NewValue(tftypes.String, nil),
 		"resource_share_id":      tftypes.NewValue(tftypes.String, nil),
 		"resource_share_account": tftypes.NewValue(tftypes.String, nil),
 		"region":                 tftypes.NewValue(tftypes.String, nil),
@@ -192,9 +197,16 @@ func TestTransitGatewaySingleDataSource_Read(t *testing.T) {
 	if got.Name.ValueString() != "prod-tgw" {
 		t.Errorf("Name = %q, want prod-tgw", got.Name.ValueString())
 	}
-	// The headline richer fields the plural DS omits:
+	// The headline richer fields the plural DS omits. The bare id is expected even
+	// though the mock returns a console link: an aws_transit_gateway_id holding a
+	// URL cannot be handed to the AWS provider, which is the whole point of it.
 	if got.AwsTransitGatewayID.ValueString() != "tgw-0abc123" {
 		t.Errorf("AwsTransitGatewayID = %q, want tgw-0abc123", got.AwsTransitGatewayID.ValueString())
+	}
+	// The link the id was extracted from is preserved rather than discarded.
+	wantURL := "https://console.aws.amazon.com/vpc/home?region=us-east-2#TransitGatewayDetails:transitGatewayId=tgw-0abc123"
+	if got.AwsConsoleURL.ValueString() != wantURL {
+		t.Errorf("AwsConsoleURL = %q, want %q", got.AwsConsoleURL.ValueString(), wantURL)
 	}
 	if got.ResourceShareID.ValueString() != "share-uuid" {
 		t.Errorf("ResourceShareID = %q, want share-uuid", got.ResourceShareID.ValueString())
@@ -253,6 +265,7 @@ func TestTransitGatewaySingleDataSource_Read_NotFound(t *testing.T) {
 		"private_space_id":       tftypes.NewValue(tftypes.String, "test-ps-id"),
 		"name":                   tftypes.NewValue(tftypes.String, nil),
 		"aws_transit_gateway_id": tftypes.NewValue(tftypes.String, nil),
+		"aws_console_url":        tftypes.NewValue(tftypes.String, nil),
 		"resource_share_id":      tftypes.NewValue(tftypes.String, nil),
 		"resource_share_account": tftypes.NewValue(tftypes.String, nil),
 		"region":                 tftypes.NewValue(tftypes.String, nil),
