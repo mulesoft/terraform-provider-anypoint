@@ -39,15 +39,46 @@ terraform apply
   `version` form the GAV identity; changing any of them (or `type`) replaces the
   asset. Publish a new `version` instead of mutating a published one.
 - **Classifier normalization.** Set the user-facing `classifier` (e.g. `oas`).
-  Exchange stores it bundled as `fat-oas`; the provider strips the prefix on read
-  so there is no perpetual plan diff.
-- **Classifier is the FILE kind, not the type.** For spec assets the `classifier`
-  is usually different from `type`: `rest-api`→`oas`/`raml`, `soap-api`→`wsdl`,
-  `graphql-api`→`graphql`, `grpc-api`→`proto`. The one that trips people up is
-  **AsyncAPI**: `type = "evented-api"` uses `classifier = "evented-api"` (same
-  string) — `classifier = "asyncapi"` is rejected with
-  `400 COULD_NOT_DETERMINE_ASSET_TYPE`. `evented-api`, `rest-api`, and `grpc-api`
-  also require `api_version` at create.
+  Exchange generates several derived copies of every upload and prefixes them —
+  `fat-` (bundled), `light-` (trimmed) and `original-` (verbatim). The provider
+  strips all three on read, so there is no perpetual plan diff and no spurious
+  forced replacement after `terraform import`.
+- **Classifier is the FILE kind, not the type**, and the FILE EXTENSION matters too
+  (the upload is sent as `files.{classifier}.{ext}` and Exchange validates `{ext}`).
+
+  | `type` | `classifier` | file ext | `api_version` at create? |
+  |---|---|---|---|
+  | `rest-api` | `oas` or `raml` | `.json` / `.raml` | **yes** |
+  | `soap-api` | `wsdl` | `.wsdl` | **yes** |
+  | `graphql-api` | `graphql` | `.graphql` | no |
+  | `evented-api` | `evented-api` | **`.yaml` or `.zip` only** | **yes** |
+  | `ruleset` | `ruleset` | `.yaml` | no |
+  | `custom` | `custom` | any (file optional) | no |
+  | `http-api` / `mcp` / `llm` | — (no file) | — | `http-api` **yes**, others no |
+  | `app` | `mule-application` | `.jar` | no |
+  | `template` | `mule-application-template` | `.jar` | no |
+  | `example` | `mule-application-example` | `.jar` | no |
+  | `connector` | `mule-plugin` | `.jar` | no |
+  | `policy` | `schema` + `metadata` (**two files**) | `.json` + `.yaml` | no |
+  | `raml-fragment` | `raml-fragment` | `.raml` | no |
+  | `agent` | `a2a-card` | `.json` | no |
+  | `grpc-api` | `protobuf` | `.proto` or `.zip` | **yes** |
+
+  Two that trip people up: **AsyncAPI** uses `classifier = "evented-api"` (the same
+  string as the type) — `asyncapi` is rejected with
+  `400 COULD_NOT_DETERMINE_ASSET_TYPE` — and it only accepts `.yaml` or `.zip`, so a
+  `.json` AsyncAPI spec fails with `400 MISSING_FILES_ERROR`.
+
+- **JAR-backed types need a real Mule descriptor inside the jar.** `app`, `template`,
+  `example` and `connector` fail with `400 INVALID_ASSET_METADATA: "Could not find
+  mule-artifact file inside jar file"` unless the jar contains
+  `META-INF/mule-artifact/mule-artifact.json` (plus `classloader-model.json` for
+  `example`). Use the artifact your Mule build produces.
+- **`policy` is the multi-file case.** Publish the JSON schema as `file_path`
+  (`classifier = "schema"`) and the metadata YAML via `additional_file`
+  (`classifier = "metadata"`). The YAML must start with `#%Policy Definition 0.1`,
+  its `name:` must exactly equal the resource's `name`, and its `type:` must be an
+  allowed value such as `custom`. See `exchange_asset_example.tf`.
 - **mule-plugin family uses `type = "extension"`.** Exchange stores the whole
   mule-plugin family (policies and connectors, `classifier = "mule-plugin"`)
   under the generic `extension` super-type. Declare `type = "extension"` — it is

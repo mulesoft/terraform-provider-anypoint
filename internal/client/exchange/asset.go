@@ -904,6 +904,55 @@ type UpdateExternalInstanceRequest struct {
 	IsPublic    *bool  `json:"isPublic,omitempty"`
 }
 
+// ListExternalInstances returns the non-managed (external) instances attached to an
+// asset's version group.
+// API: GET /exchange/api/v2/assets/{groupId}/{assetId}/versionGroups/{versionGroup}/instances
+//
+// This is the AUTHORITATIVE source for external instances. The main asset GET carries an
+// `instances` array too, but it is not populated for every asset type — a `custom` asset
+// with live external instances reports `instances: []` on the asset GET while this
+// endpoint returns them correctly. Reading the asset's inline array made a freshly
+// created instance look like it had vanished, failing the apply with
+// "Provider produced inconsistent result after apply: .instances: element 0 has vanished".
+func (c *AssetClient) ListExternalInstances(ctx context.Context, groupID, assetID, versionGroup string) ([]ExternalInstance, error) {
+	url := fmt.Sprintf("%s/exchange/api/v2/assets/%s/%s/versionGroups/%s/instances",
+		c.BaseURL, groupID, assetID, versionGroup)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil // no version group / no instances yet
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to list external instances with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var all []ExternalInstance
+	if err := json.NewDecoder(resp.Body).Decode(&all); err != nil {
+		return nil, fmt.Errorf("failed to decode external instances response: %w", err)
+	}
+
+	// The endpoint returns managed instances too; only "external" ones are ours.
+	out := make([]ExternalInstance, 0, len(all))
+	for _, inst := range all {
+		if inst.Type == "" || inst.Type == "external" {
+			out = append(out, inst)
+		}
+	}
+	return out, nil
+}
+
 // CreateExternalInstance creates a non-managed external instance for an asset version group.
 // API: POST /exchange/api/v2/assets/{groupId}/{assetId}/versionGroups/{versionGroup}/instances/external
 func (c *AssetClient) CreateExternalInstance(ctx context.Context, groupID, assetID, versionGroup string, req *CreateExternalInstanceRequest) (*ExternalInstance, error) {

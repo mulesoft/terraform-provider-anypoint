@@ -18,7 +18,7 @@
 #
 # ----------------------------------------------------------------------------
 # THREE scopes — the platform does NOT store every field per-version. There are
-# three tiers, all live-verified against production:
+# three tiers:
 #
 #   1. VERSION scope (independent per GAV): file_path, classifier, api_version,
 #      status. `status` has its own per-version endpoint, so deprecating 1.0.0
@@ -72,10 +72,10 @@ locals {
       major     = "1"
       file_path = "test-assets/petstore.json"
       status    = "published"
-      # api_version is REQUIRED at create for rest-api, evented-api, and
-      # grpc-api (live-verified). Omitting it makes the publish fail with
+      # api_version is REQUIRED at create for rest-api, soap-api, evented-api,
+      # grpc-api and http-api. Omitting it makes the publish fail with
       # `400 MISSING_REQUIRED_PROPERTIES: apiVersion`, and the provider blocks it
-      # at plan time. (soap-api/graphql-api need a spec FILE but not api_version.)
+      # at plan time. (graphql-api needs a spec FILE but not api_version.)
       # It is the human-facing API contract version (distinct from the GAV
       # `version`) and IS per-version.
       api_version = "v1"

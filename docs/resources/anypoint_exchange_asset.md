@@ -154,11 +154,11 @@ resource "anypoint_exchange_asset" "petstore" {
 }
 ```
 
-**Caveats** (all verified against the live platform):
+**Caveats:**
 
 1. **Group-scoped fields must be identical across every entry.** `name`, `description`, `contact_name`, `contact_email`, and `manager` are stored **once per asset**, not per version. If entries disagree, the platform silently keeps the existing group value and drops the others. Factor them into `locals` (as above) so they can never drift apart.
 2. **`tags` and external `instances` are shared within a major version — source them from the major, not the patch.** Exchange stores labels **once per version-group (major line)**, so `1.0.0` and `1.0.1` share one tag set and the **last publish wins**. If two same-major entries set different tags they silently clobber each other, and the loser then shows perpetual drift on every `plan`. Keying tags off the major (as above) makes disagreement impossible. Only `file_path` / `classifier` / `api_version` / `status` may safely differ between two versions that share a major.
-3. **`api_version` is required at create for `rest-api`, `evented-api`, and `grpc-api`.** Omitting it fails the publish with `400 MISSING_REQUIRED_PROPERTIES: apiVersion`, and the provider blocks it at **plan** time for these three types. (`soap-api` and `graphql-api` need a spec *file* but not `api_version`.) It is the human-facing API contract version, distinct from the GAV `version`, and is version-scoped — so it may legitimately differ between two versions that share a major.
+3. **`api_version` is required at create for `rest-api`, `soap-api`, `evented-api`, `grpc-api` and `http-api`.** Omitting it fails the publish with `400 MISSING_REQUIRED_PROPERTIES: apiVersion`, and the provider blocks it at **plan** time for these five types. (`graphql-api` needs a spec *file* but not `api_version`; note `http-api` needs `api_version` despite having no file at all.) It is the human-facing API contract version, distinct from the GAV `version`, and is version-scoped — so it may legitimately differ between two versions that share a major.
 4. **`version` is replacement-forcing, so editing a version string in place is destructive.** Prefer adding/removing map keys (purely additive / version-scoped delete). When you must bump a version, `create_before_destroy = true` publishes the new GAV before hard-deleting the old one (safe because a version bump yields a distinct, coexisting GAV), and the `status` `OneOf` validator catches typos like `"Published"` at **plan** time — before any destroy runs.
 
 ## Schema
@@ -173,27 +173,73 @@ resource "anypoint_exchange_asset" "petstore" {
 
 ### Optional
 
-- `type` (String) The Exchange asset type. This is a **free-form** value forwarded as-is to Exchange — it is **not** restricted to a fixed enum, so any type Exchange accepts works. Common values: `custom`, `rest-api`, `http-api`, `evented-api` (AsyncAPI), `graphql-api`, `grpc-api`, `soap-api`, `connector`, `app`, `template`, `example`, `policy`, `ruleset`, `agent`, `llm`, `mcp`, `extension`. API-spec **fragments** (RAML/OAS fragments) are not a distinct type — publish them as an API-spec asset and select the fragment via `classifier` (e.g. `raml-fragment`, `oas-fragment`/`oas-components`). The **mule-plugin family** (a JAR with classifier `mule-plugin`, e.g. a `policy` or `connector`) is stored by Exchange under the single super-type **`extension`**. The recommended, canonical value is `type = "extension"` (it is what Exchange stores, so it round-trips through `terraform import` identically); the provider **also** accepts the semantic `policy`/`connector` and preserves them with no drift. A bare `terraform import` of such an asset surfaces the stored `extension` (the semantic sub-type cannot be recovered from the API); you can then set `type = "policy"` (or `connector`) in config and the provider treats it as the **same** asset — the change reconciles in place, **not** a destroy+recreate, because both normalize to `extension`.
+- `type` (String) The Exchange asset type. This is a **free-form** value forwarded as-is to Exchange — it is **not** restricted to a fixed enum, so any type Exchange accepts works. Common values: `custom`, `rest-api`, `http-api`, `evented-api` (AsyncAPI), `graphql-api`, `grpc-api`, `soap-api`, `connector`, `app`, `template`, `example`, `policy`, `ruleset`, `agent`, `llm`, `mcp`, `extension`. RAML **fragments** are their own asset type: set `type = "raml-fragment"` with `classifier = "raml-fragment"`. The **mule-plugin family** (a JAR with classifier `mule-plugin`, e.g. a `policy` or `connector`) is stored by Exchange under the single super-type **`extension`**. The recommended, canonical value is `type = "extension"` (it is what Exchange stores, so it round-trips through `terraform import` identically); the provider **also** accepts the semantic `policy`/`connector` and preserves them with no drift. A bare `terraform import` of such an asset surfaces the stored `extension` (the semantic sub-type cannot be recovered from the API); you can then set `type = "policy"` (or `connector`) in config and the provider treats it as the **same** asset — the change reconciles in place, **not** a destroy+recreate, because both normalize to `extension`.
 - `status` (String) The lifecycle status of this asset **version**. One of `development`, `published` (default), or `deprecated`. **Case-sensitive** (`Published` is rejected). The Exchange API is asymmetric — validated both at plan time (via a `OneOf` validator) and by a plan-time guard: `development` is accepted **only when first publishing a version** and *cannot* be set on an existing version (the platform rejects an in-place change to `development` with HTTP 400); `deprecated` can only be set on an existing version, not at initial publish; `published` is valid in both cases. To move a published version back to `development`, publish a new version (bump `version`) rather than editing status in place.
 - `description` (String) A description of the asset. **Group-scoped** — shared across all versions of the asset (see the multi-version note below).
 - `keywords` (String) Comma-separated keywords for search discovery.
 - `contact_name` (String) Contact person name for this asset. **Group-scoped** — shared across all versions.
 - `contact_email` (String) Contact email for this asset. **Group-scoped** — shared across all versions.
-- `api_version` (String) The API version (`properties.apiVersion`), e.g. `v1`. REQUIRED at create for the API-spec types `rest-api`, `evented-api`, and `grpc-api` — publishing one of these without api_version fails with `400 MISSING_REQUIRED_PROPERTIES: apiVersion`. This is the human-facing API contract version, distinct from the immutable GAV `version`.
-- `classifier` (String) The **file** classifier (the file kind, *not* the asset type — for the spec types it does not equal `type`). Required when `file_path` is set. Fragment assets are published by setting this to a fragment classifier (e.g. `raml-fragment`). Exchange bundles the spec and stores it as `fat-<classifier>`; the provider normalizes it back on read. Type → classifier mapping:
+- `api_version` (String) The API version (`properties.apiVersion`), e.g. `v1`. REQUIRED at create for `rest-api`, `soap-api`, `evented-api`, `grpc-api` and `http-api` — publishing one of these without api_version fails with `400 MISSING_REQUIRED_PROPERTIES: apiVersion`. This is the human-facing API contract version, distinct from the immutable GAV `version`.
+- `classifier` (String) The **file** classifier (the file kind, *not* the asset type — for the spec types it does not equal `type`). Required when `file_path` is set. RAML fragments use `type = "raml-fragment"` with `classifier = "raml-fragment"`; agent cards use `classifier = "a2a-card"`. Exchange bundles the spec and stores it as `fat-<classifier>`; the provider normalizes it back on read. Type → classifier mapping:
 
-  | `type`        | `classifier`                          | file? | `api_version` at create? |
-  |---------------|---------------------------------------|-------|--------------------------|
-  | `rest-api`    | `oas` or `raml`                       | yes   | yes                      |
-  | `soap-api`    | `wsdl`                                | yes   | no                       |
-  | `graphql-api` | `graphql`                             | yes   | no                       |
-  | `grpc-api`    | `proto`                               | yes   | yes                      |
-  | `evented-api` | `evented-api` (**not** `asyncapi`)    | yes   | yes                      |
-  | `http-api`    | — (metadata-only, no file)            | no    | yes                      |
-  | `custom`      | `custom`                              | opt.  | no                       |
-  | fragments     | `raml-fragment`, `oas-fragment`/`oas-components` | yes | no             |
+  The `classifier` determines how Exchange interprets the upload, and the **file
+  extension matters too** — the file is sent as `files.{classifier}.{ext}` and Exchange
+  validates both parts.
 
-  > **AsyncAPI gotcha:** the `evented-api` classifier is literally `evented-api` (Exchange stores it as `fat-evented-api`). Passing `classifier = "asyncapi"` fails with `400 COULD_NOT_DETERMINE_ASSET_TYPE`.
+  | `type`        | `classifier`                       | file? | `api_version`? | file extension |
+  |---------------|------------------------------------|-------|----------------|----------------|
+  | `rest-api`    | `oas` or `raml`                    | yes   | **yes**        | `.json` / `.raml` |
+  | `soap-api`    | `wsdl`                             | yes   | **yes**        | `.wsdl`        |
+  | `graphql-api` | `graphql`                          | yes   | no             | `.graphql`     |
+  | `evented-api` | `evented-api` (**not** `asyncapi`) | yes   | **yes**        | `.yaml` or `.zip` |
+  | `grpc-api`    | `protobuf`                         | yes   | **yes**        | `.proto` / `.zip` |
+  | `ruleset`     | `ruleset`                          | yes   | no             | `.yaml`        |
+  | `custom`      | `custom`                           | optional | no          | any            |
+  | `http-api`    | — (metadata-only)                  | no    | **yes**        | —              |
+  | `mcp`         | — (metadata-only)                  | no    | no             | —              |
+  | `llm`         | — (metadata-only)                  | no    | no             | —              |
+  | `app`         | `mule-application`                 | yes   | no             | `.jar`         |
+  | `template`    | `mule-application-template`        | yes   | no             | `.jar`         |
+  | `example`     | `mule-application-example`         | yes   | no             | `.jar`         |
+  | `connector`   | `mule-plugin` (stored as `extension`) | yes | no          | `.jar`         |
+  | `policy`      | `schema` + `metadata` (two files)  | yes   | no             | `.json` + `.yaml` |
+  | `raml-fragment` | `raml-fragment`                  | yes   | no             | `.raml`        |
+  | `agent`       | `a2a-card`                         | yes   | no             | `.json`        |
+
+  > **AsyncAPI:** use `classifier = "evented-api"` — the same string as the type.
+  > `asyncapi` is rejected with `400 COULD_NOT_DETERMINE_ASSET_TYPE`. The extension is
+  > checked as well, so a `.json` AsyncAPI spec fails with `400 MISSING_FILES_ERROR`;
+  > supply `.yaml` or a `.zip` bundle.
+
+  > **gRPC:** use `classifier = "protobuf"`. Upload a bare `.proto`, or a `.zip`
+  > containing at least one `.proto` in its root directory.
+
+  > **RAML fragments are their own asset type**, not a classifier on an API-spec asset:
+  > set `type = "raml-fragment"` together with `classifier = "raml-fragment"` and upload
+  > the fragment `.raml` (a trait, resource type, library, data type, and so on).
+
+  > **`agent`** publishes an A2A agent card as JSON with `classifier = "a2a-card"`.
+
+  > **`app` / `template` / `example` / `connector`** upload a Mule `.jar` that must
+  > contain `META-INF/mule-artifact/mule-artifact.json` (and, for `example`, also
+  > `classloader-model.json`) — use the artifact your Mule build produces. A jar without
+  > them fails with
+  > `400 INVALID_ASSET_METADATA: "Could not find mule-artifact file inside jar file"`.
+
+  > **`policy`** publishes **two** files in one request — the JSON schema as `file_path`
+  > with `classifier = "schema"`, plus the metadata YAML via `additional_file` with
+  > `classifier = "metadata"`. The metadata file must start with the header
+  > `#%Policy Definition 0.1`, its `name:` must exactly equal the resource's `name`, and
+  > its `type:` must be one of the platform's allowed values (e.g. `custom`). See the
+  > policy example below.
+
+  > **Classifier normalization on read.** Exchange generates several derived copies of
+  > every uploaded file and prefixes them: `fat-` (bundled, dependencies inlined),
+  > `light-` (trimmed) and `original-` (the verbatim upload). The provider strips all
+  > three, so `classifier` round-trips to the value you declared — no perpetual diff and
+  > no spurious forced replacement after `terraform import`. A `soap-api` whose API
+  > classifier is `original-wsdl` settles as `wsdl`.
+
 - `file_path` (String) Path to the file to upload (JAR, ZIP, RAML, OAS, etc.). Used only at creation time. After import, one apply settles this field (non-destructive). Changing to a different value triggers replacement.
 - `main_file` (String) The main file within the uploaded archive (`properties.mainFile`). Used for multi-file specs.
 - `additional_file` (Block List) Extra files uploaded **alongside** `file_path` in the *same* publish request, for multi-file asset types. The canonical case is a mule-plugin (`type = "extension"`, e.g. a policy), which requires two files — e.g. `(mule-policy.jar + policy-definition.yaml)` or `(schema.json + metadata.yaml)`. Like `file_path`, this is a create-time, upload-only field (preserved from state on read, never reconciled from the API) and is **replacement-forcing** — except the non-destructive null→value settle on the first apply after import. See [`additional_file`](#nestedschema--additional_file) below.
@@ -313,7 +359,9 @@ resource "anypoint_exchange_asset" "policy" {
 
 An existing Exchange asset version can be imported using its composite ID: `group_id/asset_id/version` (`group_id` is usually the organization ID).
 
-On import the provider reads the live asset and seeds the immutable fields (`classifier`, `main_file`, `api_version`) and external instances into state, so the first plan after import shows zero drift. The local `file_path` settles on the next apply without recreating the asset.
+On import the provider reads the live asset and seeds the immutable fields (`classifier`, `main_file`, `api_version`) and external instances into state, so **nothing is planned for replacement**. Exchange returns derived copies of the uploaded classifier (`fat-`, `light-`, `original-`); the provider normalizes all three back to the value you declared, so e.g. a `soap-api` whose API classifier is `original-wsdl` settles as `wsdl` rather than forcing a destroy-and-recreate.
+
+The first plan after import therefore shows exactly **one in-place change per file-backed asset** — `file_path` moving from null to the value in your config, plus `updated_date` becoming "known after apply". `file_path` is a path on your machine that Exchange never stores, so it cannot be read back on import; one apply settles it permanently and the next plan is clean. Fileless types (`custom`, `http-api`, `mcp`, `llm`) import with no diff at all.
 
 ### Using an import block (Terraform ≥ 1.5 — recommended)
 
