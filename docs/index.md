@@ -46,12 +46,11 @@ For `connected_app`, create a [Connected App](https://docs.mulesoft.com/access-m
 | `anypoint_team` | Create, `members` and reads work; assigning most `roles` returns `403 Forbidden`. |
 | `anypoint_connected_app` | Create returns `403 Not authorized to access this resource`. |
 
-**Adding scopes does not fix this** — verified against a Connected App holding
-**Access Controls Admin**, **Access Controls Viewer** and **View Organization**. The
-same role, with the same `context_params`, assigns to a *role group* but not to a
-*team*: the two endpoints are gated differently. Only *Exchange Viewer*, *Exchange
-Administrator* and *View Organization* can be assigned to a team under
-`client_credentials`.
+**Adding scopes does not change this.** Even a Connected App holding **Access Controls
+Admin**, **Access Controls Viewer** and **View Organization** is refused: the same role,
+with the same `context_params`, assigns to a *role group* but not to a *team*, because
+the two endpoints are gated differently. Only *Exchange Viewer*, *Exchange Administrator*
+and *View Organization* can be assigned to a team under `client_credentials`.
 
 ~> `auth_type = "user"` **still requires a Connected App** — the password grant means
 the app acts *on behalf of* a user. Create it as "acts on behalf of a user" with the

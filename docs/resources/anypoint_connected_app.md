@@ -11,8 +11,8 @@ Creates and manages an Anypoint Connected Application. Connected apps provide a 
 
 ~> **This resource requires `auth_type = "user"`.** A `client_credentials` principal
 cannot create a connected app — the create fails with `403: Not authorized to access this
-resource`, before scopes are ever applied. **Adding scopes does not fix it** (verified
-against an app holding **Access Controls Admin**). Configure the provider with
+resource`, before scopes are ever applied. **Adding scopes does not change this** — not even
+**Access Controls Admin**. Configure the provider with
 `auth_type = "user"` as shown below; that still requires a connected app created as "acts
 on behalf of a user" with the password grant enabled.
 See [Authentication](../index.md).
