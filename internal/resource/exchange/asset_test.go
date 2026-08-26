@@ -1778,11 +1778,19 @@ func TestAssetResource_ModifyPlan_VersionCollisionGuard(t *testing.T) {
 // apiVersion not confirmed mandatory) or are fileless and unrelated; blocking any of them
 // would be a false positive. The lookup must normalize case and surrounding whitespace.
 func TestAssetTypeRequiresAPIVersion(t *testing.T) {
-	requires := []string{"rest-api", "evented-api", "grpc-api"}
-	// Types the allowlist must NEVER block. soap-api/graphql-api are deliberately here:
-	// they are file-backed (so the file_path guard covers them) but their apiVersion
-	// requirement is not confirmed, so this guard must leave them alone.
-	notRequired := []string{"soap-api", "graphql-api", "custom", "app", "template", "policy", "ruleset", "llm", "mcp", "http-api", "", "some-future-type"}
+	// http-api added 2026-08-26: live-verified on PROD with a control — publishing
+	// type=http-api WITHOUT properties.apiVersion returns 400 MISSING_REQUIRED_PROPERTIES,
+	// while the byte-identical request WITH apiVersion=v1 returns 201. It is fileless AND
+	// requires an apiVersion, which is why it was previously (wrongly) excluded.
+	// http-api and soap-api added 2026-08-26, both live-verified on PROD with controls:
+	// publishing either without properties.apiVersion returns 400
+	// MISSING_REQUIRED_PROPERTIES naming apiVersion, and the same config WITH
+	// api_version publishes 201. soap-api was verified through a real terraform apply.
+	requires := []string{"rest-api", "evented-api", "grpc-api", "http-api", "soap-api"}
+	// Types the allowlist must NEVER block — all live-verified 2026-08-26 to publish
+	// successfully with NO api_version set (graphql-api via terraform apply; custom /
+	// mcp / llm likewise). Blocking any of them would be a false positive.
+	notRequired := []string{"graphql-api", "custom", "app", "template", "policy", "ruleset", "llm", "mcp", "", "some-future-type"}
 
 	for _, ty := range requires {
 		if !assetTypeRequiresAPIVersion(ty) {
@@ -1798,7 +1806,10 @@ func TestAssetTypeRequiresAPIVersion(t *testing.T) {
 	if !assetTypeRequiresAPIVersion("  Rest-API  ") {
 		t.Error("assetTypeRequiresAPIVersion should normalize case+whitespace for an API-spec type")
 	}
-	if assetTypeRequiresAPIVersion("  SOAP-API  ") {
+	if !assetTypeRequiresAPIVersion("  SOAP-API  ") {
+		t.Error("assetTypeRequiresAPIVersion should normalize case+whitespace for soap-api (now on the allowlist)")
+	}
+	if assetTypeRequiresAPIVersion("  GraphQL-API  ") {
 		t.Error("assetTypeRequiresAPIVersion should normalize case+whitespace for an excluded type (must stay false)")
 	}
 }
@@ -1927,11 +1938,14 @@ func TestAssetResource_ModifyPlan_APIVersionGuard(t *testing.T) {
 			wantErr:   false,
 		},
 		{
-			name:      "create soap-api without api_version is allowed (not on allowlist)",
+			// Was "allowed (not on allowlist)" until 2026-08-26, when a real terraform
+			// apply proved the platform rejects a wsdl publish with
+			// 400 MISSING_REQUIRED_PROPERTIES: ["apiVersion"]. Now guarded.
+			name:      "create soap-api without api_version is blocked",
 			planRaw:   obj("1.0.0", "soap-api", unknown),
 			configRaw: obj("1.0.0", "soap-api", nullStr),
 			stateRaw:  nullObj,
-			wantErr:   false,
+			wantErr:   true,
 		},
 		{
 			name:      "create graphql-api without api_version is allowed (not on allowlist)",
@@ -3884,4 +3898,225 @@ func equalStringSets(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// TestAssetReplaceTriggered_CoversEveryReplaceForcingAttribute pins assetReplaceTriggered
+// against the schema's replace-forcing plan modifiers. The helper used to compare only
+// org/group/asset/version/type, but file_path, classifier, keywords, api_version,
+// main_file and additional_file each carry their own RequiresReplace*ExceptOnImport
+// modifier. When one of those changed alone, Terraform really replaced the asset while
+// ModifyPlan still believed it was an in-place update, so:
+//   - the file_path / api_version guards were skipped and the recreate published with no
+//     file — Exchange destroys the old version and 400s the create, losing the asset; and
+//   - fillComputedChildrenFromState ran and copied the OLD version's page_path /
+//     instance_id into the plan → "Provider produced inconsistent result after apply".
+//
+// The type case is the inverse failure: type uses RequiresReplaceOnTypeChange, which
+// compares the API-NORMALIZED type, so the mule-plugin aliases (policy/connector both
+// store as "extension") must NOT count as a replace — a raw string compare would flag the
+// standard import-then-declare-`type = "policy"` reconcile as a replace and fire the
+// guards on a plan that is actually in place.
+func TestAssetReplaceTriggered_CoversEveryReplaceForcingAttribute(t *testing.T) {
+	// base is a fully-KNOWN prior state: every replace-forcing attribute is non-null, so
+	// the except-on-import carve-out is not in play and a differing plan is a real change.
+	base := func() AssetResourceModel {
+		return AssetResourceModel{
+			OrganizationID:  types.StringValue("org"),
+			GroupID:         types.StringValue("grp"),
+			AssetID:         types.StringValue("asset"),
+			Version:         types.StringValue("1.0.0"),
+			Type:            types.StringValue("rest-api"),
+			FilePath:        types.StringValue("spec.json"),
+			Classifier:      types.StringValue("oas"),
+			Keywords:        types.StringValue("a,b"),
+			APIVersion:      types.StringValue("v1"),
+			MainFile:        types.StringValue("spec.json"),
+			AdditionalFiles: makeAdditionalFileList(t, [2]string{"specs/metadata.yaml", "metadata"}),
+		}
+	}
+
+	tests := []struct {
+		name    string
+		mutate  func(*AssetResourceModel)
+		want    bool
+		wantWhy string
+	}{
+		{name: "no change is an in-place update", mutate: func(*AssetResourceModel) {}, want: false},
+
+		// Identity attributes (plain RequiresReplace) — the cases already covered.
+		{name: "organization_id change replaces", mutate: func(m *AssetResourceModel) { m.OrganizationID = types.StringValue("org2") }, want: true},
+		{name: "group_id change replaces", mutate: func(m *AssetResourceModel) { m.GroupID = types.StringValue("grp2") }, want: true},
+		{name: "asset_id change replaces", mutate: func(m *AssetResourceModel) { m.AssetID = types.StringValue("asset2") }, want: true},
+		{name: "version bump replaces", mutate: func(m *AssetResourceModel) { m.Version = types.StringValue("2.0.0") }, want: true},
+
+		// The six the helper used to miss — each one alone must be detected.
+		{name: "file_path change replaces", mutate: func(m *AssetResourceModel) { m.FilePath = types.StringValue("other.json") }, want: true,
+			wantWhy: "file_path is RequiresReplaceExceptOnImport"},
+		{name: "classifier change replaces", mutate: func(m *AssetResourceModel) { m.Classifier = types.StringValue("raml") }, want: true,
+			wantWhy: "classifier is RequiresReplaceExceptOnImport"},
+		{name: "keywords change replaces", mutate: func(m *AssetResourceModel) { m.Keywords = types.StringValue("a,b,c") }, want: true,
+			wantWhy: "keywords is RequiresReplaceExceptOnImport"},
+		{name: "api_version change replaces", mutate: func(m *AssetResourceModel) { m.APIVersion = types.StringValue("v2") }, want: true,
+			wantWhy: "api_version is RequiresReplaceExceptOnImport"},
+		{name: "main_file change replaces", mutate: func(m *AssetResourceModel) { m.MainFile = types.StringValue("other.json") }, want: true,
+			wantWhy: "main_file is RequiresReplaceExceptOnImport"},
+		{name: "additional_file change replaces", mutate: func(m *AssetResourceModel) {
+			m.AdditionalFiles = makeAdditionalFileList(t, [2]string{"specs/other.yaml", "metadata"})
+		}, want: true, wantWhy: "additional_file is RequiresReplaceListExceptOnImport"},
+
+		// Post-import settle: prior state null → the except-on-import modifiers do NOT
+		// replace, so neither may this helper (that settle is non-destructive).
+		{name: "null prior file_path settling to a value is NOT a replace (post-import)", mutate: func(m *AssetResourceModel) {
+			m.FilePath = types.StringValue("spec.json")
+		}, want: false, wantWhy: "except-on-import: null->value must not replace"},
+		{name: "null prior additional_file settling to a value is NOT a replace (post-import)", mutate: func(m *AssetResourceModel) {
+			m.AdditionalFiles = makeAdditionalFileList(t, [2]string{"specs/metadata.yaml", "metadata"})
+		}, want: false, wantWhy: "except-on-import: null->value must not replace"},
+
+		// Unknown/omitted plan values are never a change (an unresolved computed value
+		// must not be mistaken for an edit).
+		{name: "unknown planned classifier is not a replace", mutate: func(m *AssetResourceModel) { m.Classifier = types.StringUnknown() }, want: false},
+		{name: "omitted (null) planned keywords is not a replace", mutate: func(m *AssetResourceModel) { m.Keywords = types.StringNull() }, want: false},
+
+		// type: normalized compare (mule-plugin family all stores as "extension").
+		{name: "extension -> policy is NOT a replace (same stored super-type)", mutate: func(m *AssetResourceModel) {
+			m.Type = types.StringValue("policy")
+		}, want: false, wantWhy: "policy/connector/extension all store as extension"},
+		{name: "genuine cross-type change replaces", mutate: func(m *AssetResourceModel) { m.Type = types.StringValue("soap-api") }, want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			state := base()
+			// The post-import cases need a NULL prior value; the extension/policy case
+			// needs the stored super-type as prior state.
+			switch {
+			case strings.Contains(tt.name, "null prior file_path"):
+				state.FilePath = types.StringNull()
+			case strings.Contains(tt.name, "null prior additional_file"):
+				state.AdditionalFiles = types.ListNull(additionalFileObjectType())
+			case strings.Contains(tt.name, "extension -> policy"):
+				state.Type = types.StringValue("extension")
+			}
+
+			plan := state
+			tt.mutate(&plan)
+
+			if got := assetReplaceTriggered(&state, &plan); got != tt.want {
+				t.Errorf("assetReplaceTriggered() = %v, want %v (%s)", got, tt.want, tt.wantWhy)
+			}
+		})
+	}
+}
+
+// TestAssetResource_ModifyPlan_GuardsFireOnNonIdentityReplace is the end-to-end proof for
+// the bug above, driven through the REAL ModifyPlan: a file-backed asset whose file_path is
+// null (the normal post-import state) and whose classifier changes is a genuine Terraform
+// replacement, so the file_path guard MUST fire at plan time. Before the fix,
+// assetReplaceTriggered ignored classifier, the plan was classified as in-place, no guard
+// ran, and the apply destroyed the old version then failed to publish the new one.
+func TestAssetResource_ModifyPlan_GuardsFireOnNonIdentityReplace(t *testing.T) {
+	res := NewAssetResource().(*AssetResource)
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+
+	// A rest-api at a fixed GAV with NO file_path — exactly what state looks like after
+	// `terraform import` (file_path is local-only and stays null). api_version is set so
+	// the sibling api_version guard can never fire: any diagnostic here is unambiguously
+	// the file_path guard.
+	asset := func(classifier string) tftypes.Value {
+		return assetRawValue(ctx, schemaResp.Schema, map[string]tftypes.Value{
+			"organization_id": tftypes.NewValue(tftypes.String, "org"),
+			"group_id":        tftypes.NewValue(tftypes.String, "grp"),
+			"asset_id":        tftypes.NewValue(tftypes.String, "asset"),
+			"version":         tftypes.NewValue(tftypes.String, "1.0.0"),
+			"type":            tftypes.NewValue(tftypes.String, "rest-api"),
+			"api_version":     tftypes.NewValue(tftypes.String, "v1"),
+			"classifier":      tftypes.NewValue(tftypes.String, classifier),
+		})
+	}
+
+	req := resource.ModifyPlanRequest{
+		Plan:   tfsdk.Plan{Schema: schemaResp.Schema, Raw: asset("raml")},
+		State:  tfsdk.State{Schema: schemaResp.Schema, Raw: asset("oas")},
+		Config: tfsdk.Config{Schema: schemaResp.Schema, Raw: asset("raml")},
+	}
+	resp := &resource.ModifyPlanResponse{}
+	res.ModifyPlan(ctx, req, resp)
+
+	found := false
+	for _, d := range resp.Diagnostics {
+		if strings.Contains(d.Summary(), "Missing file_path for a file-backed asset type") {
+			found = true
+			if !strings.Contains(d.Detail(), "replaced (destroyed and recreated)") {
+				t.Errorf("guard should report a REPLACE, got detail: %q", d.Detail())
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("a classifier change forces replacement, so the file_path guard must fire at "+
+			"plan time; got diagnostics: %v", resp.Diagnostics)
+	}
+}
+
+// TestClassifierDerivedPrefixes_RoundTrip locks the [I] invariant for the classifier:
+// invert the API's transformation BY RULE, not by a hardcoded list.
+//
+// Exchange generates three derived copies of every uploaded spec — "fat-" (bundled),
+// "light-" (trimmed) and "original-" (verbatim) — all denoting the same user-facing
+// classifier. Handling only "fat-" caused a real import bug (2026-08-26): importing a
+// soap-api seeded classifier="original-wsdl" against a config of "wsdl", and because
+// classifier is RequiresReplaceExceptOnImport that planned a REPLACE of a live asset.
+//
+// The prefix lists below are the exact values read back from prod after publishing one
+// asset per type.
+func TestClassifierDerivedPrefixes_RoundTrip(t *testing.T) {
+	// stored -> expected user-facing value
+	cases := map[string]string{
+		// the bug: soap-api's first non-generated file
+		"original-wsdl": "wsdl",
+		"wsdl":          "wsdl",
+		// spec families (fat- was already handled)
+		"fat-oas":              "oas",
+		"original-oas":         "oas",
+		"oas":                  "oas",
+		"fat-raml":             "raml",
+		"original-raml":        "raml",
+		"raml":                 "raml",
+		"fat-graphql":          "graphql",
+		"light-graphql":        "graphql",
+		"original-graphql":     "graphql",
+		"fat-evented-api":      "evented-api",
+		"original-evented-api": "evented-api",
+		"fat-ruleset":          "ruleset",
+		"light-ruleset":        "ruleset",
+		// fragments keep their suffix after the prefix is stripped
+		"fat-raml-fragment":  "raml-fragment",
+		"fat-oas-components": "oas-components",
+		// unprefixed / unrelated values must pass through untouched
+		"custom":      "custom",
+		"proto":       "proto",
+		"mule-plugin": "mule-plugin",
+		"":            "",
+	}
+	for stored, want := range cases {
+		if got := apiClassifierToUserClassifier(stored); got != want {
+			t.Errorf("apiClassifierToUserClassifier(%q) = %q, want %q", stored, got, want)
+		}
+	}
+
+	// normalizeClassifier must PRESERVE the user's declared value when the API returns
+	// any derived copy of it — otherwise the declared value churns or forces a replace.
+	for _, prefix := range []string{"fat-", "light-", "original-"} {
+		user := types.StringValue("wsdl")
+		if got := normalizeClassifier(prefix+"wsdl", user); got != "wsdl" {
+			t.Errorf("normalizeClassifier(%q, user=wsdl) = %q, want \"wsdl\" (derived copy must not override the declared value)", prefix+"wsdl", got)
+		}
+	}
+
+	// A genuinely different classifier must NOT be masked — that is a real change.
+	if got := normalizeClassifier("oas", types.StringValue("raml")); got != "oas" {
+		t.Errorf("normalizeClassifier(oas, user=raml) = %q, want \"oas\" (a real classifier change must survive)", got)
+	}
 }

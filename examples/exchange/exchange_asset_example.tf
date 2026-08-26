@@ -144,3 +144,88 @@ output "graphql_api_version_group" {
   description = "Version group of the GraphQL API asset"
   value       = anypoint_exchange_asset.graphql_api.version_group
 }
+
+# ---------------------------------------------------------------------------
+# policy — the MULTI-FILE case. A policy publishes TWO files in ONE request:
+# the JSON schema as `file_path` (classifier "schema") and the metadata YAML via
+# `additional_file` (classifier "metadata").
+#
+# The metadata YAML has three hard requirements, all enforced by the platform:
+#   1. it must start with the header  #%Policy Definition 0.1
+#   2. its `name:` must EXACTLY equal this resource's `name`
+#   3. its `type:` must be one of the allowed values (e.g. "custom")
+# Getting any of them wrong returns 400 INVALID_ASSET_METADATA naming the problem.
+# ---------------------------------------------------------------------------
+resource "anypoint_exchange_asset" "policy" {
+  organization_id = var.org_id
+  group_id        = var.org_id
+  asset_id        = "example-custom-policy"
+  version         = "1.0.0"
+  name            = "Example Custom Policy" # must match `name:` in metadata.yaml
+  type            = "policy"
+
+  classifier = "schema"
+  file_path  = "${path.module}/test-assets/policy-schema.json"
+
+  additional_file = [
+    {
+      classifier = "metadata"
+      path       = "${path.module}/test-assets/policy-metadata.yaml"
+    },
+  ]
+}
+
+# ---------------------------------------------------------------------------
+# connector / app / template / example — the JAR-backed mule types.
+# The uploaded .jar MUST contain META-INF/mule-artifact/mule-artifact.json
+# (and classloader-model.json for type = "example"), otherwise the publish fails
+# with 400 INVALID_ASSET_METADATA "Could not find mule-artifact file inside jar file".
+#
+#   type = "connector"  -> classifier = "mule-plugin"               (stored as "extension")
+#   type = "app"        -> classifier = "mule-application"
+#   type = "template"   -> classifier = "mule-application-template"
+#   type = "example"    -> classifier = "mule-application-example"
+# ---------------------------------------------------------------------------
+# No .jar is shipped with these examples — point this at the artifact your Mule
+# build produces (target/<your-connector>-mule-plugin.jar).
+resource "anypoint_exchange_asset" "connector" {
+  organization_id = var.org_id
+  group_id        = var.org_id
+  asset_id        = "example-connector"
+  version         = "1.0.0"
+  name            = "Example Connector"
+  type            = "connector"
+  classifier      = "mule-plugin"
+  file_path       = var.connector_jar_path
+}
+
+# ---------------------------------------------------------------------------
+# ruleset — API Governance ruleset. classifier == type, uploaded as .yaml.
+# ---------------------------------------------------------------------------
+resource "anypoint_exchange_asset" "ruleset" {
+  organization_id = var.org_id
+  group_id        = var.org_id
+  asset_id        = "example-ruleset"
+  version         = "1.0.0"
+  name            = "Example Governance Ruleset"
+  type            = "ruleset"
+  classifier      = "ruleset"
+  file_path       = "${path.module}/test-assets/governance.yaml"
+}
+
+# ---------------------------------------------------------------------------
+# grpc-api — the classifier is "protobuf". Upload a bare .proto, or a .zip with
+# at least one .proto in its root directory. api_version is required at create.
+# ---------------------------------------------------------------------------
+resource "anypoint_exchange_asset" "grpc_api" {
+  organization_id = var.org_id
+  group_id        = var.org_id
+  asset_id        = "example-grpc-api"
+  version         = "1.0.0"
+  name            = "Example gRPC API"
+  type            = "grpc-api"
+  classifier      = "protobuf"
+  file_path       = "${path.module}/test-assets/petstore.proto"
+  main_file       = "petstore.proto"
+  api_version     = "v1"
+}

@@ -197,7 +197,7 @@ func (r *AssetResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				},
 			},
 			"type": schema.StringAttribute{
-				Description: "The Exchange asset type. This is a free-form value forwarded as-is to Exchange — it is NOT restricted to a fixed enum, so any type Exchange accepts works. Common values: custom, rest-api, http-api, evented-api (AsyncAPI), graphql-api, grpc-api, soap-api, connector, app, template, example, policy, ruleset, agent, llm, mcp, extension. API-spec fragments (RAML/OAS fragments) are not a distinct type: publish them as an API-spec asset and select the fragment via `classifier` (e.g. raml-fragment, oas-fragment/oas-components). The mule-plugin family (a JAR with classifier `mule-plugin`, e.g. a `policy` or `connector`) is stored by Exchange under the single super-type `extension`; you may declare the semantic type (`policy`/`connector`) and the provider preserves it (no drift), or declare `extension` directly — both apply cleanly. A bare `terraform import` of such an asset surfaces the stored `extension` (the semantic sub-type cannot be recovered from the API); you can then set `type = \"policy\"` (or `connector`) in config and the provider treats it as the SAME asset — the change is reconciled in place, NOT as a destroy+recreate, because both normalize to `extension`.",
+				Description: "The Exchange asset type. This is a free-form value forwarded as-is to Exchange — it is NOT restricted to a fixed enum, so any type Exchange accepts works. Common values: custom, rest-api, http-api, evented-api (AsyncAPI), graphql-api, grpc-api, soap-api, connector, app, template, example, policy, ruleset, agent, llm, mcp, extension. RAML fragments are their own asset type: set type = \"raml-fragment\" with classifier = \"raml-fragment\". An agent card publishes with type = \"agent\" and classifier = \"a2a-card\". The mule-plugin family (a JAR with classifier `mule-plugin`, e.g. a `policy` or `connector`) is stored by Exchange under the single super-type `extension`; you may declare the semantic type (`policy`/`connector`) and the provider preserves it (no drift), or declare `extension` directly — both apply cleanly. A bare `terraform import` of such an asset surfaces the stored `extension` (the semantic sub-type cannot be recovered from the API); you can then set `type = \"policy\"` (or `connector`) in config and the provider treats it as the SAME asset — the change is reconciled in place, NOT as a destroy+recreate, because both normalize to `extension`.",
 				Optional:    true,
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{
@@ -312,7 +312,7 @@ func (r *AssetResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				},
 			},
 			"api_version": schema.StringAttribute{
-				Description: "The API version (properties.apiVersion), e.g. \"v1\". REQUIRED at create for the API-spec types rest-api, evented-api, and grpc-api — publishing one of these without api_version fails with `400 MISSING_REQUIRED_PROPERTIES: apiVersion`. This is the human-facing API contract version, distinct from the immutable GAV version.",
+				Description: "The API version (properties.apiVersion), e.g. \"v1\". REQUIRED at create for rest-api, soap-api, evented-api, grpc-api and http-api — publishing one of these without api_version fails with `400 MISSING_REQUIRED_PROPERTIES: apiVersion`. Note that http-api requires it even though it takes no file, while graphql-api does not require it. This is the human-facing API contract version, distinct from the immutable GAV version.",
 				Optional:    true,
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{
@@ -687,15 +687,31 @@ func assetTypeRequiresFile(t string) bool {
 //     MISSING_REQUIRED_PROPERTIES: apiVersion (both mainFile and apiVersion when both omitted).
 //   - evented-api — live-verified 2026-07-16 (E2E report Finding B).
 //   - grpc-api    — live-verified 2026-07-16 (E2E report Finding B).
+//   - http-api    — live-verified 2026-08-26 on PROD, with a control: publishing
+//     type=http-api WITHOUT properties.apiVersion 400s MISSING_REQUIRED_PROPERTIES,
+//     and the byte-identical request WITH apiVersion=v1 returns 201. http-api is
+//     fileless AND requires an apiVersion, which is why the old "fileless types never
+//     need one" assumption wrongly excluded it.
+//   - soap-api    — live-verified 2026-08-26 on PROD through the REAL provider
+//     (terraform apply): a wsdl publish without api_version fails with
+//     `400 MISSING_REQUIRED_PROPERTIES: {"errors":["The missing required properties
+//     are: [\"apiVersion\"]"]}` — the body names apiVersion explicitly. Adding
+//     api_version = "v1" to the same config publishes 201.
 //
-// Deliberately EXCLUDED (no confirmed apiVersion requirement — blocking them would be a
-// false positive): soap-api and graphql-api (file-backed but apiVersion not confirmed
-// mandatory), and every fileless type (custom/app/template/policy/llm/mcp/http-api/…).
-// Extend this map only when a type is confirmed to reject a versionless publish.
+// Both additions matter beyond a nicer message: these types are RequiresReplace on
+// `version`, so without the guard a version bump destroys the old version and only
+// THEN hits the 400 — the asset-vanishes failure this guard exists to prevent.
+//
+// Deliberately EXCLUDED (verified 2026-08-26 to publish fine with NO apiVersion):
+// graphql-api (file-backed, published 201 without one), and the fileless custom / mcp /
+// llm. Extend this map only when a type is confirmed to reject a versionless publish,
+// with a control proving apiVersion is the differentiator.
 var assetTypesRequiringAPIVersion = map[string]bool{
 	"rest-api":    true,
 	"evented-api": true,
 	"grpc-api":    true,
+	"http-api":    true,
+	"soap-api":    true,
 }
 
 // assetTypeRequiresAPIVersion reports whether the given asset type's create publish
@@ -717,18 +733,76 @@ func stringChanged(state, plan types.String) bool {
 	return !plan.Equal(state)
 }
 
+// listChanged is the List-typed sibling of stringChanged: it reports whether a
+// KNOWN planned list differs from a KNOWN prior-state list. It mirrors
+// requiresReplaceListExceptOnImport, so a null/unknown on either side (the
+// post-import settle) is never treated as a change.
+//
+// KNOWN GAP (tracked, not yet fixed): additional_file is Optional-ONLY, so a null plan
+// means "removed from config", which the schema modifier DOES treat as a replace. This
+// helper reports no change for that case. Same gap applies to file_path and keywords
+// via stringChanged. Closing it needs a comparator that counts a null plan AND a
+// matching update to the existing "omitted (null) planned keywords is not a replace"
+// test assertion, which encodes the current behaviour.
+func listChanged(state, plan types.List) bool {
+	if plan.IsUnknown() || plan.IsNull() {
+		return false
+	}
+	if state.IsNull() || state.IsUnknown() {
+		return false
+	}
+	return !plan.Equal(state)
+}
+
+// typeChanged mirrors requiresReplaceOnTypeChange: it compares the API-NORMALIZED
+// type so mule-plugin aliases (policy/connector/extension all store as "extension")
+// are NOT seen as a replacement. Comparing raw strings here would mark the
+// import-then-declare-`type = "policy"` reconcile as a replace, which would fire the
+// file_path/api_version guards on a plan that is actually in place.
+func typeChanged(state, plan types.String) bool {
+	if plan.IsUnknown() || plan.IsNull() {
+		return false
+	}
+	if state.IsNull() || state.IsUnknown() {
+		return false
+	}
+	return apiTypeFor(plan.ValueString()) != apiTypeFor(state.ValueString())
+}
+
 // assetReplaceTriggered reports whether the planned change replaces the asset
 // version (destroy + recreate) rather than updating it in place. Terraform recreates
 // the asset when any replace-forcing attribute changes, and the recreate re-runs the
 // file-dependent create path — so a replace with a missing file is just as dangerous
-// as a fresh create. Only the replace-forcing identity/immutable attributes are
-// compared; changing any of them forces replacement per the schema plan modifiers.
+// as a fresh create.
+//
+// This MUST stay in sync with every replace-forcing plan modifier in Schema(), or the
+// two consumers both misfire on the fields it misses:
+//   - the file_path / api_version guards are skipped, so a real replace with no
+//     file_path destroys the old version and then 400s the recreate (the asset is
+//     simply gone), and
+//   - fillComputedChildrenFromState runs on a replace and copies the OLD version's
+//     page_path/instance_id into the plan → "Provider produced inconsistent result
+//     after apply".
+//
+// The fields and the comparison used for each:
+//   - organization_id / group_id / asset_id / version — plain RequiresReplace.
+//   - type — RequiresReplaceOnTypeChange (API-normalized compare, see typeChanged).
+//   - file_path / classifier / keywords / api_version / main_file —
+//     RequiresReplaceExceptOnImport; stringChanged encodes the except-on-import rule
+//     (a null/unknown prior state never counts as a change).
+//   - additional_file — RequiresReplaceListExceptOnImport (see listChanged).
 func assetReplaceTriggered(state, plan *AssetResourceModel) bool {
 	return stringChanged(state.OrganizationID, plan.OrganizationID) ||
 		stringChanged(state.GroupID, plan.GroupID) ||
 		stringChanged(state.AssetID, plan.AssetID) ||
 		stringChanged(state.Version, plan.Version) ||
-		stringChanged(state.Type, plan.Type)
+		typeChanged(state.Type, plan.Type) ||
+		stringChanged(state.FilePath, plan.FilePath) ||
+		stringChanged(state.Classifier, plan.Classifier) ||
+		stringChanged(state.Keywords, plan.Keywords) ||
+		stringChanged(state.APIVersion, plan.APIVersion) ||
+		stringChanged(state.MainFile, plan.MainFile) ||
+		listChanged(state.AdditionalFiles, plan.AdditionalFiles)
 }
 
 // ModifyPlan converts a specific silent-data-loss footgun into a loud plan-time
@@ -1354,7 +1428,19 @@ func (r *AssetResource) Create(ctx context.Context, req resource.CreateRequest, 
 			// recreate at the same versionGroup can inherit orphans from a prior delete.
 			// Passing them as "current" makes syncInstances adopt/update (and prune)
 			// them instead of blindly re-POSTing and hitting 409 EXTERNAL_API_CONFLICT.
-			_, existingInstances, listErr := r.fetchExternalInstances(ctx, plan.GroupID.ValueString(), plan.AssetID.ValueString(), plan.Version.ValueString())
+			// versionGroup MUST come from the GET, not from the publish response: the
+			// multipart create response omits versionGroup for at least the fileless
+			// types (a `custom` publish returns no versionGroup at all, while a GET of
+			// the same asset reports "1.0.0"). Using the empty publish value built the
+			// URL `.../versionGroups//instances/external`, which the platform answers
+			// 201 — silently filing the instance under an empty version group, where it
+			// is attached to nothing. The asset then reads back with `instances: []`
+			// and Terraform fails the apply with
+			// `Provider produced inconsistent result after apply: .instances: element 0
+			// has vanished` — after the asset was already created.
+			// fetchExternalInstances already does that GET, so take its versionGroup and
+			// only fall back to the publish response's value if the GET has none.
+			versionGroup, existingInstances, listErr := r.fetchExternalInstances(ctx, plan.GroupID.ValueString(), plan.AssetID.ValueString(), plan.Version.ValueString())
 			if listErr != nil {
 				resp.Diagnostics.AddError(
 					"Error creating external instances",
@@ -1362,7 +1448,19 @@ func (r *AssetResource) Create(ctx context.Context, req resource.CreateRequest, 
 				)
 				return
 			}
-			err := r.syncInstances(ctx, plan.GroupID.ValueString(), plan.AssetID.ValueString(), asset.VersionGroup, existingInstances, planInstances)
+			if versionGroup == "" {
+				versionGroup = asset.VersionGroup
+			}
+			if versionGroup == "" {
+				resp.Diagnostics.AddError(
+					"Error creating external instances",
+					"Asset was created, but Exchange reported no versionGroup for it, so the "+
+						"external instances cannot be attached. Remove the instances block, or "+
+						"report this with the asset type — instances are keyed by versionGroup.",
+				)
+				return
+			}
+			err := r.syncInstances(ctx, plan.GroupID.ValueString(), plan.AssetID.ValueString(), versionGroup, existingInstances, planInstances)
 			if err != nil {
 				resp.Diagnostics.AddError(
 					"Error creating external instances",
@@ -1711,6 +1809,20 @@ func (r *AssetResource) Update(ctx context.Context, req resource.UpdateRequest, 
 			return
 		}
 
+		// Defensive: an empty versionGroup builds `.../versionGroups//instances/external`,
+		// which the platform accepts with 201 but files the instance under nothing — the
+		// asset then reads back with no instances at all. Fail loudly instead. (This path
+		// reads the versionGroup from a GET, which does return it; the CREATE path had to
+		// stop using the publish response, which omits it for fileless types.)
+		if currentAsset.VersionGroup == "" {
+			resp.Diagnostics.AddError(
+				"Error updating external instances",
+				"Exchange reported no versionGroup for this asset, so external instances "+
+					"cannot be synced. External instances are keyed by versionGroup.",
+			)
+			return
+		}
+
 		err := r.syncInstances(ctx, plan.GroupID.ValueString(), plan.AssetID.ValueString(), currentAsset.VersionGroup, stateInstances, planInstances)
 		if err != nil {
 			resp.Diagnostics.AddError(
@@ -2050,22 +2162,49 @@ func normalizeType(apiType string, currentStateType types.String) string {
 	return apiType
 }
 
+// derivedClassifierPrefixes are the prefixes Exchange puts on the DERIVED copies it
+// generates from an uploaded spec. Publishing one file yields several: the bundled
+// form ("fat-", dependencies inlined), a trimmed form ("light-"), and the verbatim
+// upload ("original-"). All three denote the same user-facing classifier.
+//
+// LIVE-VERIFIED on prod 2026-08-26 by publishing one asset per type and reading back
+// files[].classifier:
+//
+//	soap-api    -> original-wsdl, wsdl
+//	graphql-api -> fat-graphql, graphql, light-graphql, original-graphql
+//	rest-api    -> fat-oas, oas, original-oas, fat-raml, raml, …
+//	evented-api -> evented-api, fat-evented-api, original-evented-api
+//	ruleset     -> fat-ruleset, light-ruleset, ruleset
+//
+// Order matters only in that each is stripped independently; a classifier carries at
+// most one of these prefixes.
+var derivedClassifierPrefixes = []string{"fat-", "light-", "original-"}
+
 // apiClassifierToUserClassifier converts an API-stored classifier back to the
-// user-facing value. When the Exchange API ingests an API-spec file it bundles
-// the spec (inlining dependencies) and stores the result with a "fat-" prefix:
-// user "raml" -> stored "fat-raml", "oas" -> "fat-oas", "raml-fragment" ->
-// "fat-raml-fragment", "oas-components" -> "fat-oas-components", etc. Stripping
-// the "fat-" prefix is the general inverse and covers every current and future
-// spec family, not just the two we happened to hardcode originally. Classifiers
-// that are not bundled (wsdl, graphql, json-schema, proto, custom, ...) have no
-// "fat-" prefix and pass through unchanged.
+// user-facing value by stripping whichever derived-copy prefix Exchange applied
+// (see derivedClassifierPrefixes). Classifiers with no prefix (wsdl, graphql,
+// json-schema, proto, custom, …) pass through unchanged.
+//
+// Stripping ALL THREE families — not just "fat-" — fixes a real import bug found on
+// 2026-08-26: `terraform import` of a soap-api seeded classifier="original-wsdl"
+// (Exchange's verbatim copy, and the first non-generated file in the response) while
+// the config said "wsdl". Because classifier is RequiresReplaceExceptOnImport, that
+// mismatch planned a REPLACE of a live asset — caught only by the version-collision
+// guard, which errored the plan. soap-api was the type that exposed it because
+// "original-wsdl" is its first non-generated file; the spec types happened to hit a
+// "fat-"-prefixed file first and so were already handled.
 func apiClassifierToUserClassifier(apiClassifier string) string {
-	return strings.TrimPrefix(apiClassifier, "fat-")
+	for _, p := range derivedClassifierPrefixes {
+		if strings.HasPrefix(apiClassifier, p) {
+			return strings.TrimPrefix(apiClassifier, p)
+		}
+	}
+	return apiClassifier
 }
 
 // normalizeClassifier resolves the API response classifier to the user-facing value.
 // If the state already has a classifier set (from user config), preserve it to avoid
-// perpetual drift / forced replacement when the API bundles the spec into "fat-*".
+// perpetual drift / forced replacement when the API returns a derived copy.
 func normalizeClassifier(apiClassifier string, currentStateClassifier types.String) string {
 	if !currentStateClassifier.IsNull() && !currentStateClassifier.IsUnknown() {
 		userClassifier := currentStateClassifier.ValueString()
@@ -2073,12 +2212,14 @@ func normalizeClassifier(apiClassifier string, currentStateClassifier types.Stri
 		if userClassifier == apiClassifier {
 			return userClassifier
 		}
-		// API bundled the user's classifier with the "fat-" prefix — preserve theirs.
-		if apiClassifier == "fat-"+userClassifier {
-			return userClassifier
+		// API returned a DERIVED copy of the user's classifier — preserve theirs.
+		for _, p := range derivedClassifierPrefixes {
+			if apiClassifier == p+userClassifier {
+				return userClassifier
+			}
 		}
 	}
-	// Otherwise (e.g. import): strip the "fat-" bundling prefix if present.
+	// Otherwise (e.g. import): strip the derived-copy prefix if present.
 	return apiClassifierToUserClassifier(apiClassifier)
 }
 
@@ -2597,24 +2738,23 @@ func (r *AssetResource) fetchExternalInstances(ctx context.Context, groupID, ass
 	if err != nil {
 		return "", nil, err
 	}
-	var out []InstanceModel
-	for _, inst := range asset.Instances {
-		instMap, ok := inst.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		if t, _ := instMap["type"].(string); t != "external" {
-			continue
-		}
-		name, _ := instMap["name"].(string)
-		endpoint, _ := instMap["endpointUri"].(string)
-		isPublic, _ := instMap["isPublic"].(bool)
-		id, _ := instMap["id"].(string)
+	// Read instances from the DEDICATED versionGroup endpoint, not from the asset GET's
+	// inline `instances` array — that array is not populated for every asset type (a
+	// `custom` asset reports `instances: []` while the dedicated endpoint returns them).
+	if asset.VersionGroup == "" {
+		return "", nil, nil
+	}
+	live, err := r.client.ListExternalInstances(ctx, groupID, assetID, asset.VersionGroup)
+	if err != nil {
+		return asset.VersionGroup, nil, err
+	}
+	out := make([]InstanceModel, 0, len(live))
+	for _, inst := range live {
 		out = append(out, InstanceModel{
-			Name:        types.StringValue(name),
-			EndpointURI: types.StringValue(endpoint),
-			IsPublic:    types.BoolValue(isPublic),
-			InstanceID:  types.StringValue(id),
+			Name:        types.StringValue(inst.Name),
+			EndpointURI: types.StringValue(inst.EndpointURI),
+			IsPublic:    types.BoolValue(inst.IsPublic),
+			InstanceID:  types.StringValue(inst.ID),
 		})
 	}
 	return asset.VersionGroup, out, nil
@@ -2723,12 +2863,30 @@ func (r *AssetResource) readInstancesIntoState(ctx context.Context, state *Asset
 		return
 	}
 
-	// Parse instances from the asset response — filter for "external" type
+	// Prefer the DEDICATED versionGroup endpoint — the asset GET's inline `instances`
+	// array is empty for some asset types (e.g. `custom`) even when instances exist,
+	// which made a just-created instance look like it had vanished. Fall back to the
+	// inline array if the dedicated read is unavailable.
 	var externalInstances []map[string]interface{}
-	for _, inst := range asset.Instances {
-		if instMap, ok := inst.(map[string]interface{}); ok {
-			if instType, _ := instMap["type"].(string); instType == "external" {
-				externalInstances = append(externalInstances, instMap)
+	if asset.VersionGroup != "" {
+		if live, listErr := r.client.ListExternalInstances(ctx,
+			state.GroupID.ValueString(), state.AssetID.ValueString(), asset.VersionGroup); listErr == nil {
+			for _, inst := range live {
+				externalInstances = append(externalInstances, map[string]interface{}{
+					"id":          inst.ID,
+					"name":        inst.Name,
+					"endpointUri": inst.EndpointURI,
+					"isPublic":    inst.IsPublic,
+				})
+			}
+		}
+	}
+	if externalInstances == nil {
+		for _, inst := range asset.Instances {
+			if instMap, ok := inst.(map[string]interface{}); ok {
+				if instType, _ := instMap["type"].(string); instType == "external" {
+					externalInstances = append(externalInstances, instMap)
+				}
 			}
 		}
 	}
