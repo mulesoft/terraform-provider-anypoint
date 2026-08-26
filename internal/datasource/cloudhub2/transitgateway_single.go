@@ -37,6 +37,7 @@ type TransitGatewaySingleDataSourceModel struct {
 	PrivateSpaceID       types.String `tfsdk:"private_space_id"`
 	Name                 types.String `tfsdk:"name"`
 	AwsTransitGatewayID  types.String `tfsdk:"aws_transit_gateway_id"`
+	AwsConsoleURL        types.String `tfsdk:"aws_console_url"`
 	ResourceShareID      types.String `tfsdk:"resource_share_id"`
 	ResourceShareAccount types.String `tfsdk:"resource_share_account"`
 	Region               types.String `tfsdk:"region"`
@@ -77,8 +78,15 @@ func (d *TransitGatewaySingleDataSource) Schema(_ context.Context, _ datasource.
 				Computed:    true,
 			},
 			"aws_transit_gateway_id": schema.StringAttribute{
-				Description: "The AWS Transit Gateway ID the platform discovered from the resource share.",
-				Computed:    true,
+				Description: "The AWS Transit Gateway ID the platform discovered from the resource share, " +
+					"as a bare `tgw-...` identifier suitable for passing to the AWS provider.",
+				Computed: true,
+			},
+			"aws_console_url": schema.StringAttribute{
+				Description: "Deep link to this transit gateway in the AWS console, as shown by the " +
+					"Anypoint UI's \"View on AWS\" link. Empty when the platform does not supply one. " +
+					"Use `aws_transit_gateway_id` for the identifier itself.",
+				Computed: true,
 			},
 			"resource_share_id": schema.StringAttribute{
 				Description: "The AWS RAM resource share ID (UUID format).",
@@ -163,7 +171,8 @@ func (d *TransitGatewaySingleDataSource) Read(ctx context.Context, req datasourc
 	}
 
 	state.Name = types.StringValue(tgw.Name)
-	state.AwsTransitGatewayID = types.StringValue(tgw.Status.TgwResource)
+	state.AwsTransitGatewayID = types.StringValue(tgw.Status.AWSTransitGatewayID())
+	state.AwsConsoleURL = types.StringValue(tgw.Status.AWSConsoleURL())
 	state.ResourceShareID = types.StringValue(tgw.Spec.ResourceShare.ID)
 	state.ResourceShareAccount = types.StringValue(tgw.Spec.ResourceShare.Account)
 	state.Region = types.StringValue(tgw.Spec.Region)

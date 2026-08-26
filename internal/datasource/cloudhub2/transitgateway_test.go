@@ -3,6 +3,7 @@ package cloudhub2
 import (
 	"context"
 	"net/http"
+	"reflect"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -171,15 +172,13 @@ func TestTransitGatewayDataSource_Read(t *testing.T) {
 	ds.Schema(ctx, datasource.SchemaRequest{}, schemaResp)
 	configType := schemaResp.Schema.Type().TerraformType(ctx)
 
-	// Build the nested type for transit_gateway_connections attribute
-	routeObjType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
-		"cidr": tftypes.String,
-	}}
+	// Build the nested type for transit_gateway_connections attribute. Routes are a
+	// plain string list here, matching the resource and the singular data source.
 	tgwObjType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
 		"id":     tftypes.String,
 		"name":   tftypes.String,
 		"status": tftypes.String,
-		"routes": tftypes.List{ElementType: routeObjType},
+		"routes": tftypes.List{ElementType: tftypes.String},
 	}}
 
 	configRaw := tftypes.NewValue(configType, map[string]tftypes.Value{
@@ -210,12 +209,28 @@ func TestTransitGatewayDataSource_Read(t *testing.T) {
 	if got.TransitGatewayConnections[0].Status.ValueString() != "available" {
 		t.Errorf("Expected first TGW status 'available', got '%s'", got.TransitGatewayConnections[0].Status.ValueString())
 	}
-	// First TGW is "available" so routes should be fetched
-	if len(got.TransitGatewayConnections[0].Routes) != 2 {
-		t.Errorf("Expected 2 routes for available TGW, got %d", len(got.TransitGatewayConnections[0].Routes))
+	// Routes must surface as plain CIDR strings so a value read from this data
+	// source can be passed straight into anypoint_transit_gateway_connection's
+	// `routes` argument. Asserting the values (not just the count) pins the shape:
+	// wrapping each CIDR in an object again would fail to decode into []string.
+	routesOf := func(i int) []string {
+		t.Helper()
+		var routes []string
+		if diags := got.TransitGatewayConnections[i].Routes.ElementsAs(ctx, &routes, false); diags.HasError() {
+			t.Fatalf("routes[%d] did not decode as a list of strings: %v", i, diags.Errors())
+		}
+		return routes
 	}
-	// Second TGW is "pending" so routes should be empty
-	if len(got.TransitGatewayConnections[1].Routes) != 0 {
-		t.Errorf("Expected 0 routes for pending TGW, got %d", len(got.TransitGatewayConnections[1].Routes))
+
+	if want := []string{"10.0.0.0/8", "172.16.0.0/12"}; !reflect.DeepEqual(routesOf(0), want) {
+		t.Errorf("Expected routes %v for first TGW, got %v", want, routesOf(0))
+	}
+	// An empty routes array must come back as an empty list, not null, so callers
+	// can iterate it without a null check.
+	if got := routesOf(1); len(got) != 0 {
+		t.Errorf("Expected no routes for second TGW, got %v", got)
+	}
+	if got.TransitGatewayConnections[1].Routes.IsNull() {
+		t.Error("Expected empty routes to be an empty list, got null")
 	}
 }

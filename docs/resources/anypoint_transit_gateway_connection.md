@@ -71,7 +71,8 @@ resource "anypoint_transit_gateway_connection" "main" {
 
 - `id` (String) The unique identifier of the transit gateway attachment.
 - `status` (String) The current status of the transit gateway attachment (e.g. `Pending`, `Available`).
-- `aws_transit_gateway_id` (String) The AWS Transit Gateway ID discovered by the platform from the resource share. This is a computed value set after the TGW attachment is created.
+- `aws_transit_gateway_id` (String) The AWS Transit Gateway ID discovered by the platform from the resource share, as a bare `tgw-...` identifier suitable for passing to the AWS provider. This is a computed value set after the TGW attachment is created.
+- `aws_console_url` (String) Deep link to this transit gateway in the AWS console, matching the Anypoint UI's "View on AWS" link. Empty when the platform does not supply one. Use `aws_transit_gateway_id` for the identifier itself.
 
 -> **Replacement (ForceNew):** Changing `organization_id`, `private_space_id`, `resource_share_id`, or `resource_share_account` forces the connection to be replaced (destroy + create). `routes` is updated in place. Do **not** set `lifecycle { create_before_destroy = true }`: the AWS RAM resource share is exclusive, so creating the replacement before destroying the old attachment fails with `resource share ... already exists`. The default destroy-first order works because the provider's two-step teardown de-registers the share.
 

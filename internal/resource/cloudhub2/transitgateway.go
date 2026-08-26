@@ -39,6 +39,7 @@ type TransitGatewayResourceModel struct {
 	ID                   types.String `tfsdk:"id"`
 	Name                 types.String `tfsdk:"name"`
 	AwsTransitGatewayID  types.String `tfsdk:"aws_transit_gateway_id"`
+	AwsConsoleURL        types.String `tfsdk:"aws_console_url"`
 	ResourceShareID      types.String `tfsdk:"resource_share_id"`
 	ResourceShareAccount types.String `tfsdk:"resource_share_account"`
 	Routes               types.List   `tfsdk:"routes"`
@@ -75,8 +76,18 @@ func (r *TransitGatewayResource) Schema(_ context.Context, _ resource.SchemaRequ
 				Required:    true,
 			},
 			"aws_transit_gateway_id": schema.StringAttribute{
-				Description: "The AWS Transit Gateway ID discovered by the platform from the resource share. " +
+				Description: "The AWS Transit Gateway ID discovered by the platform from the resource share, " +
+					"as a bare `tgw-...` identifier suitable for passing to the AWS provider. " +
 					"This is a computed value set after the TGW attachment is created.",
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"aws_console_url": schema.StringAttribute{
+				Description: "Deep link to this transit gateway in the AWS console, as shown by the " +
+					"Anypoint UI's \"View on AWS\" link. Empty when the platform does not supply one. " +
+					"Use `aws_transit_gateway_id` for the identifier itself.",
 				Computed: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -194,7 +205,8 @@ func (r *TransitGatewayResource) Create(ctx context.Context, req resource.Create
 	}
 
 	plan.ID = types.StringValue(tgw.ID)
-	plan.AwsTransitGatewayID = types.StringValue(tgw.Status.TgwResource)
+	plan.AwsTransitGatewayID = types.StringValue(tgw.Status.AWSTransitGatewayID())
+	plan.AwsConsoleURL = types.StringValue(tgw.Status.AWSConsoleURL())
 	plan.Status = types.StringValue(tgw.Status.Gateway)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -235,7 +247,8 @@ func (r *TransitGatewayResource) Read(ctx context.Context, req resource.ReadRequ
 	}
 
 	state.Name = types.StringValue(tgw.Name)
-	state.AwsTransitGatewayID = types.StringValue(tgw.Status.TgwResource)
+	state.AwsTransitGatewayID = types.StringValue(tgw.Status.AWSTransitGatewayID())
+	state.AwsConsoleURL = types.StringValue(tgw.Status.AWSConsoleURL())
 	state.Status = types.StringValue(tgw.Status.Gateway)
 
 	// Populate resource_share fields from the API so that import works correctly.
@@ -343,6 +356,7 @@ func (r *TransitGatewayResource) Update(ctx context.Context, req resource.Update
 				map[string]interface{}{"id": state.ID.ValueString()})
 			plan.ID = state.ID
 			plan.AwsTransitGatewayID = state.AwsTransitGatewayID
+			plan.AwsConsoleURL = state.AwsConsoleURL
 			plan.Status = types.StringValue(transitGatewayStatusDetached)
 			resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 			return
@@ -355,7 +369,8 @@ func (r *TransitGatewayResource) Update(ctx context.Context, req resource.Update
 	}
 
 	plan.ID = state.ID
-	plan.AwsTransitGatewayID = types.StringValue(tgw.Status.TgwResource)
+	plan.AwsTransitGatewayID = types.StringValue(tgw.Status.AWSTransitGatewayID())
+	plan.AwsConsoleURL = types.StringValue(tgw.Status.AWSConsoleURL())
 	plan.Status = types.StringValue(tgw.Status.Gateway)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)

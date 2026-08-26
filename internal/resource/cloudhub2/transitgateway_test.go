@@ -127,9 +127,13 @@ func TestTransitGatewayResource_Read(t *testing.T) {
 					"region": "us-east-1",
 				},
 				"status": map[string]interface{}{
-					"gateway":     "available",
-					"attachment":  "available",
-					"tgwResource": "tgw-0abc123def456",
+					"gateway":    "available",
+					"attachment": "available",
+					// The platform returns a console deep link here, not a bare id.
+					// Mocking the real shape is what makes the assertion below
+					// meaningful — a bare id would pass whether or not the provider
+					// extracts anything.
+					"tgwResource": "https://console.aws.amazon.com/vpc/home?region=us-east-1#TransitGatewayDetails:transitGatewayId=tgw-0abc123def456",
 					"routes":      []string{"10.0.0.0/8"},
 				},
 			})
@@ -155,6 +159,7 @@ func TestTransitGatewayResource_Read(t *testing.T) {
 		"id":                     tftypes.NewValue(tftypes.String, "tgw-123"),
 		"name":                   tftypes.NewValue(tftypes.String, "my-tgw"),
 		"aws_transit_gateway_id": tftypes.NewValue(tftypes.String, "tgw-0abc123def456"),
+		"aws_console_url":        tftypes.NewValue(tftypes.String, nil),
 		"resource_share_id":      tftypes.NewValue(tftypes.String, "share-uuid-123"),
 		"resource_share_account": tftypes.NewValue(tftypes.String, "123456789012"),
 		"routes": tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, []tftypes.Value{
@@ -182,6 +187,11 @@ func TestTransitGatewayResource_Read(t *testing.T) {
 	}
 	if got.AwsTransitGatewayID.ValueString() != "tgw-0abc123def456" {
 		t.Errorf("Expected AwsTransitGatewayID 'tgw-0abc123def456', got %s", got.AwsTransitGatewayID.ValueString())
+	}
+	// The link the id was extracted from is preserved rather than discarded.
+	wantURL := "https://console.aws.amazon.com/vpc/home?region=us-east-1#TransitGatewayDetails:transitGatewayId=tgw-0abc123def456"
+	if got.AwsConsoleURL.ValueString() != wantURL {
+		t.Errorf("Expected AwsConsoleURL %q, got %q", wantURL, got.AwsConsoleURL.ValueString())
 	}
 	if got.Status.ValueString() != "available" {
 		t.Errorf("Expected Status 'available', got %s", got.Status.ValueString())
@@ -223,6 +233,7 @@ func TestTransitGatewayResource_Read_NotFound(t *testing.T) {
 		"id":                     tftypes.NewValue(tftypes.String, "tgw-gone"),
 		"name":                   tftypes.NewValue(tftypes.String, "my-tgw"),
 		"aws_transit_gateway_id": tftypes.NewValue(tftypes.String, ""),
+		"aws_console_url":        tftypes.NewValue(tftypes.String, nil),
 		"resource_share_id":      tftypes.NewValue(tftypes.String, "share-uuid-123"),
 		"resource_share_account": tftypes.NewValue(tftypes.String, "123456789012"),
 		"routes": tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, []tftypes.Value{
@@ -282,6 +293,7 @@ func TestTransitGatewayResource_Read_Detached(t *testing.T) {
 		"id":                     tftypes.NewValue(tftypes.String, "tgw-detached"),
 		"name":                   tftypes.NewValue(tftypes.String, "my-tgw"),
 		"aws_transit_gateway_id": tftypes.NewValue(tftypes.String, "tgw-0abc123def456"),
+		"aws_console_url":        tftypes.NewValue(tftypes.String, nil),
 		"resource_share_id":      tftypes.NewValue(tftypes.String, "share-uuid-123"),
 		"resource_share_account": tftypes.NewValue(tftypes.String, "123456789012"),
 		"routes": tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, []tftypes.Value{
@@ -360,6 +372,7 @@ func TestTransitGatewayResource_ImportState_Detached(t *testing.T) {
 		"id":                     tftypes.NewValue(tftypes.String, ""),
 		"name":                   tftypes.NewValue(tftypes.String, ""),
 		"aws_transit_gateway_id": tftypes.NewValue(tftypes.String, ""),
+		"aws_console_url":        tftypes.NewValue(tftypes.String, nil),
 		"resource_share_id":      tftypes.NewValue(tftypes.String, ""),
 		"resource_share_account": tftypes.NewValue(tftypes.String, ""),
 		"routes":                 tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, []tftypes.Value{}),
@@ -439,7 +452,7 @@ func TestTransitGatewayResource_ImportState_ValidID(t *testing.T) {
 				"status": map[string]interface{}{
 					"gateway":     "available",
 					"attachment":  "available",
-					"tgwResource": "tgw-0abc",
+					"tgwResource": "https://console.aws.amazon.com/vpc/home?region=us-east-1#TransitGatewayDetails:transitGatewayId=tgw-0abc",
 					"routes":      []string{"10.0.0.0/8", "172.16.0.0/12"},
 				},
 			})
@@ -465,6 +478,7 @@ func TestTransitGatewayResource_ImportState_ValidID(t *testing.T) {
 		"id":                     tftypes.NewValue(tftypes.String, ""),
 		"name":                   tftypes.NewValue(tftypes.String, ""),
 		"aws_transit_gateway_id": tftypes.NewValue(tftypes.String, ""),
+		"aws_console_url":        tftypes.NewValue(tftypes.String, nil),
 		"resource_share_id":      tftypes.NewValue(tftypes.String, ""),
 		"resource_share_account": tftypes.NewValue(tftypes.String, ""),
 		"routes":                 tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, []tftypes.Value{}),
@@ -532,7 +546,7 @@ func TestTransitGatewayResource_Create(t *testing.T) {
 					"status": map[string]interface{}{
 						"gateway":     "pending",
 						"attachment":  "pending",
-						"tgwResource": "tgw-0abc",
+						"tgwResource": "https://console.aws.amazon.com/vpc/home?region=us-east-1#TransitGatewayDetails:transitGatewayId=tgw-0abc",
 						"routes":      []string{"10.0.0.0/8"},
 					},
 				},
@@ -559,6 +573,7 @@ func TestTransitGatewayResource_Create(t *testing.T) {
 		"id":                     tftypes.NewValue(tftypes.String, nil),
 		"name":                   tftypes.NewValue(tftypes.String, "test-tgw"),
 		"aws_transit_gateway_id": tftypes.NewValue(tftypes.String, nil),
+		"aws_console_url":        tftypes.NewValue(tftypes.String, nil),
 		"resource_share_id":      tftypes.NewValue(tftypes.String, "share-uuid"),
 		"resource_share_account": tftypes.NewValue(tftypes.String, "123456789012"),
 		"routes": tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, []tftypes.Value{
@@ -586,6 +601,15 @@ func TestTransitGatewayResource_Create(t *testing.T) {
 	}
 	if got.Status.ValueString() != "pending" {
 		t.Errorf("Expected Status 'pending', got '%s'", got.Status.ValueString())
+	}
+	// Create is where this value first enters state, and the platform sends an AWS
+	// console link rather than an identifier. Asserting the bare id here (against a
+	// mock that returns the link) is what stops the URL being written to state.
+	if got.AwsTransitGatewayID.ValueString() != "tgw-0abc" {
+		t.Errorf("Expected AwsTransitGatewayID 'tgw-0abc', got '%s'", got.AwsTransitGatewayID.ValueString())
+	}
+	if got.AwsConsoleURL.ValueString() == "" {
+		t.Error("Expected AwsConsoleURL to carry the console link set at create, got empty")
 	}
 }
 
@@ -635,7 +659,7 @@ func TestTransitGatewayResource_Update_NameAndRoutes(t *testing.T) {
 					"id":   "tgw-upd",
 					"name": body["name"],
 					"status": map[string]interface{}{
-						"gateway": "available", "attachment": "available", "tgwResource": "tgw-0abc",
+						"gateway": "available", "attachment": "available", "tgwResource": "https://console.aws.amazon.com/vpc/home?region=us-east-1#TransitGatewayDetails:transitGatewayId=tgw-0abc",
 					},
 				},
 			})
@@ -669,7 +693,7 @@ func TestTransitGatewayResource_Update_NameAndRoutes(t *testing.T) {
 					"resourceShare": map[string]interface{}{"id": "share-uuid", "account": "123456789012"},
 				},
 				"status": map[string]interface{}{
-					"gateway": "available", "attachment": "available", "tgwResource": "tgw-0abc",
+					"gateway": "available", "attachment": "available", "tgwResource": "https://console.aws.amazon.com/vpc/home?region=us-east-1#TransitGatewayDetails:transitGatewayId=tgw-0abc",
 					"routes": []string{"10.0.0.0/8", "192.168.0.0/16"},
 				},
 			})
@@ -693,6 +717,7 @@ func TestTransitGatewayResource_Update_NameAndRoutes(t *testing.T) {
 		"id":                     tftypes.NewValue(tftypes.String, "tgw-upd"),
 		"name":                   tftypes.NewValue(tftypes.String, "old-tgw"),
 		"aws_transit_gateway_id": tftypes.NewValue(tftypes.String, "tgw-0abc"),
+		"aws_console_url":        tftypes.NewValue(tftypes.String, nil),
 		"resource_share_id":      tftypes.NewValue(tftypes.String, "share-uuid"),
 		"resource_share_account": tftypes.NewValue(tftypes.String, "123456789012"),
 		"routes": tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, []tftypes.Value{
@@ -708,6 +733,7 @@ func TestTransitGatewayResource_Update_NameAndRoutes(t *testing.T) {
 		"id":                     tftypes.NewValue(tftypes.String, "tgw-upd"),
 		"name":                   tftypes.NewValue(tftypes.String, "renamed-tgw"),
 		"aws_transit_gateway_id": tftypes.NewValue(tftypes.String, "tgw-0abc"),
+		"aws_console_url":        tftypes.NewValue(tftypes.String, nil),
 		"resource_share_id":      tftypes.NewValue(tftypes.String, "share-uuid"),
 		"resource_share_account": tftypes.NewValue(tftypes.String, "123456789012"),
 		"routes": tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, []tftypes.Value{
@@ -779,7 +805,7 @@ func TestTransitGatewayResource_Update_RoutesUnchanged(t *testing.T) {
 					"resourceShare": map[string]interface{}{"id": "share-uuid", "account": "123456789012"},
 				},
 				"status": map[string]interface{}{
-					"gateway": "available", "attachment": "available", "tgwResource": "tgw-0abc",
+					"gateway": "available", "attachment": "available", "tgwResource": "https://console.aws.amazon.com/vpc/home?region=us-east-1#TransitGatewayDetails:transitGatewayId=tgw-0abc",
 					"routes": []string{"10.0.0.0/8", "172.16.0.0/12"},
 				},
 			})
@@ -804,6 +830,7 @@ func TestTransitGatewayResource_Update_RoutesUnchanged(t *testing.T) {
 			"id":                     tftypes.NewValue(tftypes.String, "tgw-noop"),
 			"name":                   tftypes.NewValue(tftypes.String, "same-tgw"),
 			"aws_transit_gateway_id": tftypes.NewValue(tftypes.String, "tgw-0abc"),
+			"aws_console_url":        tftypes.NewValue(tftypes.String, nil),
 			"resource_share_id":      tftypes.NewValue(tftypes.String, "share-uuid"),
 			"resource_share_account": tftypes.NewValue(tftypes.String, "123456789012"),
 			"routes": tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, []tftypes.Value{
@@ -866,6 +893,7 @@ func TestTransitGatewayResource_Delete(t *testing.T) {
 		"id":                     tftypes.NewValue(tftypes.String, "tgw-del"),
 		"name":                   tftypes.NewValue(tftypes.String, "my-tgw"),
 		"aws_transit_gateway_id": tftypes.NewValue(tftypes.String, "tgw-0abc"),
+		"aws_console_url":        tftypes.NewValue(tftypes.String, nil),
 		"resource_share_id":      tftypes.NewValue(tftypes.String, "share-uuid"),
 		"resource_share_account": tftypes.NewValue(tftypes.String, "123456789012"),
 		"routes": tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, []tftypes.Value{
