@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
@@ -444,10 +445,22 @@ func (r *APIInstanceResource) Schema(_ context.Context, _ resource.SchemaRequest
 					"port": schema.Int64Attribute{
 						Description: "Listener port for the Omni/Flex Gateway proxy (the port in the constructed " +
 							"proxy URI http://0.0.0.0:<port>/<base_path>). Defaults to 8081. Set a distinct " +
-							"port to host multiple API instances on the same gateway without sharing a base path.",
+							"port to host multiple API instances on the same gateway without sharing a base path. " +
+							"Omitting it on an existing instance keeps whatever port that instance is already using.",
 						Optional: true,
 						Computed: true,
-						Default:  int64default.StaticInt64(8081),
+						PlanModifiers: []planmodifier.Int64{
+							// Deliberately NOT a static Default of 8081, for the same reason
+							// anypoint_mcp_bridge's port is not: a Default wins over prior state
+							// whenever the config omits the attribute. `port` is NEW, so no
+							// existing config can mention it — every upgraded instance would
+							// plan <live port> -> 8081 and the apply would PATCH the proxy URI,
+							// silently moving a production listener off its port.
+							// UseStateForUnknown makes "omitted" mean "leave it alone"; new
+							// instances still land on 8081 because buildProxyURI and
+							// flattenInstance both fall back to defaultProxyPort.
+							int64planmodifier.UseStateForUnknown(),
+						},
 					},
 					"response_timeout": schema.Int64Attribute{
 						Description: "Response timeout in milliseconds.",

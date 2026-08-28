@@ -38,6 +38,12 @@ Replica information is exposed at two levels of detail:
 
 ## Example Usage
 
+~> **`id` is the platform gateway UUID, not the resource's `id`.** The
+`anypoint_self_managed_gateway` *resource* exposes an `id` of the form
+`<organization_id>/<environment_id>/<name>`; this data source does **not** accept that form.
+Use the resource's `gateway_id` attribute instead. Passing the composite fails with
+`Self-managed gateway not found` even when the gateway plainly exists.
+
 ```terraform
 data "anypoint_self_managed_gateway" "one" {
   organization_id = var.organization_id
@@ -47,6 +53,38 @@ data "anypoint_self_managed_gateway" "one" {
 
 output "gateway_status" {
   value = data.anypoint_self_managed_gateway.one.status
+}
+```
+
+Referencing a gateway managed by the resource in the same configuration:
+
+```terraform
+data "anypoint_self_managed_gateway" "one" {
+  organization_id = var.organization_id
+  environment_id  = var.environment_id
+
+  # gateway_id, NOT id. Empty until a runtime has registered.
+  id = anypoint_self_managed_gateway.example.gateway_id
+}
+```
+
+When the gateway is not managed here, resolve the UUID by name from the plural data source
+rather than hardcoding a value that changes every time the gateway is re-registered:
+
+```terraform
+data "anypoint_self_managed_gateways" "all" {
+  organization_id = var.organization_id
+  environment_id  = var.environment_id
+}
+
+data "anypoint_self_managed_gateway" "one" {
+  organization_id = var.organization_id
+  environment_id  = var.environment_id
+
+  id = one([
+    for g in data.anypoint_self_managed_gateways.all.gateways : g.id
+    if g.name == "my-flex-gateway"
+  ])
 }
 
 # Total running replicas across all connectivity buckets (coarse summary).
@@ -69,7 +107,7 @@ output "connected_replica_ids" {
 
 ### Required
 
-- `id` (String) The unique identifier of the self-managed gateway to fetch.
+- `id` (String) The platform-assigned gateway UUID to fetch, e.g. `26e0cc20-ac3a-4e38-9a74-48d9cc4f4517`. This is the `anypoint_self_managed_gateway` resource's `gateway_id` attribute, **not** its `id`, which is the composite `<organization_id>/<environment_id>/<name>`. The `anypoint_self_managed_gateways` data source also returns this value as each entry's `id`.
 - `environment_id` (String) The environment ID the gateway is registered in.
 
 ### Optional
