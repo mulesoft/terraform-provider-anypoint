@@ -2,6 +2,14 @@
 # Data Sources: anypoint_mcp_bridges (list) + anypoint_mcp_bridge (single)
 ###############################################################################
 
+terraform {
+  required_providers {
+    anypoint = {
+      source = "mulesoft/anypoint"
+    }
+  }
+}
+
 # List every MCP bridge in the environment (plain MCP servers are filtered out).
 data "anypoint_mcp_bridges" "all" {
   organization_id = var.organization_id

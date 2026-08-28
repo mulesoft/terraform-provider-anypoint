@@ -19,7 +19,7 @@ Manages an **MCP bridge** in Anypoint API Manager. Unlike [`anypoint_mcp_server`
 
 -> **Tools are declared explicitly (v1):** Each tool is a single REST operation. Path parameters (`/pets/{petId}`) automatically become required tool inputs. Query and header parameters are exposed with `query_params` / `header_params`, and request bodies with `has_body = true`.
 
--> **Updates:** Adding, removing, or editing **tools** (including a tool's `description`) is an in-place update: the generated asset version is bumped (e.g. `1.0.0` → `1.0.1`, reflected in the computed `asset_version`) and the transcoding policies are re-synced. Changing a source API's **structure** — its `label`, `upstream_uri`, `asset_id`, `group_id`, `version`, or adding/removing whole `source_apis` — is rejected with a "requires replacement" error; recreate with `terraform apply -replace` to apply structural changes.
+-> **Updates:** Adding, removing, or editing **tools** (including a tool's `description`) is an in-place update: the generated asset is republished at the next unused version (reflected in the computed `asset_version`) and the transcoding policies are re-synced. The version advances to the next *free* patch rather than always `+1`, because a destroyed bridge leaves its published asset versions behind — see `asset_version` below. Changing a source API's **structure** — its `label`, `upstream_uri`, `asset_id`, `group_id`, `version`, or adding/removing whole `source_apis` — is rejected with a "requires replacement" error; recreate with `terraform apply -replace` to apply structural changes.
 
 -> **Status:** After create, `status` is read back from the instance and is typically `unregistered` until the connected gateway begins serving the deployment. This is expected and does not indicate a failure.
 
@@ -119,14 +119,14 @@ resource "anypoint_mcp_bridge" "commerce" {
 ### Optional
 
 - `organization_id` (String) The organization ID. If not provided, the organization ID is inferred from the connected app credentials.
-- `port` (Number) The listener port for the bridge on the gateway. Defaults to `8081`. The proxy URI is `http://0.0.0.0:<port>/<base_path>`. Changing this forces replacement.
-- `base_path` (String) The base path for the bridge proxy URI (default empty). The proxy URI is `http://0.0.0.0:<port>/<base_path>`. Changing this forces replacement.
+- `port` (Number) The listener port for the bridge on the gateway. Defaults to `8081` when the bridge is created without one. The proxy URI is `http://0.0.0.0:<port>/<base_path>`. Changing this forces replacement; **omitting** it on an existing bridge keeps whatever port that bridge is already using, so importing a bridge on a non-default port does not drag it back to `8081`.
+- `base_path` (String) The base path for the bridge proxy URI (default empty). The proxy URI is `http://0.0.0.0:<port>/<base_path>`. Changing this forces replacement. A leading slash is **not** significant — `"/mcp"` and `"mcp"` describe the same bridge and switching between them is not a change. An absent base path and an empty one are likewise equivalent.
 
 ### Read-Only
 
 - `id` (String) The numeric identifier of the MCP bridge instance (stored as string).
 - `asset_id` (String) The generated Exchange asset ID.
-- `asset_version` (String) The generated Exchange asset version (starts at `1.0.0` and bumps on tool updates).
+- `asset_version` (String) The generated Exchange asset version. Starts at `1.0.0` and advances on every tool update. It advances to the next **unused** patch version rather than always `+1`, so the sequence can skip numbers: destroying a bridge removes its API instance and policies but leaves the Exchange asset and all its versions published, so a recreated bridge starting again at `1.0.0` skips past the versions its predecessor already published.
 - `product_version` (String) The product version.
 - `consumer_endpoint` (String) The consumer-facing MCP endpoint URI (UI: "Consumer Endpoint").
 - `status` (String) The current status of the MCP bridge.
