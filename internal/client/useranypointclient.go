@@ -39,7 +39,21 @@ type UserClientConfig struct {
 	OrgID        string
 }
 
-// NewUserAnypointClient creates a new User-based Anypoint API client using password grant
+// NewUserAnypointClient creates a new Anypoint API client for resources that
+// historically only supported password grant (Environment, Organization).
+//
+// It supports two modes, selected by whether username/password resolve to a
+// non-empty value:
+//   - password grant (auth_type = "user"): client_id + client_secret + username + password
+//   - client_credentials grant (auth_type = "connected_app", the default): client_id +
+//     client_secret only, matching how every other resource in this provider authenticates.
+//
+// Previously this constructor unconditionally required username/password, which meant
+// Environment/Organization resources errored under the documented default
+// auth_type = "connected_app" ("username is required...") even though the provider-level
+// schema only requires username/password when auth_type = "user". See
+// https://github.com/mulesoft/terraform-provider-anypoint/issues (environment/organization
+// resources fail under connected_app auth).
 func NewUserAnypointClient(config *UserClientConfig) (*UserAnypointClient, error) {
 	if config.ClientID == "" {
 		return nil, fmt.Errorf("client_id is required")
@@ -47,26 +61,27 @@ func NewUserAnypointClient(config *UserClientConfig) (*UserAnypointClient, error
 	if config.ClientSecret == "" {
 		return nil, fmt.Errorf("client_secret is required")
 	}
-	// Allow username/password to be empty if they can be filled from environment variables.
-	// The provider-level Configure already folds in ANYPOINT_USERNAME / ANYPOINT_PASSWORD
-	// before we get here, so config.Username / config.Password may be non-empty via either
-	// the provider block or those env vars. As a final safety net we also honor
-	// ANYPOINT_ADMIN_USERNAME / ANYPOINT_ADMIN_PASSWORD for call sites that bypass the
-	// provider-level resolution.
+	// Username/password are only required for password grant. The provider-level
+	// Configure folds in ANYPOINT_USERNAME / ANYPOINT_PASSWORD before we get here, so
+	// config.Username / config.Password may be non-empty via either the provider block
+	// or those env vars. As a final safety net we also honor ANYPOINT_ADMIN_USERNAME /
+	// ANYPOINT_ADMIN_PASSWORD for call sites that bypass the provider-level resolution.
+	// If neither resolves, we fall back to client_credentials grant instead of erroring —
+	// this is the expected path for auth_type = "connected_app" (the documented default).
 	username := config.Username
 	if username == "" {
 		username = os.Getenv("ANYPOINT_ADMIN_USERNAME")
-	}
-	if username == "" {
-		return nil, fmt.Errorf("username is required (set it on the provider configuration, or via the ANYPOINT_USERNAME or ANYPOINT_ADMIN_USERNAME environment variable)")
 	}
 
 	password := config.Password
 	if password == "" {
 		password = os.Getenv("ANYPOINT_ADMIN_PASSWORD")
 	}
-	if password == "" {
-		return nil, fmt.Errorf("password is required (set it on the provider configuration, or via the ANYPOINT_PASSWORD or ANYPOINT_ADMIN_PASSWORD environment variable)")
+
+	if (username == "") != (password == "") {
+		return nil, fmt.Errorf("username and password must be set together for password grant auth " +
+			"(set both on the provider configuration, or via ANYPOINT_USERNAME/ANYPOINT_PASSWORD or " +
+			"ANYPOINT_ADMIN_USERNAME/ANYPOINT_ADMIN_PASSWORD) — or leave both unset to use client_credentials grant")
 	}
 
 	baseURL := config.BaseURL
@@ -112,16 +127,27 @@ func NewUserAnypointClient(config *UserClientConfig) (*UserAnypointClient, error
 	return c, nil
 }
 
-// authenticate performs user authentication using password grant and stores the access token
+// authenticate performs authentication and stores the access token. Uses password grant
+// when Username/Password are set, otherwise falls back to client_credentials grant — see
+// NewUserAnypointClient for why both are supported here.
 func (c *UserAnypointClient) authenticate() error {
 	authURL := fmt.Sprintf("%s/accounts/api/v2/oauth2/token", c.BaseURL)
 
-	authData := map[string]string{
-		"grant_type":    "password",
-		"client_id":     c.ClientID,
-		"client_secret": c.ClientSecret,
-		"username":      c.Username,
-		"password":      c.Password,
+	var authData map[string]string
+	if c.Username != "" && c.Password != "" {
+		authData = map[string]string{
+			"grant_type":    "password",
+			"client_id":     c.ClientID,
+			"client_secret": c.ClientSecret,
+			"username":      c.Username,
+			"password":      c.Password,
+		}
+	} else {
+		authData = map[string]string{
+			"grant_type":    "client_credentials",
+			"client_id":     c.ClientID,
+			"client_secret": c.ClientSecret,
+		}
 	}
 
 	jsonData, err := json.Marshal(authData)
@@ -143,7 +169,7 @@ func (c *UserAnypointClient) authenticate() error {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("user authentication failed with status %d: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("authentication failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
 	// Extract token from response
