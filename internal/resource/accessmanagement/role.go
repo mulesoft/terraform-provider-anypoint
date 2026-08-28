@@ -508,15 +508,28 @@ func (r *RoleResource) ImportState(ctx context.Context, req resource.ImportState
 // next apply then reconciles the remainder). Errors here are ignored — this is a
 // best-effort cleanup path invoked only when an apply has already failed.
 func (r *RoleResource) refreshManagedIntoStateBestEffort(ctx context.Context, data *RoleResourceModel, orgID, roleGroupID string, managePerms, manageMembers bool) {
-	if managePerms {
-		if perms, err := r.reconcilePermissionsIntoState(ctx, orgID, roleGroupID, data.Permissions); err == nil {
-			data.Permissions = perms
-		}
+	// Refresh BOTH collections, not just the managed one. `permissions` and `members`
+	// are Optional+Computed, so whichever the config omits is UNKNOWN on create — and
+	// this helper runs on the error path, immediately before State.Set. An unknown
+	// value there fails the apply with "Provider returned invalid result object after
+	// apply" stacked on top of the real error, hiding the cause the user needs to see.
+	if perms, err := r.reconcilePermissionsIntoState(ctx, orgID, roleGroupID, data.Permissions); err == nil {
+		data.Permissions = perms
 	}
-	if manageMembers {
-		if members, err := r.reconcileMembersIntoState(ctx, orgID, roleGroupID, data.Members); err == nil {
-			data.Members = members
-		}
+	if members, err := r.reconcileMembersIntoState(ctx, orgID, roleGroupID, data.Members); err == nil {
+		data.Members = members
+	}
+	settleUnknownRoleCollections(data)
+}
+
+// settleUnknownRoleCollections is the anypoint_role sibling of
+// settleUnknownTeamCollections: same schema shape, same error path, same failure mode.
+func settleUnknownRoleCollections(data *RoleResourceModel) {
+	if data.Permissions.IsUnknown() {
+		data.Permissions = types.SetNull(permissionObjectType)
+	}
+	if data.Members.IsUnknown() {
+		data.Members = types.SetNull(types.StringType)
 	}
 }
 
@@ -575,6 +588,26 @@ func canonicalContextParams(m map[string]string) string {
 	}
 	b, _ := json.Marshal(m)
 	return string(b)
+}
+
+// mapHasUnknownValue reports whether a known map still contains an unknown value.
+//
+// A map written as `{ org = var.org_id }` is itself KNOWN — it has one key — while
+// its value is not. mapToStringMap renders such a value as "", which is
+// indistinguishable from genuinely absent, so any validation that treats "" as
+// missing must consult this first. Terraform holds input variables unknown during
+// `terraform validate` whatever their defaults, so this is the ordinary case rather
+// than an exotic one.
+func mapHasUnknownValue(m types.Map) bool {
+	if m.IsNull() || m.IsUnknown() {
+		return false
+	}
+	for _, v := range m.Elements() {
+		if v.IsUnknown() {
+			return true
+		}
+	}
+	return false
 }
 
 // mapToStringMap converts a types.Map (possibly null/unknown) to a plain map.

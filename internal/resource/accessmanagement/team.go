@@ -41,7 +41,7 @@ type TeamResourceModel struct {
 	OrganizationID types.String `tfsdk:"organization_id"`
 	ParentTeamID   types.String `tfsdk:"parent_team_id"`
 	TeamType       types.String `tfsdk:"team_type"`
-	Roles          types.Set    `tfsdk:"roles"`
+	Permissions    types.Set    `tfsdk:"permissions"`
 	Members        types.Set    `tfsdk:"members"`
 	CreatedAt      types.String `tfsdk:"created_at"`
 	UpdatedAt      types.String `tfsdk:"updated_at"`
@@ -59,7 +59,7 @@ func (r *TeamResource) Metadata(_ context.Context, req resource.MetadataRequest,
 // Schema defines the schema for the resource.
 func (r *TeamResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Manages an Anypoint Platform team, including its inline role assignments and members.",
+		Description: "Manages an Anypoint Platform team, including its inline permissions and members.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Description: "The unique identifier for the team.",
@@ -98,22 +98,24 @@ func (r *TeamResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 				Computed: true,
 				Default:  stringdefault.StaticString("internal"),
 			},
-			"roles": schema.SetNestedAttribute{
-				Description: "The set of roles (permissions) assigned to this team. When set, this list is " +
-					"authoritative: roles not listed here are removed on apply. Omit the attribute entirely " +
-					"to leave role assignments unmanaged. System (internal) assignments are never modified.",
+			"permissions": schema.SetNestedAttribute{
+				Description: "The set of permissions assigned to this team, matching what the Anypoint UI " +
+					"calls Permissions and the same shape as anypoint_role's `permissions`. When set, this " +
+					"list is authoritative: permissions not listed here are removed on apply. Omit the " +
+					"attribute entirely to leave assignments unmanaged. System (internal) assignments are " +
+					"never modified.",
 				Optional: true,
 				Computed: true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
-							Description: "The role's display name as shown in the Anypoint UI (e.g., 'Exchange Viewer'). " +
+							Description: "The permission's display name as shown in the Anypoint UI (e.g., 'Exchange Viewer'). " +
 								"Case-insensitive. Use the anypoint_available_permissions data source to discover valid names.",
 							Required: true,
 						},
 						"context_params": schema.MapAttribute{
-							Description: "Context parameters for the role. Typically includes 'org' (organization ID) " +
-								"and, for environment-scoped roles, 'envId'.",
+							Description: "Context parameters for the permission. Typically includes 'org' (organization ID) " +
+								"and, for environment-scoped permissions, 'envId'.",
 							Optional:    true,
 							ElementType: types.StringType,
 						},
@@ -181,13 +183,13 @@ func (r *TeamResource) Configure(_ context.Context, req resource.ConfigureReques
 		return
 	}
 
-	// Sub-clients for managing the team's roles and members inline. They share the
+	// Sub-clients for managing the team's permissions and members inline. They share the
 	// same cached token via config, so no extra authentication is performed.
 	rolesClient, err := accessmanagement.NewTeamRolesClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to Create Team Roles Client",
-			"An unexpected error occurred when creating the Team Roles client.\n\n"+
+			"Unable to Create Team Permissions Client",
+			"An unexpected error occurred when creating the team permissions client.\n\n"+
 				"Client Error: "+err.Error(),
 		)
 		return
@@ -216,8 +218,8 @@ func (r *TeamResource) Configure(_ context.Context, req resource.ConfigureReques
 	catalogClient, err := accessmanagement.NewRolePermissionClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to Create Role Catalog Client",
-			"An unexpected error occurred when creating the Role Catalog client.\n\n"+
+			"Unable to Create Permission Catalog Client",
+			"An unexpected error occurred when creating the permission catalog client.\n\n"+
 				"Client Error: "+err.Error(),
 		)
 		return
@@ -246,14 +248,14 @@ func (r *TeamResource) Create(ctx context.Context, req resource.CreateRequest, r
 		orgID = r.client.OrgID
 	}
 
-	manageRoles := !data.Roles.IsNull() && !data.Roles.IsUnknown()
+	managePermissions := !data.Permissions.IsNull() && !data.Permissions.IsUnknown()
 	manageMembers := !data.Members.IsNull() && !data.Members.IsUnknown()
 
 	// Resolve (and thereby validate) role names and usernames up front so we fail
 	// before creating anything if a name is invalid — no orphaned team.
-	desiredRoles, err := r.resolveTeamRoles(ctx, data.Roles)
+	desiredPermissions, err := r.resolveTeamPermissions(ctx, data.Permissions)
 	if err != nil {
-		resp.Diagnostics.AddError("Invalid role", err.Error())
+		resp.Diagnostics.AddError("Invalid permission", err.Error())
 		return
 	}
 	desiredMembers, err := r.resolveTeamMembers(ctx, orgID, data.Members)
@@ -292,7 +294,7 @@ func (r *TeamResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
-	// Map response body to schema (leaves Roles/Members untouched).
+	// Map response body to schema (leaves Permissions/Members untouched).
 	actualParentID := r.mapTeamToState(team, &data, orgID)
 	if actualParentID == "" {
 		actualParentID = parentTeamID // fallback to what we sent
@@ -314,12 +316,12 @@ func (r *TeamResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
-	// Reconcile roles.
-	if manageRoles {
-		if err := r.applyTeamRoles(ctx, orgID, team.ID, desiredRoles); err != nil {
-			r.refreshManagedIntoStateBestEffort(ctx, &data, orgID, team.ID, manageRoles, manageMembers)
+	// Reconcile permissions.
+	if managePermissions {
+		if err := r.applyTeamPermissions(ctx, orgID, team.ID, desiredPermissions); err != nil {
+			r.refreshManagedIntoStateBestEffort(ctx, &data, orgID, team.ID, managePermissions, manageMembers)
 			resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
-			resp.Diagnostics.AddError("Error applying roles", err.Error())
+			resp.Diagnostics.AddError("Error applying permissions", err.Error())
 			return
 		}
 	}
@@ -327,7 +329,7 @@ func (r *TeamResource) Create(ctx context.Context, req resource.CreateRequest, r
 	// Reconcile members.
 	if manageMembers {
 		if err := r.applyTeamMembers(ctx, orgID, team.ID, desiredMembers); err != nil {
-			r.refreshManagedIntoStateBestEffort(ctx, &data, orgID, team.ID, manageRoles, manageMembers)
+			r.refreshManagedIntoStateBestEffort(ctx, &data, orgID, team.ID, managePermissions, manageMembers)
 			resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 			resp.Diagnostics.AddError("Error applying members", err.Error())
 			return
@@ -338,13 +340,13 @@ func (r *TeamResource) Create(ctx context.Context, req resource.CreateRequest, r
 
 	// For managed attributes, plan values are already correct. For unmanaged attributes
 	// (config omitted → plan is unknown), populate from API so state is concrete.
-	if !manageRoles {
-		roles, rolesErr := r.reconcileTeamRolesIntoState(ctx, orgID, team.ID, data.Roles)
-		if rolesErr != nil {
-			resp.Diagnostics.AddError("Error reading roles after create", rolesErr.Error())
+	if !managePermissions {
+		permissions, permErr := r.reconcileTeamPermissionsIntoState(ctx, orgID, team.ID, data.Permissions)
+		if permErr != nil {
+			resp.Diagnostics.AddError("Error reading permissions after create", permErr.Error())
 			return
 		}
-		data.Roles = roles
+		data.Permissions = permissions
 	}
 	if !manageMembers {
 		members, membersErr := r.reconcileTeamMembersIntoState(ctx, orgID, team.ID, data.Members)
@@ -388,7 +390,7 @@ func (r *TeamResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 		return
 	}
 
-	// Map response body to schema (leaves Roles/Members as they were in state).
+	// Map response body to schema (leaves Permissions/Members as they were in state).
 	parentID := r.mapTeamToState(team, &data, orgID)
 
 	// Populate parent_team_id from the API response's ancestor chain.
@@ -399,14 +401,14 @@ func (r *TeamResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 		data.ParentTeamID = types.StringNull()
 	}
 
-	// Always read roles/members from API into state. With Optional+Computed,
+	// Always read permissions/members from API into state. With Optional+Computed,
 	// Terraform handles the diff: config sets them → authoritative; config omits → accepts API reality.
-	roles, err := r.reconcileTeamRolesIntoState(ctx, orgID, data.ID.ValueString(), data.Roles)
+	permissions, err := r.reconcileTeamPermissionsIntoState(ctx, orgID, data.ID.ValueString(), data.Permissions)
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading roles", err.Error())
+		resp.Diagnostics.AddError("Error reading permissions", err.Error())
 		return
 	}
-	data.Roles = roles
+	data.Permissions = permissions
 
 	members, err := r.reconcileTeamMembersIntoState(ctx, orgID, data.ID.ValueString(), data.Members)
 	if err != nil {
@@ -438,13 +440,13 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 
 	teamID := state.ID.ValueString()
 
-	manageRoles := !plan.Roles.IsNull() && !plan.Roles.IsUnknown()
+	managePermissions := !plan.Permissions.IsNull() && !plan.Permissions.IsUnknown()
 	manageMembers := !plan.Members.IsNull() && !plan.Members.IsUnknown()
 
-	// Resolve (validate) desired roles/members before mutating anything.
-	desiredRoles, err := r.resolveTeamRoles(ctx, plan.Roles)
+	// Resolve (validate) desired permissions/members before mutating anything.
+	desiredPermissions, err := r.resolveTeamPermissions(ctx, plan.Permissions)
 	if err != nil {
-		resp.Diagnostics.AddError("Invalid role", err.Error())
+		resp.Diagnostics.AddError("Invalid permission", err.Error())
 		return
 	}
 	desiredMembers, err := r.resolveTeamMembers(ctx, orgID, plan.Members)
@@ -513,20 +515,20 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		plan.ParentTeamID = types.StringValue(updateParentID)
 	}
 
-	// Reconcile roles if managed. On failure, refresh actual state so a partial
+	// Reconcile permissions if managed. On failure, refresh actual state so a partial
 	// apply is recorded accurately for the next run.
-	if manageRoles {
-		if err := r.applyTeamRoles(ctx, orgID, teamID, desiredRoles); err != nil {
-			r.refreshManagedIntoStateBestEffort(ctx, &plan, orgID, teamID, manageRoles, manageMembers)
+	if managePermissions {
+		if err := r.applyTeamPermissions(ctx, orgID, teamID, desiredPermissions); err != nil {
+			r.refreshManagedIntoStateBestEffort(ctx, &plan, orgID, teamID, managePermissions, manageMembers)
 			resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
-			resp.Diagnostics.AddError("Error applying roles", err.Error())
+			resp.Diagnostics.AddError("Error applying permissions", err.Error())
 			return
 		}
 	}
 
 	if manageMembers {
 		if err := r.applyTeamMembers(ctx, orgID, teamID, desiredMembers); err != nil {
-			r.refreshManagedIntoStateBestEffort(ctx, &plan, orgID, teamID, manageRoles, manageMembers)
+			r.refreshManagedIntoStateBestEffort(ctx, &plan, orgID, teamID, managePermissions, manageMembers)
 			resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 			resp.Diagnostics.AddError("Error applying members", err.Error())
 			return
@@ -536,13 +538,13 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	tflog.Trace(ctx, "updated team")
 
 	// For unmanaged attributes (config omitted → plan is unknown), populate from API.
-	if !manageRoles {
-		roles, rolesErr := r.reconcileTeamRolesIntoState(ctx, orgID, teamID, plan.Roles)
-		if rolesErr != nil {
-			resp.Diagnostics.AddError("Error reading roles after update", rolesErr.Error())
+	if !managePermissions {
+		permissions, permErr := r.reconcileTeamPermissionsIntoState(ctx, orgID, teamID, plan.Permissions)
+		if permErr != nil {
+			resp.Diagnostics.AddError("Error reading permissions after update", permErr.Error())
 			return
 		}
-		plan.Roles = roles
+		plan.Permissions = permissions
 	}
 	if !manageMembers {
 		members, membersErr := r.reconcileTeamMembersIntoState(ctx, orgID, teamID, plan.Members)
@@ -588,27 +590,48 @@ func (r *TeamResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 }
 
 // ImportState imports the resource into Terraform state.
-// Roles and members will be populated by the Read that follows ImportState.
+// Permissions and members will be populated by the Read that follows ImportState.
 // With Optional+Computed schema, the API-read values become state, and
 // Terraform's diff engine handles authoritative enforcement if config sets them.
 func (r *TeamResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-// refreshManagedIntoStateBestEffort re-reads the actual roles/members from the API
+// refreshManagedIntoStateBestEffort re-reads the actual permissions/members from the API
 // into `data` after a partial-failure so the recorded state matches reality (the
 // next apply then reconciles the remainder). Errors here are ignored — this is a
 // best-effort cleanup path invoked only when an apply has already failed.
-func (r *TeamResource) refreshManagedIntoStateBestEffort(ctx context.Context, data *TeamResourceModel, orgID, teamID string, manageRoles, manageMembers bool) {
-	if manageRoles {
-		if roles, err := r.reconcileTeamRolesIntoState(ctx, orgID, teamID, data.Roles); err == nil {
-			data.Roles = roles
-		}
+func (r *TeamResource) refreshManagedIntoStateBestEffort(ctx context.Context, data *TeamResourceModel, orgID, teamID string, managePermissions, manageMembers bool) {
+	// Refresh BOTH collections, not just the managed one. `permissions` and `members`
+	// are Optional+Computed, so whichever the config omits is UNKNOWN on create — and
+	// this helper runs on the error path, immediately before State.Set. An unknown
+	// value there fails the apply with "Provider returned invalid result object after
+	// apply" stacked on top of the real error, which is exactly the wrong time to add
+	// a second, misleading failure: a 403 assigning team permissions is the EXPECTED
+	// outcome for most permissions under client_credentials (see docs/index.md), so
+	// this path is hit routinely rather than rarely.
+	if permissions, err := r.reconcileTeamPermissionsIntoState(ctx, orgID, teamID, data.Permissions); err == nil {
+		data.Permissions = permissions
 	}
-	if manageMembers {
-		if members, err := r.reconcileTeamMembersIntoState(ctx, orgID, teamID, data.Members); err == nil {
-			data.Members = members
-		}
+	if members, err := r.reconcileTeamMembersIntoState(ctx, orgID, teamID, data.Members); err == nil {
+		data.Members = members
+	}
+	settleUnknownTeamCollections(data)
+}
+
+// settleUnknownTeamCollections gives `permissions` and `members` concrete values so the
+// model is safe to write to state.
+//
+// Both are Optional+Computed, so whichever the config omits is UNKNOWN on create. An
+// unknown value reaching State.Set fails the apply with "Provider returned invalid
+// result object after apply" — and on the error path that lands ON TOP of the real
+// error, hiding it. Null is the honest record: the apply did not establish a value.
+func settleUnknownTeamCollections(data *TeamResourceModel) {
+	if data.Permissions.IsUnknown() {
+		data.Permissions = types.SetNull(teamPermissionObjectType)
+	}
+	if data.Members.IsUnknown() {
+		data.Members = types.SetNull(teamMemberObjectType)
 	}
 }
 
@@ -634,7 +657,7 @@ func (r *TeamResource) resolveRootTeamID(ctx context.Context, orgID string) (str
 }
 
 // mapTeamToState maps an API Team response to the Terraform state model, leaving the
-// Roles/Members typed values untouched (they are reconciled separately).
+// Permissions/Members typed values untouched (they are reconciled separately).
 // Returns the direct parent team ID (from ancestor_team_ids) for callers that need it.
 func (r *TeamResource) mapTeamToState(team *accessmanagement.Team, data *TeamResourceModel, orgID string) string {
 	data.ID = types.StringValue(team.ID)
@@ -650,10 +673,10 @@ func (r *TeamResource) mapTeamToState(team *accessmanagement.Team, data *TeamRes
 	return team.DirectParentID()
 }
 
-// teamRoleObjectType is the Terraform object type for a single role entry in the
-// anypoint_team resource's `roles` set. It mirrors the role resource's permission
+// teamPermissionObjectType is the Terraform object type for a single role entry in the
+// anypoint_team resource's `permissions` set. It mirrors the role resource's permission
 // entry (a display name plus optional context params).
-var teamRoleObjectType = types.ObjectType{
+var teamPermissionObjectType = types.ObjectType{
 	AttrTypes: map[string]attr.Type{
 		"name":           types.StringType,
 		"context_params": types.MapType{ElemType: types.StringType},
@@ -670,17 +693,17 @@ var teamMemberObjectType = types.ObjectType{
 	},
 }
 
-// desiredTeamRole is a resolved role ready to be sent to the API.
-type desiredTeamRole struct {
+// desiredTeamPermission is a resolved role ready to be sent to the API.
+type desiredTeamPermission struct {
 	roleID        string
 	typedName     string            // exactly what the user wrote (preserved in state)
 	contextParams map[string]string // resolved context params
 	contextKey    string            // canonical JSON of contextParams for matching
 }
 
-// typedTeamRole holds the user's original (typed) representation of a role so Read
+// typedTeamPermission holds the user's original (typed) representation of a role so Read
 // can preserve casing / context_params form and avoid perpetual diffs.
-type typedTeamRole struct {
+type typedTeamPermission struct {
 	name types.String
 	cp   types.Map
 }
@@ -699,19 +722,19 @@ type typedTeamMember struct {
 	membershipType types.String
 }
 
-// --- roles -------------------------------------------------------------------
+// --- permissions -------------------------------------------------------------
 
-// resolveTeamRoles resolves each role's display name to a role_id using the
+// resolveTeamPermissions resolves each role's display name to a role_id using the
 // available-roles catalog (case-insensitive). Returns an error listing the
 // offending name if it is unknown or ambiguous. Returns (nil, nil) when unmanaged.
-func (r *TeamResource) resolveTeamRoles(ctx context.Context, roleSet types.Set) ([]desiredTeamRole, error) {
+func (r *TeamResource) resolveTeamPermissions(ctx context.Context, roleSet types.Set) ([]desiredTeamPermission, error) {
 	if roleSet.IsNull() || roleSet.IsUnknown() {
 		return nil, nil
 	}
 
 	roles, err := r.catalogClient.ListAvailableRoles(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("could not list available roles for name resolution: %w", err)
+		return nil, fmt.Errorf("could not list available permissions for name resolution: %w", err)
 	}
 
 	// Build a case-insensitive name -> []role_id map so we can detect ambiguity.
@@ -721,7 +744,7 @@ func (r *TeamResource) resolveTeamRoles(ctx context.Context, roleSet types.Set) 
 		nameToIDs[key] = append(nameToIDs[key], role.RoleID)
 	}
 
-	out := make([]desiredTeamRole, 0, len(roleSet.Elements()))
+	out := make([]desiredTeamPermission, 0, len(roleSet.Elements()))
 	for _, el := range roleSet.Elements() {
 		obj := el.(types.Object)
 		attrs := obj.Attributes()
@@ -731,18 +754,18 @@ func (r *TeamResource) resolveTeamRoles(ctx context.Context, roleSet types.Set) 
 		ids := nameToIDs[normalizeName(typedName)]
 		if len(ids) == 0 {
 			return nil, fmt.Errorf(
-				"role %q is not a valid role name; use the anypoint_available_permissions data source to discover valid role names",
+				"permission %q is not a valid permission name; use the anypoint_available_permissions data source to discover valid names",
 				typedName,
 			)
 		}
 		if len(ids) > 1 {
 			return nil, fmt.Errorf(
-				"role name %q is ambiguous (matches %d roles); the platform has multiple roles with this name so it cannot be resolved by name alone",
+				"permission name %q is ambiguous (matches %d entries); the platform has multiple permissions with this name so it cannot be resolved by name alone",
 				typedName, len(ids),
 			)
 		}
 
-		out = append(out, desiredTeamRole{
+		out = append(out, desiredTeamPermission{
 			roleID:        ids[0],
 			typedName:     typedName,
 			contextParams: cpMap,
@@ -752,12 +775,12 @@ func (r *TeamResource) resolveTeamRoles(ctx context.Context, roleSet types.Set) 
 	return out, nil
 }
 
-// applyTeamRoles reconciles the team's role assignments to exactly `desired`.
+// applyTeamPermissions reconciles the team's role assignments to exactly `desired`.
 // It adds missing assignments and removes extras, skipping internal (system) ones.
-func (r *TeamResource) applyTeamRoles(ctx context.Context, orgID, teamID string, desired []desiredTeamRole) error {
+func (r *TeamResource) applyTeamPermissions(ctx context.Context, orgID, teamID string, desired []desiredTeamPermission) error {
 	assignments, err := r.rolesClient.ListTeamRoles(ctx, orgID, teamID)
 	if err != nil {
-		return fmt.Errorf("could not list current team role assignments: %w", err)
+		return fmt.Errorf("could not list current team permission assignments: %w", err)
 	}
 
 	// Build the set of catalog (assignable) role IDs. Any assignment whose role_id
@@ -767,7 +790,7 @@ func (r *TeamResource) applyTeamRoles(ctx context.Context, orgID, teamID string,
 	// it would fight the platform on every apply.
 	catalog, err := r.catalogClient.ListAvailableRoles(ctx)
 	if err != nil {
-		return fmt.Errorf("could not list available roles for assignment reconciliation: %w", err)
+		return fmt.Errorf("could not list available permissions for assignment reconciliation: %w", err)
 	}
 	catalogIDs := make(map[string]struct{}, len(catalog))
 	for _, role := range catalog {
@@ -785,7 +808,7 @@ func (r *TeamResource) applyTeamRoles(ctx context.Context, orgID, teamID string,
 		actual[a.RoleID+"|"+canonicalContextParams(a.ContextParams)] = a
 	}
 
-	desiredByKey := make(map[string]desiredTeamRole, len(desired))
+	desiredByKey := make(map[string]desiredTeamPermission, len(desired))
 	for _, d := range desired {
 		desiredByKey[d.roleID+"|"+d.contextKey] = d
 	}
@@ -799,7 +822,7 @@ func (r *TeamResource) applyTeamRoles(ctx context.Context, orgID, teamID string,
 			RoleID:        d.roleID,
 			ContextParams: d.contextParams,
 		}); err != nil {
-			return fmt.Errorf("failed to assign role %q: %w", d.typedName, err)
+			return fmt.Errorf("failed to assign permission %q: %w", d.typedName, err)
 		}
 	}
 
@@ -812,27 +835,27 @@ func (r *TeamResource) applyTeamRoles(ctx context.Context, orgID, teamID string,
 			RoleID:        a.RoleID,
 			ContextParams: a.ContextParams,
 		}); err != nil {
-			return fmt.Errorf("failed to unassign role %q: %w", a.Name, err)
+			return fmt.Errorf("failed to unassign permission %q: %w", a.Name, err)
 		}
 	}
 
 	return nil
 }
 
-// reconcileTeamRolesIntoState reads the actual (non-internal) role assignments from
-// the API and builds a roles set. For each assignment matching an entry in
+// reconcileTeamPermissionsIntoState reads the actual (non-internal) role assignments from
+// the API and builds a permissions set. For each assignment matching an entry in
 // typedSource, the user's original name/context_params are preserved (so casing
 // differences don't cause perpetual diffs). Unmatched assignments (drift or import)
 // are labeled with the canonical role name from the catalog.
-func (r *TeamResource) reconcileTeamRolesIntoState(ctx context.Context, orgID, teamID string, typedSource types.Set) (types.Set, error) {
+func (r *TeamResource) reconcileTeamPermissionsIntoState(ctx context.Context, orgID, teamID string, typedSource types.Set) (types.Set, error) {
 	assignments, err := r.rolesClient.ListTeamRoles(ctx, orgID, teamID)
 	if err != nil {
-		return types.SetNull(teamRoleObjectType), fmt.Errorf("could not list team role assignments: %w", err)
+		return types.SetNull(teamPermissionObjectType), fmt.Errorf("could not list team permission assignments: %w", err)
 	}
 
 	roles, err := r.catalogClient.ListAvailableRoles(ctx)
 	if err != nil {
-		return types.SetNull(teamRoleObjectType), fmt.Errorf("could not list available roles: %w", err)
+		return types.SetNull(teamPermissionObjectType), fmt.Errorf("could not list available permissions: %w", err)
 	}
 	roleIDToName := make(map[string]string, len(roles))
 	nameToID := make(map[string]string, len(roles))
@@ -841,9 +864,9 @@ func (r *TeamResource) reconcileTeamRolesIntoState(ctx context.Context, orgID, t
 		nameToID[normalizeName(role.Name)] = role.RoleID
 	}
 
-	// Index the user's typed roles by (role_id | context) so we can preserve their
+	// Index the user's typed permissions by (role_id | context) so we can preserve their
 	// exact representation for matched assignments.
-	typedByKey := map[string]typedTeamRole{}
+	typedByKey := map[string]typedTeamPermission{}
 	if !typedSource.IsNull() && !typedSource.IsUnknown() {
 		for _, el := range typedSource.Elements() {
 			obj := el.(types.Object)
@@ -852,7 +875,7 @@ func (r *TeamResource) reconcileTeamRolesIntoState(ctx context.Context, orgID, t
 			cpTypes := attrs["context_params"].(types.Map)
 			rid := nameToID[normalizeName(typedName.ValueString())]
 			key := rid + "|" + canonicalContextParams(mapToStringMap(cpTypes))
-			typedByKey[key] = typedTeamRole{name: typedName, cp: cpTypes}
+			typedByKey[key] = typedTeamPermission{name: typedName, cp: cpTypes}
 		}
 	}
 
@@ -864,7 +887,7 @@ func (r *TeamResource) reconcileTeamRolesIntoState(ctx context.Context, orgID, t
 		// Skip platform-injected side-effect grants that are not in the assignable
 		// catalog (e.g. the org-scoped "Business Group Viewer" the platform auto-adds
 		// when any env-scoped role is assigned to a team). The user cannot express
-		// these in config — resolveTeamRoles only accepts catalog role names — so
+		// these in config — resolveTeamPermissions only accepts catalog role names — so
 		// treating them as managed would surface a phantom `name = ""` entry and a
 		// perpetual diff. Mirror the internal-skip above.
 		if _, inCatalog := roleIDToName[a.RoleID]; !inCatalog {
@@ -882,19 +905,19 @@ func (r *TeamResource) reconcileTeamRolesIntoState(ctx context.Context, orgID, t
 			cpVal = stringMapToTypesMap(a.ContextParams)
 		}
 
-		obj, diags := types.ObjectValue(teamRoleObjectType.AttrTypes, map[string]attr.Value{
+		obj, diags := types.ObjectValue(teamPermissionObjectType.AttrTypes, map[string]attr.Value{
 			"name":           nameVal,
 			"context_params": cpVal,
 		})
 		if diags.HasError() {
-			return types.SetNull(teamRoleObjectType), fmt.Errorf("failed to build team role object")
+			return types.SetNull(teamPermissionObjectType), fmt.Errorf("failed to build team permission object")
 		}
 		objs = append(objs, obj)
 	}
 
-	set, diags := types.SetValue(teamRoleObjectType, objs)
+	set, diags := types.SetValue(teamPermissionObjectType, objs)
 	if diags.HasError() {
-		return types.SetNull(teamRoleObjectType), fmt.Errorf("failed to build team roles set")
+		return types.SetNull(teamPermissionObjectType), fmt.Errorf("failed to build team permissions set")
 	}
 	return set, nil
 }

@@ -181,7 +181,7 @@ func newTeamTestResource(t *testing.T, state *teamTestServerState) *TeamResource
 }
 
 // teamRoleSet builds a types.Set of team-role objects from typed entries.
-func teamRoleSet(t *testing.T, entries ...typedTeamRole) types.Set {
+func teamRoleSet(t *testing.T, entries ...typedTeamPermission) types.Set {
 	t.Helper()
 	objs := make([]attr.Value, 0, len(entries))
 	for _, e := range entries {
@@ -189,7 +189,7 @@ func teamRoleSet(t *testing.T, entries ...typedTeamRole) types.Set {
 		if cp.IsNull() || cp.IsUnknown() {
 			cp = types.MapNull(types.StringType)
 		}
-		obj, diags := types.ObjectValue(teamRoleObjectType.AttrTypes, map[string]attr.Value{
+		obj, diags := types.ObjectValue(teamPermissionObjectType.AttrTypes, map[string]attr.Value{
 			"name":           e.name,
 			"context_params": cp,
 		})
@@ -198,7 +198,7 @@ func teamRoleSet(t *testing.T, entries ...typedTeamRole) types.Set {
 		}
 		objs = append(objs, obj)
 	}
-	set, diags := types.SetValue(teamRoleObjectType, objs)
+	set, diags := types.SetValue(teamPermissionObjectType, objs)
 	if diags.HasError() {
 		t.Fatalf("teamRoleSet set error: %v", diags.Errors())
 	}
@@ -226,11 +226,11 @@ func teamMemberSet(t *testing.T, entries ...typedTeamMember) types.Set {
 	return set
 }
 
-// --- resolveTeamRoles --------------------------------------------------------
+// --- resolveTeamPermissions --------------------------------------------------------
 
 func TestResolveTeamRoles_Unmanaged(t *testing.T) {
 	r := newTeamTestResource(t, &teamTestServerState{})
-	got, err := r.resolveTeamRoles(context.Background(), types.SetNull(teamRoleObjectType))
+	got, err := r.resolveTeamPermissions(context.Background(), types.SetNull(teamPermissionObjectType))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -241,8 +241,8 @@ func TestResolveTeamRoles_Unmanaged(t *testing.T) {
 
 func TestResolveTeamRoles_CaseInsensitive(t *testing.T) {
 	r := newTeamTestResource(t, &teamTestServerState{})
-	set := teamRoleSet(t, typedTeamRole{name: types.StringValue("exCHANge VIEWer"), cp: strMap(map[string]string{"org": testOrgID})})
-	got, err := r.resolveTeamRoles(context.Background(), set)
+	set := teamRoleSet(t, typedTeamPermission{name: types.StringValue("exCHANge VIEWer"), cp: strMap(map[string]string{"org": testOrgID})})
+	got, err := r.resolveTeamPermissions(context.Background(), set)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -256,8 +256,8 @@ func TestResolveTeamRoles_CaseInsensitive(t *testing.T) {
 
 func TestResolveTeamRoles_UnknownName(t *testing.T) {
 	r := newTeamTestResource(t, &teamTestServerState{})
-	set := teamRoleSet(t, typedTeamRole{name: types.StringValue("No Such Role"), cp: types.MapNull(types.StringType)})
-	_, err := r.resolveTeamRoles(context.Background(), set)
+	set := teamRoleSet(t, typedTeamPermission{name: types.StringValue("No Such Role"), cp: types.MapNull(types.StringType)})
+	_, err := r.resolveTeamPermissions(context.Background(), set)
 	if err == nil {
 		t.Fatal("expected error for unknown role name")
 	}
@@ -265,14 +265,14 @@ func TestResolveTeamRoles_UnknownName(t *testing.T) {
 
 func TestResolveTeamRoles_AmbiguousName(t *testing.T) {
 	r := newTeamTestResource(t, &teamTestServerState{})
-	set := teamRoleSet(t, typedTeamRole{name: types.StringValue("Duplicate Role"), cp: types.MapNull(types.StringType)})
-	_, err := r.resolveTeamRoles(context.Background(), set)
+	set := teamRoleSet(t, typedTeamPermission{name: types.StringValue("Duplicate Role"), cp: types.MapNull(types.StringType)})
+	_, err := r.resolveTeamPermissions(context.Background(), set)
 	if err == nil {
 		t.Fatal("expected error for ambiguous role name")
 	}
 }
 
-// --- applyTeamRoles ----------------------------------------------------------
+// --- applyTeamPermissions ----------------------------------------------------------
 
 func TestApplyTeamRoles_AddRemoveSkipInternal(t *testing.T) {
 	state := &teamTestServerState{
@@ -288,12 +288,12 @@ func TestApplyTeamRoles_AddRemoveSkipInternal(t *testing.T) {
 	r := newTeamTestResource(t, state)
 
 	cp := map[string]string{"org": testOrgID}
-	desired := []desiredTeamRole{
+	desired := []desiredTeamPermission{
 		{roleID: "role-exchange-viewer", contextParams: cp, contextKey: canonicalContextParams(cp)},
 		{roleID: "role-exchange-admin", contextParams: cp, contextKey: canonicalContextParams(cp)}, // added
 	}
-	if err := r.applyTeamRoles(context.Background(), testOrgID, testTeamID, desired); err != nil {
-		t.Fatalf("applyTeamRoles error: %v", err)
+	if err := r.applyTeamPermissions(context.Background(), testOrgID, testTeamID, desired); err != nil {
+		t.Fatalf("applyTeamPermissions error: %v", err)
 	}
 
 	state.mu.Lock()
@@ -486,8 +486,8 @@ func TestReconcileTeamRolesIntoState_PreservesTypedCasing(t *testing.T) {
 	}
 	r := newTeamTestResource(t, state)
 
-	typed := teamRoleSet(t, typedTeamRole{name: types.StringValue("exchange viewer"), cp: strMap(map[string]string{"org": testOrgID})})
-	got, err := r.reconcileTeamRolesIntoState(context.Background(), testOrgID, testTeamID, typed)
+	typed := teamRoleSet(t, typedTeamPermission{name: types.StringValue("exchange viewer"), cp: strMap(map[string]string{"org": testOrgID})})
+	got, err := r.reconcileTeamPermissionsIntoState(context.Background(), testOrgID, testTeamID, typed)
 	if err != nil {
 		t.Fatalf("reconcile error: %v", err)
 	}
@@ -566,10 +566,10 @@ func TestResolveTeamMembers_DeletedUser_ErrorNamesUser(t *testing.T) {
 func TestResolveTeamRoles_DeletedRole_ErrorNamesRole(t *testing.T) {
 	r := newTeamTestResource(t, &teamTestServerState{})
 	set := teamRoleSet(t,
-		typedTeamRole{name: types.StringValue("Exchange Viewer"), cp: strMap(map[string]string{"org": testOrgID})},
-		typedTeamRole{name: types.StringValue("Deleted Role"), cp: types.MapNull(types.StringType)},
+		typedTeamPermission{name: types.StringValue("Exchange Viewer"), cp: strMap(map[string]string{"org": testOrgID})},
+		typedTeamPermission{name: types.StringValue("Deleted Role"), cp: types.MapNull(types.StringType)},
 	)
-	_, err := r.resolveTeamRoles(context.Background(), set)
+	_, err := r.resolveTeamPermissions(context.Background(), set)
 	if err == nil {
 		t.Fatal("expected error when a referenced role no longer exists in the catalog")
 	}
@@ -637,8 +637,8 @@ func TestReconcileTeamMembersIntoState_DeletedUserDropsFromState(t *testing.T) {
 // Discovered via live E2E against devx: assigning ANY env-scoped role to a team
 // makes the platform auto-grant an org-scoped "Business Group Viewer" role. That
 // grant is (a) NOT in the assignable catalog (GET /accounts/api/roles) and (b) NOT
-// flagged internal. Before the fix, reconcileTeamRolesIntoState surfaced it as a
-// phantom `name = ""` entry and applyTeamRoles tried to remove it, so the plan was
+// flagged internal. Before the fix, reconcileTeamPermissionsIntoState surfaced it as a
+// phantom `name = ""` entry and applyTeamPermissions tried to remove it, so the plan was
 // never idempotent after the first apply. Both tests below pin the fix: a
 // non-catalog, non-internal assignment must be IGNORED for both state and removal.
 
@@ -656,8 +656,8 @@ func TestReconcileTeamRolesIntoState_IgnoresInjectedNonCatalogRole(t *testing.T)
 	}
 	r := newTeamTestResource(t, state)
 
-	typed := teamRoleSet(t, typedTeamRole{name: types.StringValue("Exchange Viewer"), cp: strMap(map[string]string{"org": testOrgID, "envId": "env-1"})})
-	got, err := r.reconcileTeamRolesIntoState(context.Background(), testOrgID, testTeamID, typed)
+	typed := teamRoleSet(t, typedTeamPermission{name: types.StringValue("Exchange Viewer"), cp: strMap(map[string]string{"org": testOrgID, "envId": "env-1"})})
+	got, err := r.reconcileTeamPermissionsIntoState(context.Background(), testOrgID, testTeamID, typed)
 	if err != nil {
 		t.Fatalf("reconcile error: %v", err)
 	}
@@ -681,11 +681,11 @@ func TestApplyTeamRoles_NeverRemovesInjectedNonCatalogRole(t *testing.T) {
 	r := newTeamTestResource(t, state)
 
 	cp := map[string]string{"org": testOrgID, "envId": "env-1"}
-	desired := []desiredTeamRole{
+	desired := []desiredTeamPermission{
 		{roleID: "role-exchange-viewer", contextParams: cp, contextKey: canonicalContextParams(cp)},
 	}
-	if err := r.applyTeamRoles(context.Background(), testOrgID, testTeamID, desired); err != nil {
-		t.Fatalf("applyTeamRoles error: %v", err)
+	if err := r.applyTeamPermissions(context.Background(), testOrgID, testTeamID, desired); err != nil {
+		t.Fatalf("applyTeamPermissions error: %v", err)
 	}
 
 	state.mu.Lock()

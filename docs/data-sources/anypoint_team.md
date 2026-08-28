@@ -21,8 +21,8 @@ output "team_name" {
   value = data.anypoint_team.ops.name
 }
 
-output "team_roles" {
-  value = data.anypoint_team.ops.roles
+output "team_permissions" {
+  value = data.anypoint_team.ops.permissions
 }
 
 output "team_members" {
@@ -45,13 +45,13 @@ output "team_members" {
 - `name` (String) The name of the team.
 - `parent_team_id` (String) The ID of the parent team. Null for root teams. Use this value as `parent_team_id` when creating child teams.
 - `team_type` (String) The type of the team.
-- `roles` (Attributes List) The roles (permissions) assigned to this team. Excludes system/internal assignments. (see [below for nested schema](#nestedatt--roles))
+- `permissions` (Attributes List) The permissions assigned to this team, matching what the Anypoint UI calls Permissions. Excludes system/internal assignments. (see [below for nested schema](#nestedatt--permissions))
 - `members` (Attributes List) The members of this team. (see [below for nested schema](#nestedatt--members))
 - `created_at` (String) The timestamp when the team was created.
 - `updated_at` (String) The timestamp when the team was last updated.
 
-<a id="nestedatt--roles"></a>
-### Nested Schema for `roles`
+<a id="nestedatt--permissions"></a>
+### Nested Schema for `permissions`
 
 Read-Only:
 

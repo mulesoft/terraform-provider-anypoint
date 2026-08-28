@@ -33,3 +33,33 @@ output "existing_team_updated_at" {
 output "existing_team_parent_team_id" {
   value = data.anypoint_team.existing_team.parent_team_id
 }
+
+# ---------------------------------------------------------------------------
+# Example: list teams in the organization, optionally filtered by name.
+#
+# The list returns a summary per team — id, name, team_type, ancestry and
+# timestamps. It does NOT include permissions or members; use the singular
+# anypoint_team data source above for those.
+# ---------------------------------------------------------------------------
+data "anypoint_teams" "all" {
+  organization_id = var.org_id
+  name_filter     = "" # e.g. "Platform" to narrow the list
+}
+
+output "team_names" {
+  description = "Names of every team matching the filter."
+  value       = [for t in data.anypoint_teams.all.teams : t.name]
+}
+
+# ---------------------------------------------------------------------------
+# Example: list users, to discover the usernames accepted by
+# anypoint_team.members[].username.
+# ---------------------------------------------------------------------------
+data "anypoint_users" "all" {
+  organization_id = var.org_id
+}
+
+output "usernames" {
+  description = "Valid values for a members[].username entry."
+  value       = [for u in data.anypoint_users.all.users : u.username]
+}

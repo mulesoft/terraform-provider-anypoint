@@ -384,7 +384,7 @@ func TestTeamDataSource_Read_Direct(t *testing.T) {
 		"parent_team_id":  tftypes.NewValue(tftypes.String, nil),
 		"team_type":       tftypes.NewValue(tftypes.String, nil),
 		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
-		"roles":           tftypes.NewValue(tftypes.List{ElementType: roleObjType}, nil),
+		"permissions":     tftypes.NewValue(tftypes.List{ElementType: roleObjType}, nil),
 		"members":         tftypes.NewValue(tftypes.List{ElementType: memberObjType}, nil),
 		"created_at":      tftypes.NewValue(tftypes.String, nil),
 		"updated_at":      tftypes.NewValue(tftypes.String, nil),
@@ -407,14 +407,14 @@ func TestTeamDataSource_Read_Direct(t *testing.T) {
 	// Roles: only the non-internal, in-catalog assignment should surface, labeled
 	// by display name. The internal role and the non-catalog "Business Group
 	// Viewer" phantom must both be excluded.
-	if got.Roles.IsNull() {
+	if got.Permissions.IsNull() {
 		t.Fatalf("Expected roles to be populated, got null")
 	}
-	if n := len(got.Roles.Elements()); n != 1 {
+	if n := len(got.Permissions.Elements()); n != 1 {
 		t.Errorf("Expected 1 (non-internal, in-catalog) role, got %d", n)
 	}
 	// The surviving role must be the catalog role — never the empty-named phantom.
-	for _, el := range got.Roles.Elements() {
+	for _, el := range got.Permissions.Elements() {
 		obj := el.(types.Object)
 		name := obj.Attributes()["name"].(types.String).ValueString()
 		if name == "" {
@@ -482,7 +482,7 @@ func TestTeamDataSource_Read_Direct_Error(t *testing.T) {
 		"parent_team_id":  tftypes.NewValue(tftypes.String, nil),
 		"team_type":       tftypes.NewValue(tftypes.String, nil),
 		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
-		"roles":           tftypes.NewValue(tftypes.List{ElementType: roleObjType}, nil),
+		"permissions":     tftypes.NewValue(tftypes.List{ElementType: roleObjType}, nil),
 		"members":         tftypes.NewValue(tftypes.List{ElementType: memberObjType}, nil),
 		"created_at":      tftypes.NewValue(tftypes.String, nil),
 		"updated_at":      tftypes.NewValue(tftypes.String, nil),

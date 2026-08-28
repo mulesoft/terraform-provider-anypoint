@@ -43,3 +43,26 @@ output "internal_apps" {
     app if app.audience == "internal"
   ]
 }
+
+
+# ---------------------------------------------------------------------------
+# Example: fetch a single connected app by its client ID.
+# ---------------------------------------------------------------------------
+data "anypoint_connected_app" "existing" {
+  id              = "<client_id>" # Replace with a valid connected app client ID
+  organization_id = var.org_id
+}
+
+output "existing_connected_app_name" {
+  value = data.anypoint_connected_app.existing.name
+}
+
+output "existing_connected_app_grant_types" {
+  value = data.anypoint_connected_app.existing.grant_types
+}
+
+# Scopes granted to the app. This paginates internally — a bare API call returns
+# only the first page, which is a common source of "missing scope" confusion.
+output "existing_connected_app_scopes" {
+  value = data.anypoint_connected_app.existing.scopes
+}
