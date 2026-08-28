@@ -92,11 +92,11 @@ provider "anypoint" {
 | `anypoint_bg` | `anypoint_organization` | **Renamed + Schema change** | Business Group → Organization. `entitlements` is a nested object on the official side (one attribute per entitlement) rather than the flat map used by the community provider. Quota entitlements (`vcores_*`, `vpcs`, `network_connections`) are modeled as nested objects with `assigned` / `reassigned`. Note: `static_ips` and `vpns` are server-managed by Anypoint and not settable via Terraform, so they are intentionally excluded from the schema. |
 | `anypoint_env` | `anypoint_environment` | **Renamed** | Schema similar: `name`, `org_id` → `organization_id`, `type`. |
 | `anypoint_user` | — | **Not supported** | Removed from the official provider. |
-| `anypoint_user_rolegroup` | — | **Not supported** | No equivalent. Role-group based access isn't modelled in the official provider; manage roles via the inline `roles` / `members` attributes on `anypoint_team` (or `anypoint_role`) instead. |
+| `anypoint_user_rolegroup` | — | **Not supported** | No equivalent. Role-group based access isn't modelled in the official provider; manage access via the inline `permissions` / `members` attributes on `anypoint_team` (or `anypoint_role`) instead. |
 | `anypoint_rolegroup` | — | **Not supported** | Same as above. |
 | `anypoint_rolegroup_roles` | — | **Not supported** | Same as above. |
-| `anypoint_team` | `anypoint_team` | **As-is (schema change)** | Type name matches. Role assignments and membership are inline on `anypoint_team` via the authoritative `roles` and `members` attributes (roles referenced by display name, members by username), rather than as separate resources. |
-| `anypoint_team_roles` | `anypoint_team` (`roles`) | **Folded in** | Modeled as the inline `roles` attribute on `anypoint_team` instead of a standalone resource. |
+| `anypoint_team` | `anypoint_team` | **As-is (schema change)** | Type name matches. Role assignments and membership are inline on `anypoint_team` via the authoritative `permissions` and `members` attributes (permissions referenced by display name, members by username), rather than as separate resources. |
+| `anypoint_team_roles` | `anypoint_team` (`permissions`) | **Folded in** | Modeled as the inline `permissions` attribute on `anypoint_team` instead of a standalone resource. |
 | `anypoint_team_member` | `anypoint_team` (`members`) | **Folded in** | Modeled as the inline `members` attribute on `anypoint_team` instead of a standalone resource. |
 | `anypoint_team_group_mappings` | — | **Not supported** | External IdP group → team mappings aren't in the official provider yet. |
 | `anypoint_idp_oidc` | — | **Not supported** | Identity-provider management is not in scope for the official provider today. |
