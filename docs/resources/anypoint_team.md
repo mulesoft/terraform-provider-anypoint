@@ -9,16 +9,16 @@ description: |-
 
 Manages an Anypoint Platform team.
 
-~> **Managing `roles` requires `auth_type = "user"`.** Create, `members`, read and import
-work with a `client_credentials` connected app; assigning most `roles` returns `403
+~> **Managing `permissions` requires `auth_type = "user"`.** Create, `members`, read and import
+work with a `client_credentials` connected app; assigning most `permissions` returns `403
 Forbidden` and **adding scopes does not fix it**. Only *Exchange Viewer*, *Exchange
 Administrator* and *View Organization* can be assigned under `client_credentials` —
 Runtime Manager, CloudHub, Design Center, API Manager, Monitoring and others all fail,
 whether organization- or environment-scoped. The symptom is an apply that creates the
-team and then fails with `failed to assign role "...": ... status 403: Forbidden`.
+team and then fails with `failed to assign permission "...": ... status 403: Forbidden`.
 See [Authentication](../index.md).
 
--> The same roles assign fine to a **role group** via
+-> The same permissions assign fine to a **role group** via
 [`anypoint_role`](anypoint_role.md) under `client_credentials`. If you only need to grant
 permissions, that path has no such restriction.
 
@@ -43,9 +43,9 @@ resource "anypoint_team" "example" {
   team_type      = "internal"
   parent_team_id = local.root_team_id  # optional — omit to default to root team
 
-  # Inline role assignments. Roles are referenced by their UI display name
+  # Inline permissions. Permissions are referenced by their UI display name
   # (case-insensitive); the provider resolves each name to a role ID at apply time.
-  roles = [
+  permissions = [
     {
       name = "Exchange Viewer"
       context_params = {
@@ -86,7 +86,7 @@ resource "anypoint_team" "sub_team" {
 - `parent_team_id` (String, Optional) The ID of the parent team. If omitted, the org's root team is used as the parent — mirroring the Anypoint UI default. Use the `anypoint_teams` data source to look up team IDs by name.
 - `team_type` (String) The type of the team. Optional; defaults to `internal` — the same default the Anypoint UI applies (its Create Team dialog only asks for a name and parent, and sends `team_type: "internal"` behind the scenes). Changing the type requires the target type to be enabled in the organization.
 - `members` (Attributes Set) The set of members of this team. When set, this list is authoritative: members not listed here are removed on apply. Omit the attribute entirely to leave membership unmanaged. Members assigned via external groups (SAML/SCIM) are never modified. (see [below for nested schema](#nestedatt--members))
-- `roles` (Attributes Set) The set of roles (permissions) assigned to this team. When set, this list is authoritative: roles not listed here are removed on apply. Omit the attribute entirely to leave role assignments unmanaged. System (internal) assignments are never modified. (see [below for nested schema](#nestedatt--roles))
+- `permissions` (Attributes Set) The set of permissions assigned to this team, matching what the Anypoint UI calls Permissions and the same shape as `anypoint_role`'s `permissions`. When set, this list is authoritative: permissions not listed here are removed on apply. Omit the attribute entirely to leave assignments unmanaged. System (internal) assignments are never modified. (see [below for nested schema](#nestedatt--permissions))
 
 ### Read-Only
 
@@ -94,16 +94,16 @@ resource "anypoint_team" "sub_team" {
 - `id` (String) The unique identifier for the team.
 - `updated_at` (String) The timestamp when the team was last updated.
 
-<a id="nestedatt--roles"></a>
-### Nested Schema for `roles`
+<a id="nestedatt--permissions"></a>
+### Nested Schema for `permissions`
 
 Required:
 
-- `name` (String) The role's display name as shown in the Anypoint UI (e.g., `Exchange Viewer`). Case-insensitive. Use the `anypoint_available_permissions` data source to discover valid names.
+- `name` (String) The permission's display name as shown in the Anypoint UI (e.g., `Exchange Viewer`). Case-insensitive. Use the `anypoint_available_permissions` data source to discover valid names.
 
 Optional:
 
-- `context_params` (Map of String) Context parameters for the role. Typically includes `org` (organization ID) and, for environment-scoped roles, `envId`.
+- `context_params` (Map of String) Context parameters for the permission. Typically includes `org` (organization ID) and, for environment-scoped permissions, `envId`.
 
 <a id="nestedatt--members"></a>
 ### Nested Schema for `members`

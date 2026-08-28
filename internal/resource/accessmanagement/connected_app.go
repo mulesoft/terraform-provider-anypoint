@@ -1001,7 +1001,15 @@ func validateScopeContextParams(scopeSet types.Set) diag.Diagnostics {
 			continue
 		}
 		cpAttr := attrs["context_params"].(types.Map)
-		if cpAttr.IsUnknown() {
+		// Skip when the map OR any value inside it is still unknown. Checking only
+		// the map itself was not enough: `context_params = { org = var.org_id }` is a
+		// KNOWN map holding an UNKNOWN value, and mapToStringMap renders that as "",
+		// which then reads as "org is missing". Terraform treats input variables as
+		// unknown during `terraform validate` regardless of their defaults, so this
+		// rejected every config that parameterises the org — i.e. essentially all of
+		// them, including the shipped example. Create-time validation still catches a
+		// genuinely absent org/envId, so deferring here loses nothing.
+		if cpAttr.IsUnknown() || mapHasUnknownValue(cpAttr) {
 			continue
 		}
 		cpMap := mapToStringMap(cpAttr)

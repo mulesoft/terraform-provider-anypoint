@@ -35,3 +35,26 @@ output "existing_role_members" {
 output "existing_role_created_at" {
   value = data.anypoint_role.existing_role.created_at
 }
+
+
+# ---------------------------------------------------------------------------
+# Example: list every role group in the organization.
+# ---------------------------------------------------------------------------
+data "anypoint_roles" "all" {}
+
+output "all_role_names" {
+  description = "Names of every role group in the organization."
+  value       = [for r in data.anypoint_roles.all.roles : r.name]
+}
+
+# ---------------------------------------------------------------------------
+# Example: discover the permission names accepted by anypoint_role.permissions
+# and anypoint_team.permissions. These are what the Anypoint UI calls
+# "Permissions"; the platform API still calls them roles.
+# ---------------------------------------------------------------------------
+data "anypoint_available_permissions" "catalog" {}
+
+output "available_permission_names" {
+  description = "Valid values for a permissions[].name entry."
+  value       = [for p in data.anypoint_available_permissions.catalog.permissions : p.name]
+}

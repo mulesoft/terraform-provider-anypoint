@@ -35,14 +35,14 @@ type TeamDataSourceModel struct {
 	ParentTeamID   types.String `tfsdk:"parent_team_id"`
 	TeamType       types.String `tfsdk:"team_type"`
 	OrganizationID types.String `tfsdk:"organization_id"`
-	Roles          types.List   `tfsdk:"roles"`
+	Permissions    types.List   `tfsdk:"permissions"`
 	Members        types.List   `tfsdk:"members"`
 	CreatedAt      types.String `tfsdk:"created_at"`
 	UpdatedAt      types.String `tfsdk:"updated_at"`
 }
 
-// teamDSRoleObjectType is the object type for a role entry in the data source output.
-var teamDSRoleObjectType = types.ObjectType{
+// teamDSPermissionObjectType is the object type for a role entry in the data source output.
+var teamDSPermissionObjectType = types.ObjectType{
 	AttrTypes: map[string]attr.Type{
 		"name":           types.StringType,
 		"context_params": types.MapType{ElemType: types.StringType},
@@ -70,7 +70,7 @@ func (d *TeamDataSource) Metadata(_ context.Context, req datasource.MetadataRequ
 // Schema defines the schema for the data source.
 func (d *TeamDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Fetches information about an Anypoint Platform team, including its role assignments and members.",
+		Description: "Fetches information about an Anypoint Platform team, including its permissions and members.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Description: "The unique identifier for the team.",
@@ -93,17 +93,18 @@ func (d *TeamDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, r
 				Optional:    true,
 				Computed:    true,
 			},
-			"roles": schema.ListNestedAttribute{
-				Description: "The roles (permissions) assigned to this team. Excludes system/internal assignments.",
-				Computed:    true,
+			"permissions": schema.ListNestedAttribute{
+				Description: "The permissions assigned to this team, matching what the Anypoint UI calls " +
+					"Permissions. Excludes system/internal assignments.",
+				Computed: true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
-							Description: "The role's display name.",
+							Description: "The permission's display name.",
 							Computed:    true,
 						},
 						"context_params": schema.MapAttribute{
-							Description: "Context parameters for the role (e.g., org, envId).",
+							Description: "Context parameters for the permission (e.g., org, envId).",
 							Computed:    true,
 							ElementType: types.StringType,
 						},
@@ -171,8 +172,8 @@ func (d *TeamDataSource) Configure(_ context.Context, req datasource.ConfigureRe
 	rolesClient, err := accessmanagement.NewTeamRolesClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to Create Team Roles Client",
-			"An unexpected error occurred when creating the Team Roles client.\n\n"+
+			"Unable to Create Team Permissions Client",
+			"An unexpected error occurred when creating the team permissions client.\n\n"+
 				"Client Error: "+err.Error(),
 		)
 		return
@@ -201,8 +202,8 @@ func (d *TeamDataSource) Configure(_ context.Context, req datasource.ConfigureRe
 	catalogClient, err := accessmanagement.NewRolePermissionClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to Create Role Catalog Client",
-			"An unexpected error occurred when creating the Role Catalog client.\n\n"+
+			"Unable to Create Permission Catalog Client",
+			"An unexpected error occurred when creating the permission catalog client.\n\n"+
 				"Client Error: "+err.Error(),
 		)
 		return
@@ -256,15 +257,15 @@ func (d *TeamDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 		data.ParentTeamID = types.StringNull()
 	}
 
-	// Populate roles (excluding internal/system assignments), labeled by display name.
+	// Populate permissions (excluding internal/system assignments), labeled by display name.
 	assignments, err := d.rolesClient.ListTeamRoles(ctx, orgID, team.ID)
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading team roles", "Could not list team role assignments: "+err.Error())
+		resp.Diagnostics.AddError("Error reading team permissions", "Could not list team permission assignments: "+err.Error())
 		return
 	}
 	roles, err := d.catalogClient.ListAvailableRoles(ctx)
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading available roles", "Could not list available roles: "+err.Error())
+		resp.Diagnostics.AddError("Error reading available permissions", "Could not list available permissions: "+err.Error())
 		return
 	}
 	roleIDToName := make(map[string]string, len(roles))
@@ -293,7 +294,7 @@ func (d *TeamDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 			}
 			cp = types.MapValueMust(types.StringType, cpElems)
 		}
-		obj, diags := types.ObjectValue(teamDSRoleObjectType.AttrTypes, map[string]attr.Value{
+		obj, diags := types.ObjectValue(teamDSPermissionObjectType.AttrTypes, map[string]attr.Value{
 			"name":           types.StringValue(roleIDToName[a.RoleID]),
 			"context_params": cp,
 		})
@@ -303,7 +304,7 @@ func (d *TeamDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 		}
 		roleValues = append(roleValues, obj)
 	}
-	data.Roles = types.ListValueMust(teamDSRoleObjectType, roleValues)
+	data.Permissions = types.ListValueMust(teamDSPermissionObjectType, roleValues)
 
 	// Populate members. Map user IDs to usernames via the org user list.
 	members, err := d.membersClient.ListTeamMembers(ctx, orgID, team.ID)

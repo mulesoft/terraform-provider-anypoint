@@ -18,14 +18,14 @@ resource "anypoint_team" "qa" {
   name = "QA Team"
 }
 
-# Create a development team (top-level) with inline roles + members.
+# Create a development team (top-level) with inline permissions + members.
 resource "anypoint_team" "development" {
   name = "Development Team With Child teams"
 
-  # Roles are referenced by their UI display name (case-insensitive); the provider
-  # resolves each to a role ID at apply time. Omit `roles` entirely to leave role
-  # assignments unmanaged. System (internal) assignments are never modified.
-  roles = [
+  # Permissions are referenced by their UI display name (case-insensitive); the
+  # provider resolves each to an id at apply time. Omit `permissions` entirely to
+  # leave them unmanaged. System (internal) assignments are never modified.
+  permissions = [
     {
       name = "Exchange Viewer"
       context_params = {
@@ -48,7 +48,7 @@ resource "anypoint_team" "development" {
   ]
 }
 
-# Read the development team back, including its roles and members.
+# Read the development team back, including its permissions and members.
 data "anypoint_team" "development" {
   id              = anypoint_team.development.id
   organization_id = var.org_id
@@ -106,9 +106,9 @@ output "operations_team_id" {
   value       = anypoint_team.operations.id
 }
 
-output "development_team_roles" {
+output "development_team_permissions" {
   description = "Roles read back from the development team by the data source"
-  value       = data.anypoint_team.development.roles
+  value       = data.anypoint_team.development.permissions
 }
 
 output "development_team_members" {

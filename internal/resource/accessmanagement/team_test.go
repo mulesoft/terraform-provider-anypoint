@@ -17,12 +17,13 @@ import (
 )
 
 // TestTeamResource_ManagedSignal_NoUseStateForUnknown guards the same invariant as the role
-// test: roles and members must NOT carry UseStateForUnknown. Team Update uses
-// plan.X.IsUnknown() as the "is this attribute config-managed?" signal (manageRoles :=
-// !plan.Roles.IsNull() && !plan.Roles.IsUnknown()), so config-omit -> unknown -> reconcile
-// read-only from the API. UseStateForUnknown would make omit -> known -> applyTeamRoles
-// enforces the last-applied set, reverting out-of-band role/member changes and breaking the
-// documented "Omit the attribute entirely to leave ... unmanaged" contract.
+// test: permissions and members must NOT carry UseStateForUnknown. Team Update uses
+// plan.X.IsUnknown() as the "is this attribute config-managed?" signal (managePermissions :=
+// !plan.Permissions.IsNull() && !plan.Permissions.IsUnknown()), so config-omit -> unknown ->
+// reconcile read-only from the API. UseStateForUnknown would make omit -> known ->
+// applyTeamPermissions enforces the last-applied set, reverting out-of-band permission/member
+// changes and breaking the documented "Omit the attribute entirely to leave ... unmanaged"
+// contract.
 func TestTeamResource_ManagedSignal_NoUseStateForUnknown(t *testing.T) {
 	res := NewTeamResource()
 	ctx := context.Background()
@@ -30,7 +31,7 @@ func TestTeamResource_ManagedSignal_NoUseStateForUnknown(t *testing.T) {
 	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
 	attrs := schemaResp.Schema.Attributes
 
-	for _, name := range []string{"roles", "members"} {
+	for _, name := range []string{"permissions", "members"} {
 		a, ok := attrs[name].(schema.SetNestedAttribute)
 		if !ok {
 			t.Fatalf("%s: expected SetNestedAttribute, got %T", name, attrs[name])
@@ -77,7 +78,7 @@ func teamRawValue(stateType tftypes.Type, id, name, teamType, _ string, parentUn
 		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
 		"team_type":       tftypes.NewValue(tftypes.String, teamType),
 		"parent_team_id":  parentTeamVal,
-		"roles":           tftypes.NewValue(tftypes.Set{ElementType: roleObj}, nil),
+		"permissions":     tftypes.NewValue(tftypes.Set{ElementType: roleObj}, nil),
 		"members":         tftypes.NewValue(tftypes.Set{ElementType: memberObj}, nil),
 		"created_at":      tftypes.NewValue(tftypes.String, "2024-01-01T00:00:00Z"),
 		"updated_at":      tftypes.NewValue(tftypes.String, "2024-01-01T00:00:00Z"),
@@ -486,7 +487,7 @@ func TestTeamResource_Read(t *testing.T) {
 		"created_at":      tftypes.NewValue(tftypes.String, ""),
 		"updated_at":      tftypes.NewValue(tftypes.String, ""),
 		// roles/members null — Read populates from API (empty sets returned by mock).
-		"roles": tftypes.NewValue(tftypes.Set{ElementType: tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"permissions": tftypes.NewValue(tftypes.Set{ElementType: tftypes.Object{AttributeTypes: map[string]tftypes.Type{
 			"name":           tftypes.String,
 			"context_params": tftypes.Map{ElementType: tftypes.String},
 		}}}, nil),
@@ -546,7 +547,7 @@ func TestTeamResource_Read_NotFound(t *testing.T) {
 		"created_at":      tftypes.NewValue(tftypes.String, ""),
 		"updated_at":      tftypes.NewValue(tftypes.String, ""),
 		// roles/members null — Read populates from API (empty sets returned by mock).
-		"roles": tftypes.NewValue(tftypes.Set{ElementType: tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"permissions": tftypes.NewValue(tftypes.Set{ElementType: tftypes.Object{AttributeTypes: map[string]tftypes.Type{
 			"name":           tftypes.String,
 			"context_params": tftypes.Map{ElementType: tftypes.String},
 		}}}, nil),
