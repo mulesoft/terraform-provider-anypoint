@@ -14,7 +14,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
@@ -159,18 +158,33 @@ func (r *MCPBridgeResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				},
 			},
 			"port": schema.Int64Attribute{
-				Description: "The listener port for the bridge on the gateway. Defaults to 8081. The proxy URI is http://0.0.0.0:<port>/<base_path>.",
-				Optional:    true,
-				Computed:    true,
-				Default:     int64default.StaticInt64(8081),
+				Description: "The listener port for the bridge on the gateway. Defaults to 8081 when the " +
+					"bridge is created without one. The proxy URI is http://0.0.0.0:<port>/<base_path>. " +
+					"Omitting it on an existing bridge keeps whatever port that bridge is already using.",
+				Optional: true,
+				Computed: true,
 				PlanModifiers: []planmodifier.Int64{
+					// Deliberately NOT a static Default of 8081. A Default wins over prior
+					// state whenever the config omits the attribute, so importing a bridge
+					// listening on, say, 8083 and then not declaring `port` planned
+					// 8083 -> 8081 — and because port is RequiresReplace, that proposed
+					// destroying a healthy bridge in order to move it back to the default.
+					// Keeping the known value instead means "omitted" reads as "leave it
+					// alone". New bridges still land on 8081: bridgeProxyURI maps an
+					// absent/zero port to 8081 at create time.
+					int64planmodifier.UseStateForUnknown(),
 					int64planmodifier.RequiresReplace(),
 				},
 			},
 			"base_path": schema.StringAttribute{
-				Description: "The base path for the bridge proxy URI (default empty). The proxy URI is http://0.0.0.0:<port>/<base_path>.",
-				Optional:    true,
+				Description: "The base path for the bridge proxy URI (default empty). The proxy URI is " +
+					"http://0.0.0.0:<port>/<base_path>. A leading slash is optional and not significant: " +
+					"\"/mcp\" and \"mcp\" describe the same bridge and neither forces replacement.",
+				Optional: true,
 				PlanModifiers: []planmodifier.String{
+					// MUST precede RequiresReplace: it collapses the slash-only
+					// difference so RequiresReplace never sees a spurious change.
+					basePathSlashInsensitive{},
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
@@ -407,13 +421,16 @@ func (r *MCPBridgeResource) ModifyPlan(ctx context.Context, req resource.ModifyP
 	planSources := r.toBridgeSources(ctx, plan.SourceAPIs, "")
 	stateSources := r.toBridgeSources(ctx, state.SourceAPIs, "")
 	if bridgeToolSignature(planSources) != bridgeToolSignature(stateSources) {
-		resp.Plan.SetAttribute(ctx, path.Root("asset_version"), types.StringUnknown())
+		// Collect the diagnostics rather than discarding them. If one of these writes
+		// fails the stale value silently stays in the plan and the apply dies later
+		// with an inconsistent-result error whose cause is invisible.
+		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("asset_version"), types.StringUnknown())...)
 		// These are read back from the live instance after the version move / policy
 		// resync and can flap while the gateway re-registers; mark them unknown so the
 		// readback value is always accepted.
-		resp.Plan.SetAttribute(ctx, path.Root("product_version"), types.StringUnknown())
-		resp.Plan.SetAttribute(ctx, path.Root("consumer_endpoint"), types.StringUnknown())
-		resp.Plan.SetAttribute(ctx, path.Root("status"), types.StringUnknown())
+		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("product_version"), types.StringUnknown())...)
+		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("consumer_endpoint"), types.StringUnknown())...)
+		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("status"), types.StringUnknown())...)
 	}
 }
 
@@ -510,6 +527,7 @@ func (r *MCPBridgeResource) Create(ctx context.Context, req resource.CreateReque
 	plannedSources := data.SourceAPIs
 	r.flattenBridge(instance, &data, orgID, envID)
 	data.SourceAPIs = plannedSources
+	settleBridgePort(&data)
 	tflog.Trace(ctx, "created MCP bridge", map[string]interface{}{"id": instance.ID})
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -652,7 +670,7 @@ func (r *MCPBridgeResource) Update(ctx context.Context, req resource.UpdateReque
 	}
 
 	assetID := state.AssetID.ValueString()
-	newVersion := agentstools.BumpPatchVersion(state.AssetVersion.ValueString())
+	newVersion := r.nextFreeBridgeAssetVersion(ctx, orgID, assetID, state.AssetVersion.ValueString())
 	proxyURI := bridgeProxyURI(plan.Port.ValueInt64(), plan.BasePath.ValueString())
 
 	metaJSON, err := json.Marshal(buildBridgeMetadata(proxyURI, planSources))
@@ -697,6 +715,7 @@ func (r *MCPBridgeResource) Update(ctx context.Context, req resource.UpdateReque
 	plannedSources := plan.SourceAPIs
 	r.flattenBridge(instance, &plan, orgID, envID)
 	plan.SourceAPIs = plannedSources
+	settleBridgePort(&plan)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -1026,12 +1045,119 @@ func (r *MCPBridgeResource) flattenBridge(inst *agentstools.MCPBridge, data *MCP
 
 // --- Pure helpers (Terraform-free) ---
 
+// maxBridgeAssetVersionProbes bounds the search for a free asset version so a
+// pathological history can never spin here.
+const maxBridgeAssetVersionProbes = 50
+
+// nextFreeBridgeAssetVersion returns the first patch version at or above the bump of
+// `current` that Exchange does not already hold.
+//
+// Every in-place update republishes the generated MCP metadata as a new asset version.
+// Bumping the patch once is not enough, because DESTROYING a bridge removes its API
+// instance and policies but leaves the Exchange asset and ALL of its versions
+// published. So create -> update -> destroy -> create -> update collides: the second
+// life restarts at 1.0.0 and bumps straight into the 1.0.1 the first life already
+// published, and the republish fails with
+//
+//	409 ASSET_PRE_CONDITIONS_FAILED: An asset already exists with this version and
+//	published lifecycle state
+//
+// leaving the update dead in the water with no way forward from configuration alone.
+// Probing for the next unused version makes the recreate-then-edit cycle work.
+//
+// A probe that fails for any reason other than "not found" is treated as free: we
+// cannot prove the version is taken, and the publish itself will surface the real
+// error rather than this loop guessing at it.
+func (r *MCPBridgeResource) nextFreeBridgeAssetVersion(ctx context.Context, groupID, assetID, current string) string {
+	version := agentstools.BumpPatchVersion(current)
+	for i := 0; i < maxBridgeAssetVersionProbes; i++ {
+		existing, err := r.client.Assets.GetAsset(ctx, groupID, assetID, version)
+		if err != nil || existing == nil {
+			return version
+		}
+		tflog.Debug(ctx, "MCP bridge asset version already published; trying the next patch", map[string]interface{}{
+			"asset_id": assetID,
+			"version":  version,
+		})
+		version = agentstools.BumpPatchVersion(version)
+	}
+	return version
+}
+
+// basePathSlashInsensitive stops a purely cosmetic leading slash from forcing the
+// bridge to be replaced.
+//
+// The proxy URI is built by stripping any leading slash (bridgeProxyURI), so "/mcp"
+// and "mcp" produce the identical URI and therefore the identical bridge. Reading
+// back — notably on import, where the value is recovered from the live proxy URI by
+// parseBridgeProxyURI — always yields the bare form. A user who declared "/mcp" would
+// otherwise import to state "mcp", and because base_path is RequiresReplace the very
+// next plan proposed destroying and recreating a perfectly healthy bridge.
+//
+// When the two differ only by that slash, keep the state value so no diff is produced.
+type basePathSlashInsensitive struct{}
+
+func (m basePathSlashInsensitive) Description(_ context.Context) string {
+	return "Treats a leading slash in base_path as insignificant."
+}
+
+func (m basePathSlashInsensitive) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (m basePathSlashInsensitive) PlanModifyString(_ context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	// An unknown config value cannot be compared yet.
+	if req.ConfigValue.IsUnknown() {
+		return
+	}
+	// Both absent: create, destroy, or a bridge that simply has no base path.
+	// Nothing to reconcile, and nothing to suppress.
+	if req.StateValue.IsNull() && req.ConfigValue.IsNull() {
+		return
+	}
+	// NB: null is deliberately NOT treated as "skip". An omitted base_path is an
+	// ordinary update plan, not a destroy, and a bridge with no base path reads back
+	// as "" — so null-versus-"" has to compare equal or importing the commonest kind
+	// of bridge proposes destroying it. Destroy is detected by Terraform before plan
+	// modifiers run, so it never reaches here.
+	if normalizeBridgeBasePath(req.StateValue.ValueString()) == normalizeBridgeBasePath(req.ConfigValue.ValueString()) {
+		resp.PlanValue = req.StateValue
+	}
+}
+
+// normalizeBridgeBasePath reduces a base path to the form actually sent to the
+// platform, so two spellings of the same path compare equal. ValueString() yields ""
+// for a null value, which is intended: an absent base path and an empty one both
+// produce the same proxy URI.
+func normalizeBridgeBasePath(s string) string {
+	return strings.TrimPrefix(strings.TrimSpace(s), "/")
+}
+
+// defaultBridgePort is the listener port a bridge lands on when the config omits one.
+// It is NOT a schema Default (see the `port` plan modifiers for why); it is applied at
+// create time by bridgeProxyURI and mirrored into state by settleBridgePort.
+const defaultBridgePort int64 = 8081
+
 func bridgeProxyURI(port int64, basePath string) string {
 	if port == 0 {
-		port = 8081
+		port = defaultBridgePort
 	}
-	bp := strings.TrimPrefix(strings.TrimSpace(basePath), "/")
+	bp := normalizeBridgeBasePath(basePath)
 	return fmt.Sprintf("http://0.0.0.0:%d/%s", port, bp)
+}
+
+// settleBridgePort gives `port` a concrete value before the model is written to state.
+//
+// `port` is Optional+Computed with no schema Default, so a config that omits it plans
+// as UNKNOWN on create (UseStateForUnknown is a no-op when there is no prior state).
+// flattenBridge does not set Port, so without this the create path would hand Terraform
+// an unknown value and the apply would fail with "Provider returned invalid result
+// object after apply" - after the bridge, its Exchange asset and its policies had all
+// already been created on the platform.
+func settleBridgePort(data *MCPBridgeResourceModel) {
+	if data.Port.IsNull() || data.Port.IsUnknown() || data.Port.ValueInt64() == 0 {
+		data.Port = types.Int64Value(defaultBridgePort)
+	}
 }
 
 // parseBridgeProxyURI extracts the listener port and base path from a bridge proxy URI
@@ -1073,7 +1199,12 @@ func backfillBridgeImportFields(data *MCPBridgeResourceModel, inst *agentstools.
 		if data.Port.IsNull() || data.Port.IsUnknown() || data.Port.ValueInt64() == 0 {
 			data.Port = types.Int64Value(port)
 		}
-		if data.BasePath.IsNull() {
+		// Only backfill a base path that actually exists. A bridge with none parses
+		// to "", and writing that into state would leave an imported bridge holding
+		// "" against a config that omits the attribute (null) — which, base_path
+		// being RequiresReplace, plans a destroy-and-recreate. Leaving it null keeps
+		// the two sides equal.
+		if data.BasePath.IsNull() && bp != "" {
 			data.BasePath = types.StringValue(bp)
 		}
 	}
