@@ -1262,24 +1262,29 @@ func (r *AssetResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 	asset, err := r.client.CreateAsset(ctx, createReq)
 	if err != nil {
-		// Exchange versions are immutable AND non-reusable: once a version is
-		// published it is reserved forever, and a soft-delete does NOT free it up.
-		// Re-publishing the same group/asset/version (e.g. after changing the
-		// file, classifier, or tags, which forces a destroy+recreate) fails with
-		// 409 ASSET_PRE_CONDITIONS_FAILED. Surface actionable "bump the version"
-		// guidance instead of the raw platform error.
+		// A published version is immutable: re-publishing the same group/asset/version
+		// while it still EXISTS fails with 409 ASSET_PRE_CONDITIONS_FAILED. A
+		// soft-delete does not free the number either.
+		//
+		// A HARD delete DOES free it, though — live-verified on devx: publish 201 →
+		// hard-delete 204 → re-publish the same GAV 201. The provider always sends
+		// `x-delete-type: hard-delete`, so `terraform destroy` genuinely releases the
+		// version. Do not tell users the number is gone forever; that would talk them
+		// out of the destroy-and-recreate that actually works, and it contradicts what
+		// checkVersionCollisionAtPlan relies on.
 		if isAssetVersionConflict(err) {
 			resp.Diagnostics.AddError(
 				"Exchange asset version already exists",
 				fmt.Sprintf(
-					"Version %q of asset %q already exists in Exchange and cannot be reused. "+
-						"Exchange versions are immutable and are reserved permanently — even after the "+
-						"asset version is deleted, the same version number cannot be re-published "+
-						"(the platform returns 409 ASSET_PRE_CONDITIONS_FAILED).\n\n"+
+					"Version %q of asset %q already exists in Exchange, and a published version "+
+						"cannot be overwritten in place (the platform returns "+
+						"409 ASSET_PRE_CONDITIONS_FAILED).\n\n"+
 						"To publish new content (a different file, classifier, or tags), bump the "+
 						"`version` to a new value (e.g. %q). Changing `version`, `classifier`, or "+
 						"`file_path` already forces Terraform to replace this resource; give it a "+
 						"fresh version number so the replacement can publish.\n\n"+
+						"Alternatively, destroying this resource hard-deletes the version and frees "+
+						"the number, so the same version can be published again afterwards.\n\n"+
 						"Original error: %s",
 					plan.Version.ValueString(),
 					plan.AssetID.ValueString(),
@@ -2013,8 +2018,21 @@ func (r *AssetResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	// version == one instance set), so this is currently latent; revisit if a group-wide LIST
 	// endpoint is added. We do NOT skip the cleanup on this hypothesis — skipping reintroduces
 	// the verified 409 orphan bug, which is strictly worse than the unverified sibling case.
-	if versionGroup, existing, listErr := r.fetchExternalInstances(ctx,
-		state.GroupID.ValueString(), state.AssetID.ValueString(), state.Version.ValueString()); listErr == nil {
+	versionGroup, existing, listErr := r.fetchExternalInstances(ctx,
+		state.GroupID.ValueString(), state.AssetID.ValueString(), state.Version.ValueString())
+	if listErr != nil {
+		// Deliberately non-fatal — the destroy still proceeds — but it must not be
+		// silent: when this fires the instances are orphaned, and the next create at
+		// the same versionGroup hits the very 409 this block exists to prevent. That
+		// 409 is otherwise impossible to trace back to here.
+		tflog.Warn(ctx, "could not list external instances before deleting the asset version; "+
+			"any instances will be orphaned and may cause a 409 on a later create", map[string]interface{}{
+			"group_id": state.GroupID.ValueString(),
+			"asset_id": state.AssetID.ValueString(),
+			"version":  state.Version.ValueString(),
+			"error":    listErr.Error(),
+		})
+	} else {
 		for _, inst := range existing {
 			instanceID := inst.InstanceID.ValueString()
 			if instanceID == "" {
@@ -2867,10 +2885,20 @@ func (r *AssetResource) readInstancesIntoState(ctx context.Context, state *Asset
 	// array is empty for some asset types (e.g. `custom`) even when instances exist,
 	// which made a just-created instance look like it had vanished. Fall back to the
 	// inline array if the dedicated read is unavailable.
+	// Track whether the dedicated read SUCCEEDED, rather than inferring it from an
+	// empty result. The two are different and must not be conflated: a successful
+	// empty read means the instances are genuinely gone (someone deleted them out of
+	// band) and state should reflect that, whereas a failed read tells us nothing and
+	// should fall back. Keying off a nil slice made a transient 403 look like "no
+	// instances", silently reverting to the inline array — which for a `custom` asset
+	// is empty, i.e. the very "instance vanished" bug the dedicated read fixed.
 	var externalInstances []map[string]interface{}
+	dedicatedReadOK := false
 	if asset.VersionGroup != "" {
-		if live, listErr := r.client.ListExternalInstances(ctx,
-			state.GroupID.ValueString(), state.AssetID.ValueString(), asset.VersionGroup); listErr == nil {
+		live, listErr := r.client.ListExternalInstances(ctx,
+			state.GroupID.ValueString(), state.AssetID.ValueString(), asset.VersionGroup)
+		if listErr == nil {
+			dedicatedReadOK = true
 			for _, inst := range live {
 				externalInstances = append(externalInstances, map[string]interface{}{
 					"id":          inst.ID,
@@ -2879,9 +2907,15 @@ func (r *AssetResource) readInstancesIntoState(ctx context.Context, state *Asset
 					"isPublic":    inst.IsPublic,
 				})
 			}
+		} else {
+			tflog.Warn(ctx, "external instances read failed; falling back to the asset's inline array", map[string]interface{}{
+				"asset_id":      state.AssetID.ValueString(),
+				"version_group": asset.VersionGroup,
+				"error":         listErr.Error(),
+			})
 		}
 	}
-	if externalInstances == nil {
+	if !dedicatedReadOK {
 		for _, inst := range asset.Instances {
 			if instMap, ok := inst.(map[string]interface{}); ok {
 				if instType, _ := instMap["type"].(string); instType == "external" {
