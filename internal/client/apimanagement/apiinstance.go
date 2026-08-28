@@ -145,6 +145,7 @@ type CreateAPIInstanceRequest struct {
 // The PATCH endpoint requires a split structure:
 //   - Upstreams: top-level full upstream definitions (id, label, uri, tlsContext)
 //   - Routing[].Upstreams: weight + id references into the top-level array
+//
 // The PATCH endpoint accepts assetVersion at the root level for version updates.
 // Note: assetId and groupId cannot be updated via PATCH (require recreate).
 type UpdateAPIInstanceRequest struct {

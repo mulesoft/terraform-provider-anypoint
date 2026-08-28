@@ -287,7 +287,7 @@ The backend assigns `def-456` to the canary entry.
 ### Required
 
 - `environment_id` (String) The environment ID where the API instance will be created.
-- `spec` (Block) The Exchange asset specification backing this API instance. See [below for nested schema](#nestedschema--spec).
+- `spec` (Block) The Exchange asset specification backing this API instance. Required when creating an instance; on import it is populated from the platform, so an imported instance may omit it. See [below for nested schema](#nestedschema--spec).
 
 ### Optional
 
@@ -328,7 +328,7 @@ Optional:
 - `deployment_type` (String) Deployment type. Valid values: `HY` (hybrid), `CH` (CloudHub), `CH2`, `RF` (Runtime Fabric). Defaults to `HY`.
 - `type` (String) Endpoint protocol type. Valid values: `http`, `rest`, `raml`, `wsdl`, `graphql`, `grpc`, `websocket`. The value must be compatible with the backing Exchange asset's type — e.g. a `graphql` Exchange asset requires endpoint type `graphql`, and a `grpc-api` asset requires `grpc`. Defaults to `http`.
 - `base_path` (String) API base path for the Omni Gateway proxy listener (e.g. `my-api`). The provider constructs the full proxy URI as `http://0.0.0.0:<port>/<base_path>` (see `port` for the listener port). A single gateway can host multiple API instances either on distinct ports or on the same port under distinct, non-root base paths; a base path of `/` is a catch-all that monopolizes the whole port.
-- `port` (Number) Listener port for the Omni/Flex Gateway proxy (the port in the constructed proxy URI `http://0.0.0.0:<port>/<base_path>`). Defaults to `8081`. Set a distinct port to host multiple API instances on the same gateway without sharing a base path.
+- `port` (Number) Listener port for the Omni/Flex Gateway proxy (the port in the constructed proxy URI `http://0.0.0.0:<port>/<base_path>`). Defaults to `8081` for a newly created instance. Set a distinct port to host multiple API instances on the same gateway without sharing a base path. Omitting it on an existing or imported instance keeps whatever port that instance is already using, so upgrading the provider never moves a live listener.
 - `response_timeout` (Number) Response timeout in milliseconds.
 
 <a id="nestedschema--deployment"></a>

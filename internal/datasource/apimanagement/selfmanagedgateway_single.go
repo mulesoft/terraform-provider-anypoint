@@ -84,8 +84,14 @@ func (d *SelfManagedGatewaySingleDataSource) Schema(_ context.Context, _ datasou
 			"additionally surfaces the reported runtime `versions`.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Description: "The unique identifier of the self-managed gateway to fetch.",
-				Required:    true,
+				Description: "The platform-assigned gateway UUID to fetch, e.g. " +
+					"`26e0cc20-ac3a-4e38-9a74-48d9cc4f4517`. This is the " +
+					"`anypoint_self_managed_gateway` resource's `gateway_id` attribute, NOT its " +
+					"`id`, which is the composite `<organization_id>/<environment_id>/<name>`. " +
+					"Passing the composite fails with \"Self-managed gateway not found\" even " +
+					"when the gateway exists. The `anypoint_self_managed_gateways` data source " +
+					"also returns this value as each entry's `id`.",
+				Required: true,
 			},
 			"organization_id": schema.StringAttribute{
 				Description: "The organization ID. Defaults to the provider credentials organization.",

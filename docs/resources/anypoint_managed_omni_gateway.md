@@ -74,6 +74,7 @@ resource "anypoint_managed_omni_gateway" "example" {
 
 - `id` (String) The unique identifier of the managed Omni Gateway.
 - `status` (String) The current status of the managed Omni Gateway.
+- `target_type` (String) The type of the deployment target, resolved by the provider from `target_id`: either `private-space` or `shared-space`.
 
 <a id="nestedschema--ingress"></a>
 ### Nested Schema for `ingress`

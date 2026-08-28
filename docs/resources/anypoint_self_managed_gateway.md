@@ -95,7 +95,55 @@ flexctl registration create my-flex-gateway \
 ```
 
 After the runtime registers, run `terraform refresh` (or the next `plan`) and the computed
-`gateway_id`, `status`, and `last_update` attributes populate.
+`gateway_id` and `last_update` attributes populate. At this point `status` is `DISCONNECTED`:
+the gateway object exists, but nothing is running yet.
+
+### Registering is not the same as running
+
+`flexctl registration create` only **enrols** the gateway. It contacts the platform, generates
+the keypair, and writes `registration.yaml` to the output directory — it does not start a
+gateway. Until you start a runtime the gateway shows `DISCONNECTED` with **0 replicas**, which
+is expected rather than a fault.
+
+Start the runtime by mounting the registration into the Flex Gateway container:
+
+```shell
+docker run --rm \
+  -v "$(pwd)":/usr/local/share/mulesoft/flex-gateway/conf.d \
+  -p 8080:8080 \
+  mulesoft/flex-gateway
+```
+
+~> **Run this from the directory that holds `registration.yaml`.** The command mounts
+`$(pwd)`, so running it from anywhere else silently mounts a directory with no
+registration in it. The failure is loud but misleading: the agent logs a few hundred
+lines of `Extension default/<name>: the registration configuration is missing` and
+never prints `Gateway: ... Mode=connected`. The quickest way to tell the two apart is
+to look for this line near the top of the log, which only appears when the mount is
+correct:
+
+```
+[flex-gateway-agent][info] Reading config file '/usr/local/share/mulesoft/flex-gateway/conf.d/registration.yaml'
+```
+
+On Apple Silicon add `--platform linux/amd64`; the published image is `linux/amd64` and Docker
+otherwise warns about the architecture mismatch. Once the agent logs `Anypoint websocket:
+connected`, another `terraform refresh` reports `status = "CONNECTED"`.
+
+~> Re-running `registration create` in a directory that already has a `registration.yaml` fails
+with `file already exists`. To re-register, delete that file **and** mint a fresh token — the
+previous one is spent.
+
+### Installation method does not change the Terraform configuration
+
+The Anypoint UI offers several ways to install a self-managed gateway (Docker, a Linux package,
+Kubernetes/Helm, and so on). They all consume **the same registration token**, and this resource
+mints it the same way for all of them: the token is scoped only to the organization and
+environment. So there is nothing per-method to configure here — pick whichever installation the
+UI offers and feed it the `registration_token` output.
+
+-> This resource models **connected mode** only. A gateway running in *local* mode never
+registers with the control plane, so no gateway object exists for Terraform to manage.
 
 ## Schema
 
@@ -113,7 +161,7 @@ After the runtime registers, run `terraform refresh` (or the next `plan`) and th
 - `id` (String) Composite identifier: `<organization_id>/<environment_id>/<name>`. Stable across the gateway's lifecycle, even before the runtime registers.
 - `registration_token` (String, Sensitive) The registration token minted for this gateway. Feed it to the Flex runtime so it can self-register. This is a short-lived, one-shot enrollment secret and cannot be recovered on import.
 - `gateway_id` (String) The platform-assigned gateway ID, resolved once the runtime registers. Empty until the gateway appears on the platform.
-- `status` (String) The current status of the registered gateway (e.g. `CONNECTED`, `DISCONNECTED`). Empty until it registers.
+- `status` (String) The current status of the registered gateway. Moves through three states: empty immediately after `apply` (the token is minted but nothing has registered), `DISCONNECTED` once a runtime has registered but is not running, and `CONNECTED` once a runtime is up.
 - `last_update` (String) Timestamp of the gateway's last status update, as reported by the platform (RFC 3339). Empty until the runtime registers.
 
 ## Import
