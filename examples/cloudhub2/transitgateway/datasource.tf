@@ -31,3 +31,23 @@ output "one_transit_gateway_aws_id" {
   description = "AWS Transit Gateway ID of the looked-up connection."
   value       = data.anypoint_transit_gateway_connection.one.aws_transit_gateway_id
 }
+
+
+# ---------------------------------------------------------------------------
+# Example: discover the private spaces a transit gateway can attach to.
+#
+# Use this to find the private_space_id required by
+# anypoint_transit_gateway_connection and by both transit gateway data sources.
+# ---------------------------------------------------------------------------
+data "anypoint_private_spaces" "all" {
+  organization_id = var.organization_id
+}
+
+output "private_space_targets" {
+  description = "Private spaces available as transit gateway attachment targets."
+  value = [for ps in data.anypoint_private_spaces.all.private_spaces : {
+    id     = ps.id
+    name   = ps.name
+    region = ps.region
+  }]
+}
