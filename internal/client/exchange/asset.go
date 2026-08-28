@@ -943,10 +943,18 @@ func (c *AssetClient) ListExternalInstances(ctx context.Context, groupID, assetI
 		return nil, fmt.Errorf("failed to decode external instances response: %w", err)
 	}
 
-	// The endpoint returns managed instances too; only "external" ones are ours.
+	// The endpoint returns managed instances too, so match "external" EXACTLY.
+	//
+	// An earlier version also accepted an empty type. That is unsafe here: the caller
+	// (syncInstances) deletes every instance it finds that is absent from the desired
+	// set, so wrongly adopting a managed instance — one created by anypoint_api_instance
+	// on the same version group, say — would delete it from the platform. Verified
+	// against production that external instances carry type "external" explicitly:
+	// with this exact-match filter the demo asset's instances still round-trip with
+	// their instance_id intact, so the empty case buys nothing and risks real damage.
 	out := make([]ExternalInstance, 0, len(all))
 	for _, inst := range all {
-		if inst.Type == "" || inst.Type == "external" {
+		if inst.Type == "external" {
 			out = append(out, inst)
 		}
 	}
