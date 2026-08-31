@@ -29,7 +29,55 @@ provider "anypoint" {
 
 ## Authentication
 
-The provider authenticates against Anypoint Platform using a [Connected App](https://docs.mulesoft.com/access-management/connected-apps-overview) with the `client_credentials` grant type. Create a Connected App in your root org with the scopes required for the resources you intend to manage, then provide its `client_id` / `client_secret` to the provider.
+The provider supports two authentication modes, selected with `auth_type`:
+
+| `auth_type` | Grant | Credentials | Token principal |
+|-------------|-------|-------------|-----------------|
+| `connected_app` (default) | `client_credentials` | `client_id` + `client_secret` | the **Connected App** (no user) |
+| `user` | `password` | `client_id` + `client_secret` + `username` + `password` | a **user** (the app acts on the user's behalf) |
+
+For `connected_app`, create a [Connected App](https://docs.mulesoft.com/access-management/connected-apps-overview) in your root org with the scopes required for the resources you intend to manage.
+
+### Two Access Management operations require `auth_type = "user"`
+
+| Resource | `connected_app` (client_credentials) |
+|----------|--------------------------------------|
+| `anypoint_role` | Works fully — role groups, `permissions`, `members`. |
+| `anypoint_team` | Create, `members` and reads work; assigning most `permissions` returns `403 Forbidden`. |
+| `anypoint_connected_app` | Create returns `403 Not authorized to access this resource`. |
+
+**Adding scopes does not change this.** Even a Connected App holding **Access Controls
+Admin**, **Access Controls Viewer** and **View Organization** is refused: the same role,
+with the same `context_params`, assigns to a *role group* but not to a *team*, because
+the two endpoints are gated differently. Only *Exchange Viewer*, *Exchange Administrator*
+and *View Organization* can be assigned to a team under `client_credentials`.
+
+~> `auth_type = "user"` **still requires a Connected App** — the password grant means
+the app acts *on behalf of* a user. Create it as "acts on behalf of a user" with the
+password grant enabled, or you'll get
+`invalid_grant: Application is missing requested grant`.
+
+### Control-plane resources need the right scopes (important)
+
+For the CloudHub 2.0 and Gateway control-plane resources, a `client_credentials`
+Connected App works fine **as long as it is granted the scopes those APIs require.** A
+`HTTP 401`/`403` from one of these APIs almost always means the Connected App is
+**missing a scope**, not that you must switch authentication modes. (The Access
+Management operations above are the exception to that rule.)
+
+> Verified live on Anypoint: with a properly scoped `client_credentials` token, `runtimefabric/.../privatespaces`, `gatewaymanager/api/v1/.../gateways`, and `standalone/api/v1/.../gateways` all return `200`. Without the required scopes they return `401`/`403`. Using `auth_type = "user"` tends to "just work" only because a human admin already holds those permissions — it is a convenient alternative, **not a requirement**.
+
+Scopes required by the control-plane API families:
+
+| API family | Endpoint (base) | Required Connected App scopes | Resources |
+|------------|-----------------|-------------------------------|-----------|
+| **CloudHub 2.0 private spaces** | `runtimefabric/api/...` | **Cloudhub Organization Admin** (`admin:cloudhub`), plus **Manage Runtime Fabrics** for some operations | `anypoint_private_space_config`, `anypoint_private_space_association`, `anypoint_private_space_upgrade`, `anypoint_privatespace_advanced_config`, `anypoint_tls_context`, `anypoint_vpn_connection`, `anypoint_transit_gateway_connection` |
+| **Gateway Manager** (managed Omni Gateway) | `gatewaymanager/api/v1/...` | **Manage Servers** + **Read Servers** + **View Organization**; for Omni Gateway operations also API Manager scopes (**Manage APIs Configuration**, **Manage Policies**, **View Policies**, **Deploy API Proxies**) and **Exchange Viewer** | `anypoint_managed_omni_gateway`, and any resource that pre-flights a `gateway_id`: `anypoint_api_instance`, `anypoint_api_policy`, `anypoint_api_instance_sla_tier`, `anypoint_mcp_server`, `anypoint_mcp_bridge`, `anypoint_agent_instance` |
+| **Standalone / self-managed gateways** | `standalone/api/v1/...` | **Manage Servers** + **Read Servers** + **View Organization** | `anypoint_self_managed_gateway` (mint / list / get) |
+
+If a `client_credentials` app is missing these scopes, `terraform apply` fails **before creating anything** — the gateway `gateway_id` pre-flight (or the private-space call) returns `401`/`403`. The provider surfaces this as an explicit error naming the scopes to grant, rather than an opaque status code. The fix is to **add the scopes above to your Connected App** (or use `auth_type = "user"` with a user that already has them).
+
+~> **Tip:** you can grant all of the above scopes to a single Connected App and use `auth_type = "connected_app"` for every resource **except** `anypoint_connected_app` and `anypoint_team` role assignment, which require `auth_type = "user"` (see above). `auth_type = "user"` also remains available as an alternative anywhere you'd rather rely on an existing admin user's permissions.
 
 ## Schema
 
@@ -40,6 +88,9 @@ The provider authenticates against Anypoint Platform using a [Connected App](htt
 
 ### Optional
 
+- `auth_type` (String) – Authentication type. Valid values: `connected_app` (default) for the client-credentials flow, or `user` for the password-grant flow. Most resources work with either; `anypoint_connected_app` and `anypoint_team` role assignment **require** `user` (see Authentication above). May also be provided via `ANYPOINT_AUTH_TYPE`.
+- `username` (String) – Username for user authentication (only required when `auth_type = "user"`). May also be provided via `ANYPOINT_USERNAME`.
+- `password` (String, Sensitive) – Password for user authentication (only required when `auth_type = "user"`). May also be provided via `ANYPOINT_PASSWORD`.
 - `base_url` (String) – Anypoint Platform base URL. Defaults to `https://anypoint.mulesoft.com`. Override for EU (`https://eu1.anypoint.mulesoft.com`), GovCloud, or staging environments.
 
 ## Resources by Category
@@ -50,10 +101,12 @@ All resources provided by `terraform-provider-anypoint`, grouped by subcategory.
 
 | Resource | Description |
 |----------|-------------|
-| [anypoint_connected_app_scopes](resources/anypoint_connected_app_scopes.md) | Manages scopes for an Anypoint Connected Application using user authentication. |
+| [anypoint_connected_app](resources/anypoint_connected_app.md) | Creates and manages an Anypoint Connected Application, including its scopes managed inline. |
+| [anypoint_connected_app_scopes](resources/anypoint_connected_app_scopes.md) | _Deprecated._ Manages scopes for an Anypoint Connected Application standalone. Prefer the inline `scopes` attribute on `anypoint_connected_app`. |
 | [anypoint_environment](resources/anypoint_environment.md) | Manages an Anypoint Platform environment. |
 | [anypoint_organization](resources/anypoint_organization.md) | Creates and manages an Anypoint Platform organization. |
-| [anypoint_team](resources/anypoint_team.md) | Manages an Anypoint Platform team. |
+| [anypoint_role](resources/anypoint_role.md) | Manages an Anypoint Platform role group, including its permissions and members managed inline. |
+| [anypoint_team](resources/anypoint_team.md) | Manages an Anypoint Platform team, including its role assignments and members managed inline. |
 
 ### API Management
 
@@ -63,6 +116,7 @@ All resources provided by `terraform-provider-anypoint`, grouped by subcategory.
 | [anypoint_api_instance_sla_tier](resources/anypoint_api_instance_sla_tier.md) | Manages an SLA tier for an API instance in Anypoint API Manager. |
 | [anypoint_api_policy](resources/anypoint_api_policy.md) | Manages a policy applied to an API instance. Supports both known policies (via `policy_type`) and custom policies (via `group_id` + `asset_id`). |
 | [anypoint_managed_omni_gateway](resources/anypoint_managed_omni_gateway.md) | Manages a CloudHub 2.0 Managed Omni Gateway instance in Anypoint Platform. |
+| [anypoint_self_managed_gateway](resources/anypoint_self_managed_gateway.md) | Manages a self-managed (connected-mode) Flex/Omni Gateway that you run on your own infrastructure; mints the registration token and tracks the gateway once its runtime self-registers. |
 
 ### Agents & Tools
 
@@ -81,6 +135,13 @@ All resources provided by `terraform-provider-anypoint`, grouped by subcategory.
 | [anypoint_privatespace_advanced_config](resources/anypoint_privatespace_advanced_config.md) | Manages advanced configuration for an Anypoint Private Space. |
 | [anypoint_tls_context](resources/anypoint_tls_context.md) | Manages a CloudHub 2.0 TLS Context with support for both PEM and JKS keystores. |
 | [anypoint_vpn_connection](resources/anypoint_vpn_connection.md) | Creates a VPN connection in a CloudHub 2.0 private space. |
+| [anypoint_transit_gateway_connection](resources/anypoint_transit_gateway_connection.md) | Manages a Transit Gateway connection (attachment) linking a CloudHub 2.0 private space to an AWS Transit Gateway, with inline routes. |
+
+### Exchange
+
+| Resource | Description |
+|----------|-------------|
+| [anypoint_exchange_asset](resources/anypoint_exchange_asset.md) | Publishes and manages an Exchange asset (metadata, spec/multi-file upload, docs pages, categories, custom fields, and external instances). Asset versions are immutable. |
 
 ### Secrets Management
 
@@ -204,3 +265,13 @@ All resources provided by `terraform-provider-anypoint`, grouped by subcategory.
 | [anypoint_api_policy_a2a_prompt_decorator](resources/anypoint_api_policy_a2a_prompt_decorator.md) | Manages an A2A Prompt Decorator policy on an Anypoint API instance. |
 | [anypoint_api_policy_a2a_schema_validation](resources/anypoint_api_policy_a2a_schema_validation.md) | Manages an A2A Schema Validation policy on an Anypoint API instance. |
 | [anypoint_api_policy_a2a_token_rate_limit](resources/anypoint_api_policy_a2a_token_rate_limit.md) | Manages an A2A Token Rate Limit policy on an Anypoint API instance. |
+
+### API Policies — GraphQL & WebSocket
+
+| Resource | Description |
+|----------|-------------|
+| [anypoint_api_policy_graphql_schema_validation](resources/anypoint_api_policy_graphql_schema_validation.md) | Manages a GraphQL Schema Validation policy on an Anypoint API instance. |
+| [anypoint_api_policy_graphql_operation_limits](resources/anypoint_api_policy_graphql_operation_limits.md) | Manages a GraphQL Operation Limits policy on an Anypoint API instance. |
+| [anypoint_api_policy_graphql_static_query_complexity](resources/anypoint_api_policy_graphql_static_query_complexity.md) | Manages a GraphQL Static Query Complexity policy on an Anypoint API instance. |
+| [anypoint_api_policy_graphql_introspection_control](resources/anypoint_api_policy_graphql_introspection_control.md) | Manages a GraphQL Introspection Control policy on an Anypoint API instance. |
+| [anypoint_api_policy_websocket_connection_limit](resources/anypoint_api_policy_websocket_connection_limit.md) | Manages a WebSocket Connection Limit policy on an Anypoint API instance. |

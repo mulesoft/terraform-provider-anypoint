@@ -92,17 +92,17 @@ provider "anypoint" {
 | `anypoint_bg` | `anypoint_organization` | **Renamed + Schema change** | Business Group → Organization. `entitlements` is a nested object on the official side (one attribute per entitlement) rather than the flat map used by the community provider. Quota entitlements (`vcores_*`, `vpcs`, `network_connections`) are modeled as nested objects with `assigned` / `reassigned`. Note: `static_ips` and `vpns` are server-managed by Anypoint and not settable via Terraform, so they are intentionally excluded from the schema. |
 | `anypoint_env` | `anypoint_environment` | **Renamed** | Schema similar: `name`, `org_id` → `organization_id`, `type`. |
 | `anypoint_user` | — | **Not supported** | Removed from the official provider. |
-| `anypoint_user_rolegroup` | — | **Not supported** | No equivalent. Role-group based access isn't modelled in the official provider; manage roles via `anypoint_team_roles` / `anypoint_team_members` instead. |
+| `anypoint_user_rolegroup` | — | **Not supported** | No equivalent. Role-group based access isn't modelled in the official provider; manage access via the inline `permissions` / `members` attributes on `anypoint_team` (or `anypoint_role`) instead. |
 | `anypoint_rolegroup` | — | **Not supported** | Same as above. |
 | `anypoint_rolegroup_roles` | — | **Not supported** | Same as above. |
-| `anypoint_team` | `anypoint_team` | **As-is** | Type name matches; minor schema review recommended. |
-| `anypoint_team_roles` | — | **Not supported** | Removed from the official provider. |
-| `anypoint_team_member` | — | **Not supported** | Removed from the official provider. |
+| `anypoint_team` | `anypoint_team` | **As-is (schema change)** | Type name matches. Role assignments and membership are inline on `anypoint_team` via the authoritative `permissions` and `members` attributes (permissions referenced by display name, members by username), rather than as separate resources. |
+| `anypoint_team_roles` | `anypoint_team` (`permissions`) | **Folded in** | Modeled as the inline `permissions` attribute on `anypoint_team` instead of a standalone resource. |
+| `anypoint_team_member` | `anypoint_team` (`members`) | **Folded in** | Modeled as the inline `members` attribute on `anypoint_team` instead of a standalone resource. |
 | `anypoint_team_group_mappings` | — | **Not supported** | External IdP group → team mappings aren't in the official provider yet. |
 | `anypoint_idp_oidc` | — | **Not supported** | Identity-provider management is not in scope for the official provider today. |
 | `anypoint_idp_saml` | — | **Not supported** | Same. |
-| `anypoint_connected_app` | `anypoint_connected_app` | **As-is (schema change)** | Type name matches. Scope configuration on the community provider is inline; official provider splits it into a separate `anypoint_connected_app_scopes` resource. |
-| — | `anypoint_connected_app_scopes` | **New in official** | Dedicated resource for scope assignment. |
+| `anypoint_connected_app` | `anypoint_connected_app` | **As-is (schema change)** | Type name matches. Scope configuration is inline on both providers via the authoritative `scopes` attribute on `anypoint_connected_app`. A standalone `anypoint_connected_app_scopes` resource also exists but is deprecated in favor of inline scopes. |
+| — | `anypoint_connected_app_scopes` | **Deprecated** | Standalone scope resource (use inline `scopes` on `anypoint_connected_app` instead). |
 
 ### API Management
 
@@ -184,7 +184,7 @@ even for list queries; the official provider distinguishes singular vs plural):
 | `anypoint_apim_instance` | `anypoint_api_instance` | Renamed. |
 | `anypoint_apim_instance_policies` | — | Use the `anypoint_api_policy*` resources as the source of truth. |
 | `anypoint_secretgroups` | — | Not supported as a data source. |
-| `anypoint_omnigateway_registration_token` | — | Not supported. |
+| `anypoint_omnigateway_registration_token` | `anypoint_self_managed_gateway` (resource) | The token-minting concept is now a first-class resource. `anypoint_self_managed_gateway` mints the connected-mode registration token, tracks the gateway once your Flex runtime self-registers, and deletes it. Use the `anypoint_self_managed_gateways` data source to list registered gateways. |
 | `anypoint_exchange_policy_template*` | — | Not needed — the official provider ships strongly-typed policy resources for every supported policy. |
 
 Data sources unique to the official provider:

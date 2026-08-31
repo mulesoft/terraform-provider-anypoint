@@ -68,7 +68,7 @@ func TestConnectedAppScopesClient_RemoveConnectedAppScopes(t *testing.T) {
 			server := testutil.MockHTTPServer(t, handlers)
 
 			c := &ConnectedAppScopesClient{
-				UserAnypointClient: &client.UserAnypointClient{
+				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					OrgID:      "test-org-id",
@@ -95,12 +95,12 @@ func TestConnectedAppScopesClient_RemoveConnectedAppScopes(t *testing.T) {
 
 func TestConnectedAppScopesClient_DeleteConnectedAppScopes(t *testing.T) {
 	tests := []struct {
-		name           string
-		appID          string
-		getHandler     func(w http.ResponseWriter, r *http.Request)
-		deleteHandler  func(w http.ResponseWriter, r *http.Request)
-		wantErr        bool
-		errContains    string
+		name          string
+		appID         string
+		getHandler    func(w http.ResponseWriter, r *http.Request)
+		deleteHandler func(w http.ResponseWriter, r *http.Request)
+		wantErr       bool
+		errContains   string
 	}{
 		{
 			name:  "successful delete with existing scopes",
@@ -164,7 +164,7 @@ func TestConnectedAppScopesClient_DeleteConnectedAppScopes(t *testing.T) {
 			server := testutil.MockHTTPServer(t, handlers)
 
 			c := &ConnectedAppScopesClient{
-				UserAnypointClient: &client.UserAnypointClient{
+				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					OrgID:      "test-org-id",

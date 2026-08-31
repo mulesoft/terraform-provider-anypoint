@@ -3,6 +3,7 @@ package apimanagement
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
@@ -29,6 +31,7 @@ var (
 	_ resource.ResourceWithConfigure      = &APIInstanceResource{}
 	_ resource.ResourceWithImportState    = &APIInstanceResource{}
 	_ resource.ResourceWithValidateConfig = &APIInstanceResource{}
+	_ resource.ResourceWithModifyPlan     = &APIInstanceResource{}
 )
 
 type APIInstanceResource struct {
@@ -70,6 +73,7 @@ type EndpointModel struct {
 	DeploymentType  types.String `tfsdk:"deployment_type"`
 	Type            types.String `tfsdk:"type"`
 	BasePath        types.String `tfsdk:"base_path"`
+	Port            types.Int64  `tfsdk:"port"`
 	ResponseTimeout types.Int64  `tfsdk:"response_timeout"`
 }
 
@@ -91,6 +95,7 @@ var endpointAttrTypes = map[string]attr.Type{
 	"deployment_type":  types.StringType,
 	"type":             types.StringType,
 	"base_path":        types.StringType,
+	"port":             types.Int64Type,
 	"response_timeout": types.Int64Type,
 }
 
@@ -105,6 +110,7 @@ func endpointFromObject(obj types.Object) *EndpointModel {
 		DeploymentType:  attrs["deployment_type"].(types.String),
 		Type:            attrs["type"].(types.String),
 		BasePath:        attrs["base_path"].(types.String),
+		Port:            attrs["port"].(types.Int64),
 		ResponseTimeout: attrs["response_timeout"].(types.Int64),
 	}
 }
@@ -119,12 +125,58 @@ func endpointToObject(ep *EndpointModel) types.Object {
 		"deployment_type":  ep.DeploymentType,
 		"type":             ep.Type,
 		"base_path":        ep.BasePath,
+		"port":             ep.Port,
 		"response_timeout": ep.ResponseTimeout,
 	})
 	if diags.HasError() {
 		return types.ObjectNull(endpointAttrTypes)
 	}
 	return obj
+}
+
+// defaultProxyPort is the Omni/Flex Gateway listener port used when the endpoint
+// does not specify one. The platform's "Add API" flow also defaults to 8081.
+const defaultProxyPort int64 = 8081
+
+// buildProxyURI constructs the Omni/Flex Gateway proxy URI the platform expects
+// for an API instance: http://0.0.0.0:<port>/<base_path>. The port defaults to
+// 8081 when the endpoint's port is null/unknown so that instances written before
+// the port field existed (and configs that omit it) keep their historical URI.
+// A leading slash on base_path is trimmed so callers can write "/my-api" or
+// "my-api" interchangeably.
+func buildProxyURI(ep *EndpointModel) string {
+	port := defaultProxyPort
+	if ep != nil && !ep.Port.IsNull() && !ep.Port.IsUnknown() {
+		port = ep.Port.ValueInt64()
+	}
+	basePath := ""
+	if ep != nil && !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
+		basePath = strings.TrimPrefix(ep.BasePath.ValueString(), "/")
+	}
+	return fmt.Sprintf("http://0.0.0.0:%d/%s", port, basePath)
+}
+
+// parseProxyURI recovers the base_path and listener port from a proxy URI the
+// platform returns (e.g. "http://0.0.0.0:8082/my-api"). It parses generically so
+// that instances on any port — not just the legacy hardcoded 8081 — round-trip
+// correctly. When the port cannot be determined it falls back to 8081. basePath
+// is returned as a bare path with no leading slash (empty string for a root "/"
+// listener), mirroring what buildProxyURI accepts.
+func parseProxyURI(proxyURI string) (basePath string, port int64) {
+	port = defaultProxyPort
+	u, err := url.Parse(proxyURI)
+	if err != nil {
+		// Fall back to the legacy literal-prefix strip so a malformed but
+		// 8081-shaped URI still yields a sensible base path.
+		return strings.TrimPrefix(proxyURI, "http://0.0.0.0:8081/"), port
+	}
+	basePath = strings.TrimPrefix(u.Path, "/")
+	if p := u.Port(); p != "" {
+		if pi, e := strconv.ParseInt(p, 10, 64); e == nil {
+			port = pi
+		}
+	}
+	return basePath, port
 }
 
 // deploymentAttrTypes maps DeploymentModel field names to their Terraform types.
@@ -371,18 +423,44 @@ func (r *APIInstanceResource) Schema(_ context.Context, _ resource.SchemaRequest
 						},
 					},
 					"type": schema.StringAttribute{
-						Description: "Endpoint protocol type. Valid values: 'http', 'rest', 'raml'.",
-						Optional:    true,
-						Computed:    true,
-						Default:     stringdefault.StaticString("http"),
+						Description: "Endpoint protocol type. Valid values: 'http', 'rest', 'raml', 'wsdl', " +
+							"'graphql', 'grpc', 'websocket'. The value must be compatible with the backing " +
+							"Exchange asset's type — e.g. a 'graphql' Exchange asset requires endpoint type " +
+							"'graphql', and a 'grpc-api' asset requires 'grpc'. Defaults to 'http'.",
+						Optional: true,
+						Computed: true,
+						Default:  stringdefault.StaticString("http"),
 						Validators: []validator.String{
-							stringvalidator.OneOf("http", "rest", "raml"),
+							stringvalidator.OneOf("http", "rest", "raml", "wsdl", "graphql", "grpc", "websocket"),
 						},
 					},
 					"base_path": schema.StringAttribute{
 						Description: "API base path for the Omni Gateway proxy listener (e.g. 'my-api'). " +
-							"The provider constructs the full proxy URI as http://0.0.0.0:8081/<base_path>.",
+							"The provider constructs the full proxy URI as http://0.0.0.0:<port>/<base_path> " +
+							"(see 'port' for the listener port). A single gateway can host multiple API " +
+							"instances either on distinct ports or on the same port under distinct, non-root " +
+							"base paths; a base path of '/' is a catch-all that monopolizes the whole port.",
 						Optional: true,
+					},
+					"port": schema.Int64Attribute{
+						Description: "Listener port for the Omni/Flex Gateway proxy (the port in the constructed " +
+							"proxy URI http://0.0.0.0:<port>/<base_path>). Defaults to 8081. Set a distinct " +
+							"port to host multiple API instances on the same gateway without sharing a base path. " +
+							"Omitting it on an existing instance keeps whatever port that instance is already using.",
+						Optional: true,
+						Computed: true,
+						PlanModifiers: []planmodifier.Int64{
+							// Deliberately NOT a static Default of 8081, for the same reason
+							// anypoint_mcp_bridge's port is not: a Default wins over prior state
+							// whenever the config omits the attribute. `port` is NEW, so no
+							// existing config can mention it — every upgraded instance would
+							// plan <live port> -> 8081 and the apply would PATCH the proxy URI,
+							// silently moving a production listener off its port.
+							// UseStateForUnknown makes "omitted" mean "leave it alone"; new
+							// instances still land on 8081 because buildProxyURI and
+							// flattenInstance both fall back to defaultProxyPort.
+							int64planmodifier.UseStateForUnknown(),
+						},
 					},
 					"response_timeout": schema.Int64Attribute{
 						Description: "Response timeout in milliseconds.",
@@ -756,6 +834,47 @@ func (r *APIInstanceResource) Read(ctx context.Context, req resource.ReadRequest
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
+// ModifyPlan adjusts the plan to mark computed fields as Unknown when their
+// dependencies change, ensuring Terraform's consistency checks pass.
+func (r *APIInstanceResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	// Nothing to do on destroy.
+	if req.Plan.Raw.IsNull() {
+		return
+	}
+
+	// Nothing to do on create (state is null).
+	if req.State.Raw.IsNull() {
+		return
+	}
+
+	var plan, state APIInstanceResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// When spec.version changes, mark asset_version as Unknown so Terraform knows
+	// it will be recomputed. Without this, the provider gets "inconsistent result
+	// after apply" errors because the plan said asset_version="1.0.0" but after
+	// PATCH it became "1.0.1" (W-23307847).
+	stateVersion := ""
+	planVersion := ""
+	if state.Spec != nil && !state.Spec.Version.IsNull() && !state.Spec.Version.IsUnknown() {
+		stateVersion = state.Spec.Version.ValueString()
+	}
+	if plan.Spec != nil && !plan.Spec.Version.IsNull() && !plan.Spec.Version.IsUnknown() {
+		planVersion = plan.Spec.Version.ValueString()
+	}
+
+	if stateVersion != planVersion && planVersion != "" {
+		// Version is changing — mark asset_version as Unknown so Terraform
+		// expects it to be recomputed during apply.
+		plan.AssetVersion = types.StringUnknown()
+		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+	}
+}
+
 func (r *APIInstanceResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan, state APIInstanceResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -774,6 +893,27 @@ func (r *APIInstanceResource) Update(ctx context.Context, req resource.UpdateReq
 	if err != nil {
 		resp.Diagnostics.AddError("Invalid API Instance ID", "Could not parse API instance ID: "+state.ID.ValueString())
 		return
+	}
+
+	// Validate immutable fields: assetId and groupId cannot be changed via PATCH.
+	// These require resource replacement (destroy + recreate).
+	if state.Spec != nil && plan.Spec != nil {
+		if !state.Spec.AssetID.Equal(plan.Spec.AssetID) {
+			resp.Diagnostics.AddError(
+				"Immutable Attribute Changed",
+				"Attribute 'spec.asset_id' cannot be changed after creation (API Manager does not support this operation). "+
+					"To change the asset ID, destroy and recreate the resource with the new value.",
+			)
+			return
+		}
+		if !state.Spec.GroupID.Equal(plan.Spec.GroupID) {
+			resp.Diagnostics.AddError(
+				"Immutable Attribute Changed",
+				"Attribute 'spec.group_id' cannot be changed after creation (API Manager does not support this operation). "+
+					"To change the group ID, destroy and recreate the resource with the new value.",
+			)
+			return
+		}
 	}
 
 	if !plan.GatewayID.IsNull() && !plan.GatewayID.IsUnknown() && (plan.Deployment.IsNull() || plan.Deployment.IsUnknown()) {
@@ -956,11 +1096,7 @@ func (r *APIInstanceResource) expandCreateRequest(ctx context.Context, data APII
 
 		req.Endpoint.TLSContexts = &apimanagement.APIInstanceTLSContexts{}
 
-		basePath := ""
-		if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
-			basePath = strings.TrimPrefix(ep.BasePath.ValueString(), "/")
-		}
-		proxyURI := "http://0.0.0.0:8081/" + basePath
+		proxyURI := buildProxyURI(ep)
 		req.Endpoint.ProxyURI = &proxyURI
 	}
 
@@ -1015,11 +1151,7 @@ func (r *APIInstanceResource) expandUpdateRequest(ctx context.Context, data APII
 
 		req.Endpoint.TLSContexts = &apimanagement.APIInstanceTLSContexts{}
 
-		basePath := ""
-		if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
-			basePath = strings.TrimPrefix(ep.BasePath.ValueString(), "/")
-		}
-		proxyURI := "http://0.0.0.0:8081/" + basePath
+		proxyURI := buildProxyURI(ep)
 		req.Endpoint.ProxyURI = &proxyURI
 	}
 
@@ -1028,12 +1160,11 @@ func (r *APIInstanceResource) expandUpdateRequest(ctx context.Context, data APII
 		req.EndpointURI = &ce
 	}
 
-	if data.Spec != nil {
-		req.Spec = &apimanagement.APIInstanceSpec{
-			AssetID: data.Spec.AssetID.ValueString(),
-			GroupID: data.Spec.GroupID.ValueString(),
-			Version: data.Spec.Version.ValueString(),
-		}
+	// Asset version can be updated via root-level assetVersion field.
+	// AssetID and GroupID are immutable (changes require resource recreation).
+	if data.Spec != nil && !data.Spec.Version.IsNull() && !data.Spec.Version.IsUnknown() {
+		version := data.Spec.Version.ValueString()
+		req.AssetVersion = &version
 	}
 
 	if dep := deploymentFromObject(data.Deployment); dep != nil {
@@ -1408,9 +1539,12 @@ func (r *APIInstanceResource) flattenInstance(_ context.Context, inst *apimanage
 		}
 
 		if inst.Endpoint.ProxyURI != nil && *inst.Endpoint.ProxyURI != "" {
-			ep.BasePath = types.StringValue(strings.TrimPrefix(*inst.Endpoint.ProxyURI, "http://0.0.0.0:8081/"))
+			basePath, port := parseProxyURI(*inst.Endpoint.ProxyURI)
+			ep.BasePath = types.StringValue(basePath)
+			ep.Port = types.Int64Value(port)
 		} else {
 			ep.BasePath = types.StringNull()
+			ep.Port = types.Int64Value(defaultProxyPort)
 		}
 
 		if inst.Endpoint.ResponseTimeout != nil {

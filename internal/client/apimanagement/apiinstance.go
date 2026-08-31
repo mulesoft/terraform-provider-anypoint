@@ -145,10 +145,14 @@ type CreateAPIInstanceRequest struct {
 // The PATCH endpoint requires a split structure:
 //   - Upstreams: top-level full upstream definitions (id, label, uri, tlsContext)
 //   - Routing[].Upstreams: weight + id references into the top-level array
+//
+// The PATCH endpoint accepts assetVersion at the root level for version updates.
+// Note: assetId and groupId cannot be updated via PATCH (require recreate).
 type UpdateAPIInstanceRequest struct {
 	Technology    *string                `json:"technology,omitempty"`
 	EndpointURI   *string                `json:"endpointUri,omitempty"`
 	InstanceLabel *string                `json:"instanceLabel,omitempty"`
+	AssetVersion  *string                `json:"assetVersion,omitempty"`
 	Endpoint      *APIInstanceEndpoint   `json:"endpoint,omitempty"`
 	Spec          *APIInstanceSpec       `json:"spec,omitempty"`
 	Routing       []APIInstanceRoute     `json:"routing,omitempty"`
@@ -190,6 +194,13 @@ func (c *APIInstanceClient) GetGatewayInfo(ctx context.Context, orgID, envID, ga
 	}
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		// Gateway Manager requires the connected app to hold Runtime Manager server
+		// scopes (Manage/Read Servers, View Organization); a token missing them is
+		// rejected with 401/403 during this pre-flight, before the API instance is
+		// created. Surface actionable scope guidance.
+		if authErr := client.AuthContextErrorIfUnauthorized(resp.StatusCode, url, string(body)); authErr != nil {
+			return nil, authErr
+		}
 		return nil, fmt.Errorf("failed to get gateway info with status %d: %s", resp.StatusCode, string(body))
 	}
 

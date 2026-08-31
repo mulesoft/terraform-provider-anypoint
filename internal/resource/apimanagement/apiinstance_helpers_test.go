@@ -334,15 +334,15 @@ func TestAPIInstanceResource_expandCreateRequest(t *testing.T) {
 
 	t.Run("technology is mapped to API value", func(t *testing.T) {
 		data := APIInstanceResourceModel{
-			Technology:           types.StringValue("omniGateway"),
-			Endpoint:             types.ObjectNull(endpointAttrTypes),
-			Deployment:           types.ObjectNull(deploymentAttrTypes),
-			Routing:              types.ListNull(routeListElemType),
-			ProviderID:           types.StringNull(),
-			InstanceLabel:        types.StringNull(),
-			ApprovalMethod:       types.StringNull(),
-			ConsumerEndpoint:     types.StringNull(),
-			UpstreamURI:          types.StringNull(),
+			Technology:       types.StringValue("omniGateway"),
+			Endpoint:         types.ObjectNull(endpointAttrTypes),
+			Deployment:       types.ObjectNull(deploymentAttrTypes),
+			Routing:          types.ListNull(routeListElemType),
+			ProviderID:       types.StringNull(),
+			InstanceLabel:    types.StringNull(),
+			ApprovalMethod:   types.StringNull(),
+			ConsumerEndpoint: types.StringNull(),
+			UpstreamURI:      types.StringNull(),
 		}
 		req := r.expandCreateRequest(ctx, data)
 		if req.Technology != "flexGateway" {
@@ -352,15 +352,15 @@ func TestAPIInstanceResource_expandCreateRequest(t *testing.T) {
 
 	t.Run("upstream_uri creates simple routing", func(t *testing.T) {
 		data := APIInstanceResourceModel{
-			Technology:           types.StringValue("mule4"),
-			UpstreamURI:          types.StringValue("https://backend.example.com"),
-			Endpoint:             types.ObjectNull(endpointAttrTypes),
-			Deployment:           types.ObjectNull(deploymentAttrTypes),
-			Routing:              types.ListNull(routeListElemType),
-			ProviderID:           types.StringNull(),
-			InstanceLabel:        types.StringNull(),
-			ApprovalMethod:       types.StringNull(),
-			ConsumerEndpoint:     types.StringNull(),
+			Technology:       types.StringValue("mule4"),
+			UpstreamURI:      types.StringValue("https://backend.example.com"),
+			Endpoint:         types.ObjectNull(endpointAttrTypes),
+			Deployment:       types.ObjectNull(deploymentAttrTypes),
+			Routing:          types.ListNull(routeListElemType),
+			ProviderID:       types.StringNull(),
+			InstanceLabel:    types.StringNull(),
+			ApprovalMethod:   types.StringNull(),
+			ConsumerEndpoint: types.StringNull(),
 		}
 		req := r.expandCreateRequest(ctx, data)
 		if len(req.Routing) != 1 {
@@ -379,15 +379,15 @@ func TestAPIInstanceResource_expandCreateRequest(t *testing.T) {
 
 	t.Run("spec is included when set", func(t *testing.T) {
 		data := APIInstanceResourceModel{
-			Technology:           types.StringValue("mule4"),
-			UpstreamURI:          types.StringNull(),
-			Endpoint:             types.ObjectNull(endpointAttrTypes),
-			Deployment:           types.ObjectNull(deploymentAttrTypes),
-			Routing:              types.ListNull(routeListElemType),
-			ProviderID:           types.StringNull(),
-			InstanceLabel:        types.StringNull(),
-			ApprovalMethod:       types.StringNull(),
-			ConsumerEndpoint:     types.StringNull(),
+			Technology:       types.StringValue("mule4"),
+			UpstreamURI:      types.StringNull(),
+			Endpoint:         types.ObjectNull(endpointAttrTypes),
+			Deployment:       types.ObjectNull(deploymentAttrTypes),
+			Routing:          types.ListNull(routeListElemType),
+			ProviderID:       types.StringNull(),
+			InstanceLabel:    types.StringNull(),
+			ApprovalMethod:   types.StringNull(),
+			ConsumerEndpoint: types.StringNull(),
 			Spec: &SpecModel{
 				AssetID: types.StringValue("my-api"),
 				GroupID: types.StringValue("com.example"),
@@ -408,18 +408,19 @@ func TestAPIInstanceResource_expandCreateRequest(t *testing.T) {
 			"deployment_type":  types.StringValue("CH"),
 			"type":             types.StringValue("http"),
 			"base_path":        types.StringValue("/api/v1"),
+			"port":             types.Int64Null(),
 			"response_timeout": types.Int64Null(),
 		})
 		data := APIInstanceResourceModel{
-			Technology:           types.StringValue("mule4"),
-			UpstreamURI:          types.StringNull(),
-			Endpoint:             epObj,
-			Deployment:           types.ObjectNull(deploymentAttrTypes),
-			Routing:              types.ListNull(routeListElemType),
-			ProviderID:           types.StringNull(),
-			InstanceLabel:        types.StringNull(),
-			ApprovalMethod:       types.StringNull(),
-			ConsumerEndpoint:     types.StringNull(),
+			Technology:       types.StringValue("mule4"),
+			UpstreamURI:      types.StringNull(),
+			Endpoint:         epObj,
+			Deployment:       types.ObjectNull(deploymentAttrTypes),
+			Routing:          types.ListNull(routeListElemType),
+			ProviderID:       types.StringNull(),
+			InstanceLabel:    types.StringNull(),
+			ApprovalMethod:   types.StringNull(),
+			ConsumerEndpoint: types.StringNull(),
 		}
 		req := r.expandCreateRequest(ctx, data)
 		if req.Endpoint == nil {

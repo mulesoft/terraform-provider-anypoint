@@ -9,7 +9,7 @@ description: |-
 
 Manages an Agent instance in Anypoint API Manager. An Agent instance represents an Agent specification deployed to a Omni Gateway target with routing rules and upstream backends.
 
--> **Connected App:** This resource requires a **standard connected app** (client credentials). An admin connected app is not needed. The connected app must have relevant scopes.
+-> **Authentication:** This resource calls **Gateway Manager / API Manager control-plane APIs** (the gateway lifecycle and/or the `gateway_id` pre-flight). A `client_credentials` Connected App works — grant it **Manage Servers**, **Read Servers**, and **View Organization** (plus API Manager scopes such as **Manage APIs Configuration**, **Manage Policies**, **Deploy API Proxies**, and **Exchange Viewer** for Omni Gateway operations). A Connected App missing these scopes is rejected with `HTTP 401`/`403` before anything is created; the fix is to add the scopes (or use `auth_type = "user"` with a user that has the equivalent permissions). See [Authentication](../index.md#control-plane-resources-need-the-right-scopes-important).
 
 -> **Status after create:** After a successful `terraform apply` the `status` field is populated from a GET request made immediately after the POST. The Platform typically returns `status = "active"` right away. If your Gateway is not yet ready the provider retries the POST up to 5 times with a 20-second backoff before failing.
 
@@ -90,7 +90,7 @@ resource "anypoint_agent_instance" "advanced" {
 - `technology` (String) The gateway technology. Only `omniGateway` is currently supported. Defaults to `omniGateway`.
 - `provider_id` (String) The identity provider ID for the Agent.
 - `instance_label` (String) A human-readable label for this Agent instance.
-- `approval_method` (String) Client approval method. Valid values: `manual`, `automatic`. Defaults to null (no approval required).
+- `approval_method` (String) Client approval method. Valid values: `manual`. Defaults to null (no approval required). **Note:** `automatic` approval is no longer supported.
 - `endpoint` (Block) Endpoint / proxy configuration for the Agent instance. See [`endpoint`](#nestedschema--endpoint) below.
 - `consumer_endpoint` (String) Consumer-facing endpoint URI (the public URL clients use to reach the Agent). Maps to top-level endpointUri in the Agent.
 - `upstream_uri` (String) Shorthand for a single-upstream routing configuration. When set, the provider constructs routing as `[{upstreams: [{weight: 100, uri: <value>}]}]`. Mutually exclusive with the `routing` block.

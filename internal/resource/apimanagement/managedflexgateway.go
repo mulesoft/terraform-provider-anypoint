@@ -28,6 +28,7 @@ var (
 	_ resource.Resource                = &ManagedOmniGatewayResource{}
 	_ resource.ResourceWithConfigure   = &ManagedOmniGatewayResource{}
 	_ resource.ResourceWithImportState = &ManagedOmniGatewayResource{}
+	_ resource.ResourceWithModifyPlan  = &ManagedOmniGatewayResource{}
 )
 
 // attr type maps — used to build and validate types.Object values for nested blocks.
@@ -73,6 +74,7 @@ type ManagedOmniGatewayResourceModel struct {
 	OrganizationID types.String `tfsdk:"organization_id"`
 	EnvironmentID  types.String `tfsdk:"environment_id"`
 	TargetID       types.String `tfsdk:"target_id"`
+	TargetType     types.String `tfsdk:"target_type"`
 	RuntimeVersion types.String `tfsdk:"runtime_version"`
 	ReleaseChannel types.String `tfsdk:"release_channel"`
 	Size           types.String `tfsdk:"size"`
@@ -103,8 +105,10 @@ func (r *ManagedOmniGatewayResource) Schema(_ context.Context, _ resource.Schema
 				},
 			},
 			"name": schema.StringAttribute{
-				Description: "The name of the managed Omni Gateway.",
-				Required:    true,
+				Description: "The name of the managed Omni Gateway. Immutable after creation — " +
+					"Gateway Manager rejects an in-place rename with `400 cannot change gateway name`. " +
+					"To change the name, replace the gateway (`terraform apply -replace=<address>`).",
+				Required: true,
 			},
 			"organization_id": schema.StringAttribute{
 				Description: "The organization ID. If not specified, uses the organization from provider credentials.",
@@ -122,10 +126,21 @@ func (r *ManagedOmniGatewayResource) Schema(_ context.Context, _ resource.Schema
 				},
 			},
 			"target_id": schema.StringAttribute{
-				Description: "The target (private space) ID for the gateway deployment.",
-				Required:    true,
+				Description: "The target ID for the gateway deployment. For a private space this is the " +
+					"private space UUID; for a CloudHub 2.0 shared space this is the region slug " +
+					"(e.g. 'cloudhub-us-east-1'). The provider auto-detects the target type — no extra " +
+					"configuration is needed to deploy into a shared space.",
+				Required: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"target_type": schema.StringAttribute{
+				Description: "The type of the deployment target, resolved by the provider: " +
+					"'private-space' or 'shared-space'.",
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"runtime_version": schema.StringAttribute{
@@ -328,6 +343,62 @@ func (r *ManagedOmniGatewayResource) Configure(_ context.Context, req resource.C
 	r.client = gwClient
 }
 
+// ModifyPlan converts the platform's mid-apply "cannot change gateway name"
+// crash into a clear, actionable plan-time error.
+//
+// The Gateway Manager API treats a managed gateway's name as IMMUTABLE after
+// creation: a PUT that changes it is rejected with
+// `400 {"message":"cannot change gateway name"}`, which would otherwise abort
+// `terraform apply` mid-run. This resource shipped in the original provider with
+// `name` as an in-place-mutable Required attribute, so flipping it to
+// RequiresReplace (destroy+recreate) is a breaking schema-contract change on a
+// RELEASED resource. Per the maintainers' decision (Ankit, 2026-08-10) we take
+// the NON-BREAKING path: keep the schema as-is and reject a rename at plan time
+// with guidance to recreate instead. No `ForceNew`, no contract change — only
+// users who actually rename (which crashes today) are affected, and they now get
+// a helpful message before any change is attempted.
+func (r *ManagedOmniGatewayResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	// Only an in-place update can rename: skip create (no prior state) and
+	// destroy (no plan).
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+		return
+	}
+
+	var plan, state ManagedOmniGatewayResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Compare only KNOWN concrete values so an unresolved computed value is never
+	// mistaken for a rename.
+	if plan.Name.IsNull() || plan.Name.IsUnknown() ||
+		state.Name.IsNull() || state.Name.IsUnknown() {
+		return
+	}
+	if plan.Name.Equal(state.Name) {
+		return
+	}
+
+	resp.Diagnostics.AddAttributeError(
+		path.Root("name"),
+		"Managed Omni Gateway name is immutable",
+		fmt.Sprintf(
+			"The gateway name cannot be changed after creation. Gateway Manager treats "+
+				"the name as immutable and rejects an in-place rename with "+
+				"`400 cannot change gateway name`.\n\n"+
+				"You are trying to rename %q to %q. To change the name, replace the gateway "+
+				"(destroy and recreate it) instead of editing it in place:\n"+
+				"  terraform apply -replace=<this resource's address>\n\n"+
+				"Note that replacing the gateway provisions a NEW instance (new id and, for a "+
+				"shared space, a new platform-assigned public URL). If you only want to keep the "+
+				"old name, revert the `name` change in your configuration.",
+			state.Name.ValueString(), plan.Name.ValueString(),
+		),
+	)
+}
+
 // --- CRUD ---
 
 func (r *ManagedOmniGatewayResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -370,9 +441,28 @@ func (r *ManagedOmniGatewayResource) Create(ctx context.Context, req resource.Cr
 
 	cfg := r.expandConfiguration(data)
 
-	// Resolve public_url and internal_url: use user-provided values when set,
-	// otherwise auto-derive from the target's domain.
-	if cfg.Ingress.PublicURL == "" || cfg.Ingress.InternalURL == "" {
+	// Detect the target type up front. The platform derives private-vs-shared
+	// server-side from target_id (the create body carries no type field), but the
+	// provider must know it to decide how to handle ingress URLs. Detection is
+	// best-effort: on error or "not found" we fall back to private-space behavior,
+	// which is the historical default.
+	detectedType, detectErr := r.client.GetTargetType(ctx, orgID, targetID)
+	if detectErr != nil {
+		tflog.Warn(ctx, "Could not resolve target type; assuming private-space",
+			map[string]interface{}{"target_id": targetID, "error": detectErr.Error()})
+	}
+	isSharedSpace := detectedType == apimanagement.TargetTypeSharedSpace
+
+	if isSharedSpace {
+		// Shared space (CloudHub 2.0): the platform assigns the public URL (a
+		// random-slug host the client cannot compute) and there is no internal
+		// URL. Never derive or send ingress URLs — clear them so the platform
+		// assigns, and read the assigned public_url back from the create response.
+		cfg.Ingress.PublicURL = ""
+		cfg.Ingress.InternalURL = ""
+	} else if cfg.Ingress.PublicURL == "" || cfg.Ingress.InternalURL == "" {
+		// Private space: auto-derive public_url / internal_url from the target's
+		// provisioned domains when the user did not supply them.
 		domainsResp, err := r.client.GetDomains(ctx, orgID, targetID, envID)
 		if err != nil {
 			if client.IsNotFound(err) {
@@ -428,6 +518,11 @@ func (r *ManagedOmniGatewayResource) Create(ctx context.Context, req resource.Cr
 
 	r.flattenGateway(gw, &data, orgID, envID)
 	data.Tracing = reconcileTracing(planTracing, data.Tracing)
+	// The create (api/v1) response may omit targetType; fall back to the value we
+	// detected so the computed attribute settles to a concrete value on create.
+	if data.TargetType.ValueString() == "" && detectedType != "" {
+		data.TargetType = types.StringValue(detectedType)
+	}
 	tflog.Trace(ctx, "created managed omni gateway", map[string]interface{}{"id": gw.ID})
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -467,6 +562,21 @@ func (r *ManagedOmniGatewayResource) Update(ctx context.Context, req resource.Up
 		return
 	}
 
+	// Defense in depth: the name is immutable (see ModifyPlan). ModifyPlan already
+	// blocks a rename at plan time, but guard here too so we never send the PUT
+	// that Gateway Manager rejects with `400 cannot change gateway name`.
+	if !plan.Name.IsNull() && !plan.Name.IsUnknown() &&
+		!state.Name.IsNull() && !state.Name.IsUnknown() &&
+		!plan.Name.Equal(state.Name) {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("name"),
+			"Managed Omni Gateway name is immutable",
+			"The gateway name cannot be changed after creation. Replace the gateway "+
+				"(terraform apply -replace=<address>) to change its name.",
+		)
+		return
+	}
+
 	orgID := state.OrganizationID.ValueString()
 	if orgID == "" {
 		orgID = r.client.OrgID
@@ -475,9 +585,17 @@ func (r *ManagedOmniGatewayResource) Update(ctx context.Context, req resource.Up
 
 	cfg := r.expandConfiguration(plan)
 
+	// Shared-space targets have a platform-assigned public URL and no internal
+	// URL. target_type is already resolved in state (from Create/Read), so no
+	// extra API call is needed. Skip domain derivation entirely — the plan's
+	// ingress URLs (carried forward from state via UseStateForUnknown) already
+	// hold the platform-assigned public_url, which is the safe value to echo back.
+	isSharedSpace := state.TargetType.ValueString() == apimanagement.TargetTypeSharedSpace
+
 	// Resolve public_url / internal_url: use user-provided values when set,
 	// otherwise auto-derive from the target's domain (same logic as Create).
-	if cfg.Ingress.PublicURL == "" || cfg.Ingress.InternalURL == "" {
+	// Private space only — shared space skips derivation.
+	if !isSharedSpace && (cfg.Ingress.PublicURL == "" || cfg.Ingress.InternalURL == "") {
 		targetID := state.TargetID.ValueString()
 		gwName := plan.Name.ValueString()
 		domainsResp, err := r.client.GetDomains(ctx, orgID, targetID, envID)
@@ -655,6 +773,14 @@ func (r *ManagedOmniGatewayResource) flattenGateway(gw *apimanagement.ManagedOmn
 	data.ID = types.StringValue(gw.ID)
 	data.Name = types.StringValue(gw.Name)
 	data.TargetID = types.StringValue(gw.TargetID)
+	// target_type is only reliably present on the xapi/v1 single-GET response;
+	// the create/update (api/v1) response may omit it. Preserve any prior known
+	// value rather than clobbering it with an empty string, so state stays stable.
+	if gw.TargetType != "" {
+		data.TargetType = types.StringValue(gw.TargetType)
+	} else if data.TargetType.IsNull() || data.TargetType.IsUnknown() {
+		data.TargetType = types.StringValue(gw.TargetType)
+	}
 	data.RuntimeVersion = types.StringValue(gw.RuntimeVersion)
 	data.ReleaseChannel = types.StringValue(gw.ReleaseChannel)
 	data.Size = types.StringValue(gw.Size)
@@ -735,6 +861,20 @@ func (r *ManagedOmniGatewayResource) flattenGateway(gw *apimanagement.ManagedOmn
 // after we sent enabled=true). This prevents "provider produced an unexpected
 // new value" framework errors. Read() always uses the live API value.
 func reconcileTracing(plan, fromAPI types.Object) types.Object {
+	// The plan value is only usable as a fallback when it is a concrete (known,
+	// non-null) object. On Create the user typically OMITS `tracing`, so the
+	// Optional+Computed plan value is UNKNOWN — there is nothing to preserve from
+	// the plan, and the flattened API value is the authoritative computed result.
+	// Returning the (unknown) plan on this path would leave a Computed attribute
+	// unknown after apply, which the framework rejects with "Provider returned
+	// invalid result object after apply". Always prefer the known API value when
+	// the plan is not concrete. (This guard must come first: every later branch
+	// may `return plan`, which is only safe once we know plan is concrete.)
+	if plan.IsNull() || plan.IsUnknown() {
+		return fromAPI
+	}
+	// If flatten could not produce a usable API value, fall back to the (now
+	// known) plan value.
 	if fromAPI.IsNull() || fromAPI.IsUnknown() {
 		return plan
 	}

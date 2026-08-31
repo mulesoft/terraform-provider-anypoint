@@ -138,7 +138,7 @@ func (d *ManagedOmniGatewaySingleDataSource) Schema(_ context.Context, _ datasou
 			},
 			"status": schema.StringAttribute{
 				Computed:    true,
-				Description: "The current status of the gateway (e.g. APPLIED).",
+				Description: "The current status of the gateway (e.g. APPLYING while provisioning, RUNNING once ready).",
 			},
 			"desired_status": schema.StringAttribute{
 				Computed:    true,

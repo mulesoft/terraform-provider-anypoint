@@ -2,22 +2,17 @@
 # Outputs
 ###############################################################################
 
-# output "customer_support_agent_id" {
-#   description = "Customer support agent instance ID"
-#   value       = anypoint_agent_instance.customer_support_agent.id
-# }
+output "agent_instance_id" {
+  description = "Numeric ID of the Agent instance"
+  value       = anypoint_agent_instance.bedrock.id
+}
 
-# output "customer_support_agent_status" {
-#   description = "Customer support agent instance status"
-#   value       = anypoint_agent_instance.customer_support_agent.status
-# }
+output "agent_instance_status" {
+  description = "Current status of the Agent instance"
+  value       = anypoint_agent_instance.bedrock.status
+}
 
-# output "sales_agent_id" {
-#   description = "Sales agent instance ID"
-#   value       = anypoint_agent_instance.sales_agent.id
-# }
-
-# output "sales_agent_status" {
-#   description = "Sales agent instance status"
-#   value       = anypoint_agent_instance.sales_agent.status
-# }
+output "agent_instance_asset_id" {
+  description = "Exchange asset ID computed from the Agent response"
+  value       = anypoint_agent_instance.bedrock.asset_id
+}

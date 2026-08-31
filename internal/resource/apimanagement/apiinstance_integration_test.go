@@ -232,3 +232,129 @@ func BenchmarkIntegrationAPIInstanceResource_Schema(b *testing.B) {
 		apiResource.Schema(ctx, req, resp)
 	}
 }
+
+// TestIntegrationAPIInstanceResource_AssetVersionUpdate verifies that asset version
+// updates are correctly sent in PATCH requests at root level (GUS W-23307847).
+func TestIntegrationAPIInstanceResource_AssetVersionUpdate(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	var receivedPatchBody map[string]interface{}
+
+	mockInstance := &apimanagement.APIInstance{
+		ID:           12345,
+		AssetID:      "test-api",
+		AssetVersion: "1.0.0",
+		GroupID:      "test-org-id",
+		Technology:   "flexGateway",
+		Status:       "active",
+		Spec: &apimanagement.APIInstanceSpec{
+			AssetID: "test-api",
+			GroupID: "test-org-id",
+			Version: "1.0.0",
+		},
+		Endpoint: &apimanagement.APIInstanceEndpoint{
+			Type:     "http",
+			ProxyURI: testutil.StringPtr("http://0.0.0.0:8081/api"),
+		},
+	}
+
+	updatedInstance := *mockInstance
+	updatedInstance.AssetVersion = "1.0.1"
+	if updatedInstance.Spec != nil {
+		updatedInstance.Spec.Version = "1.0.1"
+	}
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		"/apimanager/api/v1/organizations/test-org-id/environments/test-env-id/apis/12345": func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == "GET" {
+				// Return updated instance to reflect version change
+				testutil.JSONResponse(w, http.StatusOK, &updatedInstance)
+			} else {
+				testutil.ErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+			}
+		},
+		"/apimanager/xapi/v1/organizations/test-org-id/environments/test-env-id/apis/12345": func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == "PATCH" {
+				// Capture the PATCH body to verify structure
+				receivedPatchBody = testutil.AssertJSONBody(t, r)
+				testutil.JSONResponse(w, http.StatusOK, &updatedInstance)
+			} else {
+				testutil.ErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed")
+			}
+		},
+		"/accounts/api/v2/oauth2/token": testutil.StandardMockHandlers()["/accounts/api/v2/oauth2/token"],
+		"/accounts/api/me":              testutil.StandardMockHandlers()["/accounts/api/me"],
+	}
+
+	server := testutil.MockHTTPServer(t, handlers)
+
+	anypointClient, err := client.NewAnypointClient(&client.Config{
+		ClientID:     "test-client-id",
+		ClientSecret: "test-client-secret",
+		BaseURL:      server.URL,
+		Timeout:      30,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	apiClient := &apimanagement.APIInstanceClient{AnypointClient: anypointClient}
+
+	t.Run("AssetVersionUpdate_RootLevel", func(t *testing.T) {
+		// Update with new version
+		version := "1.0.1"
+		updateReq := &apimanagement.UpdateAPIInstanceRequest{
+			AssetVersion: &version,
+		}
+
+		inst, err := apiClient.UpdateAPIInstance(context.Background(), "test-org-id", "test-env-id", 12345, updateReq)
+		if err != nil {
+			t.Fatalf("UpdateAPIInstance failed: %v", err)
+		}
+
+		// Verify the response has the updated version
+		if inst.AssetVersion != "1.0.1" {
+			t.Errorf("Expected AssetVersion 1.0.1, got %s", inst.AssetVersion)
+		}
+
+		// CRITICAL: Verify PATCH body has assetVersion at root level (not in spec)
+		if receivedPatchBody == nil {
+			t.Fatal("PATCH body was not captured")
+		}
+
+		assetVersion, hasAssetVersion := receivedPatchBody["assetVersion"]
+		if !hasAssetVersion {
+			t.Error("PATCH body missing 'assetVersion' at root level - this is the bug from W-23307847")
+		} else if assetVersion != "1.0.1" {
+			t.Errorf("Expected assetVersion='1.0.1' in PATCH body, got %v", assetVersion)
+		}
+
+		// Verify spec is NOT present (or if present, doesn't contain version)
+		if spec, hasSpec := receivedPatchBody["spec"]; hasSpec {
+			if specMap, ok := spec.(map[string]interface{}); ok {
+				if _, hasVersion := specMap["version"]; hasVersion {
+					t.Error("PATCH body should NOT have version in nested spec object - use root-level assetVersion instead")
+				}
+			}
+		}
+	})
+
+	t.Run("AssetVersionUpdate_NoDrift", func(t *testing.T) {
+		// Fetch the instance after update
+		inst, err := apiClient.GetAPIInstance(context.Background(), "test-org-id", "test-env-id", 12345)
+		if err != nil {
+			t.Fatalf("GetAPIInstance failed: %v", err)
+		}
+
+		// Verify no drift: both root AssetVersion and Spec.Version should match
+		if inst.AssetVersion != "1.0.1" {
+			t.Errorf("Expected AssetVersion 1.0.1 after update, got %s (drift detected)", inst.AssetVersion)
+		}
+
+		if inst.Spec != nil && inst.Spec.Version != "1.0.1" {
+			t.Errorf("Expected Spec.Version 1.0.1 after update, got %s (drift detected)", inst.Spec.Version)
+		}
+	})
+}

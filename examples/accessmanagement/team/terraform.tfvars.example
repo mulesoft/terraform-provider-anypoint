@@ -10,5 +10,4 @@ anypoint_base_url = "https://anypoint.mulesoft.com"  # Production
 # anypoint_base_url = "https://stgx.anypoint.mulesoft.com"  # Staging
 
 # Team Configuration
-org_id         = "your-organization-id-here"
-parent_team_id = "your-parent-team-id-here"  # Use organization ID for root team
+org_id = "your-organization-id-here"

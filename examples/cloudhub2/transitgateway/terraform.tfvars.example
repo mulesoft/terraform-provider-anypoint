@@ -1,0 +1,15 @@
+# Copy to terraform.tfvars and fill in your values.
+
+anypoint_client_id     = "your-connected-app-client-id"
+anypoint_client_secret = "your-connected-app-client-secret"
+anypoint_base_url      = "https://anypoint.mulesoft.com"
+
+organization_id        = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+private_space_id       = "rf-p2-private-space"
+
+name                   = "tf-test-tgw"
+resource_share_id      = "e8e330a8-4f8c-452b-afd0-7810c41287f1"
+resource_share_account = "055970264539"
+
+# >=1 CIDR; must NOT overlap the Private Space CIDR. Use [] to clear all routes.
+routes = ["192.168.1.0/24", "172.16.0.0/12"]

@@ -25,9 +25,9 @@ output "all_api_instances" {
   value       = data.anypoint_api_instances.all.instances
 }
 
-# Output a concise summary
+# Output a concise summary (includes the gateway each instance is deployed to)
 output "api_instance_summary" {
-  description = "ID, asset, technology and status for each API instance"
+  description = "ID, asset, technology, status and gateway for each API instance"
   value = [
     for inst in data.anypoint_api_instances.all.instances : {
       id             = inst.id
@@ -36,6 +36,7 @@ output "api_instance_summary" {
       technology     = inst.technology
       instance_label = inst.instance_label
       status         = inst.status
+      gateway_id     = inst.gateway_id
     }
   ]
 }
@@ -47,6 +48,21 @@ output "omni_gateway_instances" {
     for inst in data.anypoint_api_instances.all.instances :
     inst if inst.technology == "omniGateway"
   ]
+}
+
+# List only the API instances deployed to a specific gateway (server-side of
+# the write path: an anypoint_api_instance references its gateway via
+# gateway_id — this data source is the reverse lookup). Surfaces instances
+# created outside Terraform too (e.g. via the Anypoint UI).
+data "anypoint_api_instances" "on_gateway" {
+  organization_id = var.organization_id
+  environment_id  = var.environment_id
+  gateway_id      = var.gateway_id
+}
+
+output "instances_on_gateway" {
+  description = "IDs of the API instances attached to var.gateway_id"
+  value       = [for inst in data.anypoint_api_instances.on_gateway.instances : inst.id]
 }
 
 # Look up a specific instance by label
