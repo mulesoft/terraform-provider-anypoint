@@ -131,7 +131,93 @@ func NewAnypointClient(config *Config) (*AnypointClient, error) {
 
 // authenticate performs authentication and stores the access token.
 // Uses password grant if Username is set, otherwise client_credentials.
+//
+// For user authentication the OAuth2 password grant is only half the story: several
+// Anypoint control planes issue an *opaque* token for that grant which cannot read
+// /accounts/api/me, so org resolution fails with 401 even though the grant itself
+// succeeded. /accounts/login always returns a token carrying user context, so user auth
+// falls back to it — the same fallback UserAnypointClient already performs. Without it
+// every area built on this client is unusable with auth_type = "user", including the
+// team and connected-app operations that require it.
+//
+// client_credentials has no such fallback and is left exactly as it was.
 func (c *AnypointClient) authenticate() error {
+	oauthErr := c.authenticateOAuth2()
+	if oauthErr == nil {
+		if err := c.resolveOrg(); err == nil {
+			return nil
+		}
+		// Token issued but it cannot identify the user. Only user auth can recover.
+		if c.Username == "" {
+			return fmt.Errorf("failed to get user info: %w", c.resolveOrg())
+		}
+	} else if c.Username == "" {
+		return oauthErr
+	}
+
+	if err := c.authenticateLogin(); err != nil {
+		if oauthErr != nil {
+			return fmt.Errorf("OAuth2 password grant failed (%v) and login fallback also failed: %w", oauthErr, err)
+		}
+		return err
+	}
+	return c.resolveOrg()
+}
+
+// resolveOrg reads the caller identity for the current token and stores its org.
+func (c *AnypointClient) resolveOrg() error {
+	me, err := c.getMe()
+	if err != nil {
+		return fmt.Errorf("failed to get user info: %w", err)
+	}
+	orgID, err := c.extractOrgID(me)
+	if err != nil {
+		return fmt.Errorf("failed to extract organization ID: %w", err)
+	}
+	c.OrgID = orgID
+	return nil
+}
+
+// authenticateLogin obtains a user-context token from /accounts/login.
+func (c *AnypointClient) authenticateLogin() error {
+	loginURL := fmt.Sprintf("%s/accounts/login", c.BaseURL)
+
+	jsonData, err := json.Marshal(map[string]string{"username": c.Username, "password": c.Password})
+	if err != nil {
+		return fmt.Errorf("failed to marshal login data: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", loginURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("failed to create login request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send login request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("login failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var loginResp map[string]interface{}
+	if decodeErr := json.NewDecoder(resp.Body).Decode(&loginResp); decodeErr != nil {
+		return fmt.Errorf("failed to decode login response: %w", decodeErr)
+	}
+	token, ok := loginResp["access_token"].(string)
+	if !ok {
+		return fmt.Errorf("no access token found in login response")
+	}
+	c.Token = token
+	return nil
+}
+
+// authenticateOAuth2 runs the token endpoint and stores the resulting access token.
+func (c *AnypointClient) authenticateOAuth2() error {
 	authURL := fmt.Sprintf("%s/accounts/api/v2/oauth2/token", c.BaseURL)
 
 	authData := map[string]string{
@@ -182,17 +268,6 @@ func (c *AnypointClient) authenticate() error {
 	} else {
 		return fmt.Errorf("no access token found in response")
 	}
-
-	// Extract OrgID from token
-	me, err := c.getMe()
-	if err != nil {
-		return fmt.Errorf("failed to get user info: %w", err)
-	}
-	orgID, err := c.extractOrgID(me)
-	if err != nil {
-		return fmt.Errorf("failed to extract organization ID: %w", err)
-	}
-	c.OrgID = orgID
 
 	return nil
 }
