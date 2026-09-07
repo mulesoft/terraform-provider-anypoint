@@ -41,6 +41,9 @@ type AssetDataSourceModel struct {
 
 	IsPublic     types.Bool   `tfsdk:"is_public"`
 	IsSnapshot   types.Bool   `tfsdk:"is_snapshot"`
+	APIVersion   types.String `tfsdk:"api_version"`
+	Classifier   types.String `tfsdk:"classifier"`
+	MainFile     types.String `tfsdk:"main_file"`
 	MinorVersion types.String `tfsdk:"minor_version"`
 	VersionGroup types.String `tfsdk:"version_group"`
 	CreatedDate  types.String `tfsdk:"created_date"`
@@ -149,6 +152,18 @@ func (d *AssetDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 			"minor_version": schema.StringAttribute{
 				Description: "The minor version (e.g. '1.0').",
 				Computed:    true,
+			},
+			"api_version": schema.StringAttribute{
+				Computed:    true,
+				Description: "The API contract version (`properties.apiVersion`), distinct from the GAV `version`. Null for asset types that do not carry one.",
+			},
+			"classifier": schema.StringAttribute{
+				Computed:    true,
+				Description: "The classifier of the asset's first user-uploaded file, for example `oas` or `raml`. Null for metadata-only assets. Exchange derives extra files from an API spec (a RAML upload also yields `oas` and `fat-oas`), and with no declared value to reconcile against this reports whichever of those comes back first — so it may name a sibling of the classifier the asset was published with.",
+			},
+			"main_file": schema.StringAttribute{
+				Computed:    true,
+				Description: "The name of the asset's main file. Null for metadata-only assets.",
 			},
 			"version_group": schema.StringAttribute{
 				Description: "The version group.",
@@ -312,6 +327,16 @@ func (d *AssetDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 	data.IsPublic = types.BoolValue(asset.IsPublic)
 	data.IsSnapshot = types.BoolValue(asset.IsSnapshot)
 	data.MinorVersion = types.StringValue(asset.MinorVersion)
+
+	// api_version lives in the attributes list, classifier and main_file on the
+	// uploaded file — the same places the resource reads them from. The resource can
+	// additionally reconcile classifier against the declared value; a data source has
+	// nothing to reconcile against, so for a multi-file API spec this may report a
+	// derived sibling (fat-oas) rather than the published classifier (oas).
+	data.APIVersion = dsStringOrNull(exchange.ExtractAttributeValue(asset.Attributes, "api-version"))
+	classifier, mainFile := exchange.ExtractFileMetadata(asset.Files)
+	data.Classifier = dsStringOrNull(classifier)
+	data.MainFile = dsStringOrNull(mainFile)
 	data.VersionGroup = types.StringValue(asset.VersionGroup)
 	data.CreatedDate = types.StringValue(asset.CreatedDate)
 	data.UpdatedDate = types.StringValue(asset.UpdatedDate)
@@ -491,4 +516,13 @@ func (d *AssetDataSource) readTerms(ctx context.Context, groupID, assetID, versi
 		return types.StringValue("")
 	}
 	return types.StringValue(content)
+}
+
+// dsStringOrNull renders an absent value as null rather than an empty string, so a
+// metadata-only asset reports no classifier instead of "".
+func dsStringOrNull(s string) types.String {
+	if s == "" {
+		return types.StringNull()
+	}
+	return types.StringValue(s)
 }
