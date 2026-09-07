@@ -62,6 +62,9 @@ output "rest_api_instances" {
 - `is_snapshot` (Boolean) Whether this is a snapshot version.
 - `minor_version` (String) The minor version (e.g. `1.0`).
 - `version_group` (String) The version group.
+- `api_version` (String) The API contract version (`properties.apiVersion`), distinct from the GAV `version`. Null for asset types that do not carry one.
+- `classifier` (String) The classifier of the asset's first user-uploaded file, for example `oas` or `raml`. Null for metadata-only assets. Exchange derives extra files from an API spec, so for a multi-file spec this may name a derived sibling (`fat-oas`) rather than the classifier the asset was published with.
+- `main_file` (String) The name of the asset's main file. Null for metadata-only assets.
 - `created_date` (String) When the asset was created.
 - `updated_date` (String) When the asset was last updated.
 - `tags` (List of String) The asset tags (labels).

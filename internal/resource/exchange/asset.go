@@ -2244,16 +2244,7 @@ func normalizeClassifier(apiClassifier string, currentStateClassifier types.Stri
 // extractAttributeValue extracts a value from the asset's attributes array by key.
 // The attributes array contains objects like {"key": "api-version", "value": "v1"}.
 func extractAttributeValue(attributes []interface{}, key string) string {
-	for _, attr := range attributes {
-		if attrMap, ok := attr.(map[string]interface{}); ok {
-			if attrKey, _ := attrMap["key"].(string); attrKey == key {
-				if val, ok := attrMap["value"].(string); ok {
-					return val
-				}
-			}
-		}
-	}
-	return ""
+	return exchange.ExtractAttributeValue(attributes, key)
 }
 
 // additionalFilesToUploads converts the additional_file plan list into the client's
@@ -2288,23 +2279,7 @@ func additionalFilesToUploads(ctx context.Context, list types.List) ([]exchange.
 // It finds the user-uploaded file (non-generated, with a non-null classifier) and returns
 // its classifier and mainFile values.
 func extractFileMetadata(files []exchange.AssetFile) (classifier string, mainFile string) {
-	for _, f := range files {
-		// Skip auto-generated files (like pom, fat-oas, etc.)
-		if f.IsGenerated {
-			continue
-		}
-		// Skip the pom file (always auto-created, classifier is empty)
-		if f.Packaging == "pom" && f.Classifier == "" {
-			continue
-		}
-		// This is the user-uploaded file
-		if f.Classifier != "" {
-			classifier = f.Classifier
-			mainFile = f.MainFile
-			return
-		}
-	}
-	return "", ""
+	return exchange.ExtractFileMetadata(files)
 }
 
 // declaredClassifierPresent reports whether the user's declared classifier is
@@ -2450,10 +2425,33 @@ func (r *AssetResource) mapAssetToState(state *AssetResourceModel, asset *exchan
 				priorTagOrder = append(priorTagOrder, s.ValueString())
 			}
 		}
-		orderedLabels := reorderByKey(asset.Labels, priorTagOrder, func(s string) string { return s })
+
+		// Exchange canonicalizes labels to lower case, so a configured "Terraform"
+		// comes back as "terraform". Both sides of the match are folded: with an
+		// identity key the prior order never lines up once any tag is capitalized,
+		// and the lower-cased value then replaces the UseStateForUnknown-frozen plan
+		// value, failing the apply with "Provider produced inconsistent result after
+		// apply" for something as ordinary as tags = ["Terraform"].
+		fold := strings.ToLower
+		foldedPriorOrder := make([]string, len(priorTagOrder))
+		for i, t := range priorTagOrder {
+			foldedPriorOrder[i] = fold(t)
+		}
+		orderedLabels := reorderByKey(asset.Labels, foldedPriorOrder, fold)
+
+		// Keep the configured casing where it differs only by case. The two are the
+		// same label to Exchange, so rewriting it would report drift on every plan
+		// for a difference the platform does not recognize.
+		priorByFold := make(map[string]string, len(priorTagOrder))
+		for _, t := range priorTagOrder {
+			priorByFold[fold(t)] = t
+		}
 
 		tagValues := make([]attr.Value, len(orderedLabels))
 		for i, label := range orderedLabels {
+			if prior, ok := priorByFold[fold(label)]; ok {
+				label = prior
+			}
 			tagValues[i] = types.StringValue(label)
 		}
 		state.Tags, _ = types.ListValue(types.StringType, tagValues)
