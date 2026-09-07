@@ -53,6 +53,8 @@ output "bridge_source_tools" {
 - `group_id` (String) The Exchange group (organization) ID.
 - `technology` (String) The gateway technology (`flexGateway` for MCP bridges).
 - `instance_label` (String) The label of the MCP bridge.
+- `approval_method` (String) The client approval method (UI: "Manual approval"). `manual` when access requests are held for review, null when they are approved automatically.
+- `provider_id` (String) The client provider authenticating applications that request access (UI: "Client provider"). Null when Anypoint's built-in provider is used.
 - `status` (String) The current status of the MCP bridge.
 - `consumer_endpoint` (String) The consumer-facing MCP endpoint URI (UI: "Consumer Endpoint"). Populated from the platform's `endpointUri`; may be null for self-managed (flexGateway) bridges — use `proxy_uri` instead.
 - `proxy_uri` (String) The gateway proxy URI where the bridge listens (`http://0.0.0.0:<port>/<base_path>`), reconstructed from the instance endpoint.
@@ -81,6 +83,7 @@ Read-Only:
 - `asset_id` (String) The source REST API's Exchange asset ID.
 - `group_id` (String) The source REST API's Exchange group ID.
 - `version` (String) The source REST API's Exchange asset version.
+- `tls_context_id` (String) The TLS context securing the connection to this backend, as `secretGroupId/tlsContextId`. Null when the upstream has none.
 - `tools` (List of Object) The MCP tools exposed for this source API. See [`tools`](#nestedschema--source_apis--tools) below.
 
 <a id="nestedschema--source_apis--tools"></a>
@@ -95,3 +98,21 @@ Read-Only:
 - `query_params` (List of String) Query parameter names passed through.
 - `header_params` (List of String) Header parameter names passed through.
 - `has_body` (Boolean) Whether the tool sends a request body.
+- `http_mapping` (Object) How the tool's inputs are mapped onto the upstream request. Null when the mapping is the default one already described by `query_params` and `header_params`; populated when the bridge maps a parameter to a different upstream name, a custom expression, or a custom body. See [`http_mapping`](#nestedschema--source_apis--tools--http_mapping) below.
+
+~> The tool's `input_schema` is not readable here. Like `description`, it lives only in the generated Exchange asset metadata rather than on the gateway, which is what this data source reads. Read it from the asset itself if you need it.
+
+<a id="nestedschema--source_apis--tools--http_mapping"></a>
+### Nested Schema for `source_apis.tools.http_mapping`
+
+Read-Only:
+
+- `query_params` (List of Object) Mapping for query string parameters.
+- `uri_params` (List of Object) Mapping for path placeholders.
+- `headers` (List of Object) Mapping for request headers.
+- `body` (String) DataWeave expression producing the request body.
+
+Each entry of `query_params`, `uri_params` and `headers` has:
+
+- `key` (String) The name sent upstream.
+- `value` (String) DataWeave expression producing the value.
