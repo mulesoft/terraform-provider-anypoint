@@ -1,6 +1,7 @@
 package agentstools
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -21,6 +22,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
@@ -56,6 +58,10 @@ type MCPBridgeResourceModel struct {
 	Port           types.Int64  `tfsdk:"port"`
 	BasePath       types.String `tfsdk:"base_path"`
 
+	InstanceLabel  types.String `tfsdk:"instance_label"`
+	ApprovalMethod types.String `tfsdk:"approval_method"`
+	ProviderID     types.String `tfsdk:"provider_id"`
+
 	AssetID          types.String `tfsdk:"asset_id"`
 	AssetVersion     types.String `tfsdk:"asset_version"`
 	ProductVersion   types.String `tfsdk:"product_version"`
@@ -68,12 +74,13 @@ type MCPBridgeResourceModel struct {
 }
 
 type BridgeSourceAPIModel struct {
-	Label       types.String `tfsdk:"label"`
-	UpstreamURI types.String `tfsdk:"upstream_uri"`
-	AssetID     types.String `tfsdk:"asset_id"`
-	GroupID     types.String `tfsdk:"group_id"`
-	Version     types.String `tfsdk:"version"`
-	Tools       types.List   `tfsdk:"tools"`
+	Label        types.String `tfsdk:"label"`
+	UpstreamURI  types.String `tfsdk:"upstream_uri"`
+	TLSContextID types.String `tfsdk:"tls_context_id"`
+	AssetID      types.String `tfsdk:"asset_id"`
+	GroupID      types.String `tfsdk:"group_id"`
+	Version      types.String `tfsdk:"version"`
+	Tools        types.List   `tfsdk:"tools"`
 }
 
 type BridgeToolModel struct {
@@ -84,6 +91,21 @@ type BridgeToolModel struct {
 	QueryParams  types.List   `tfsdk:"query_params"`
 	HeaderParams types.List   `tfsdk:"header_params"`
 	HasBody      types.Bool   `tfsdk:"has_body"`
+	InputSchema  types.String `tfsdk:"input_schema"`
+	HTTPMapping  types.Object `tfsdk:"http_mapping"`
+}
+
+// bridgeParamMappingAttrTypes is one {key,value} row of the HTTP request mapping.
+var bridgeParamMappingAttrTypes = map[string]attr.Type{
+	"key":   types.StringType,
+	"value": types.StringType,
+}
+
+var bridgeHTTPMappingAttrTypes = map[string]attr.Type{
+	"query_params": types.ListType{ElemType: types.ObjectType{AttrTypes: bridgeParamMappingAttrTypes}},
+	"uri_params":   types.ListType{ElemType: types.ObjectType{AttrTypes: bridgeParamMappingAttrTypes}},
+	"headers":      types.ListType{ElemType: types.ObjectType{AttrTypes: bridgeParamMappingAttrTypes}},
+	"body":         types.StringType,
 }
 
 var bridgeToolAttrTypes = map[string]attr.Type{
@@ -94,15 +116,39 @@ var bridgeToolAttrTypes = map[string]attr.Type{
 	"query_params":  types.ListType{ElemType: types.StringType},
 	"header_params": types.ListType{ElemType: types.StringType},
 	"has_body":      types.BoolType,
+	"input_schema":  types.StringType,
+	"http_mapping":  types.ObjectType{AttrTypes: bridgeHTTPMappingAttrTypes},
 }
 
 var bridgeSourceAttrTypes = map[string]attr.Type{
-	"label":        types.StringType,
-	"upstream_uri": types.StringType,
-	"asset_id":     types.StringType,
-	"group_id":     types.StringType,
-	"version":      types.StringType,
-	"tools":        types.ListType{ElemType: types.ObjectType{AttrTypes: bridgeToolAttrTypes}},
+	"label":          types.StringType,
+	"upstream_uri":   types.StringType,
+	"tls_context_id": types.StringType,
+	"asset_id":       types.StringType,
+	"group_id":       types.StringType,
+	"version":        types.StringType,
+	"tools":          types.ListType{ElemType: types.ObjectType{AttrTypes: bridgeToolAttrTypes}},
+}
+
+// bridgeParamMappingAttribute builds the shared {key,value} list attribute used by each
+// section of a tool's http_mapping.
+func bridgeParamMappingAttribute(what string) schema.ListNestedAttribute {
+	return schema.ListNestedAttribute{
+		Description: "Explicit mapping for " + what + ".",
+		Optional:    true,
+		NestedObject: schema.NestedAttributeObject{
+			Attributes: map[string]schema.Attribute{
+				"key": schema.StringAttribute{
+					Description: "The name sent upstream.",
+					Required:    true,
+				},
+				"value": schema.StringAttribute{
+					Description: "DataWeave expression producing the value, e.g. `#[vars.params['apiKey']]`.",
+					Required:    true,
+				},
+			},
+		},
+	}
 }
 
 func NewMCPBridgeResource() resource.Resource {
@@ -209,9 +255,49 @@ func (r *MCPBridgeResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
+			"instance_label": schema.StringAttribute{
+				Description: "A human-readable label for this bridge instance (UI: \"Instance label\"). " +
+					"Recommended when several managed instances share the same asset, so they can be told apart. " +
+					"Changed in place; omitting it on an existing bridge keeps the label already set.",
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"approval_method": schema.StringAttribute{
+				Description: "Client approval method for instance requests (UI: \"Manual approval\"). " +
+					"Set to `manual` to require approval; leave unset for automatic approval. " +
+					"Requiring manual approval only restricts access when a policy enforcing client " +
+					"credentials is also applied. Changed in place.",
+				Optional: true,
+				Computed: true,
+				Validators: []validator.String{
+					stringvalidator.OneOf("manual"),
+				},
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"provider_id": schema.StringAttribute{
+				Description: "The client provider (identity provider) used to authenticate client " +
+					"applications requesting access to this bridge (UI: \"Client provider\"). Leave it " +
+					"unset to use Anypoint's built-in provider, which is what the UI shows greyed out " +
+					"as \"Anypoint\". Set it to the ID of an external client provider configured on the " +
+					"organization. Changed in place.",
+				Optional: true,
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
 			"consumer_endpoint": schema.StringAttribute{
-				Description: "The consumer-facing MCP endpoint URI (UI: \"Consumer Endpoint\"; computed).",
-				Computed:    true,
+				Description: "The consumer-facing MCP endpoint URI (UI: \"Consumer Endpoint\"). " +
+					"Set it to publish the public URL clients use to reach the bridge — typically the " +
+					"gateway's ingress URL with the bridge's base path. When omitted the platform value " +
+					"is read back, so a bridge that has never been given one reports null. Changed in place.",
+				Optional: true,
+				Computed: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
@@ -262,6 +348,15 @@ func (r *MCPBridgeResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 						"upstream_uri": schema.StringAttribute{
 							Description: "REQUIRED. The real backend base URI that tool calls are forwarded to.",
 							Required:    true,
+						},
+						"tls_context_id": schema.StringAttribute{
+							Description: "TLS context for the outbound connection to this source API's backend, " +
+								"in the form 'secretGroupId/tlsContextId' (same format as anypoint_mcp_server). " +
+								"Use it when `upstream_uri` is https and the backend presents a certificate the " +
+								"gateway must trust, or when the backend requires mutual TLS. Omit it for plain " +
+								"http backends. Changing it forces replacement, because the bridge's upstream " +
+								"routing is only sent at create time.",
+							Optional: true,
 						},
 						"asset_id": schema.StringAttribute{
 							Description: "REQUIRED. The source REST API's Exchange asset ID (the connection link).",
@@ -314,6 +409,35 @@ func (r *MCPBridgeResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 										Optional:    true,
 										Computed:    true,
 										Default:     booldefault.StaticBool(false),
+									},
+									"input_schema": schema.StringAttribute{
+										Description: "A raw JSON Schema object describing the tool's inputs (UI: \"Input schema\"), " +
+											"replacing the schema derived from the parameters above. Use it when the derived " +
+											"schema is too coarse — it is the only way to give a property a non-string type, " +
+											"a description, an enum, or nested structure. Must be a JSON object. " +
+											"Like `description`, it lives only in the generated asset metadata and is therefore " +
+											"not recovered by `terraform import`.",
+										Optional: true,
+									},
+									"http_mapping": schema.SingleNestedAttribute{
+										Description: "Overrides how the tool's inputs are mapped onto the upstream REST request " +
+											"(UI: \"HTTP mapping (optional)\"). By default each declared parameter maps to " +
+											"itself via `#[vars.params['<name>']]`; set this to send a different upstream name, " +
+											"a different expression, or a custom body. Each field is independent — omitting one " +
+											"leaves that part derived, so changing only the body does not require restating " +
+											"every parameter. An empty list means \"send none of these\".",
+										Optional: true,
+										Attributes: map[string]schema.Attribute{
+											"query_params": bridgeParamMappingAttribute("query string parameters"),
+											"uri_params":   bridgeParamMappingAttribute("path placeholders such as `{petId}`"),
+											"headers":      bridgeParamMappingAttribute("request headers"),
+											"body": schema.StringAttribute{
+												Description: "DataWeave expression producing the request body, e.g. " +
+													"`#[vars.params.payload]`. Defaults to `#[vars.params.body]` when " +
+													"`has_body` is true. Set to an empty string to send no body.",
+												Optional: true,
+											},
+										},
 									},
 								},
 							},
@@ -390,9 +514,29 @@ func (r *MCPBridgeResource) ValidateConfig(ctx context.Context, req resource.Val
 				"At least one tool required", "Each source_api must declare at least one tool.")
 		}
 		for j, t := range tools {
+			toolPath := path.Root("source_apis").AtListIndex(i).AtName("tools").AtListIndex(j)
+
 			if !t.Path.IsNull() && !t.Path.IsUnknown() && !strings.HasPrefix(t.Path.ValueString(), "/") {
-				resp.Diagnostics.AddAttributeError(path.Root("source_apis").AtListIndex(i).AtName("tools").AtListIndex(j).AtName("path"),
+				resp.Diagnostics.AddAttributeError(toolPath.AtName("path"),
 					"Invalid tool path", "The tool path must start with '/'.")
+			}
+
+			// A malformed input_schema would otherwise be published into the generated
+			// asset and only surface as a broken tool at MCP call time, so reject it here.
+			if !t.InputSchema.IsNull() && !t.InputSchema.IsUnknown() {
+				raw := strings.TrimSpace(t.InputSchema.ValueString())
+				if raw != "" {
+					var parsed interface{}
+					if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+						resp.Diagnostics.AddAttributeError(toolPath.AtName("input_schema"),
+							"Invalid input schema JSON",
+							"input_schema must be valid JSON. Use jsonencode({...}) to build it from HCL. Parse error: "+err.Error())
+					} else if _, ok := parsed.(map[string]interface{}); !ok {
+						resp.Diagnostics.AddAttributeError(toolPath.AtName("input_schema"),
+							"Invalid input schema",
+							"input_schema must be a JSON object (a JSON Schema of \"type\": \"object\"), not an array or scalar.")
+					}
+				}
 			}
 		}
 	}
@@ -429,8 +573,17 @@ func (r *MCPBridgeResource) ModifyPlan(ctx context.Context, req resource.ModifyP
 		// resync and can flap while the gateway re-registers; mark them unknown so the
 		// readback value is always accepted.
 		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("product_version"), types.StringUnknown())...)
-		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("consumer_endpoint"), types.StringUnknown())...)
 		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("status"), types.StringUnknown())...)
+
+		// consumer_endpoint is Optional as well as Computed. Blanking a value the
+		// practitioner declared is rejected as an invalid plan ("planned value
+		// cty.UnknownVal does not match config value"), so it may only be re-planned as
+		// unknown when the platform is the one supplying it.
+		var configEndpoint types.String
+		resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("consumer_endpoint"), &configEndpoint)...)
+		if configEndpoint.IsNull() {
+			resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("consumer_endpoint"), types.StringUnknown())...)
+		}
 	}
 }
 
@@ -481,12 +634,16 @@ func (r *MCPBridgeResource) Create(ctx context.Context, req resource.CreateReque
 	}
 
 	createReq := &agentstools.CreateBridgeInstanceRequest{
-		Spec:       &agentstools.MCPBridgeSpec{AssetID: assetID, GroupID: orgID, Version: version},
-		Endpoint:   &agentstools.MCPBridgeEndpoint{Type: "mcp", ProxyURI: &proxyURI, DeploymentType: "HY"},
-		Technology: "flexGateway",
-		Routing:    buildBridgeRouting(sources),
-		Deployment: deployment,
-		Metadata:   map[string]string{"generatedBy": "mcp_bridge"},
+		Spec:           &agentstools.MCPBridgeSpec{AssetID: assetID, GroupID: orgID, Version: version},
+		Endpoint:       &agentstools.MCPBridgeEndpoint{Type: "mcp", ProxyURI: &proxyURI, DeploymentType: "HY"},
+		Technology:     "flexGateway",
+		InstanceLabel:  knownString(data.InstanceLabel),
+		ApprovalMethod: knownString(data.ApprovalMethod),
+		EndpointURI:    knownString(data.ConsumerEndpoint),
+		ProviderID:     knownString(data.ProviderID),
+		Routing:        buildBridgeRouting(sources),
+		Deployment:     deployment,
+		Metadata:       map[string]string{"generatedBy": "mcp_bridge"},
 	}
 
 	bridge, err := r.client.CreateBridgeInstance(ctx, orgID, envID, createReq)
@@ -670,7 +827,6 @@ func (r *MCPBridgeResource) Update(ctx context.Context, req resource.UpdateReque
 	}
 
 	assetID := state.AssetID.ValueString()
-	newVersion := r.nextFreeBridgeAssetVersion(ctx, orgID, assetID, state.AssetVersion.ValueString())
 	proxyURI := bridgeProxyURI(plan.Port.ValueInt64(), plan.BasePath.ValueString())
 
 	metaJSON, err := json.Marshal(buildBridgeMetadata(proxyURI, planSources))
@@ -678,32 +834,64 @@ func (r *MCPBridgeResource) Update(ctx context.Context, req resource.UpdateReque
 		resp.Diagnostics.AddError("Error building MCP metadata", err.Error())
 		return
 	}
-
-	if _, err = r.client.PublishBridgeAsset(ctx, &agentstools.PublishBridgeAssetInput{
-		OrganizationID: orgID,
-		GroupID:        orgID,
-		AssetID:        assetID,
-		Version:        newVersion,
-		Name:           state.MCPAssetName.ValueString(),
-		MetadataJSON:   metaJSON,
-	}); err != nil {
-		resp.Diagnostics.AddError("Error republishing generated MCP asset", err.Error())
-		return
-	}
-
-	if _, err = r.client.UpdateBridgeAssetVersion(ctx, orgID, envID, bridgeID, newVersion); err != nil {
-		resp.Diagnostics.AddError("Error moving MCP bridge to new asset version", err.Error())
-		return
-	}
-
-	ups, err := r.client.GetBridgeUpstreams(ctx, orgID, envID, bridgeID)
+	stateMetaJSON, err := json.Marshal(buildBridgeMetadata(proxyURI, stateSources))
 	if err != nil {
-		resp.Diagnostics.AddError("Error reading MCP bridge upstreams", err.Error())
+		resp.Diagnostics.AddError("Error building MCP metadata", err.Error())
 		return
 	}
-	if err = r.resyncTranscodingPolicies(ctx, orgID, envID, bridgeID, planSources, ups); err != nil {
-		resp.Diagnostics.AddError("Error re-syncing MCP bridge transcoding policies", err.Error())
-		return
+
+	// The published asset and the transcoding policies move independently. Editing a
+	// tool's input_schema changes the metadata but not the policies; editing its
+	// http_mapping changes the policies but not the metadata. Deciding both from one
+	// comparison would silently drop half of those edits. Instance-only edits (label,
+	// approval method, consumer endpoint) touch neither and must not burn a version.
+	metadataChanged := !bytes.Equal(metaJSON, stateMetaJSON)
+	transcodingChanged := bridgeTranscodingSignature(planSources) != bridgeTranscodingSignature(stateSources)
+
+	if metadataChanged {
+		newVersion := r.nextFreeBridgeAssetVersion(ctx, orgID, assetID, state.AssetVersion.ValueString())
+
+		if _, err = r.client.PublishBridgeAsset(ctx, &agentstools.PublishBridgeAssetInput{
+			OrganizationID: orgID,
+			GroupID:        orgID,
+			AssetID:        assetID,
+			Version:        newVersion,
+			Name:           state.MCPAssetName.ValueString(),
+			MetadataJSON:   metaJSON,
+		}); err != nil {
+			resp.Diagnostics.AddError("Error republishing generated MCP asset", err.Error())
+			return
+		}
+
+		if _, err = r.client.UpdateBridgeAssetVersion(ctx, orgID, envID, bridgeID, newVersion); err != nil {
+			resp.Diagnostics.AddError("Error moving MCP bridge to new asset version", err.Error())
+			return
+		}
+	}
+
+	if metadataChanged || transcodingChanged {
+		ups, upsErr := r.client.GetBridgeUpstreams(ctx, orgID, envID, bridgeID)
+		if upsErr != nil {
+			resp.Diagnostics.AddError("Error reading MCP bridge upstreams", upsErr.Error())
+			return
+		}
+		if err = r.resyncTranscodingPolicies(ctx, orgID, envID, bridgeID, planSources, ups); err != nil {
+			resp.Diagnostics.AddError("Error re-syncing MCP bridge transcoding policies", err.Error())
+			return
+		}
+	}
+
+	instanceFields := agentstools.BridgeInstanceFields{
+		InstanceLabel:  changedInstanceField(plan.InstanceLabel, state.InstanceLabel),
+		ApprovalMethod: changedInstanceField(plan.ApprovalMethod, state.ApprovalMethod),
+		EndpointURI:    changedInstanceField(plan.ConsumerEndpoint, state.ConsumerEndpoint),
+		ProviderID:     changedInstanceField(plan.ProviderID, state.ProviderID),
+	}
+	if !instanceFields.IsEmpty() {
+		if _, err = r.client.UpdateBridgeInstanceFields(ctx, orgID, envID, bridgeID, instanceFields); err != nil {
+			resp.Diagnostics.AddError("Error updating MCP bridge instance fields", err.Error())
+			return
+		}
 	}
 
 	instance, err := r.client.GetBridge(ctx, orgID, envID, bridgeID)
@@ -812,16 +1000,70 @@ func (r *MCPBridgeResource) toBridgeSources(ctx context.Context, list types.List
 				QueryParams:  q,
 				HeaderParams: h,
 				HasBody:      tm.HasBody.ValueBool(),
+				InputSchema:  tm.InputSchema.ValueString(),
+				HTTPMapping:  toBridgeHTTPMapping(ctx, tm.HTTPMapping),
 			})
 		}
 		out = append(out, bridgeSource{
-			Label:       m.Label.ValueString(),
-			UpstreamURI: m.UpstreamURI.ValueString(),
-			AssetID:     m.AssetID.ValueString(),
-			GroupID:     grp,
-			Version:     m.Version.ValueString(),
-			Tools:       tools,
+			Label:        m.Label.ValueString(),
+			UpstreamURI:  m.UpstreamURI.ValueString(),
+			AssetID:      m.AssetID.ValueString(),
+			GroupID:      grp,
+			Version:      m.Version.ValueString(),
+			TLSContextID: m.TLSContextID.ValueString(),
+			Tools:        tools,
 		})
+	}
+	return out
+}
+
+// bridgeParamMappingModel mirrors one {key,value} row of a tool's http_mapping.
+type bridgeParamMappingModel struct {
+	Key   types.String `tfsdk:"key"`
+	Value types.String `tfsdk:"value"`
+}
+
+// bridgeHTTPMappingModel mirrors the http_mapping object.
+type bridgeHTTPMappingModel struct {
+	QueryParams types.List   `tfsdk:"query_params"`
+	URIParams   types.List   `tfsdk:"uri_params"`
+	Headers     types.List   `tfsdk:"headers"`
+	Body        types.String `tfsdk:"body"`
+}
+
+// toMappingPairs converts one section of http_mapping. A null/unknown list returns nil
+// ("derive it"); a present list — including an empty one — returns a non-nil slice so
+// the caller can tell "no parameters" apart from "not specified".
+func toMappingPairs(ctx context.Context, list types.List) *[]bridgeParamMapping {
+	if list.IsNull() || list.IsUnknown() {
+		return nil
+	}
+	var models []bridgeParamMappingModel
+	list.ElementsAs(ctx, &models, false)
+	pairs := make([]bridgeParamMapping, 0, len(models))
+	for _, m := range models {
+		pairs = append(pairs, bridgeParamMapping{Key: m.Key.ValueString(), Value: m.Value.ValueString()})
+	}
+	return &pairs
+}
+
+// toBridgeHTTPMapping converts a tool's http_mapping object into the Terraform-free form.
+func toBridgeHTTPMapping(ctx context.Context, obj types.Object) *bridgeHTTPMapping {
+	if obj.IsNull() || obj.IsUnknown() {
+		return nil
+	}
+	var m bridgeHTTPMappingModel
+	if diags := obj.As(ctx, &m, basetypes.ObjectAsOptions{}); diags.HasError() {
+		return nil
+	}
+	out := &bridgeHTTPMapping{
+		QueryParams: toMappingPairs(ctx, m.QueryParams),
+		URIParams:   toMappingPairs(ctx, m.URIParams),
+		Headers:     toMappingPairs(ctx, m.Headers),
+	}
+	if !m.Body.IsNull() && !m.Body.IsUnknown() {
+		body := m.Body.ValueString()
+		out.Body = &body
 	}
 	return out
 }
@@ -941,13 +1183,20 @@ func (r *MCPBridgeResource) reconstructSourceAPIs(ctx context.Context, orgID, en
 	for _, src := range sources {
 		toolElems := flattenReconstructedTools(src.Tools)
 		toolsList, _ := types.ListValue(types.ObjectType{AttrTypes: bridgeToolAttrTypes}, toolElems)
+		// Absent TLS reads back as null, not "", so a source API without a TLS context
+		// matches an omitted tls_context_id instead of showing a permanent diff.
+		tlsCtxVal := types.StringNull()
+		if src.TLSContextID != "" {
+			tlsCtxVal = types.StringValue(src.TLSContextID)
+		}
 		obj, diags := types.ObjectValue(bridgeSourceAttrTypes, map[string]attr.Value{
-			"label":        types.StringValue(src.Label),
-			"upstream_uri": types.StringValue(src.UpstreamURI),
-			"asset_id":     types.StringValue(src.AssetID),
-			"group_id":     types.StringValue(src.GroupID),
-			"version":      types.StringValue(src.Version),
-			"tools":        toolsList,
+			"label":          types.StringValue(src.Label),
+			"upstream_uri":   types.StringValue(src.UpstreamURI),
+			"tls_context_id": tlsCtxVal,
+			"asset_id":       types.StringValue(src.AssetID),
+			"group_id":       types.StringValue(src.GroupID),
+			"version":        types.StringValue(src.Version),
+			"tools":          toolsList,
 		})
 		if diags.HasError() {
 			continue
@@ -974,13 +1223,20 @@ func flattenReconstructedTools(tools []agentstools.ReconstructedTool) []attr.Val
 		qList, _ := types.ListValue(types.StringType, stringsToValues(t.QueryParams))
 		hList, _ := types.ListValue(types.StringType, stringsToValues(t.HeaderParams))
 		obj, diags := types.ObjectValue(bridgeToolAttrTypes, map[string]attr.Value{
-			"name":          nameVal,
-			"description":   types.StringNull(),
-			"method":        types.StringValue(t.Method),
-			"path":          types.StringValue(t.Path),
+			"name":        nameVal,
+			"description": types.StringNull(),
+			"method":      types.StringValue(t.Method),
+			"path":        types.StringValue(t.Path),
+			// The concise parameter lists describe the mapping only when it is the plain
+			// identity one. A customised mapping is surfaced as http_mapping instead, so
+			// the two never disagree about the same request.
 			"query_params":  qList,
 			"header_params": hList,
 			"has_body":      types.BoolValue(t.HasBody),
+			// input_schema lives only in the generated asset metadata, which
+			// reconstruction does not read — same as description.
+			"input_schema": types.StringNull(),
+			"http_mapping": flattenReconstructedHTTPMapping(t),
 		})
 		if diags.HasError() {
 			continue
@@ -988,6 +1244,53 @@ func flattenReconstructedTools(tools []agentstools.ReconstructedTool) []attr.Val
 		out = append(out, obj)
 	}
 	return out
+}
+
+// flattenReconstructedHTTPMapping emits an http_mapping object only when the stored
+// mapping is not the one the plain parameter lists would generate. Emitting it always
+// would bury every imported tool in boilerplate identical to the derived default;
+// emitting it never would lose a customised mapping and show drift on the next plan.
+func flattenReconstructedHTTPMapping(t agentstools.ReconstructedTool) attr.Value {
+	if !t.HasCustomHTTPMapping() {
+		return types.ObjectNull(bridgeHTTPMappingAttrTypes)
+	}
+
+	bodyVal := types.StringNull()
+	if t.Body != "" {
+		bodyVal = types.StringValue(t.Body)
+	}
+
+	obj, diags := types.ObjectValue(bridgeHTTPMappingAttrTypes, map[string]attr.Value{
+		"query_params": mappingListValue(t.QueryMapping),
+		"uri_params":   mappingListValue(t.URIMapping),
+		"headers":      mappingListValue(t.HeaderMapping),
+		"body":         bodyVal,
+	})
+	if diags.HasError() {
+		return types.ObjectNull(bridgeHTTPMappingAttrTypes)
+	}
+	return obj
+}
+
+// mappingListValue renders stored {key,value} pairs as a Terraform list.
+func mappingListValue(pairs []agentstools.ReconstructedParamMapping) types.List {
+	elemType := types.ObjectType{AttrTypes: bridgeParamMappingAttrTypes}
+	elems := make([]attr.Value, 0, len(pairs))
+	for _, p := range pairs {
+		obj, diags := types.ObjectValue(bridgeParamMappingAttrTypes, map[string]attr.Value{
+			"key":   types.StringValue(p.Key),
+			"value": types.StringValue(p.Value),
+		})
+		if diags.HasError() {
+			continue
+		}
+		elems = append(elems, obj)
+	}
+	list, diags := types.ListValue(elemType, elems)
+	if diags.HasError() {
+		return types.ListNull(elemType)
+	}
+	return list
 }
 
 func stringsToValues(in []string) []attr.Value {
@@ -1022,6 +1325,21 @@ func (r *MCPBridgeResource) flattenBridge(inst *agentstools.MCPBridge, data *MCP
 	} else {
 		data.ConsumerEndpoint = types.StringNull()
 	}
+	if inst.InstanceLabel != "" {
+		data.InstanceLabel = types.StringValue(inst.InstanceLabel)
+	} else {
+		data.InstanceLabel = types.StringNull()
+	}
+	if inst.ApprovalMethod != "" {
+		data.ApprovalMethod = types.StringValue(inst.ApprovalMethod)
+	} else {
+		data.ApprovalMethod = types.StringNull()
+	}
+	if inst.ProviderID != "" {
+		data.ProviderID = types.StringValue(inst.ProviderID)
+	} else {
+		data.ProviderID = types.StringNull()
+	}
 
 	if data.OrganizationID.IsNull() || data.OrganizationID.IsUnknown() || data.OrganizationID.ValueString() == "" {
 		data.OrganizationID = types.StringValue(orgID)
@@ -1041,6 +1359,37 @@ func (r *MCPBridgeResource) flattenBridge(inst *agentstools.MCPBridge, data *MCP
 	} else {
 		data.Deployment = types.ObjectNull(deploymentAttrTypes)
 	}
+}
+
+// knownString returns the configured value, or "" when the attribute is null or not yet
+// known. Create request fields are `omitempty`, so "" means "don't send this field".
+func knownString(v types.String) string {
+	if v.IsNull() || v.IsUnknown() {
+		return ""
+	}
+	return v.ValueString()
+}
+
+// changedInstanceField returns a pointer to the planned value when it differs from what
+// is in state, and nil when it is unchanged or not yet known. Optional+Computed
+// attributes come through as unknown when the practitioner drops them from config, and
+// that must not be read as "clear it" — the prior value is kept instead.
+func changedInstanceField(planned, current types.String) *string {
+	if planned.IsUnknown() {
+		return nil
+	}
+	next := ""
+	if !planned.IsNull() {
+		next = planned.ValueString()
+	}
+	prev := ""
+	if !current.IsNull() && !current.IsUnknown() {
+		prev = current.ValueString()
+	}
+	if next == prev {
+		return nil
+	}
+	return &next
 }
 
 // --- Pure helpers (Terraform-free) ---
@@ -1230,19 +1579,23 @@ func bridgeAssetID(name string) string {
 func buildBridgeRouting(sources []bridgeSource) []agentstools.MCPBridgeRoute {
 	routes := make([]agentstools.MCPBridgeRoute, 0, len(sources))
 	for _, s := range sources {
+		upstream := agentstools.MCPBridgeRouteUpstream{
+			Weight: 100,
+			URI:    s.UpstreamURI,
+			Connection: &agentstools.MCPBridgeConnection{
+				Label:   s.Label,
+				AssetID: s.AssetID,
+				GroupID: s.GroupID,
+				Version: s.Version,
+			},
+		}
+		if sg, tls, ok := splitTLSContextID(s.TLSContextID); ok {
+			upstream.TLSContext = &agentstools.MCPBridgeUpstreamTLS{SecretGroupID: sg, TLSContextID: tls}
+		}
 		routes = append(routes, agentstools.MCPBridgeRoute{
-			Label: s.Label,
-			Rules: &agentstools.MCPBridgeRules{Headers: map[string]string{"X-UPSTREAM-NAME": s.Label}},
-			Upstreams: []agentstools.MCPBridgeRouteUpstream{{
-				Weight: 100,
-				URI:    s.UpstreamURI,
-				Connection: &agentstools.MCPBridgeConnection{
-					Label:   s.Label,
-					AssetID: s.AssetID,
-					GroupID: s.GroupID,
-					Version: s.Version,
-				},
-			}},
+			Label:     s.Label,
+			Rules:     &agentstools.MCPBridgeRules{Headers: map[string]string{"X-UPSTREAM-NAME": s.Label}},
+			Upstreams: []agentstools.MCPBridgeRouteUpstream{upstream},
 		})
 	}
 	return routes
@@ -1297,11 +1650,12 @@ func structuralSignatureFromList(ctx context.Context, l types.List) string {
 	sources := make([]bridgeSource, 0, len(models))
 	for _, m := range models {
 		sources = append(sources, bridgeSource{
-			Label:       m.Label.ValueString(),
-			UpstreamURI: m.UpstreamURI.ValueString(),
-			AssetID:     m.AssetID.ValueString(),
-			GroupID:     m.GroupID.ValueString(),
-			Version:     m.Version.ValueString(),
+			Label:        m.Label.ValueString(),
+			UpstreamURI:  m.UpstreamURI.ValueString(),
+			AssetID:      m.AssetID.ValueString(),
+			GroupID:      m.GroupID.ValueString(),
+			Version:      m.Version.ValueString(),
+			TLSContextID: m.TLSContextID.ValueString(),
 		})
 	}
 	return bridgeStructuralSignature(sources)
@@ -1312,26 +1666,34 @@ func structuralSignatureFromList(ctx context.Context, l types.List) string {
 func bridgeStructuralSignature(sources []bridgeSource) string {
 	parts := make([]string, 0, len(sources))
 	for _, s := range sources {
-		parts = append(parts, strings.Join([]string{s.Label, s.UpstreamURI, s.AssetID, s.GroupID, s.Version}, "\x1f"))
+		// tls_context_id is structural for the same reason upstream_uri is: it lives on
+		// the upstream, and routing is only ever sent at CREATE (buildBridgeRouting has
+		// no Update call site), so a change cannot be patched in place.
+		parts = append(parts, strings.Join(
+			[]string{s.Label, s.UpstreamURI, s.AssetID, s.GroupID, s.Version, s.TLSContextID}, "\x1f"))
 	}
 	return strings.Join(parts, "\x1e")
 }
 
-// bridgeToolSignature is the identity of a bridge's full tool set across all source APIs
-// (name, description, method, path, params, body). It changes exactly when an update needs
-// to republish the generated asset (and bump asset_version). Used by ModifyPlan to decide
-// whether the computed asset_version must be re-planned as unknown.
+// bridgeToolSignature is the identity of everything about a bridge's tools that an
+// update acts on: the metadata published to the generated asset, and the request mapping
+// written into the transcoding policies. ModifyPlan uses it to decide whether the
+// computed platform-managed fields must be re-planned as unknown.
+//
+// It is composed from the exact same two renderings Update compares, rather than listing
+// tool fields by hand. A hand-written list silently goes stale the moment a field is
+// added — which is precisely how input_schema first shipped: the update republished the
+// asset and moved asset_version while the plan still carried the old value, and the apply
+// died with "Provider produced inconsistent result after apply".
+//
+// The transport path is irrelevant here because only plan-vs-state is compared, and port
+// and base_path force replacement, so both sides always share the same value.
 func bridgeToolSignature(sources []bridgeSource) string {
-	parts := make([]string, 0, len(sources))
-	for _, s := range sources {
-		parts = append(parts, s.Label)
-		for _, t := range s.Tools {
-			parts = append(parts, strings.Join([]string{
-				t.Name, t.Description, t.Method, t.Path,
-				strings.Join(t.QueryParams, ","), strings.Join(t.HeaderParams, ","),
-				fmt.Sprintf("%t", t.HasBody),
-			}, "\x1f"))
-		}
+	meta, err := json.Marshal(buildBridgeMetadata("", sources))
+	if err != nil {
+		// Never report "unchanged" on a marshal failure: that would leave stale computed
+		// values in the plan. A unique value forces them to be re-planned as unknown.
+		return fmt.Sprintf("unmarshalable-%v", err)
 	}
-	return strings.Join(parts, "\x1e")
+	return string(meta) + "\x1e" + bridgeTranscodingSignature(sources)
 }
