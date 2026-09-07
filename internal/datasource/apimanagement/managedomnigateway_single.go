@@ -263,7 +263,7 @@ func (d *ManagedOmniGatewaySingleDataSource) Read(ctx context.Context, req datas
 	envID := data.EnvironmentID.ValueString()
 	gatewayID := data.ID.ValueString()
 
-	gw, err := d.client.GetManagedOmniGateway(ctx, orgID, envID, gatewayID)
+	gw, err := d.client.GetManagedOmniGatewayWithCounters(ctx, orgID, envID, gatewayID)
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading managed Omni Gateway", err.Error())
 		return
