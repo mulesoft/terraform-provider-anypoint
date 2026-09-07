@@ -42,6 +42,8 @@ type MCPBridgeDataSourceModel struct {
 	GroupID          types.String `tfsdk:"group_id"`
 	Technology       types.String `tfsdk:"technology"`
 	InstanceLabel    types.String `tfsdk:"instance_label"`
+	ApprovalMethod   types.String `tfsdk:"approval_method"`
+	ProviderID       types.String `tfsdk:"provider_id"`
 	Status           types.String `tfsdk:"status"`
 	ConsumerEndpoint types.String `tfsdk:"consumer_endpoint"`
 	ProxyURI         types.String `tfsdk:"proxy_uri"`
@@ -50,6 +52,16 @@ type MCPBridgeDataSourceModel struct {
 }
 
 var (
+	dsBridgeParamMappingAttrTypes = map[string]attr.Type{
+		"key":   types.StringType,
+		"value": types.StringType,
+	}
+	dsBridgeHTTPMappingAttrTypes = map[string]attr.Type{
+		"query_params": types.ListType{ElemType: types.ObjectType{AttrTypes: dsBridgeParamMappingAttrTypes}},
+		"uri_params":   types.ListType{ElemType: types.ObjectType{AttrTypes: dsBridgeParamMappingAttrTypes}},
+		"headers":      types.ListType{ElemType: types.ObjectType{AttrTypes: dsBridgeParamMappingAttrTypes}},
+		"body":         types.StringType,
+	}
 	dsBridgeToolAttrTypes = map[string]attr.Type{
 		"name":          types.StringType,
 		"description":   types.StringType,
@@ -58,14 +70,16 @@ var (
 		"query_params":  types.ListType{ElemType: types.StringType},
 		"header_params": types.ListType{ElemType: types.StringType},
 		"has_body":      types.BoolType,
+		"http_mapping":  types.ObjectType{AttrTypes: dsBridgeHTTPMappingAttrTypes},
 	}
 	dsBridgeSourceAttrTypes = map[string]attr.Type{
-		"label":        types.StringType,
-		"upstream_uri": types.StringType,
-		"asset_id":     types.StringType,
-		"group_id":     types.StringType,
-		"version":      types.StringType,
-		"tools":        types.ListType{ElemType: types.ObjectType{AttrTypes: dsBridgeToolAttrTypes}},
+		"label":          types.StringType,
+		"upstream_uri":   types.StringType,
+		"asset_id":       types.StringType,
+		"group_id":       types.StringType,
+		"version":        types.StringType,
+		"tls_context_id": types.StringType,
+		"tools":          types.ListType{ElemType: types.ObjectType{AttrTypes: dsBridgeToolAttrTypes}},
 	}
 	dsBridgeDeploymentAttrTypes = map[string]attr.Type{
 		"environment_id":  types.StringType,
@@ -134,6 +148,14 @@ func (d *MCPBridgeDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 				Computed:    true,
 				Description: "The gateway technology (flexGateway for MCP bridges).",
 			},
+			"approval_method": schema.StringAttribute{
+				Computed:    true,
+				Description: "The client approval method (UI: \"Manual approval\"). `manual` when access requests are held for review, null when they are approved automatically.",
+			},
+			"provider_id": schema.StringAttribute{
+				Computed:    true,
+				Description: "The client provider authenticating applications that request access (UI: \"Client provider\"). Null when Anypoint's built-in provider is used.",
+			},
 			"instance_label": schema.StringAttribute{
 				Computed:    true,
 				Description: "The label of the MCP bridge.",
@@ -172,6 +194,11 @@ func (d *MCPBridgeDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 						"asset_id":     schema.StringAttribute{Computed: true, Description: "The source REST API's Exchange asset ID."},
 						"group_id":     schema.StringAttribute{Computed: true, Description: "The source REST API's Exchange group ID."},
 						"version":      schema.StringAttribute{Computed: true, Description: "The source REST API's Exchange asset version."},
+						"tls_context_id": schema.StringAttribute{
+							Computed: true,
+							Description: "The TLS context securing the connection to this backend, as " +
+								"\"secretGroupId/tlsContextId\". Null when the upstream has none.",
+						},
 						"tools": schema.ListNestedAttribute{
 							Computed:    true,
 							Description: "The MCP tools exposed for this source API.",
@@ -184,6 +211,19 @@ func (d *MCPBridgeDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 									"query_params":  schema.ListAttribute{Computed: true, ElementType: types.StringType, Description: "Query parameter names passed through."},
 									"header_params": schema.ListAttribute{Computed: true, ElementType: types.StringType, Description: "Header parameter names passed through."},
 									"has_body":      schema.BoolAttribute{Computed: true, Description: "Whether the tool sends a request body."},
+									"http_mapping": schema.SingleNestedAttribute{
+										Computed: true,
+										Description: "How the tool's inputs are mapped onto the upstream request. Null when the " +
+											"mapping is the default one already described by query_params and header_params; " +
+											"populated when the bridge maps a parameter to a different upstream name, a " +
+											"custom expression, or a custom body.",
+										Attributes: map[string]schema.Attribute{
+											"query_params": dsBridgeMappingAttribute("query string parameters"),
+											"uri_params":   dsBridgeMappingAttribute("path placeholders"),
+											"headers":      dsBridgeMappingAttribute("request headers"),
+											"body":         schema.StringAttribute{Computed: true, Description: "DataWeave expression producing the request body."},
+										},
+									},
 								},
 							},
 						},
@@ -263,6 +303,8 @@ func (d *MCPBridgeDataSource) Read(ctx context.Context, req datasource.ReadReque
 	data.ProductVersion = stringOrNull(inst.ProductVersion)
 	data.GroupID = stringOrNull(inst.GroupID)
 	data.InstanceLabel = stringOrNull(inst.InstanceLabel)
+	data.ApprovalMethod = stringOrNull(inst.ApprovalMethod)
+	data.ProviderID = stringOrNull(inst.ProviderID)
 	data.Status = stringOrNull(inst.Status)
 	data.ConsumerEndpoint = stringOrNull(inst.EndpointURI)
 
@@ -305,6 +347,50 @@ func (d *MCPBridgeDataSource) Read(ctx context.Context, req datasource.ReadReque
 // and flattens them into the data source's Terraform types. Unlike the resource (which
 // nulls a derived tool name to avoid post-import drift), the data source surfaces the
 // effective tool name — the actual name a client sees — for observability.
+// dsBridgeMappingList renders stored {key,value} pairs as a Terraform list.
+func dsBridgeMappingList(pairs []agentstools.ReconstructedParamMapping) types.List {
+	elemType := types.ObjectType{AttrTypes: dsBridgeParamMappingAttrTypes}
+	elems := make([]attr.Value, 0, len(pairs))
+	for _, p := range pairs {
+		obj, diags := types.ObjectValue(dsBridgeParamMappingAttrTypes, map[string]attr.Value{
+			"key":   types.StringValue(p.Key),
+			"value": types.StringValue(p.Value),
+		})
+		if diags.HasError() {
+			continue
+		}
+		elems = append(elems, obj)
+	}
+	list, diags := types.ListValue(elemType, elems)
+	if diags.HasError() {
+		return types.ListNull(elemType)
+	}
+	return list
+}
+
+// dsFlattenHTTPMapping surfaces a tool's request mapping only when it differs from the
+// identity mapping the parameter lists already describe. Emitting it for every tool
+// would repeat query_params and header_params back in a second, noisier form.
+func dsFlattenHTTPMapping(t agentstools.ReconstructedTool) attr.Value {
+	if !t.HasCustomHTTPMapping() {
+		return types.ObjectNull(dsBridgeHTTPMappingAttrTypes)
+	}
+	body := types.StringNull()
+	if t.Body != "" {
+		body = types.StringValue(t.Body)
+	}
+	obj, diags := types.ObjectValue(dsBridgeHTTPMappingAttrTypes, map[string]attr.Value{
+		"query_params": dsBridgeMappingList(t.QueryMapping),
+		"uri_params":   dsBridgeMappingList(t.URIMapping),
+		"headers":      dsBridgeMappingList(t.HeaderMapping),
+		"body":         body,
+	})
+	if diags.HasError() {
+		return types.ObjectNull(dsBridgeHTTPMappingAttrTypes)
+	}
+	return obj
+}
+
 func flattenBridgeSourcesForDS(orgID string, inst *agentstools.MCPBridge, ups []agentstools.MCPBridgeUpstreamDetail, policies []apimanagement.APIPolicy) types.List {
 	srcObjType := types.ObjectType{AttrTypes: dsBridgeSourceAttrTypes}
 
@@ -327,6 +413,7 @@ func flattenBridgeSourcesForDS(orgID string, inst *agentstools.MCPBridge, ups []
 				"query_params":  qList,
 				"header_params": hList,
 				"has_body":      types.BoolValue(t.HasBody),
+				"http_mapping":  dsFlattenHTTPMapping(t),
 			})
 			if diags.HasError() {
 				continue
@@ -334,13 +421,18 @@ func flattenBridgeSourcesForDS(orgID string, inst *agentstools.MCPBridge, ups []
 			toolElems = append(toolElems, toolObj)
 		}
 		toolsList, _ := types.ListValue(types.ObjectType{AttrTypes: dsBridgeToolAttrTypes}, toolElems)
+		tlsCtx := types.StringNull()
+		if src.TLSContextID != "" {
+			tlsCtx = types.StringValue(src.TLSContextID)
+		}
 		srcObj, diags := types.ObjectValue(dsBridgeSourceAttrTypes, map[string]attr.Value{
-			"label":        types.StringValue(src.Label),
-			"upstream_uri": types.StringValue(src.UpstreamURI),
-			"asset_id":     types.StringValue(src.AssetID),
-			"group_id":     types.StringValue(src.GroupID),
-			"version":      types.StringValue(src.Version),
-			"tools":        toolsList,
+			"label":          types.StringValue(src.Label),
+			"upstream_uri":   types.StringValue(src.UpstreamURI),
+			"asset_id":       types.StringValue(src.AssetID),
+			"group_id":       types.StringValue(src.GroupID),
+			"version":        types.StringValue(src.Version),
+			"tls_context_id": tlsCtx,
+			"tools":          toolsList,
 		})
 		if diags.HasError() {
 			continue
@@ -371,4 +463,19 @@ func parseBridgeProxyURI(raw string) (port int64, basePath string, ok bool) {
 		return 0, "", false
 	}
 	return p, strings.TrimPrefix(u.Path, "/"), true
+}
+
+// dsBridgeMappingAttribute builds the shared {key,value} list used by each section of a
+// tool's http_mapping.
+func dsBridgeMappingAttribute(what string) schema.ListNestedAttribute {
+	return schema.ListNestedAttribute{
+		Computed:    true,
+		Description: "Mapping for " + what + ".",
+		NestedObject: schema.NestedAttributeObject{
+			Attributes: map[string]schema.Attribute{
+				"key":   schema.StringAttribute{Computed: true, Description: "The name sent upstream."},
+				"value": schema.StringAttribute{Computed: true, Description: "DataWeave expression producing the value."},
+			},
+		},
+	}
 }

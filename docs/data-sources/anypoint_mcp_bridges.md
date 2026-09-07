@@ -51,6 +51,8 @@ Read-Only:
 - `group_id` (String) The Exchange group (organization) ID.
 - `technology` (String) The gateway technology (`flexGateway` for MCP bridges).
 - `instance_label` (String) The label of the MCP bridge.
+- `approval_method` (String) The client approval method (UI: "Manual approval"). `manual` when access requests are held for review, null when they are approved automatically.
+- `provider_id` (String) The client provider authenticating applications that request access (UI: "Client provider"). Null when Anypoint's built-in provider is used.
 - `status` (String) The current status of the MCP bridge.
 - `endpoint_uri` (String) The consumer-facing endpoint URI (`endpointUri`); may be null for self-managed (flexGateway) bridges — use `proxy_uri` instead.
 - `proxy_uri` (String) The gateway proxy URI where the bridge listens (`http://0.0.0.0:<port>/<base_path>`). The list endpoint omits it, so it is fetched per bridge; null if the per-bridge fetch fails.

@@ -155,23 +155,37 @@ func TestMCPBridgeDataSource_Read_NotFound(t *testing.T) {
 
 // dsBridgeSourceRead / dsBridgeToolRead mirror the single DS source/tool object shape for
 // decoding source_apis out of state in tests.
+type dsBridgeParamMappingRead struct {
+	Key   string `tfsdk:"key"`
+	Value string `tfsdk:"value"`
+}
+
+type dsBridgeHTTPMappingRead struct {
+	QueryParams []dsBridgeParamMappingRead `tfsdk:"query_params"`
+	URIParams   []dsBridgeParamMappingRead `tfsdk:"uri_params"`
+	Headers     []dsBridgeParamMappingRead `tfsdk:"headers"`
+	Body        *string                    `tfsdk:"body"`
+}
+
 type dsBridgeToolRead struct {
-	Name         string   `tfsdk:"name"`
-	Description  *string  `tfsdk:"description"`
-	Method       string   `tfsdk:"method"`
-	Path         string   `tfsdk:"path"`
-	QueryParams  []string `tfsdk:"query_params"`
-	HeaderParams []string `tfsdk:"header_params"`
-	HasBody      bool     `tfsdk:"has_body"`
+	Name         string                   `tfsdk:"name"`
+	Description  *string                  `tfsdk:"description"`
+	Method       string                   `tfsdk:"method"`
+	Path         string                   `tfsdk:"path"`
+	QueryParams  []string                 `tfsdk:"query_params"`
+	HeaderParams []string                 `tfsdk:"header_params"`
+	HasBody      bool                     `tfsdk:"has_body"`
+	HTTPMapping  *dsBridgeHTTPMappingRead `tfsdk:"http_mapping"`
 }
 
 type dsBridgeSourceRead struct {
-	Label       string             `tfsdk:"label"`
-	UpstreamURI string             `tfsdk:"upstream_uri"`
-	AssetID     string             `tfsdk:"asset_id"`
-	GroupID     string             `tfsdk:"group_id"`
-	Version     string             `tfsdk:"version"`
-	Tools       []dsBridgeToolRead `tfsdk:"tools"`
+	TLSContextID *string            `tfsdk:"tls_context_id"`
+	Label        string             `tfsdk:"label"`
+	UpstreamURI  string             `tfsdk:"upstream_uri"`
+	AssetID      string             `tfsdk:"asset_id"`
+	GroupID      string             `tfsdk:"group_id"`
+	Version      string             `tfsdk:"version"`
+	Tools        []dsBridgeToolRead `tfsdk:"tools"`
 }
 
 func bridgeSingleConfigRaw(ctx context.Context, ds *MCPBridgeDataSource, id string) tftypes.Value {

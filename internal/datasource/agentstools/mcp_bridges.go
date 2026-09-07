@@ -41,6 +41,8 @@ type MCPBridgeItemModel struct {
 	GroupID        types.String `tfsdk:"group_id"`
 	Technology     types.String `tfsdk:"technology"`
 	InstanceLabel  types.String `tfsdk:"instance_label"`
+	ApprovalMethod types.String `tfsdk:"approval_method"`
+	ProviderID     types.String `tfsdk:"provider_id"`
 	Status         types.String `tfsdk:"status"`
 	EndpointURI    types.String `tfsdk:"endpoint_uri"`
 	ProxyURI       types.String `tfsdk:"proxy_uri"`
@@ -99,6 +101,14 @@ func (d *MCPBridgesDataSource) Schema(_ context.Context, _ datasource.SchemaRequ
 						"technology": schema.StringAttribute{
 							Description: "The gateway technology (flexGateway for MCP bridges).",
 							Computed:    true,
+						},
+						"approval_method": schema.StringAttribute{
+							Computed:    true,
+							Description: "The client approval method (UI: \"Manual approval\"). `manual` when access requests are held for review, null when they are approved automatically.",
+						},
+						"provider_id": schema.StringAttribute{
+							Computed:    true,
+							Description: "The client provider authenticating applications that request access (UI: \"Client provider\"). Null when Anypoint's built-in provider is used.",
 						},
 						"instance_label": schema.StringAttribute{
 							Description: "The label of the MCP bridge.",
@@ -203,6 +213,8 @@ func mapMCPBridgeToItemModel(b agentstools.MCPBridge) MCPBridgeItemModel {
 		GroupID:        stringOrNull(b.GroupID),
 		Technology:     types.StringValue(technology),
 		InstanceLabel:  stringOrNull(b.InstanceLabel),
+		ApprovalMethod: stringOrNull(b.ApprovalMethod),
+		ProviderID:     stringOrNull(b.ProviderID),
 		Status:         stringOrNull(b.Status),
 		EndpointURI:    stringOrNull(b.EndpointURI),
 		ProxyURI:       types.StringNull(),

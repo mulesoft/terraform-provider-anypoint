@@ -68,7 +68,7 @@ output "parsed_tool_count" {
 
 - `id` (String) Composite identifier `group_id/asset_id/version`.
 - `spec_type` (String) The detected spec format: `oas3`, `oas2`, or `raml`.
-- `tools` (List of Object) The parsed tools, one per REST operation, sorted by path then method. Its object shape matches `anypoint_mcp_bridge` `source_apis[].tools` for direct assignment. See [`tools`](#nestedschema--tools) below.
+- `tools` (List of Object) The parsed tools, one per REST operation, sorted by path then method. Assignable straight to `anypoint_mcp_bridge` `source_apis[].tools`; the bridge's optional authoring attributes (`input_schema`, `http_mapping`) are simply left unset, since neither can be derived from a spec. See [`tools`](#nestedschema--tools) below.
 
 <a id="nestedschema--tools"></a>
 ### Nested Schema for `tools`
