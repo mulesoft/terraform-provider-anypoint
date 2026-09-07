@@ -35,6 +35,84 @@ type ReconstructedTool struct {
 	QueryParams  []string
 	HeaderParams []string
 	HasBody      bool
+
+	// The full request mapping exactly as stored, including the DataWeave expression
+	// on each entry. The fields above are the key-only view used when the mapping is
+	// the plain identity one; these carry enough to detect and reproduce a customised
+	// mapping on import.
+	QueryMapping  []ReconstructedParamMapping
+	URIMapping    []ReconstructedParamMapping
+	HeaderMapping []ReconstructedParamMapping
+	Body          string
+}
+
+// ReconstructedParamMapping is one {key,value} row of a tool's stored request mapping.
+type ReconstructedParamMapping struct {
+	Key   string
+	Value string
+}
+
+// identityExpression is the DataWeave template the provider generates for a parameter
+// that maps to itself.
+func identityExpression(key string) string {
+	return "#[vars.params['" + key + "']]"
+}
+
+// isIdentityMapping reports whether every entry maps a key to its own tool parameter,
+// which is exactly what the provider generates from a plain parameter list.
+func isIdentityMapping(pairs []ReconstructedParamMapping) bool {
+	for _, p := range pairs {
+		if p.Value != identityExpression(p.Key) {
+			return false
+		}
+	}
+	return true
+}
+
+// HasCustomHTTPMapping reports whether the stored mapping differs from what the plain
+// parameter lists would generate. Import uses it to decide between emitting the concise
+// query_params/header_params form and an explicit http_mapping block — emitting the
+// wrong one would show drift on the next plan.
+//
+// uriParams are derived from the path's `{...}` placeholders, so a URI mapping is custom
+// when its keys no longer match those placeholders or its expressions are not identity.
+func (t ReconstructedTool) HasCustomHTTPMapping() bool {
+	if !isIdentityMapping(t.QueryMapping) || !isIdentityMapping(t.HeaderMapping) || !isIdentityMapping(t.URIMapping) {
+		return true
+	}
+
+	uriKeys := make([]string, 0, len(t.URIMapping))
+	for _, p := range t.URIMapping {
+		uriKeys = append(uriKeys, p.Key)
+	}
+	if !equalStrings(uriKeys, PathURIParamKeys(t.Path)) {
+		return true
+	}
+
+	return t.Body != "" && t.Body != "#[vars.params.body]"
+}
+
+// PathURIParamKeys returns the ordered `{...}` placeholder names in a path.
+func PathURIParamKeys(path string) []string {
+	keys := make([]string, 0)
+	for _, seg := range strings.Split(path, "/") {
+		if strings.HasPrefix(seg, "{") && strings.HasSuffix(seg, "}") && len(seg) > 2 {
+			keys = append(keys, seg[1:len(seg)-1])
+		}
+	}
+	return keys
+}
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // ReconstructedSource is a Terraform-agnostic view of one source REST API rebuilt from
@@ -45,7 +123,11 @@ type ReconstructedSource struct {
 	AssetID     string
 	GroupID     string
 	Version     string
-	Tools       []ReconstructedTool
+	// TLSContextID is the user-facing "secretGroupId/tlsContextId" form, empty when the
+	// upstream has no TLS context. Reconstructed so an imported bridge round-trips
+	// instead of showing a spurious diff on tls_context_id.
+	TLSContextID string
+	Tools        []ReconstructedTool
 }
 
 // BridgeToolName derives the MCP tool name from a method + path exactly as the platform
@@ -166,13 +248,19 @@ func ReconstructBridgeSources(orgID string, inst *MCPBridge, ups []MCPBridgeUpst
 			}
 		}
 
+		tlsCtx := ""
+		if u.TLSContext != nil && u.TLSContext.SecretGroupID != "" && u.TLSContext.TLSContextID != "" {
+			tlsCtx = u.TLSContext.SecretGroupID + "/" + u.TLSContext.TLSContextID
+		}
+
 		out = append(out, ReconstructedSource{
-			Label:       label,
-			UpstreamURI: u.URI,
-			AssetID:     aid,
-			GroupID:     gid,
-			Version:     ver,
-			Tools:       reconstructBridgeTools(toolDefs),
+			Label:        label,
+			UpstreamURI:  u.URI,
+			AssetID:      aid,
+			GroupID:      gid,
+			Version:      ver,
+			TLSContextID: tlsCtx,
+			Tools:        reconstructBridgeTools(toolDefs),
 		})
 	}
 	return out
@@ -189,15 +277,41 @@ func reconstructBridgeTools(raw []interface{}) []ReconstructedTool {
 		method, _ := m["method"].(string)
 		pathVal, _ := m["path"].(string)
 		name, _ := m["name"].(string)
-		_, hasBody := m["body"]
+		body, hasBody := m["body"].(string)
 		out = append(out, ReconstructedTool{
-			Name:         name,
-			Method:       method,
-			Path:         pathVal,
-			QueryParams:  bridgeParamKeysFromConfig(m["queryParams"]),
-			HeaderParams: bridgeParamKeysFromConfig(m["headers"]),
-			HasBody:      hasBody,
+			Name:          name,
+			Method:        method,
+			Path:          pathVal,
+			QueryParams:   bridgeParamKeysFromConfig(m["queryParams"]),
+			HeaderParams:  bridgeParamKeysFromConfig(m["headers"]),
+			HasBody:       hasBody,
+			QueryMapping:  bridgeParamMappingFromConfig(m["queryParams"]),
+			URIMapping:    bridgeParamMappingFromConfig(m["uriParams"]),
+			HeaderMapping: bridgeParamMappingFromConfig(m["headers"]),
+			Body:          body,
 		})
+	}
+	return out
+}
+
+// bridgeParamMappingFromConfig pulls the ordered {key,value} pairs out of a policy param
+// list, preserving the DataWeave expression so a customised mapping can be detected.
+func bridgeParamMappingFromConfig(v interface{}) []ReconstructedParamMapping {
+	arr, ok := v.([]interface{})
+	if !ok {
+		return nil
+	}
+	out := make([]ReconstructedParamMapping, 0, len(arr))
+	for _, e := range arr {
+		m, ok := e.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		key, _ := m["key"].(string)
+		val, _ := m["value"].(string)
+		if key != "" {
+			out = append(out, ReconstructedParamMapping{Key: key, Value: val})
+		}
 	}
 	return out
 }

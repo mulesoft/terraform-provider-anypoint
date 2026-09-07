@@ -337,6 +337,9 @@ func buildBridgeValidateReq(t *testing.T, r *MCPBridgeResource, sourceAPIs tftyp
 		"mcp_asset_name":    tftypes.NewValue(tftypes.String, "bridge"),
 		"port":              tftypes.NewValue(tftypes.Number, nil),
 		"base_path":         tftypes.NewValue(tftypes.String, nil),
+		"instance_label":    tftypes.NewValue(tftypes.String, nil),
+		"approval_method":   tftypes.NewValue(tftypes.String, nil),
+		"provider_id":       tftypes.NewValue(tftypes.String, nil),
 		"asset_id":          tftypes.NewValue(tftypes.String, nil),
 		"asset_version":     tftypes.NewValue(tftypes.String, nil),
 		"product_version":   tftypes.NewValue(tftypes.String, nil),
@@ -368,6 +371,8 @@ func sourceAPIsValue(t *testing.T, r *MCPBridgeResource, labels []string, toolsP
 			"query_params":  tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, nil),
 			"header_params": tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, nil),
 			"has_body":      tftypes.NewValue(tftypes.Bool, false),
+			"input_schema":  tftypes.NewValue(tftypes.String, nil),
+			"http_mapping":  tftypes.NewValue(toolElem.AttributeTypes["http_mapping"], nil),
 		})
 	}
 
@@ -384,12 +389,13 @@ func sourceAPIsValue(t *testing.T, r *MCPBridgeResource, labels []string, toolsP
 			toolsList = tftypes.NewValue(tftypes.List{ElementType: toolElem}, toolVals)
 		}
 		srcVals = append(srcVals, tftypes.NewValue(srcElem, map[string]tftypes.Value{
-			"label":        tftypes.NewValue(tftypes.String, lbl),
-			"upstream_uri": tftypes.NewValue(tftypes.String, "https://backend"),
-			"asset_id":     tftypes.NewValue(tftypes.String, lbl),
-			"group_id":     tftypes.NewValue(tftypes.String, nil),
-			"version":      tftypes.NewValue(tftypes.String, "1.0.0"),
-			"tools":        toolsList,
+			"label":          tftypes.NewValue(tftypes.String, lbl),
+			"upstream_uri":   tftypes.NewValue(tftypes.String, "https://backend"),
+			"tls_context_id": tftypes.NewValue(tftypes.String, nil),
+			"asset_id":       tftypes.NewValue(tftypes.String, lbl),
+			"group_id":       tftypes.NewValue(tftypes.String, nil),
+			"version":        tftypes.NewValue(tftypes.String, "1.0.0"),
+			"tools":          toolsList,
 		}))
 	}
 	return tftypes.NewValue(tftypes.List{ElementType: srcElem}, srcVals)

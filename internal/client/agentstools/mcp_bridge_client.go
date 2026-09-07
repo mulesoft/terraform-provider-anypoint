@@ -79,13 +79,15 @@ type MCPBridge struct {
 	Technology     string               `json:"technology,omitempty"` // "flexGateway"
 	EndpointURI    string               `json:"endpointUri,omitempty"`
 	InstanceLabel  string               `json:"instanceLabel,omitempty"`
+	ApprovalMethod string               `json:"approvalMethod,omitempty"`
+	ProviderID     string               `json:"providerId,omitempty"`
 	Status         string               `json:"status,omitempty"`
 	EnvironmentID  string               `json:"environmentId,omitempty"`
 	Endpoint       *MCPBridgeEndpoint   `json:"endpoint,omitempty"`
 	Spec           *MCPBridgeSpec       `json:"spec,omitempty"`
 	Routing        []MCPBridgeRoute     `json:"routing,omitempty"`
 	Deployment     *MCPBridgeDeployment `json:"deployment,omitempty"`
-	Metadata       map[string]string    `json:"metadata,omitempty"` // {"generatedBy":"mcp_bridge"}
+	Metadata       InstanceMetadata     `json:"metadata,omitempty"` // {"generatedBy":"mcp_bridge"}
 }
 
 // MCPBridgeEndpoint is the MCP-specific endpoint block. On the bridge, type is "mcp",
@@ -124,10 +126,20 @@ type MCPBridgeRoute struct {
 //   - On READ:   {id, weight} — the platform rewrites routing to reference the
 //     materialized upstream by id.
 type MCPBridgeRouteUpstream struct {
-	ID         string               `json:"id,omitempty"`
-	Weight     int                  `json:"weight"`
-	URI        string               `json:"uri,omitempty"`
-	Connection *MCPBridgeConnection `json:"connection,omitempty"`
+	ID         string                `json:"id,omitempty"`
+	Weight     int                   `json:"weight"`
+	URI        string                `json:"uri,omitempty"`
+	Connection *MCPBridgeConnection  `json:"connection,omitempty"`
+	TLSContext *MCPBridgeUpstreamTLS `json:"tlsContext,omitempty"`
+}
+
+// MCPBridgeUpstreamTLS references the TLS context used for outbound connections to a
+// source API's backend. Same wire shape as MCPServerUpstreamTLS — the bridge and the
+// MCP server are both API-Manager instances, so the platform takes the identical
+// {secretGroupId, tlsContextId} pair on the upstream.
+type MCPBridgeUpstreamTLS struct {
+	SecretGroupID string `json:"secretGroupId"`
+	TLSContextID  string `json:"tlsContextId"`
 }
 
 // MCPBridgeRules are route match conditions. For a bridge, routing is by the
@@ -163,11 +175,12 @@ type MCPBridgeDeployment struct {
 // MCPBridgeUpstreamDetail is one record from the upstreams sub-resource. It carries the
 // real backend URI and the connection link to the source REST API.
 type MCPBridgeUpstreamDetail struct {
-	ID                 string               `json:"id"`
-	InstanceUpstreamID string               `json:"instanceUpstreamId,omitempty"`
-	URI                string               `json:"uri,omitempty"`
-	Label              *string              `json:"label"`
-	Connection         *MCPBridgeConnection `json:"connection,omitempty"`
+	ID                 string                `json:"id"`
+	InstanceUpstreamID string                `json:"instanceUpstreamId,omitempty"`
+	URI                string                `json:"uri,omitempty"`
+	Label              *string               `json:"label"`
+	Connection         *MCPBridgeConnection  `json:"connection,omitempty"`
+	TLSContext         *MCPBridgeUpstreamTLS `json:"tlsContext,omitempty"`
 }
 
 // MCPBridgeUpstreamsResponse wraps the upstreams sub-resource listing.
@@ -176,20 +189,93 @@ type MCPBridgeUpstreamsResponse struct {
 	Upstreams []MCPBridgeUpstreamDetail `json:"upstreams"`
 }
 
+// InstanceMetadata is an API Manager instance's metadata map.
+//
+// A bridge only ever reads the "generatedBy" marker and only ever writes string
+// values, but the LIST endpoint returns EVERY instance in the environment, not just
+// bridges — and other instance types carry structured metadata. An LLM proxy, for
+// example, stores {"globalRouting":{"llmConfigs":{"routingType":"model-based"}}}.
+// Decoding that into map[string]string fails the entire listing with
+//
+//	json: cannot unmarshal object into Go struct field .metadata of type string
+//
+// which makes the bridge list data source unusable in any environment that also has
+// an LLM proxy. Non-string values are therefore skipped rather than fatal: they can
+// never be the marker we look for.
+type InstanceMetadata map[string]string
+
+func (m *InstanceMetadata) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	out := make(InstanceMetadata, len(raw))
+	for k, v := range raw {
+		var s string
+		if err := json.Unmarshal(v, &s); err == nil {
+			out[k] = s
+		}
+	}
+	*m = out
+	return nil
+}
+
 // --- Request Models ---
 
 // CreateBridgeInstanceRequest is the body sent to create the bridge's APIM instance.
 // technology is fixed "flexGateway", endpoint.type "mcp", and routing[] carries
 // connection at create-time (the only durable way to persist it).
 type CreateBridgeInstanceRequest struct {
-	Spec          *MCPBridgeSpec       `json:"spec"`
-	Endpoint      *MCPBridgeEndpoint   `json:"endpoint,omitempty"`
-	Technology    string               `json:"technology"`
-	InstanceLabel string               `json:"instanceLabel,omitempty"`
-	Routing       []MCPBridgeRoute     `json:"routing,omitempty"`
-	Deployment    *MCPBridgeDeployment `json:"deployment,omitempty"`
-	Metadata      map[string]string    `json:"metadata,omitempty"`
+	Spec           *MCPBridgeSpec       `json:"spec"`
+	Endpoint       *MCPBridgeEndpoint   `json:"endpoint,omitempty"`
+	Technology     string               `json:"technology"`
+	InstanceLabel  string               `json:"instanceLabel,omitempty"`
+	ApprovalMethod string               `json:"approvalMethod,omitempty"`
+	EndpointURI    string               `json:"endpointUri,omitempty"`
+	ProviderID     string               `json:"providerId,omitempty"`
+	Routing        []MCPBridgeRoute     `json:"routing,omitempty"`
+	Deployment     *MCPBridgeDeployment `json:"deployment,omitempty"`
+	Metadata       map[string]string    `json:"metadata,omitempty"`
 }
+
+// BridgeInstanceFields carries the instance-level fields a bridge can change in place:
+// the UI's "Instance label", "Manual approval" and "Consumer endpoint". A nil pointer
+// leaves the field untouched; a pointer to the empty string clears it (sends JSON null).
+//
+// All three are accepted by both the api/v1 and xapi/v1 PATCH endpoints and survive a
+// read-back, unlike assetVersion which only moves via xapi/v1 (see
+// UpdateBridgeAssetVersion).
+type BridgeInstanceFields struct {
+	InstanceLabel  *string
+	ApprovalMethod *string
+	EndpointURI    *string
+	ProviderID     *string
+}
+
+// payload renders the fields as a PATCH body, omitting untouched entries. An empty
+// string becomes an explicit null so a cleared value is actually unset on the platform
+// rather than written as "".
+func (f BridgeInstanceFields) payload() map[string]interface{} {
+	body := map[string]interface{}{}
+	set := func(key string, v *string) {
+		if v == nil {
+			return
+		}
+		if *v == "" {
+			body[key] = nil
+			return
+		}
+		body[key] = *v
+	}
+	set("instanceLabel", f.InstanceLabel)
+	set("approvalMethod", f.ApprovalMethod)
+	set("endpointUri", f.EndpointURI)
+	set("providerId", f.ProviderID)
+	return body
+}
+
+// IsEmpty reports whether there is nothing to send, so callers can skip the request.
+func (f BridgeInstanceFields) IsEmpty() bool { return len(f.payload()) == 0 }
 
 // --- MCP metadata (mcp-metadata.json) ---
 
@@ -502,6 +588,52 @@ func (c *MCPBridgeClient) UpdateBridgeAssetVersion(ctx context.Context, orgID, e
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("failed to update MCP bridge with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var bridge MCPBridge
+	if err := json.NewDecoder(resp.Body).Decode(&bridge); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+	return &bridge, nil
+}
+
+// UpdateBridgeInstanceFields patches the instance-level fields (label, approval method,
+// consumer endpoint) in place. Returns the re-read bridge so the caller can flatten the
+// values the platform actually stored rather than assuming the request echoed back.
+func (c *MCPBridgeClient) UpdateBridgeInstanceFields(ctx context.Context, orgID, envID string, bridgeID int, fields BridgeInstanceFields) (*MCPBridge, error) {
+	if fields.IsEmpty() {
+		return c.GetBridge(ctx, orgID, envID, bridgeID)
+	}
+
+	url := fmt.Sprintf("%s/apimanager/api/v1/organizations/%s/environments/%s/apis/%d",
+		c.BaseURL, orgID, envID, bridgeID)
+
+	jsonData, err := json.Marshal(fields.payload())
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal update request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "PATCH", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	req.Header.Set("X-ANYPNT-ORG-ID", orgID)
+	req.Header.Set("X-ANYPNT-ENV-ID", envID)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, client.NewNotFoundError("MCP bridge")
+	}
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to update MCP bridge instance fields with status %d: %s", resp.StatusCode, string(body))
 	}
 
 	var bridge MCPBridge
