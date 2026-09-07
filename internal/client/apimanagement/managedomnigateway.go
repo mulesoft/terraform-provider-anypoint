@@ -221,6 +221,70 @@ func (c *ManagedOmniGatewayClient) GetManagedOmniGateway(ctx context.Context, or
 	return &gw, nil
 }
 
+// GetManagedOmniGatewayWithCounters reads a gateway and fills in the two fields the
+// xapi/v1 view leaves null: apiLimit and desiredStatus.
+//
+// The two views disagree on purpose. xapi/v1 reports a lifecycle status ("RUNNING")
+// while api/v1 reports the last applied configuration state ("APPLIED"), so status must
+// keep coming from xapi/v1; only the missing counters are taken from api/v1. Reading
+// everything from api/v1 instead would silently change what `status` means.
+//
+// Hydration is best-effort: a gateway that reads fine from xapi/v1 is returned as-is if
+// the supplementary call fails, rather than failing an otherwise successful read.
+func (c *ManagedOmniGatewayClient) GetManagedOmniGatewayWithCounters(ctx context.Context, orgID, envID, gatewayID string) (*ManagedOmniGateway, error) {
+	gw, err := c.GetManagedOmniGateway(ctx, orgID, envID, gatewayID)
+	if err != nil {
+		return nil, err
+	}
+
+	counters, err := c.getGatewayCounters(ctx, orgID, envID, gatewayID)
+	if err != nil {
+		return gw, nil
+	}
+	if gw.APILimit == 0 {
+		gw.APILimit = counters.APILimit
+	}
+	if gw.DesiredStatus == "" {
+		gw.DesiredStatus = counters.DesiredStatus
+	}
+	return gw, nil
+}
+
+// gatewayCounters is the slice of the api/v1 gateway view that xapi/v1 does not carry.
+type gatewayCounters struct {
+	APILimit      int    `json:"apiLimit"`
+	DesiredStatus string `json:"desiredStatus"`
+}
+
+func (c *ManagedOmniGatewayClient) getGatewayCounters(ctx context.Context, orgID, envID, gatewayID string) (*gatewayCounters, error) {
+	url := fmt.Sprintf("%s/gatewaymanager/api/v1/organizations/%s/environments/%s/gateways/%s", c.BaseURL, orgID, envID, gatewayID)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	req.Header.Set("X-ANYPNT-ORG-ID", orgID)
+	req.Header.Set("X-ANYPNT-ENV-ID", envID)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get gateway counters with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var out gatewayCounters
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+	return &out, nil
+}
+
 // UpdateManagedOmniGateway replaces an existing managed Omni Gateway (PUT).
 func (c *ManagedOmniGatewayClient) UpdateManagedOmniGateway(ctx context.Context, orgID, envID, gatewayID string, request *UpdateManagedOmniGatewayRequest) (*ManagedOmniGateway, error) {
 	url := fmt.Sprintf("%s/gatewaymanager/api/v1/organizations/%s/environments/%s/gateways/%s", c.BaseURL, orgID, envID, gatewayID)
