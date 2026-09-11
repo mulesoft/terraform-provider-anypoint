@@ -21,13 +21,20 @@ data "anypoint_mcp_bridge" "one" {
   id              = "21058094"
 }
 
-output "bridge_source_tools" {
-  value = [
-    for s in data.anypoint_mcp_bridge.one.source_apis : {
-      label = s.label
-      tools = [for t in s.tools : t.name]
-    }
-  ]
+output "bridge" {
+  value = {
+    instance_label    = data.anypoint_mcp_bridge.one.instance_label
+    approval_method   = data.anypoint_mcp_bridge.one.approval_method
+    consumer_endpoint = data.anypoint_mcp_bridge.one.consumer_endpoint
+    status            = data.anypoint_mcp_bridge.one.status
+    source_apis = [
+      for s in data.anypoint_mcp_bridge.one.source_apis : {
+        label          = s.label
+        tls_context_id = s.tls_context_id
+        tools          = [for t in s.tools : t.name]
+      }
+    ]
+  }
 }
 ```
 

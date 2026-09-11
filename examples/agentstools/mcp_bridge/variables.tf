@@ -41,7 +41,35 @@ variable "environment_id" {
 # ── Gateway ──────────────────────────────────────────────────────────────────
 
 variable "gateway_id" {
-  description = "Flex / Self-Managed Gateway UUID to deploy the MCP bridge to"
+  description = "Flex / Self-Managed Gateway UUID"
   type        = string
   default     = "<gateway_id>"
+}
+
+# ── Optional instance settings ───────────────────────────────────────────────
+
+variable "consumer_endpoint" {
+  description = "Public URL clients use to reach the petstore bridge. Leave empty to omit."
+  type        = string
+  default     = ""
+}
+
+# ── Petstore source API ──────────────────────────────────────────────────────
+
+variable "petstore_asset_id" {
+  description = "Exchange asset ID of the petstore REST API"
+  type        = string
+  default     = "petstore-rest-api"
+}
+
+variable "petstore_asset_version" {
+  description = "Exchange asset version of the petstore REST API"
+  type        = string
+  default     = "1.0.0"
+}
+
+variable "petstore_upstream_uri" {
+  description = "Backend the petstore bridge forwards tool calls to"
+  type        = string
+  default     = "https://sandbox.example.com/petstore/v1"
 }
