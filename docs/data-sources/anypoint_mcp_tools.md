@@ -9,7 +9,7 @@ description: |-
 
 Parses a source REST API's Exchange spec (OpenAPI/Swagger or RAML) into a normalized MCP tool list, one tool per REST operation. Feed the `tools` output directly into an [`anypoint_mcp_bridge`](../resources/anypoint_mcp_bridge.md) source API to auto-derive tools instead of declaring each one by hand.
 
-This is the read-only "DS-hybrid" companion to `anypoint_mcp_bridge`: the risky spec parsing lives in a data source, so a spec that cannot be parsed fails `plan` cleanly instead of half-building a bridge. RAML parsing is best-effort; if it fails, declare tools explicitly on the resource.
+Spec parsing runs in this data source so a spec that cannot be parsed fails `plan` cleanly instead of half-building a bridge. RAML parsing is best-effort; if it fails, declare tools explicitly on the resource.
 
 The data source downloads the asset's best available spec file (preferring `fat-oas`, then `oas`, `fat-raml`, `raml`), unzips it if needed, and parses every operation. Output is sorted deterministically by path then method, so re-reads never cause plan churn. Path parameters (`{...}`) are omitted from `query_params`/`header_params` because the bridge derives URI params from the path automatically.
 

@@ -148,20 +148,22 @@ By default a tool's input schema is derived from its parameters, with every prop
 ```terraform
 tools = [
   {
-    method       = "GET"
-    path         = "/search"
-    name         = "search_pets"
-    description  = "Search the catalogue."
-    query_params = ["q", "limit"]
+    method        = "GET"
+    path          = "/search"
+    name          = "search_pets"
+    description   = "Search the catalogue."
+    query_params  = ["q", "limit"]
+    header_params = ["apiKey"]
 
     # Describe the inputs the model sees, with real types and guidance.
     input_schema = jsonencode({
       type = "object"
       properties = {
-        q     = { type = "string", description = "Free-text search query." }
-        limit = { type = "integer", description = "Maximum results to return." }
+        q      = { type = "string", description = "Free-text search query." }
+        limit  = { type = "integer", description = "Maximum results to return." }
+        apiKey = { type = "string", description = "API key for the upstream." }
       }
-      required = ["q"]
+      required = ["q", "apiKey"]
     })
 
     # Describe how those inputs become the upstream HTTP request.
@@ -273,7 +275,7 @@ Optional:
 - `query_params` (Attributes List) Mapping for query string parameters.
 - `uri_params` (Attributes List) Mapping for path placeholders such as `{petId}`.
 - `headers` (Attributes List) Mapping for request headers.
-- `body` (String) DataWeave expression producing the request body, for example `#[vars.params.payload]`. Defaults to `#[vars.params.body]` when `has_body` is `true`. Set it to `""` to send no body.
+- `body` (String) DataWeave expression producing the request body. Defaults to `#[vars.params.body]` when `has_body` is `true`. Override only when the body should come from a differently named input (for example `#[vars.params.payload]`). Set it to `""` to send no body.
 
 Each entry of `query_params`, `uri_params` and `headers` takes:
 
@@ -311,11 +313,11 @@ Then generate the configuration:
 terraform plan -generate-config-out=generated.tf
 ```
 
-To adopt the Exchange asset the bridge generated, import it alongside with [`anypoint_exchange_asset`](anypoint_exchange_asset.md), using `group_id/asset_id/version`:
+To adopt the Exchange asset the bridge generated, import it alongside with [`anypoint_exchange_asset`](anypoint_exchange_asset.md), using `group_id/asset_id/version`. Use the computed `asset_id` (the sanitized form of `mcp_asset_name`), not the raw display name:
 
 ```terraform
 import {
   to = anypoint_exchange_asset.generated
-  id = "<organization_id>/<mcp_asset_name>/<asset_version>"
+  id = "<organization_id>/<asset_id>/<asset_version>"
 }
 ```
