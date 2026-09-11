@@ -141,6 +141,36 @@ func TestMCPToolsDataSource_Read(t *testing.T) {
 		if tl.Method.ValueString() == "DELETE" {
 			t.Error("DELETE tool should have been excluded")
 		}
+		if !tl.InputSchema.IsNull() {
+			t.Errorf("input_schema should be null for DS-derived tools, got %v", tl.InputSchema)
+		}
+		if !tl.HTTPMapping.IsNull() {
+			t.Errorf("http_mapping should be null for DS-derived tools, got %v", tl.HTTPMapping)
+		}
+	}
+}
+
+func TestMCPToolsAttrTypes_MatchBridgeToolsShape(t *testing.T) {
+	// Keep in sync with internal/resource/agentstools.bridgeToolAttrTypes — Terraform
+	// rejects assigning DS tools into the bridge when these diverge.
+	want := []string{
+		"name", "description", "method", "path",
+		"query_params", "header_params", "has_body",
+		"input_schema", "http_mapping",
+	}
+	if len(mcpToolAttrTypes) != len(want) {
+		t.Fatalf("mcpToolAttrTypes has %d keys, want %d (%v)", len(mcpToolAttrTypes), len(want), want)
+	}
+	for _, k := range want {
+		if _, ok := mcpToolAttrTypes[k]; !ok {
+			t.Errorf("mcpToolAttrTypes missing %q (required for DS→bridge assignment)", k)
+		}
+	}
+	if _, ok := mcpToolAttrTypes["http_mapping"].(types.ObjectType); !ok {
+		t.Errorf("http_mapping type = %T, want types.ObjectType", mcpToolAttrTypes["http_mapping"])
+	}
+	if mcpToolAttrTypes["input_schema"] != types.StringType {
+		t.Errorf("input_schema type = %v, want StringType", mcpToolAttrTypes["input_schema"])
 	}
 }
 
@@ -195,4 +225,6 @@ type MCPToolModelForTest struct {
 	QueryParams  types.List   `tfsdk:"query_params"`
 	HeaderParams types.List   `tfsdk:"header_params"`
 	HasBody      types.Bool   `tfsdk:"has_body"`
+	InputSchema  types.String `tfsdk:"input_schema"`
+	HTTPMapping  types.Object `tfsdk:"http_mapping"`
 }

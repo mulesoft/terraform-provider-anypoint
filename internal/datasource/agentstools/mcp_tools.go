@@ -18,10 +18,28 @@ var (
 	_ datasource.DataSourceWithConfigure = &MCPToolsDataSource{}
 )
 
+// mcpToolHTTPMappingAttrTypes mirrors anypoint_mcp_bridge's http_mapping object type so
+// the DS tools list is assignable to source_apis[].tools without a type mismatch.
+var mcpToolHTTPMappingAttrTypes = map[string]attr.Type{
+	"query_params": types.ListType{ElemType: types.ObjectType{AttrTypes: map[string]attr.Type{
+		"key": types.StringType, "value": types.StringType,
+	}}},
+	"uri_params": types.ListType{ElemType: types.ObjectType{AttrTypes: map[string]attr.Type{
+		"key": types.StringType, "value": types.StringType,
+	}}},
+	"headers": types.ListType{ElemType: types.ObjectType{AttrTypes: map[string]attr.Type{
+		"key": types.StringType, "value": types.StringType,
+	}}},
+	"body": types.StringType,
+}
+
 // mcpToolAttrTypes MUST match the anypoint_mcp_bridge resource's `tools` block object
 // type exactly, so the output can be assigned directly:
 //
 //	source_apis = [{ ... tools = data.anypoint_mcp_tools.x.tools }]
+//
+// input_schema and http_mapping are always null here — neither can be derived from a
+// REST spec — but they must still be present on the object type for Terraform assignment.
 var mcpToolAttrTypes = map[string]attr.Type{
 	"name":          types.StringType,
 	"description":   types.StringType,
@@ -30,6 +48,8 @@ var mcpToolAttrTypes = map[string]attr.Type{
 	"query_params":  types.ListType{ElemType: types.StringType},
 	"header_params": types.ListType{ElemType: types.StringType},
 	"has_body":      types.BoolType,
+	"input_schema":  types.StringType,
+	"http_mapping":  types.ObjectType{AttrTypes: mcpToolHTTPMappingAttrTypes},
 }
 
 // MCPToolsDataSource parses a source REST API's Exchange spec into MCP tools
@@ -141,6 +161,48 @@ func (d *MCPToolsDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 							Computed:    true,
 							Description: "Whether the operation takes a request body.",
 						},
+						"input_schema": schema.StringAttribute{
+							Computed: true,
+							Description: "Always null from this data source. Present so the tools list type matches " +
+								"anypoint_mcp_bridge source_apis[].tools for direct assignment; set a custom schema " +
+								"on the bridge resource after assignment if needed.",
+						},
+						"http_mapping": schema.SingleNestedAttribute{
+							Computed: true,
+							Description: "Always null from this data source. Present so the tools list type matches " +
+								"anypoint_mcp_bridge source_apis[].tools for direct assignment; override mapping on " +
+								"the bridge resource after assignment if needed.",
+							Attributes: map[string]schema.Attribute{
+								"query_params": schema.ListNestedAttribute{
+									Computed: true,
+									NestedObject: schema.NestedAttributeObject{
+										Attributes: map[string]schema.Attribute{
+											"key":   schema.StringAttribute{Computed: true},
+											"value": schema.StringAttribute{Computed: true},
+										},
+									},
+								},
+								"uri_params": schema.ListNestedAttribute{
+									Computed: true,
+									NestedObject: schema.NestedAttributeObject{
+										Attributes: map[string]schema.Attribute{
+											"key":   schema.StringAttribute{Computed: true},
+											"value": schema.StringAttribute{Computed: true},
+										},
+									},
+								},
+								"headers": schema.ListNestedAttribute{
+									Computed: true,
+									NestedObject: schema.NestedAttributeObject{
+										Attributes: map[string]schema.Attribute{
+											"key":   schema.StringAttribute{Computed: true},
+											"value": schema.StringAttribute{Computed: true},
+										},
+									},
+								},
+								"body": schema.StringAttribute{Computed: true},
+							},
+						},
 					},
 				},
 			},
@@ -219,6 +281,9 @@ func (d *MCPToolsDataSource) Read(ctx context.Context, req datasource.ReadReques
 			"query_params":  stringSliceToList(t.QueryParams),
 			"header_params": stringSliceToList(t.HeaderParams),
 			"has_body":      types.BoolValue(t.HasBody),
+			// Null authoring attrs keep type parity with anypoint_mcp_bridge tools.
+			"input_schema": types.StringNull(),
+			"http_mapping": types.ObjectNull(mcpToolHTTPMappingAttrTypes),
 		})
 		resp.Diagnostics.Append(diags...)
 		if diags.HasError() {
