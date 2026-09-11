@@ -21,7 +21,7 @@ variable "anypoint_client_secret" {
 variable "anypoint_base_url" {
   description = "Anypoint control-plane URL"
   type        = string
-  default     = "https://stgx.anypoint.mulesoft.com"
+  default     = "https://anypoint.mulesoft.com"
 }
 
 # ── Organization & Environment ───────────────────────────────────────────────
