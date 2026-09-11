@@ -79,12 +79,12 @@ Parses an Exchange REST API spec into a tool list for `anypoint_mcp_bridge`.
 
 1. **[agent_instance/](./agent_instance/)** - Simple agent instance deployments
    - Single agent with basic configuration
-   - A/B testing with weighted routing
+   - Single-upstream routing (`upstream_uri`)
 
 2. **[mcp_server/](./mcp_server/)** - MCP server deployments
    - Atlassian MCP server (Jira/Confluence)
    - Salesforce MCP server
-   - High-availability MCP cluster
+   - Enterprise tools MCP server with MCP / LLM policies
 
 3. **[mcp_bridge/](./mcp_bridge/)** - MCP bridge (REST → MCP)
    - Explicit tools, multi-source APIs, and tools parsed from an Exchange spec
@@ -167,34 +167,35 @@ The Agents Tools resources enable this architecture:
 │                  Anypoint Omni Gateway                      │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
-│  ┌─────────────────┐         ┌──────────────────────┐      │
-│  │  Agent          │         │  MCP Servers         │      │
-│  │  Instances      │────────▶│  (Tool Providers)    │      │
-│  │                 │         │                       │      │
-│  │ • Support Agent │         │ • Atlassian MCP      │      │
-│  │ • Sales Agent   │         │ • Salesforce MCP     │      │
-│  │ • Analytics     │         │ • Database MCP       │      │
-│  └─────────────────┘         └──────────────────────┘      │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-         │                                 │
-         ▼                                 ▼
-  ┌─────────────┐                  ┌──────────────┐
-  │  AI Model   │                  │  Enterprise  │
-  │  Backends   │                  │  Systems     │
-  └─────────────┘                  └──────────────┘
+│  ┌──────────────┐    ┌──────────────┐    ┌───────────────┐ │
+│  │ Agent        │    │ MCP Servers  │    │ MCP Bridges   │ │
+│  │ Instances    │───▶│ (MCP specs)  │    │ (REST → MCP)  │ │
+│  │              │    │              │    │               │ │
+│  │ • Support    │    │ • Atlassian  │    │ • Petstore    │ │
+│  │ • Sales      │    │ • Salesforce │    │ • Commerce    │ │
+│  └──────────────┘    └──────────────┘    └───────┬───────┘ │
+│                                                   │         │
+└───────────────────────────────────────────────────┼─────────┘
+         │                    │                     │
+         ▼                    ▼                     ▼
+  ┌─────────────┐      ┌──────────────┐    ┌──────────────┐
+  │  AI Model   │      │  MCP Server  │    │  REST APIs   │
+  │  Backends   │      │  Backends    │    │  (existing)  │
+  └─────────────┘      └──────────────┘    └──────────────┘
 ```
 
 ## Key Concepts
 
-### Agent Instance vs MCP Server
+### Agent Instance vs MCP Server vs MCP Bridge
 
 - **Agent Instance**: The AI agent itself that makes decisions and executes tasks
-- **MCP Server**: The tool provider that agents can call to access enterprise systems
+- **MCP Server**: An MCP tool provider you deploy from an existing MCP server Exchange asset
+- **MCP Bridge**: Turns one or more existing REST APIs into an MCP server without writing MCP code
 
 Think of it like:
 - Agent Instance = The brain (AI model)
-- MCP Server = The hands (tools to interact with systems)
+- MCP Server = Hands you already built as MCP
+- MCP Bridge = Hands generated from REST APIs you already have
 
 ### Routing
 
@@ -242,8 +243,8 @@ This allows:
 ## Best Practices
 
 1. **Resource Naming**: Use descriptive labels that indicate the agent's purpose
-2. **Weighted Routing**: Start with conservative weights (90/10) for A/B tests
-3. **Dependencies**: Use `depends_on` to ensure MCP servers deploy before agents
+2. **Routing**: Prefer `upstream_uri` for a single backend; use multiple routes (not multiple upstreams) when you need read/write separation
+3. **Dependencies**: Use `depends_on` to ensure MCP servers or bridges deploy before agents that call them
 4. **Environment Promotion**: Test in sandbox before promoting to production
 5. **Monitoring**: Add alerts and policies to track agent performance
 
