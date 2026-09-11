@@ -313,11 +313,11 @@ Then generate the configuration:
 terraform plan -generate-config-out=generated.tf
 ```
 
-To adopt the Exchange asset the bridge generated, import it alongside with [`anypoint_exchange_asset`](anypoint_exchange_asset.md), using `group_id/asset_id/version`. Use the computed `asset_id` (the sanitized form of `mcp_asset_name`), not the raw display name:
+To adopt the Exchange asset the bridge generated, import it alongside with [`anypoint_exchange_asset`](anypoint_exchange_asset.md), using `group_id/asset_id/version`. `group_id` is usually the organization ID. Use the computed `asset_id` (the sanitized form of `mcp_asset_name`), not the raw display name:
 
 ```terraform
 import {
   to = anypoint_exchange_asset.generated
-  id = "<organization_id>/<asset_id>/<asset_version>"
+  id = "<group_id>/<asset_id>/<version>"
 }
 ```

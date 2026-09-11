@@ -106,7 +106,7 @@ Parses an Exchange REST API spec into a tool list for `anypoint_mcp_bridge`.
 - Anypoint Platform account
 - Connected App credentials
 - Existing organization and environment
-- Deployed Omni Gateway
+- Deployed Flex or Omni Gateway (managed or self-managed)
 
 ### Deploy an Agent Instance
 
@@ -164,7 +164,7 @@ The Agents Tools resources enable this architecture:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                  Anypoint Omni Gateway                      │
+│             Anypoint Flex / Omni Gateway                    │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
 │  ┌──────────────┐    ┌──────────────┐    ┌───────────────┐ │
