@@ -16,16 +16,12 @@
 # The mcp_bridge_id is the numeric ID from Anypoint API Manager
 # (visible in the URL when viewing the instance, e.g. "21058094").
 #
-# On import the provider reconstructs source_apis (labels, upstreams, tools)
-# from the live routing + transcoding policies. Tool descriptions live only in
-# the generated asset metadata and are left null after import; add them back to
-# your config as desired (they will not cause a spurious diff).
+# Import reconstructs source_apis (including tls_context_id and custom
+# http_mapping). description and input_schema come back null — they live only
+# in the generated asset. Instance settings are recovered.
 #
-# TIP (Terraform >= 1.5): to have Terraform WRITE the resource block for you,
-# add only the import {} block below, then run:
-#     terraform plan -generate-config-out=generated.tf
-# and review generated.tf. It will contain every source API and tool (with
-# query_params / has_body) reconstructed from the live bridge.
+# Terraform >= 1.5 tip: add only the import {} block, then:
+#   terraform plan -generate-config-out=generated.tf
 # ---------------------------------------------------------------------------
 
 # locals {
@@ -45,7 +41,12 @@
 #   gateway_id      = "<gateway_id>"
 #
 #   mcp_asset_name = "<mcp_asset_name>"
-#   base_path   = "<base_path>"
+#   port           = 8081
+#   base_path      = "<base_path>"
+#
+#   instance_label    = "<instance_label>"
+#   approval_method   = "manual"
+#   consumer_endpoint = "https://<ingress>/<base_path>"
 #
 #   source_apis = [
 #     {

@@ -1,13 +1,10 @@
 # Anypoint Agents Tools Resources
 
-This directory contains Terraform examples for the new **Agents Tools** category, which includes resources for managing AI agent instances and MCP (Model Context Protocol) servers on the Anypoint Platform.
+This directory contains Terraform examples for the **Agents Tools** category:
 
-## Overview
-
-The Agents Tools category provides two main resources:
-
-1. **Agent Instance** (`anypoint_agent_instance`) - Deploy AI agents that can consume tools and resources from MCP servers
-2. **MCP Server** (`anypoint_mcp_server`) - Deploy MCP servers that expose tools, resources, and prompts to AI agents
+1. **Agent Instance** (`anypoint_agent_instance`) — Deploy AI agent instances that consume tools from MCP servers
+2. **MCP Server** (`anypoint_mcp_server`) — Deploy MCP servers that expose tools, resources, and prompts
+3. **MCP Bridge** (`anypoint_mcp_bridge`) — Turn existing REST APIs into an MCP server without writing MCP code
 
 ## Resources
 
@@ -41,6 +38,17 @@ Creates and manages an MCP (Model Context Protocol) server instance. MCP servers
 
 > **Note:** Only one upstream per route is supported. Multi-upstream weighted routing is not available for MCP servers.
 
+### `anypoint_mcp_bridge`
+
+Turns one or more existing REST APIs into an MCP server without writing MCP code.
+The provider publishes a generated Exchange asset, creates the gateway instance,
+and attaches the MCP transcoding policies.
+
+**Key Features:**
+- Explicit tool declarations, or tools parsed from an Exchange spec (`anypoint_mcp_tools`)
+- Instance settings: label, approval method, consumer endpoint, client provider
+- Optional outbound TLS and per-tool `input_schema` / `http_mapping`
+
 ## Data Sources
 
 ### `anypoint_agent_instances`
@@ -57,6 +65,14 @@ Lists all MCP servers in an environment. Useful for:
 - Inventory management
 - Integration planning
 
+### `anypoint_mcp_bridge` / `anypoint_mcp_bridges`
+
+Look up a single MCP bridge or list all bridges in an environment.
+
+### `anypoint_mcp_tools`
+
+Parses an Exchange REST API spec into a tool list for `anypoint_mcp_bridge`.
+
 ## Examples
 
 ### Basic Examples
@@ -64,17 +80,24 @@ Lists all MCP servers in an environment. Useful for:
 1. **[agent_instance/](./agent_instance/)** - Simple agent instance deployments
    - Single agent with basic configuration
    - A/B testing with weighted routing
-   
+
 2. **[mcp_server/](./mcp_server/)** - MCP server deployments
    - Atlassian MCP server (Jira/Confluence)
    - Salesforce MCP server
    - High-availability MCP cluster
 
-3. **[complete/](./complete/)** - Comprehensive example
+3. **[mcp_bridge/](./mcp_bridge/)** - MCP bridge (REST → MCP)
+   - Explicit tools, multi-source APIs, and tools parsed from an Exchange spec
+
+4. **[complete/](./complete/)** - Comprehensive agent + MCP server example
    - Multiple MCP servers
    - Multiple agent instances
    - Data source queries
    - Complete infrastructure setup
+
+5. **[data-sources/](./data-sources/)** - Read-only lookups
+   - `anypoint_mcp_bridge` / `anypoint_mcp_bridges`
+   - `anypoint_mcp_server` / `anypoint_agent_instance`
 
 ## Quick Start
 
@@ -103,6 +126,20 @@ terraform apply
 
 ```bash
 cd mcp_server
+terraform init
+terraform plan \
+  -var="anypoint_client_id=YOUR_CLIENT_ID" \
+  -var="anypoint_client_secret=YOUR_SECRET" \
+  -var="organization_id=YOUR_ORG_ID" \
+  -var="environment_id=YOUR_ENV_ID" \
+  -var="gateway_id=YOUR_GATEWAY_ID"
+terraform apply
+```
+
+### Deploy an MCP Bridge
+
+```bash
+cd mcp_bridge
 terraform init
 terraform plan \
   -var="anypoint_client_id=YOUR_CLIENT_ID" \

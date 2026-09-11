@@ -19,8 +19,16 @@ data "anypoint_mcp_bridges" "all" {
   environment_id  = var.environment_id
 }
 
-output "mcp_bridge_ids" {
-  value = [for b in data.anypoint_mcp_bridges.all.bridges : b.id]
+output "mcp_bridges" {
+  value = [
+    for b in data.anypoint_mcp_bridges.all.bridges : {
+      id              = b.id
+      instance_label  = b.instance_label
+      approval_method = b.approval_method
+      endpoint_uri    = b.endpoint_uri
+      status          = b.status
+    }
+  ]
 }
 ```
 

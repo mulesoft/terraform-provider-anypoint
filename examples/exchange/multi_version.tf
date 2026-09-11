@@ -30,7 +30,8 @@
 #      set and the LAST publish wins — if two entries in the same major set
 #      different tags they silently clobber each other, and the loser then drifts
 #      on every `plan`. FIX: source tags from the MAJOR (see `petstore_majors`),
-#      never from the individual patch.
+#      never from the individual patch. Exchange lowercases tags on write; the
+#      provider preserves the casing you configure in state (e.g. "Terraform").
 #
 #   3. GROUP scope (SHARED across ALL versions): name, description, contact_name,
 #      contact_email, manager. ONE value per asset. These MUST be identical in
