@@ -327,7 +327,7 @@ func (r *AssetResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				},
 			},
 			"main_file": schema.StringAttribute{
-				Description: "The main file within the uploaded archive (properties.mainFile). Used for multi-file specs.",
+				Description: "The main file within the uploaded archive (properties.mainFile). REQUIRED at create for ruleset — publishing a ruleset without main_file fails with `400 MISSING_REQUIRED_PROPERTIES: mainFile`. Set it to the basename of file_path (for example \"governance.yaml\"). Also used for multi-file specs.",
 				Optional:    true,
 				Computed:    true,
 				PlanModifiers: []planmodifier.String{
@@ -720,6 +720,26 @@ func assetTypeRequiresAPIVersion(t string) bool {
 	return assetTypesRequiringAPIVersion[strings.ToLower(strings.TrimSpace(t))]
 }
 
+// assetTypesRequiringMainFile lists asset types whose multipart CREATE publish is
+// rejected when properties.mainFile is omitted, with
+// `400 MISSING_REQUIRED_PROPERTIES: ["mainFile"]`. Separate from the file and
+// apiVersion allowlists: a type can need a file, an apiVersion, a mainFile, or
+// a combination.
+//
+// Conservative membership — ONLY types whose mainFile requirement was verified
+// against the platform's own 400 body:
+//   - ruleset — live-verified 2026-09-14 on STGX through terraform apply: a
+//     classifier=ruleset publish with file_path set but no main_file 400s
+//     MISSING_REQUIRED_PROPERTIES naming mainFile. graphql-api and policy
+//     published in the same apply WITHOUT main_file, so they stay excluded.
+var assetTypesRequiringMainFile = map[string]bool{
+	"ruleset": true,
+}
+
+func assetTypeRequiresMainFile(t string) bool {
+	return assetTypesRequiringMainFile[strings.ToLower(strings.TrimSpace(t))]
+}
+
 // stringChanged reports whether the planned value differs from prior state in a way
 // that RequiresReplaceExceptOnImport would treat as a replace. Rules:
 //   - unknown plan → no change (unresolved computed / reference)
@@ -912,6 +932,39 @@ func (r *AssetResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 				"status = \"development\" (change the version attribute, which forces replacement) "+
 				"rather than editing the status of an already-published version in place.",
 		)
+	}
+
+	// --- Guard #1.6: ruleset needs main_file on create/replace. ---
+	// Live-verified 2026-09-14 on STGX: type=ruleset with file_path but no
+	// properties.mainFile 400s MISSING_REQUIRED_PROPERTIES: ["mainFile"]. Same
+	// config-vs-plan read as the api_version guard (main_file is Optional+Computed).
+	if (creating || replacing) && !plan.Type.IsUnknown() &&
+		assetTypeRequiresMainFile(plan.Type.ValueString()) {
+		var cfgMainFile types.String
+		resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("main_file"), &cfgMainFile)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if !cfgMainFile.IsUnknown() && (cfgMainFile.IsNull() || cfgMainFile.ValueString() == "") {
+			mainFileAction := "created"
+			if replacing {
+				mainFileAction = "replaced (destroyed and recreated)"
+			}
+			resp.Diagnostics.AddAttributeError(
+				path.Root("main_file"),
+				"Missing main_file for a ruleset asset",
+				fmt.Sprintf(
+					"Asset type %q requires main_file (properties.mainFile) when it is published, "+
+						"but main_file is not set. When the asset version is %s, Exchange rejects the "+
+						"publish with \"400 MISSING_REQUIRED_PROPERTIES: mainFile\".\n\n"+
+						"Set main_file to the basename of file_path (for example \"governance.yaml\"). "+
+						"On a version change this is especially important: the version attribute forces "+
+						"replacement, so the failing publish can occur after the previous version has "+
+						"already been destroyed.",
+					plan.Type.ValueString(), mainFileAction,
+				),
+			)
+		}
 	}
 
 	// --- Guard #1.5: API-spec types need api_version on create/replace. ---
