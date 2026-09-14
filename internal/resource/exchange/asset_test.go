@@ -1814,6 +1814,127 @@ func TestAssetTypeRequiresAPIVersion(t *testing.T) {
 	}
 }
 
+func TestAssetTypeRequiresMainFile(t *testing.T) {
+	if !assetTypeRequiresMainFile("ruleset") {
+		t.Error("assetTypeRequiresMainFile(\"ruleset\") = false, want true")
+	}
+	if !assetTypeRequiresMainFile("  RuleSet  ") {
+		t.Error("assetTypeRequiresMainFile should normalize case+whitespace")
+	}
+	for _, ty := range []string{"graphql-api", "policy", "custom", "rest-api", "soap-api", ""} {
+		if assetTypeRequiresMainFile(ty) {
+			t.Errorf("assetTypeRequiresMainFile(%q) = true, want false (live-verified to publish without main_file, or unrelated)", ty)
+		}
+	}
+}
+
+func TestAssetResource_ModifyPlan_MainFileGuard(t *testing.T) {
+	res := NewAssetResource().(*AssetResource)
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	objType := schemaResp.Schema.Type().TerraformType(ctx).(tftypes.Object)
+
+	raw := func(overrides map[string]tftypes.Value) tftypes.Value {
+		return assetRawValue(ctx, schemaResp.Schema, overrides)
+	}
+	nullObj := tftypes.NewValue(objType, nil)
+	unknown := tftypes.NewValue(tftypes.String, tftypes.UnknownValue)
+	nullStr := tftypes.NewValue(tftypes.String, nil)
+	str := func(s string) tftypes.Value { return tftypes.NewValue(tftypes.String, s) }
+
+	obj := func(version, assetType string, mainFile tftypes.Value) tftypes.Value {
+		return raw(map[string]tftypes.Value{
+			"organization_id": str("org"),
+			"group_id":        str("grp"),
+			"asset_id":        str("asset"),
+			"version":         str(version),
+			"type":            str(assetType),
+			"file_path":       str("governance.yaml"),
+			"main_file":       mainFile,
+		})
+	}
+
+	tests := []struct {
+		name      string
+		planRaw   tftypes.Value
+		configRaw tftypes.Value
+		stateRaw  tftypes.Value
+		wantErr   bool
+	}{
+		{
+			name:      "create ruleset with main_file OMITTED is blocked",
+			planRaw:   obj("1.0.0", "ruleset", unknown),
+			configRaw: obj("1.0.0", "ruleset", nullStr),
+			stateRaw:  nullObj,
+			wantErr:   true,
+		},
+		{
+			name:      "create ruleset with main_file from unresolved reference is deferred",
+			planRaw:   obj("1.0.0", "ruleset", unknown),
+			configRaw: obj("1.0.0", "ruleset", unknown),
+			stateRaw:  nullObj,
+			wantErr:   false,
+		},
+		{
+			name:      "create ruleset WITH main_file is allowed",
+			planRaw:   obj("1.0.0", "ruleset", str("governance.yaml")),
+			configRaw: obj("1.0.0", "ruleset", str("governance.yaml")),
+			stateRaw:  nullObj,
+			wantErr:   false,
+		},
+		{
+			name:      "replace (version bump) ruleset with main_file OMITTED is blocked",
+			planRaw:   obj("2.0.0", "ruleset", unknown),
+			configRaw: obj("2.0.0", "ruleset", nullStr),
+			stateRaw:  obj("1.0.0", "ruleset", str("governance.yaml")),
+			wantErr:   true,
+		},
+		{
+			name:      "in-place update ruleset without main_file in config is allowed",
+			planRaw:   obj("1.0.0", "ruleset", str("governance.yaml")),
+			configRaw: obj("1.0.0", "ruleset", nullStr),
+			stateRaw:  obj("1.0.0", "ruleset", str("governance.yaml")),
+			wantErr:   false,
+		},
+		{
+			name:      "create graphql-api without main_file is allowed (not on allowlist)",
+			planRaw:   obj("1.0.0", "graphql-api", unknown),
+			configRaw: obj("1.0.0", "graphql-api", nullStr),
+			stateRaw:  nullObj,
+			wantErr:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := resource.ModifyPlanRequest{
+				Plan:   tfsdk.Plan{Schema: schemaResp.Schema, Raw: tt.planRaw},
+				State:  tfsdk.State{Schema: schemaResp.Schema, Raw: tt.stateRaw},
+				Config: tfsdk.Config{Schema: schemaResp.Schema, Raw: tt.configRaw},
+			}
+			resp := &resource.ModifyPlanResponse{}
+			res.ModifyPlan(ctx, req, resp)
+
+			if !tt.wantErr {
+				if resp.Diagnostics.HasError() {
+					t.Fatalf("expected no error, got: %v", resp.Diagnostics.Errors())
+				}
+				return
+			}
+			found := false
+			for _, d := range resp.Diagnostics {
+				if strings.Contains(d.Summary(), "Missing main_file for a ruleset asset") {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("expected the main_file guard diagnostic, got: %v", resp.Diagnostics.Errors())
+			}
+		})
+	}
+}
+
 // TestAssetResource_ModifyPlan_APIVersionGuard covers the #143 plan-time guard: an API-spec
 // type (rest-api/evented-api/grpc-api) CREATED or REPLACED without api_version is rejected by
 // Exchange at apply with "400 MISSING_REQUIRED_PROPERTIES: apiVersion". On a version bump
@@ -3294,7 +3415,7 @@ func TestAssetResource_ReadPagesIntoState_HomePageFiltering(t *testing.T) {
 //	    sibling version survives and still reads back cleanly.
 //
 // The subject is type="rest-api", classifier="oas" — the file-backed path the example
-// (examples/exchange/multi_version.tf) actually ships — so the fake also exercises the
+// (examples/exchange/multi_version/main.tf) actually ships — so the fake also exercises the
 // files[] → classifier/main_file extraction that the import Read path depends on to
 // seed state without forcing a spurious replacement. Files are written to a temp dir so
 // the real multipart upload (buildAssetMultipart → os.ReadFile) runs end to end.

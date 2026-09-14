@@ -48,6 +48,7 @@ resource "anypoint_exchange_asset" "rest_api" {
   version         = "1.0.0"
   name            = "TF Demo REST API"
   type            = "rest-api"
+  api_version     = "v1"
 
   classifier = "oas"
   file_path  = "${path.module}/test-assets/petstore.json"
@@ -161,7 +162,8 @@ resource "anypoint_exchange_asset" "petstore" {
 1. **Group-scoped fields must be identical across every entry.** `name`, `description`, `contact_name`, `contact_email`, and `manager` are stored **once per asset**, not per version. If entries disagree, the platform silently keeps the existing group value and drops the others. Factor them into `locals` (as above) so they can never drift apart.
 2. **`tags` and external `instances` are shared within a major version — source them from the major, not the patch.** Exchange stores labels **once per version-group (major line)**, so `1.0.0` and `1.0.1` share one tag set and the **last publish wins**. If two same-major entries set different tags they silently clobber each other, and the loser then shows perpetual drift on every `plan`. Keying tags off the major (as above) makes disagreement impossible. Only `file_path` / `classifier` / `api_version` / `status` may safely differ between two versions that share a major.
 3. **`api_version` is required at create for `rest-api`, `soap-api`, `evented-api`, `grpc-api` and `http-api`.** Omitting it fails the publish with `400 MISSING_REQUIRED_PROPERTIES: apiVersion`, and the provider blocks it at **plan** time for these five types. (`graphql-api` needs a spec *file* but not `api_version`; note `http-api` needs `api_version` despite having no file at all.) It is the human-facing API contract version, distinct from the GAV `version`, and is version-scoped — so it may legitimately differ between two versions that share a major.
-4. **`version` is replacement-forcing, so editing a version string in place is destructive.** Prefer adding/removing map keys (purely additive / version-scoped delete). When you must bump a version, `create_before_destroy = true` publishes the new GAV before hard-deleting the old one (safe because a version bump yields a distinct, coexisting GAV), and the `status` `OneOf` validator catches typos like `"Published"` at **plan** time — before any destroy runs.
+4. **`ruleset` needs `main_file` at create.** Omitting it fails the publish with `400 MISSING_REQUIRED_PROPERTIES: mainFile`, and the provider blocks it at **plan** time. Set `main_file` to the basename of `file_path` (for example `"governance.yaml"`).
+5. **`version` is replacement-forcing, so editing a version string in place is destructive.** Prefer adding/removing map keys (purely additive / version-scoped delete). When you must bump a version, `create_before_destroy = true` publishes the new GAV before hard-deleting the old one (safe because a version bump yields a distinct, coexisting GAV), and the `status` `OneOf` validator catches typos like `"Published"` at **plan** time — before any destroy runs.
 
 ## Schema
 
@@ -195,7 +197,7 @@ resource "anypoint_exchange_asset" "petstore" {
   | `graphql-api` | `graphql`                          | yes   | no             | `.graphql`     |
   | `evented-api` | `evented-api` (**not** `asyncapi`) | yes   | **yes**        | `.yaml` or `.zip` |
   | `grpc-api`    | `protobuf`                         | yes   | **yes**        | `.proto` / `.zip` |
-  | `ruleset`     | `ruleset`                          | yes   | no             | `.yaml`        |
+  | `ruleset`     | `ruleset`                          | yes   | no; **`main_file` yes** | `.yaml` |
   | `custom`      | `custom`                           | optional | no          | any            |
   | `http-api`    | — (metadata-only)                  | no    | **yes**        | —              |
   | `mcp`         | — (metadata-only)                  | no    | no             | —              |
@@ -243,7 +245,7 @@ resource "anypoint_exchange_asset" "petstore" {
   > classifier is `original-wsdl` settles as `wsdl`.
 
 - `file_path` (String) Path to the file to upload (JAR, ZIP, RAML, OAS, etc.). Used only at creation time. After import, one apply settles this field (non-destructive). Changing to a different value triggers replacement.
-- `main_file` (String) The main file within the uploaded archive (`properties.mainFile`). Used for multi-file specs.
+- `main_file` (String) The main file within the uploaded archive (`properties.mainFile`). Required at create for `ruleset` — publishing a ruleset without `main_file` fails with `400 MISSING_REQUIRED_PROPERTIES: mainFile`. Set it to the basename of `file_path` (for example `"governance.yaml"`). Also used for multi-file specs.
 - `additional_file` (Block List) Extra files uploaded **alongside** `file_path` in the *same* publish request, for multi-file asset types. The canonical case is a mule-plugin (`type = "extension"`, e.g. a policy), which requires two files — e.g. `(mule-policy.jar + policy-definition.yaml)` or `(schema.json + metadata.yaml)`. Like `file_path`, this is a create-time, upload-only field (preserved from state on read, never reconciled from the API) and is **replacement-forcing** — except the non-destructive null→value settle on the first apply after import. See [`additional_file`](#nestedschema--additional_file) below.
 - `tags` (List of String) Search tags for the asset version. Each element is a tag value string.
 - `terms_and_conditions` (String) Terms and conditions content (markdown). Displayed as the T&C page in the asset portal.
