@@ -1,0 +1,12 @@
+anypoint_client_id     = "<client_id>"
+anypoint_client_secret = "<client_secret>"
+anypoint_base_url      = "https://stgx.anypoint.mulesoft.com"
+organization_id        = "<org_id>"
+environment_id         = "<env_id>"
+gateway_id             = "<gateway_id>"
+
+# Optional
+# consumer_endpoint      = ""
+# petstore_asset_id      = "petstore-rest-api"
+# petstore_asset_version = "1.0.0"
+# petstore_upstream_uri  = "https://sandbox.example.com/petstore/v1"

@@ -8,18 +8,16 @@ variable "anypoint_client_id" {
   description = "Connected App client ID"
   type        = string
   sensitive   = true
-  default     = "<anypoint_connected_app_client_id>"
 }
 
 variable "anypoint_client_secret" {
   description = "Connected App client secret"
   type        = string
   sensitive   = true
-  default     = "<anypoint_connected_app_client_secret>"
 }
 
 variable "anypoint_base_url" {
-  description = "Anypoint control-plane URL"
+  description = "Anypoint control-plane URL (use https://stgx.anypoint.mulesoft.com for STGX)"
   type        = string
   default     = "https://anypoint.mulesoft.com"
 }
@@ -29,13 +27,11 @@ variable "anypoint_base_url" {
 variable "organization_id" {
   description = "Organization ID"
   type        = string
-  default     = "<org_id>"
 }
 
 variable "environment_id" {
   description = "Environment ID"
   type        = string
-  default     = "<env_id>"
 }
 
 # ── Gateway ──────────────────────────────────────────────────────────────────
@@ -43,7 +39,6 @@ variable "environment_id" {
 variable "gateway_id" {
   description = "Flex / Self-Managed Gateway UUID"
   type        = string
-  default     = "<gateway_id>"
 }
 
 # ── Optional instance settings ───────────────────────────────────────────────
