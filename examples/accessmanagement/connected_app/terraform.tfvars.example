@@ -10,7 +10,6 @@ anypoint_client_secret = "<client_secret>"
 anypoint_username      = "<username>"
 anypoint_password      = "<password>"
 anypoint_base_url      = "https://anypoint.mulesoft.com"
-# anypoint_base_url    = "https://stgx.anypoint.mulesoft.com"
 
 org_id = "<org_id>"
 env_id = "<env_id>"

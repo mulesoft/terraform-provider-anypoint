@@ -4,6 +4,5 @@
 anypoint_client_id     = "<client_id>"
 anypoint_client_secret = "<client_secret>"
 anypoint_base_url      = "https://anypoint.mulesoft.com"
-# anypoint_base_url    = "https://stgx.anypoint.mulesoft.com"
 
 org_id = "<org_id>"

@@ -30,7 +30,7 @@ variable "anypoint_client_secret" {
 
 variable "anypoint_base_url" {
   type    = string
-  default = "https://stgx.anypoint.mulesoft.com"
+  default = "https://anypoint.mulesoft.com"
 }
 
 variable "organization_id" {
