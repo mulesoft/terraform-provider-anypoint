@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -491,6 +492,10 @@ func TestBridgeToolMappingFromPolicies_RouterWithoutUpstreamIDs(t *testing.T) {
 
 // --- orphan self-heal: publish 409 -> hard-delete -> republish ---
 
+type errString string
+
+func (e errString) Error() string { return string(e) }
+
 func TestIsAssetConflict(t *testing.T) {
 	cases := []struct {
 		name string
@@ -513,6 +518,7 @@ func TestIsAssetConflict(t *testing.T) {
 func TestPublishBridgeAsset_SelfHealsOrphan(t *testing.T) {
 	assetPath := "/exchange/api/v2/organizations/" + brOrg + "/assets/" + brOrg + "/my-bridge/1.0.0"
 	getPath := "/exchange/api/v2/assets/" + brOrg + "/my-bridge/1.0.0"
+	listPath := "/apimanager/xapi/v1/organizations/" + brOrg + "/environments/" + brEnv + "/apis"
 
 	var publishCalls, deleteCalls int
 	res := newBridgeResourceWithMock(t, map[string]func(w http.ResponseWriter, r *http.Request){
@@ -541,9 +547,13 @@ func TestPublishBridgeAsset_SelfHealsOrphan(t *testing.T) {
 				"groupId": brOrg, "assetId": "my-bridge", "version": "1.0.0", "type": "mcp",
 			})
 		},
+		// Empty list → no live bridge references the GAV → hard-delete is safe.
+		listPath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{"instances": []interface{}{}})
+		},
 	})
 
-	err := res.publishBridgeAsset(context.Background(), brOrg, &agentsclient.PublishBridgeAssetInput{
+	err := res.publishBridgeAsset(context.Background(), brOrg, brEnv, &agentsclient.PublishBridgeAssetInput{
 		OrganizationID: brOrg, GroupID: brOrg, AssetID: "my-bridge", Version: "1.0.0",
 		Name: "My Bridge", MetadataJSON: []byte(`{"tools":[]}`),
 	})
@@ -558,6 +568,52 @@ func TestPublishBridgeAsset_SelfHealsOrphan(t *testing.T) {
 	}
 }
 
-type errString string
+func TestPublishBridgeAsset_RefusesHardDeleteWhenInUse(t *testing.T) {
+	assetPath := "/exchange/api/v2/organizations/" + brOrg + "/assets/" + brOrg + "/my-bridge/1.0.0"
+	listPath := "/apimanager/xapi/v1/organizations/" + brOrg + "/environments/" + brEnv + "/apis"
 
-func (e errString) Error() string { return string(e) }
+	var publishCalls, deleteCalls int
+	res := newBridgeResourceWithMock(t, map[string]func(w http.ResponseWriter, r *http.Request){
+		assetPath: func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodPost {
+				publishCalls++
+				testutil.ErrorResponse(w, http.StatusConflict, `{"code":"ASSET_PRE_CONDITIONS_FAILED"}`)
+				return
+			}
+			if r.Method == http.MethodDelete {
+				deleteCalls++
+				w.WriteHeader(http.StatusNoContent)
+			}
+		},
+		listPath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"instances": []map[string]interface{}{
+					{
+						"id": 99901, "assetId": "my-bridge",
+						"metadata": map[string]string{"generatedBy": "mcp_bridge"},
+					},
+				},
+			})
+		},
+	})
+
+	err := res.publishBridgeAsset(context.Background(), brOrg, brEnv, &agentsclient.PublishBridgeAssetInput{
+		OrganizationID: brOrg, GroupID: brOrg, AssetID: "my-bridge", Version: "1.0.0",
+		Name: "My Bridge", MetadataJSON: []byte(`{"tools":[]}`),
+	})
+	if err == nil {
+		t.Fatal("publishBridgeAsset() expected error when asset is in use by a live bridge")
+	}
+	if !strings.Contains(err.Error(), "in use by bridge instance") {
+		t.Fatalf("error = %q, want 'in use by bridge instance' guidance", err.Error())
+	}
+	if !strings.Contains(err.Error(), "terraform import") {
+		t.Fatalf("error = %q, want import guidance", err.Error())
+	}
+	if publishCalls != 1 {
+		t.Errorf("publish attempts = %d, want 1 (no republish after refuse)", publishCalls)
+	}
+	if deleteCalls != 0 {
+		t.Errorf("deleteCalls = %d, want 0 (must not hard-delete an in-use asset)", deleteCalls)
+	}
+}

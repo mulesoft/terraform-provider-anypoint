@@ -359,11 +359,17 @@ resource "anypoint_exchange_asset" "policy" {
 
 ## Import
 
-An existing Exchange asset version can be imported using its composite ID: `group_id/asset_id/version` (`group_id` is usually the organization ID).
+An existing Exchange asset version can be imported using its composite ID: `group_id/asset_id/version`.
 
-On import the provider reads the live asset and seeds the immutable fields (`classifier`, `main_file`, `api_version`) and external instances into state, so **nothing is planned for replacement**. Exchange returns derived copies of the uploaded classifier (`fat-`, `light-`, `original-`); the provider normalizes all three back to the value you declared, so e.g. a `soap-api` whose API classifier is `original-wsdl` settles as `wsdl` rather than forcing a destroy-and-recreate.
+On import the provider reads the live asset and seeds:
+- `organization_id` from the asset's owning organization (which can differ from `group_id` for business-group assets — seeding `organization_id = group_id` would force a destroy/recreate on the next plan)
+- immutable fields (`classifier`, `main_file`, `api_version`) and external instances
+
+so **nothing is planned for replacement** when your config uses the real owning org. Exchange returns derived copies of the uploaded classifier (`fat-`, `light-`, `original-`); the provider normalizes all three back to the value you declared, so e.g. a `soap-api` whose API classifier is `original-wsdl` settles as `wsdl` rather than forcing a destroy-and-recreate.
 
 The first plan after import therefore shows exactly **one in-place change per file-backed asset** — `file_path` moving from null to the value in your config, plus `updated_date` becoming "known after apply". `file_path` is a path on your machine that Exchange never stores, so it cannot be read back on import; one apply settles it permanently and the next plan is clean. Fileless types (`custom`, `http-api`, `mcp`, `llm`) import with no diff at all.
+
+~> **Removing** `file_path`, `keywords`, or `additional_file` from configuration after create **forces replacement**. The plan-time guard requires a `file_path` on that replace for file-backed types, so the old version is not destroyed before a doomed recreate.
 
 ### Using an import block (Terraform ≥ 1.5 — recommended)
 

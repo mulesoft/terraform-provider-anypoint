@@ -628,7 +628,7 @@ func (r *MCPBridgeResource) Create(ctx context.Context, req resource.CreateReque
 		Name:           data.MCPAssetName.ValueString(),
 		MetadataJSON:   metaJSON,
 	}
-	if err = r.publishBridgeAsset(ctx, orgID, publishInput); err != nil {
+	if err = r.publishBridgeAsset(ctx, orgID, envID, publishInput); err != nil {
 		resp.Diagnostics.AddError("Error publishing generated MCP asset", err.Error())
 		return
 	}
@@ -670,14 +670,24 @@ func (r *MCPBridgeResource) Create(ctx context.Context, req resource.CreateReque
 
 	instance, err := r.client.GetBridge(ctx, orgID, envID, bridge.ID)
 	if err != nil {
-		// The bridge instance + its generated asset are already created on-platform at
-		// this point. Do NOT roll them back on a readback failure: a transient/auth GET
-		// error does not mean the bridge is gone, and deleting the backing asset here can
-		// cascade into dependent resources (mcp_server / api_policy) losing their id on
-		// the same apply (W-23914162). Surface the error and leave the bridge in place so
-		// the next refresh/apply reconciles it (worst case a recoverable orphan, never
-		// destructive data loss).
-		resp.Diagnostics.AddError("Error reading MCP bridge after create", err.Error())
+		// The bridge instance + its generated asset are already created on-platform.
+		// Persist state from the create response so a retry does not re-enter Create
+		// (which would 409-self-heal and risk hard-deleting the in-use asset —
+		// W-23914162). Use a warning (not an error) so the resource is not tainted.
+		plannedSources := data.SourceAPIs
+		r.flattenBridge(bridge, &data, orgID, envID)
+		data.SourceAPIs = plannedSources
+		settleBridgePort(&data)
+		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+		resp.Diagnostics.AddWarning(
+			"MCP bridge created but post-create read failed",
+			fmt.Sprintf(
+				"Bridge instance %d was created and is now in Terraform state, but reading it back failed: %s. "+
+					"Run `terraform refresh` (or a subsequent plan/apply) to reconcile computed attributes. "+
+					"Do not delete the generated Exchange asset manually.",
+				bridge.ID, err.Error(),
+			),
+		)
 		return
 	}
 
@@ -689,12 +699,13 @@ func (r *MCPBridgeResource) Create(ctx context.Context, req resource.CreateReque
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-// publishBridgeAsset publishes the generated MCP asset, self-healing a leftover
-// orphan from a prior failed create: Exchange rejects a re-publish of an existing
-// GAV with a 409 (ASSET_PRE_CONDITIONS_FAILED). Because a genuinely in-use bridge
-// asset would be tracked in Terraform state (and thus never re-created here), a 409 on
-// CREATE means the previous version is orphaned — hard-delete it and republish once.
-func (r *MCPBridgeResource) publishBridgeAsset(ctx context.Context, orgID string, in *agentstools.PublishBridgeAssetInput) error {
+// publishBridgeAsset publishes the generated MCP asset. On a 409 conflict it will
+// hard-delete and republish ONLY when no live bridge instance still references that
+// GAV. A prior Create that succeeded through attachBridgePolicies but failed the
+// final GetBridge leaves an in-use asset with no TF state; blindly hard-deleting on
+// retry would destroy that asset (W-23914162). Callers must pass envID so we can
+// list bridges before deleting.
+func (r *MCPBridgeResource) publishBridgeAsset(ctx context.Context, orgID, envID string, in *agentstools.PublishBridgeAssetInput) error {
 	_, err := r.client.PublishBridgeAsset(ctx, in)
 	if err == nil {
 		return nil
@@ -702,10 +713,38 @@ func (r *MCPBridgeResource) publishBridgeAsset(ctx context.Context, orgID string
 	if !isAssetConflict(err) {
 		return err
 	}
-	tflog.Warn(ctx, "generated MCP asset already exists (orphan from a prior failed create); hard-deleting and republishing", map[string]interface{}{
+
+	if envID != "" {
+		if bridges, listErr := r.client.ListBridges(ctx, orgID, envID); listErr == nil {
+			for _, b := range bridges {
+				aid := b.AssetID
+				if b.Spec != nil && b.Spec.AssetID != "" {
+					aid = b.Spec.AssetID
+				}
+				if aid == in.AssetID {
+					return fmt.Errorf(
+						"generated MCP asset %s@%s already exists and is in use by bridge instance %d; "+
+							"import it instead of recreating:\n"+
+							"  terraform import anypoint_mcp_bridge.<name> %s/%s/%d",
+						in.AssetID, in.Version, b.ID, orgID, envID, b.ID,
+					)
+				}
+			}
+		} else {
+			tflog.Warn(ctx, "could not list bridges before 409 self-heal; refusing to hard-delete to avoid destroying an in-use asset", map[string]interface{}{
+				"asset_id": in.AssetID, "version": in.Version, "list_error": listErr.Error(),
+			})
+			return fmt.Errorf(
+				"generated MCP asset %s@%s already exists (409), and listing bridge instances to confirm it is unused failed (%v); "+
+					"refusing to hard-delete. Import the existing bridge or delete the orphan asset manually, then retry",
+				in.AssetID, in.Version, listErr,
+			)
+		}
+	}
+
+	tflog.Warn(ctx, "generated MCP asset already exists with no live bridge reference (orphan from a prior failed create); hard-deleting and republishing", map[string]interface{}{
 		"asset_id": in.AssetID, "version": in.Version,
 	})
-	// Best-effort delete; ignore its error and surface the republish result.
 	_ = r.client.DeleteBridgeAssetVersion(ctx, orgID, in.AssetID, in.Version)
 	_, err = r.client.PublishBridgeAsset(ctx, in)
 	return err
