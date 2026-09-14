@@ -48,7 +48,7 @@ variable "environment_id" {
 variable "api_instance_id" {
   type        = string
   description = "Numeric ID of the API instance to apply policies to"
-  default     = "4696123"
+  default     = "<api_instance_id>"
 }
 
 variable "graphql_api_instance_id" {
@@ -444,87 +444,86 @@ resource "anypoint_api_policy_http_caching" "http_caching" {
 # }
 
 # ═════════════════════════════════════════════════════════════
-# GRAPHQL & WEBSOCKET POLICIES
+# GRAPHQL & WEBSOCKET POLICIES (Phase-2)
 # ═════════════════════════════════════════════════════════════
-# NOTE: These policies are type-specific — they only apply to an API
-# instance whose Exchange asset (and endpoint `type`) is GraphQL or
-# WebSocket. Applying them to the generic REST instance above returns
-# 400 from API Manager. Point them at a graphql/websocket-backed
-# instance via var.graphql_api_instance_id / var.websocket_api_instance_id.
+# Commented so terraform apply succeeds against a REST API instance.
+# These policies 400 unless the instance is GraphQL-typed or WebSocket.
+# Uncomment after setting graphql_api_instance_id / websocket_api_instance_id
+# to real instance IDs of those types.
 
 # ─── 22. GraphQL Schema Validation ───────────────────────────
-resource "anypoint_api_policy_graphql_schema_validation" "graphql_schema_validation" {
-  organization_id = local.org_id
-  environment_id  = local.env_id
-  api_instance_id = var.graphql_api_instance_id
-  label           = "graphql-schema-validation"
-  order           = 22
-
-  configuration = {
-    block_operation = true
-  }
-}
+# resource "anypoint_api_policy_graphql_schema_validation" "graphql_schema_validation" {
+#   organization_id = local.org_id
+#   environment_id  = local.env_id
+#   api_instance_id = var.graphql_api_instance_id
+#   label           = "graphql-schema-validation"
+#   order           = 22
+#
+#   configuration = {
+#     block_operation = true
+#   }
+# }
 
 # ─── 23. GraphQL Operation Limits ────────────────────────────
-resource "anypoint_api_policy_graphql_operation_limits" "graphql_operation_limits" {
-  organization_id = local.org_id
-  environment_id  = local.env_id
-  api_instance_id = var.graphql_api_instance_id
-  label           = "graphql-operation-limits"
-  order           = 23
-
-  configuration = {
-    max_depth       = 10
-    max_aliases     = 20
-    max_root_fields = 15
-    max_directives  = 30
-  }
-}
+# resource "anypoint_api_policy_graphql_operation_limits" "graphql_operation_limits" {
+#   organization_id = local.org_id
+#   environment_id  = local.env_id
+#   api_instance_id = var.graphql_api_instance_id
+#   label           = "graphql-operation-limits"
+#   order           = 23
+#
+#   configuration = {
+#     max_depth       = 10
+#     max_aliases     = 20
+#     max_root_fields = 15
+#     max_directives  = 30
+#   }
+# }
 
 # ─── 24. GraphQL Static Query Complexity ─────────────────────
-resource "anypoint_api_policy_graphql_static_query_complexity" "graphql_static_query_complexity" {
-  organization_id = local.org_id
-  environment_id  = local.env_id
-  api_instance_id = var.graphql_api_instance_id
-  label           = "graphql-query-complexity"
-  order           = 24
-
-  configuration = {
-    maximum_complexity     = 100
-    default_field_cost     = 1
-    block_operation        = true
-    reject_unbounded_lists = true
-  }
-}
+# resource "anypoint_api_policy_graphql_static_query_complexity" "graphql_static_query_complexity" {
+#   organization_id = local.org_id
+#   environment_id  = local.env_id
+#   api_instance_id = var.graphql_api_instance_id
+#   label           = "graphql-query-complexity"
+#   order           = 24
+#
+#   configuration = {
+#     maximum_complexity     = 100
+#     default_field_cost     = 1
+#     block_operation        = true
+#     reject_unbounded_lists = true
+#   }
+# }
 
 # ─── 25. GraphQL Introspection Control ───────────────────────
-resource "anypoint_api_policy_graphql_introspection_control" "graphql_introspection_control" {
-  organization_id = local.org_id
-  environment_id  = local.env_id
-  api_instance_id = var.graphql_api_instance_id
-  label           = "graphql-introspection-control"
-  order           = 25
-
-  # Block all introspection queries (hide the schema from clients)
-  configuration = {
-    block_schema   = true
-    block_type     = true
-    block_typename = true
-  }
-}
+# resource "anypoint_api_policy_graphql_introspection_control" "graphql_introspection_control" {
+#   organization_id = local.org_id
+#   environment_id  = local.env_id
+#   api_instance_id = var.graphql_api_instance_id
+#   label           = "graphql-introspection-control"
+#   order           = 25
+#
+#   # Block all introspection queries (hide the schema from clients)
+#   configuration = {
+#     block_schema   = true
+#     block_type     = true
+#     block_typename = true
+#   }
+# }
 
 # ─── 26. WebSocket Connection Limit ──────────────────────────
-resource "anypoint_api_policy_websocket_connection_limit" "websocket_connection_limit" {
-  organization_id = local.org_id
-  environment_id  = local.env_id
-  api_instance_id = var.websocket_api_instance_id
-  label           = "websocket-connection-limit"
-  order           = 26
-
-  configuration = {
-    maximum_connections = 100
-  }
-}
+# resource "anypoint_api_policy_websocket_connection_limit" "websocket_connection_limit" {
+#   organization_id = local.org_id
+#   environment_id  = local.env_id
+#   api_instance_id = var.websocket_api_instance_id
+#   label           = "websocket-connection-limit"
+#   order           = 26
+#
+#   configuration = {
+#     maximum_connections = 100
+#   }
+# }
 
 # ═════════════════════════════════════════════════════════════
 # POINTCUT DATA EXAMPLES
@@ -621,15 +620,15 @@ output "policy_summary" {
     caching = {
       http_caching = anypoint_api_policy_http_caching.http_caching.id
     }
-    graphql = {
-      schema_validation       = anypoint_api_policy_graphql_schema_validation.graphql_schema_validation.id
-      operation_limits        = anypoint_api_policy_graphql_operation_limits.graphql_operation_limits.id
-      static_query_complexity = anypoint_api_policy_graphql_static_query_complexity.graphql_static_query_complexity.id
-      introspection_control   = anypoint_api_policy_graphql_introspection_control.graphql_introspection_control.id
-    }
-    websocket = {
-      connection_limit = anypoint_api_policy_websocket_connection_limit.websocket_connection_limit.id
-    }
+    # graphql = {
+    #   schema_validation       = anypoint_api_policy_graphql_schema_validation.graphql_schema_validation.id
+    #   operation_limits        = anypoint_api_policy_graphql_operation_limits.graphql_operation_limits.id
+    #   static_query_complexity = anypoint_api_policy_graphql_static_query_complexity.graphql_static_query_complexity.id
+    #   introspection_control   = anypoint_api_policy_graphql_introspection_control.graphql_introspection_control.id
+    # }
+    # websocket = {
+    #   connection_limit = anypoint_api_policy_websocket_connection_limit.websocket_connection_limit.id
+    # }
     # spec_validation and message_logging_outbound are commented out above —
     # they require a spec-backed API and valid upstream_ids respectively.
     # graphql/* and websocket/* require GraphQL/WebSocket-typed API instances

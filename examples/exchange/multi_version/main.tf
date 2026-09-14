@@ -1,3 +1,17 @@
+terraform {
+  required_providers {
+    anypoint = {
+      source = "mulesoft/anypoint"
+    }
+  }
+}
+
+provider "anypoint" {
+  client_id     = var.anypoint_client_id
+  client_secret = var.anypoint_client_secret
+  base_url      = var.anypoint_base_url
+}
+
 # ============================================================================
 # Managing MULTIPLE VERSIONS of one Exchange asset with `for_each`
 # ============================================================================
@@ -107,7 +121,7 @@ resource "anypoint_exchange_asset" "petstore" {
 
   # ---- VERSION-scoped: from each map entry, independent per version ----
   version     = each.key # the map key IS the version number
-  file_path   = "${path.module}/${each.value.file_path}"
+  file_path   = "${path.module}/../${each.value.file_path}"
   main_file   = basename(each.value.file_path)
   status      = each.value.status
   api_version = each.value.api_version

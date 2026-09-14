@@ -8,8 +8,11 @@ terraform {
 }
 
 provider "anypoint" {
+  auth_type     = "user"
   client_id     = var.anypoint_client_id
   client_secret = var.anypoint_client_secret
+  username      = var.anypoint_username
+  password      = var.anypoint_password
   base_url      = var.anypoint_base_url
 }
 
@@ -37,15 +40,15 @@ resource "anypoint_team" "development" {
   # Members are referenced by username (case-insensitive). membership_type is
   # optional and defaults to "member". Members assigned via external groups
   # (SAML/SCIM) are never modified.
-  members = [
-    {
-      username        = "dev-lead"
-      membership_type = "maintainer"
-    },
-    {
-      username = "dev-engineer" # membership_type omitted → "member"
-    },
-  ]
+#   members = [
+#     {
+#       username        = "dev-lead"
+#       membership_type = "maintainer"
+#     },
+#     {
+#       username = "dev-engineer" # membership_type omitted → "member"
+#     },
+#   ]
 }
 
 # Read the development team back, including its permissions and members.

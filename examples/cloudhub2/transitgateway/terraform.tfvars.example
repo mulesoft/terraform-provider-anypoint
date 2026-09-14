@@ -1,8 +1,13 @@
 # Copy to terraform.tfvars and fill in your values.
 
+# This example uses auth_type = "user". You need a Connected App that
+# allows the password grant, plus your Anypoint username and password.
 anypoint_client_id     = "your-connected-app-client-id"
 anypoint_client_secret = "your-connected-app-client-secret"
+anypoint_username      = "your-anypoint-username"
+anypoint_password      = "your-anypoint-password"
 anypoint_base_url      = "https://anypoint.mulesoft.com"
+# anypoint_base_url    = "https://stgx.anypoint.mulesoft.com"
 
 organization_id        = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 private_space_id       = "rf-p2-private-space"
