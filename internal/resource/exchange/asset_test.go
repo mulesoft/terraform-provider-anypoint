@@ -3976,7 +3976,14 @@ func TestAssetReplaceTriggered_CoversEveryReplaceForcingAttribute(t *testing.T) 
 		// Unknown/omitted plan values are never a change (an unresolved computed value
 		// must not be mistaken for an edit).
 		{name: "unknown planned classifier is not a replace", mutate: func(m *AssetResourceModel) { m.Classifier = types.StringUnknown() }, want: false},
-		{name: "omitted (null) planned keywords is not a replace", mutate: func(m *AssetResourceModel) { m.Keywords = types.StringNull() }, want: false},
+		// Removing keywords/file_path/additional_file from config IS a replace — the
+		// schema RequiresReplaceExceptOnImport fires on value→null, and ModifyPlan
+		// guards must see the same signal via assetReplaceTriggered.
+		{name: "omitted (null) planned keywords IS a replace (value removed)", mutate: func(m *AssetResourceModel) { m.Keywords = types.StringNull() }, want: true, wantWhy: "value→null must replace so file guards fire"},
+		{name: "omitted (null) planned file_path IS a replace (value removed)", mutate: func(m *AssetResourceModel) { m.FilePath = types.StringNull() }, want: true, wantWhy: "value→null must replace so file guards fire"},
+		{name: "omitted (null) planned additional_file IS a replace (value removed)", mutate: func(m *AssetResourceModel) {
+			m.AdditionalFiles = types.ListNull(additionalFileObjectType())
+		}, want: true, wantWhy: "value→null must replace so file guards fire"},
 
 		// type: normalized compare (mule-plugin family all stores as "extension").
 		{name: "extension -> policy is NOT a replace (same stored super-type)", mutate: func(m *AssetResourceModel) {

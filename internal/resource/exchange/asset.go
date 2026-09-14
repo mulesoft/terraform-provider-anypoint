@@ -720,36 +720,43 @@ func assetTypeRequiresAPIVersion(t string) bool {
 	return assetTypesRequiringAPIVersion[strings.ToLower(strings.TrimSpace(t))]
 }
 
-// stringChanged reports whether a KNOWN planned value differs from the prior state
-// value. Unknown or null plan values (and null/unknown prior state) are treated as
-// "no change" so an unresolved computed value is never mistaken for a real edit.
+// stringChanged reports whether the planned value differs from prior state in a way
+// that RequiresReplaceExceptOnImport would treat as a replace. Rules:
+//   - unknown plan → no change (unresolved computed / reference)
+//   - null/unknown state → no change (post-import settle; except-on-import)
+//   - known non-null state + null plan → CHANGE (attribute removed from config)
+//   - both known → compare equality
+//
+// The value→null case MUST count as a change: the schema modifier already forces
+// replace when the user removes file_path/keywords/main_file, and ModifyPlan's
+// create/replace file guards depend on assetReplaceTriggered seeing the same
+// signal — otherwise Terraform destroys the old version and then 400s the
+// recreate with no file (asset gone).
 func stringChanged(state, plan types.String) bool {
-	if plan.IsUnknown() || plan.IsNull() {
+	if plan.IsUnknown() {
 		return false
 	}
 	if state.IsNull() || state.IsUnknown() {
 		return false
+	}
+	if plan.IsNull() {
+		return true
 	}
 	return !plan.Equal(state)
 }
 
-// listChanged is the List-typed sibling of stringChanged: it reports whether a
-// KNOWN planned list differs from a KNOWN prior-state list. It mirrors
-// requiresReplaceListExceptOnImport, so a null/unknown on either side (the
-// post-import settle) is never treated as a change.
-//
-// KNOWN GAP (tracked, not yet fixed): additional_file is Optional-ONLY, so a null plan
-// means "removed from config", which the schema modifier DOES treat as a replace. This
-// helper reports no change for that case. Same gap applies to file_path and keywords
-// via stringChanged. Closing it needs a comparator that counts a null plan AND a
-// matching update to the existing "omitted (null) planned keywords is not a replace"
-// test assertion, which encodes the current behaviour.
+// listChanged is the List-typed sibling of stringChanged. Same rules: a null plan
+// against a known non-null state (additional_file removed from config) is a
+// replace, matching RequiresReplaceListExceptOnImport.
 func listChanged(state, plan types.List) bool {
-	if plan.IsUnknown() || plan.IsNull() {
+	if plan.IsUnknown() {
 		return false
 	}
 	if state.IsNull() || state.IsUnknown() {
 		return false
+	}
+	if plan.IsNull() {
+		return true
 	}
 	return !plan.Equal(state)
 }
@@ -1301,6 +1308,58 @@ func (r *AssetResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 
+	// Persist identity IMMEDIATELY after a successful publish. Tags / pages / T&C /
+	// instances / categories can still fail below; without state the next apply
+	// retries Create, hits 409 ASSET_PRE_CONDITIONS_FAILED, and leaves an orphan
+	// in Exchange. Mirrors connected_app / role / team partial-create pattern.
+	// Create errors after State.Set taint the resource — child-step errors below
+	// tell the operator to `terraform untaint` and re-apply in place.
+	//
+	// Preserve config-only / not-yet-applied fields: mapAssetToState would overwrite
+	// them from the empty post-publish API response and skip the child-apply blocks
+	// below (e.g. tags never get written because plan.Tags becomes null/empty).
+	cfgTags := plan.Tags
+	cfgPages := plan.Pages
+	cfgTerms := plan.TermsAndConditions
+	cfgInstances := plan.Instances
+	cfgCategories := plan.Categories
+	cfgCustomFields := plan.CustomFields
+	cfgFilePath := plan.FilePath
+	cfgAdditionalFiles := plan.AdditionalFiles
+	cfgKeywords := plan.Keywords
+	cfgOrgID := plan.OrganizationID
+	r.mapAssetToState(&plan, asset)
+	plan.Tags = cfgTags
+	plan.Pages = cfgPages
+	plan.TermsAndConditions = cfgTerms
+	plan.Instances = cfgInstances
+	plan.Categories = cfgCategories
+	plan.CustomFields = cfgCustomFields
+	plan.FilePath = cfgFilePath
+	plan.AdditionalFiles = cfgAdditionalFiles
+	plan.Keywords = cfgKeywords
+	plan.OrganizationID = cfgOrgID
+	if plan.Classifier.IsUnknown() {
+		plan.Classifier = types.StringNull()
+	}
+	if plan.APIVersion.IsUnknown() {
+		plan.APIVersion = types.StringNull()
+	}
+	if plan.MainFile.IsUnknown() {
+		plan.MainFile = types.StringNull()
+	}
+	if !plan.FilePath.IsNull() && plan.FilePath.ValueString() != "" {
+		if hash, hashErr := computeFileHash(plan.FilePath.ValueString()); hashErr == nil {
+			plan.FileSHA256 = types.StringValue(hash)
+		}
+	} else if plan.FileSHA256.IsUnknown() {
+		plan.FileSHA256 = types.StringValue("")
+	}
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	// After create, PATCH mutable metadata fields to ensure they match the plan.
 	// The multipart create may not update asset-level metadata (name, description)
 	// when publishing a new version of an existing asset. Contact fields are PATCH-only.
@@ -1339,7 +1398,9 @@ func (r *AssetResource) Create(ctx context.Context, req resource.CreateRequest, 
 		if patchErr != nil {
 			resp.Diagnostics.AddError(
 				"Error setting asset metadata after create",
-				"Asset was created but metadata update failed: "+patchErr.Error(),
+				"Asset was created and is tracked in Terraform state, but metadata update failed: "+patchErr.Error()+
+					"\n\nRun `terraform untaint <address>` then `terraform apply` to retry in place "+
+					"(a bare re-apply would destroy and recreate because Create errors taint the resource).",
 			)
 			return
 		}
@@ -1371,7 +1432,9 @@ func (r *AssetResource) Create(ctx context.Context, req resource.CreateRequest, 
 			if tagErr != nil {
 				resp.Diagnostics.AddError(
 					"Error setting asset tags",
-					"Asset was created but tag update failed: "+tagErr.Error(),
+					"Asset was created and is tracked in Terraform state, but tag update failed: "+tagErr.Error()+
+						"\n\nRun `terraform untaint <address>` then `terraform apply` to retry in place "+
+						"(a bare re-apply would destroy and recreate because Create errors taint the resource).",
 				)
 				return
 			}
@@ -2085,7 +2148,6 @@ func (r *AssetResource) ImportState(ctx context.Context, req resource.ImportStat
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("asset_id"), assetID)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("version"), version)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), req.ID)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("organization_id"), groupID)...)
 
 	// Fetch the asset from the API to seed immutable fields so that the first plan
 	// after import shows zero drift (avoids RequiresReplace on file_path, classifier, etc.)
@@ -2097,6 +2159,15 @@ func (r *AssetResource) ImportState(ctx context.Context, req resource.ImportStat
 		)
 		return
 	}
+
+	// organization_id is the owning org, which can differ from group_id for
+	// business-group assets. Seeding it from group_id caused a RequiresReplace
+	// destroy/recreate on the first plan when config used the real org.
+	orgID := groupID
+	if asset.Organization != nil && asset.Organization.ID != "" {
+		orgID = asset.Organization.ID
+	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("organization_id"), orgID)...)
 
 	// Seed classifier and main_file from the files array
 	classifier, mainFile := extractFileMetadata(asset.Files)
