@@ -87,7 +87,8 @@ Parses an Exchange REST API spec into a tool list for `anypoint_mcp_bridge`.
    - Enterprise tools MCP server with MCP / LLM policies
 
 3. **[mcp_bridge/](./mcp_bridge/)** - MCP bridge (REST → MCP)
-   - Explicit tools, multi-source APIs, and tools parsed from an Exchange spec
+   - [explicit/](./mcp_bridge/explicit/) — declare tools by hand
+   - [auto_tools/](./mcp_bridge/auto_tools/) — auto-create tools from an Exchange REST API asset
 
 4. **[complete/](./complete/)** - Comprehensive agent + MCP server example
    - Multiple MCP servers
@@ -139,7 +140,7 @@ terraform apply
 ### Deploy an MCP Bridge
 
 ```bash
-cd mcp_bridge
+cd mcp_bridge/explicit   # or mcp_bridge/auto_tools
 terraform init
 terraform plan \
   -var="anypoint_client_id=YOUR_CLIENT_ID" \

@@ -1,19 +1,19 @@
 ###############################################################################
-# Anypoint MCP Bridge Example
-# ===========================
+# Anypoint MCP Bridge — explicit tools
+# =====================================
 # An MCP bridge turns one or more existing REST APIs into an MCP server
-# without writing MCP server code. For each source API you declare the tools
-# (REST operations) to expose; the provider publishes a generated Exchange
-# asset, creates the gateway instance, and attaches the MCP transcoding
-# policies.
+# without writing MCP server code. This example declares tools explicitly.
 #
-# Differs from anypoint_mcp_server, where you supply an existing MCP server
-# spec asset. A bridge generates that asset from your tool declarations.
+# For tools parsed automatically from an Exchange REST API spec, see ../auto_tools/
+#
+# Managed Flex Gateway note:
+#   Managed Flex typically exposes only ports 8081 and 8082. Port + base_path
+#   must be unique on the gateway. Run one bridge example at a time on the
+#   same managed gateway, or use distinct ports/paths.
 #
 # Usage:
-#   terraform init
-#   terraform plan
-#   terraform apply
+#   cp terraform.tfvars.example terraform.tfvars   # fill in values
+#   terraform init && terraform plan && terraform apply
 ###############################################################################
 
 terraform {
@@ -33,8 +33,8 @@ provider "anypoint" {
 ###############################################################################
 # MCP Bridge - Petstore (explicit tools)
 # --------------------------------------
-# One REST API exposed as an MCP server. Path parameters ({petId}) become
-# required tool inputs; POST bodies use has_body = true.
+# Path parameters ({petId}) become required tool inputs; POST bodies use
+# has_body = true.
 ###############################################################################
 
 resource "anypoint_mcp_bridge" "petstore" {
@@ -127,103 +127,6 @@ resource "anypoint_mcp_bridge" "petstore" {
           }
         },
       ]
-    },
-  ]
-}
-
-###############################################################################
-# MCP Bridge - Multiple Source APIs
-# ---------------------------------
-# Each source_api becomes its own route and upstream. Labels must be unique
-# within the bridge. Uses a different port from the petstore bridge above.
-###############################################################################
-
-resource "anypoint_mcp_bridge" "commerce" {
-  organization_id = var.organization_id
-  environment_id  = var.environment_id
-  gateway_id      = var.gateway_id
-
-  mcp_asset_name = "commerce-mcp-bridge"
-  port           = 8082
-  base_path      = "commerce"
-
-  instance_label = "Commerce MCP"
-
-  source_apis = [
-    {
-      label        = "orders-api"
-      upstream_uri = "https://orders.internal:8080"
-      asset_id     = "orders-rest-api"
-      version      = "1.0.0"
-      group_id     = var.organization_id
-
-      tools = [
-        {
-          method = "GET"
-          path   = "/orders/{orderId}"
-        },
-        {
-          method   = "POST"
-          path     = "/orders"
-          has_body = true
-        },
-      ]
-    },
-    {
-      label        = "inventory-api"
-      upstream_uri = "https://inventory.internal:8080"
-      asset_id     = "inventory-rest-api"
-      version      = "2.0.0"
-      group_id     = var.organization_id
-
-      tools = [
-        {
-          method        = "GET"
-          path          = "/inventory/{sku}"
-          name          = "check_stock"
-          description   = "Check available stock for a SKU"
-          header_params = ["X-Warehouse-Id"]
-        },
-      ]
-    },
-  ]
-}
-
-###############################################################################
-# MCP Bridge - Tools from Exchange spec
-# -------------------------------------
-# Parse an Exchange REST API spec into tools, then assign them to the bridge.
-###############################################################################
-
-data "anypoint_mcp_tools" "petstore" {
-  organization_id = var.organization_id
-  group_id        = var.organization_id
-  asset_id        = var.petstore_asset_id
-  version         = var.petstore_asset_version
-
-  exclude_methods = ["DELETE"]
-}
-
-resource "anypoint_mcp_bridge" "petstore_auto" {
-  organization_id = var.organization_id
-  environment_id  = var.environment_id
-  gateway_id      = var.gateway_id
-
-  mcp_asset_name = "petstore-auto-mcp-bridge"
-  port           = 8083
-  base_path      = "petstore-auto"
-
-  instance_label = "Petstore MCP (auto-parsed tools)"
-
-  source_apis = [
-    {
-      label        = "petstore-api"
-      upstream_uri = var.petstore_upstream_uri
-      asset_id     = var.petstore_asset_id
-      version      = var.petstore_asset_version
-      group_id     = var.organization_id
-
-      tools = data.anypoint_mcp_tools.petstore.tools
     },
   ]
 }
