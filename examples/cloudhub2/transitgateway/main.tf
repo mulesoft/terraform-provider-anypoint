@@ -15,10 +15,10 @@
 #     (you supply the RAM resource share ID and the owning AWS account ID).
 #   - The route CIDRs must NOT overlap the Private Space CIDR.
 #
-# Authentication: this resource calls the CloudHub 2.0 private-space control
-# plane. A client_credentials Connected App works if it has the
-# "Cloudhub Organization Admin" (admin:cloudhub) scope; otherwise use
-# auth_type = "user" with an equivalently-permissioned user.
+# Authentication: CloudHub 2.0 private-space API. client_credentials works if
+# the Connected App has Cloudhub Organization Admin (admin:cloudhub). This
+# example uses auth_type = "user" so testers can reuse the same tfvars as
+# Access Management (password-grant Connected App + username/password).
 ###############################################################################
 
 terraform {
@@ -30,8 +30,11 @@ terraform {
 }
 
 provider "anypoint" {
+  auth_type     = "user"
   client_id     = var.anypoint_client_id
   client_secret = var.anypoint_client_secret
+  username      = var.anypoint_username
+  password      = var.anypoint_password
   base_url      = var.anypoint_base_url
 }
 

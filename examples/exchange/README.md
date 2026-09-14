@@ -1,37 +1,27 @@
-# Anypoint Exchange Asset Examples
+# Anypoint Exchange asset examples
 
-This directory contains examples for publishing and managing **Exchange assets**
-with the Terraform provider.
+Each subdirectory is its own Terraform root. Apply **one folder at a time**.
 
-## Resources & Data Sources Demonstrated
+| Folder | What it shows |
+|--------|----------------|
+| [custom/](./custom/) | Metadata-only `custom` asset (no file) |
+| [rest_api/](./rest_api/) | OAS REST API (`api_version` required at create) |
+| [types/](./types/) | GraphQL, SOAP, AsyncAPI, HTTP, gRPC, policy, ruleset |
+| [multi_version/](./multi_version/) | Several versions of one REST API via `for_each` |
+| [datasource/](./datasource/) | List REST APIs; singular read is commented until `rest_api/` exists |
+| [import/](./import/) | Commented import template |
 
-- `anypoint_exchange_asset` (resource) — publish/update/delete an Exchange asset
-  version. Supports metadata-only assets, spec-backed assets (RAML/OAS/WSDL/
-  GraphQL/AsyncAPI), documentation pages, categories, custom fields, and external
-  (non-managed) API instances.
-- `anypoint_exchange_asset` (data source) — read a single asset version by GAV.
-- `anypoint_exchange_assets` (data source) — list assets in an org, filtered by
-  type and free-text search.
+`custom/` is separate from `types/` so a first apply can publish one metadata-only asset without also creating every spec-backed type.
 
-## Files
+Shared specs live in [test-assets/](./test-assets/). The AsyncAPI spec is [asyncapi-sample.yaml](./asyncapi-sample.yaml).
 
-- `main.tf` — provider config + a basic metadata-only `custom` asset.
-- `exchange_asset_example.tf` — spec-backed REST / GraphQL / SOAP assets and an
-  endpoint-only HTTP API, each with external instances.
-- `datasource.tf` — single-asset and list data source usage with outputs.
-- `variables.tf` — variable definitions (placeholder defaults; NO real creds).
-- `import.tf` — how to import an existing asset (commented out).
-- `test-assets/` — sample spec files (`petstore.json`, `schema.graphql`,
-  `weather.wsdl`, `events.json`) referenced by the examples.
-
-## Usage
-
-```shell
-cp terraform.tfvars.example terraform.tfvars   # then fill in real values
-terraform init
-terraform plan
-terraform apply
+```bash
+cd rest_api   # or custom, types, multi_version, datasource, import
+cp terraform.tfvars.example terraform.tfvars   # fill in values
+terraform init && terraform plan && terraform apply
 ```
+
+Connected-app **client credentials** is the right grant for Exchange (`edit:exchange` / `view:exchange`).
 
 ## Behavior worth knowing
 
@@ -52,7 +42,7 @@ terraform apply
   | `soap-api` | `wsdl` | `.wsdl` | **yes** |
   | `graphql-api` | `graphql` | `.graphql` | no |
   | `evented-api` | `evented-api` | **`.yaml` or `.zip` only** | **yes** |
-  | `ruleset` | `ruleset` | `.yaml` | no |
+  | `ruleset` | `ruleset` | `.yaml` | no; **`main_file` yes** |
   | `custom` | `custom` | any (file optional) | no |
   | `http-api` / `mcp` / `llm` | — (no file) | — | `http-api` **yes**, others no |
   | `app` | `mule-application` | `.jar` | no |
@@ -73,12 +63,13 @@ terraform apply
   `example` and `connector` fail with `400 INVALID_ASSET_METADATA: "Could not find
   mule-artifact file inside jar file"` unless the jar contains
   `META-INF/mule-artifact/mule-artifact.json` (plus `classloader-model.json` for
-  `example`). Use the artifact your Mule build produces.
+  `example`). Use the artifact your Mule build produces. The connector block in
+  [types/](./types/) is commented for that reason.
 - **`policy` is the multi-file case.** Publish the JSON schema as `file_path`
   (`classifier = "schema"`) and the metadata YAML via `additional_file`
   (`classifier = "metadata"`). The YAML must start with `#%Policy Definition 0.1`,
   its `name:` must exactly equal the resource's `name`, and its `type:` must be an
-  allowed value such as `custom`. See `exchange_asset_example.tf`.
+  allowed value such as `custom`.
 - **mule-plugin family uses `type = "extension"`.** Exchange stores the whole
   mule-plugin family (policies and connectors, `classifier = "mule-plugin"`)
   under the generic `extension` super-type. Declare `type = "extension"` — it is

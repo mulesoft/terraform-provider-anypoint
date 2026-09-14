@@ -50,10 +50,10 @@ resource "anypoint_role" "api_managers" {
 
   # Members are referenced by username (case-insensitive). Use the anypoint_users
   # data source to discover usernames.
-  members = [
-    "jdoe",
-    "asmith",
-  ]
+#   members = [
+#     "jdoe",
+#     "asmith",
+#   ]
 }
 
 # A role group that leaves permissions and members unmanaged (attributes omitted).

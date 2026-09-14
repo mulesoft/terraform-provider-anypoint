@@ -1,6 +1,6 @@
 anypoint_client_id     = "<client_id>"
 anypoint_client_secret = "<client_secret>"
-anypoint_base_url      = "https://stgx.anypoint.mulesoft.com"
+anypoint_base_url      = "https://anypoint.mulesoft.com"
 organization_id        = "<org_id>"
 environment_id         = "<env_id>"
 gateway_id             = "<gateway_id>"

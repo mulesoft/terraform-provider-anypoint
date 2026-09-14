@@ -54,7 +54,7 @@ variable "consumer_endpoint" {
 variable "petstore_asset_id" {
   description = "Exchange asset ID of the petstore REST API"
   type        = string
-  default     = "petstore-rest-api"
+  default     = "tf-demo-rest-api"
 }
 
 variable "petstore_asset_version" {

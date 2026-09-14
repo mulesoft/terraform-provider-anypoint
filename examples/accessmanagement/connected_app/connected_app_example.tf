@@ -71,24 +71,24 @@ resource "anypoint_connected_app" "user_app" {
 
 # Create a connected app with JWT Bearer grant (for service-to-service auth).
 # redirect_uris and client_uri are required for user-behalf apps to be editable in the UI.
-resource "anypoint_connected_app" "jwt_app" {
-  name          = "JWT Bearer Service"
-  grant_types   = ["urn:ietf:params:oauth:grant-type:jwt-bearer"]
-  redirect_uris = ["https://jwt-service.example.com/callback"]
-  client_uri    = "https://jwt-service.example.com"
-  audience      = "internal"
-
-  public_keys = [
-    "-----BEGIN PUBLIC KEY-----\n<your_public_key_here>\n-----END PUBLIC KEY-----"
-  ]
-
-  scopes = [
-    {
-      scope          = "Read Applications"
-      context_params = { org = var.org_id, envId = var.env_id }
-    },
-  ]
-}
+# resource "anypoint_connected_app" "jwt_app" {
+#   name          = "JWT Bearer Service"
+#   grant_types   = ["urn:ietf:params:oauth:grant-type:jwt-bearer"]
+#   redirect_uris = ["https://jwt-service.example.com/callback"]
+#   client_uri    = "https://jwt-service.example.com"
+#   audience      = "internal"
+#
+#   public_keys = [
+#     "-----BEGIN PUBLIC KEY-----\n<your_public_key_here>\n-----END PUBLIC KEY-----"
+#   ]
+#
+#   scopes = [
+#     {
+#       scope          = "Read Applications"
+#       context_params = { org = var.org_id, envId = var.env_id }
+#     },
+#   ]
+# }
 
 # Create a public app that can be used by anyone
 resource "anypoint_connected_app" "public_app" {

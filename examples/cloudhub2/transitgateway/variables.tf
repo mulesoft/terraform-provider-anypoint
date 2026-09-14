@@ -13,6 +13,17 @@ variable "anypoint_client_secret" {
   sensitive   = true
 }
 
+variable "anypoint_username" {
+  description = "Anypoint Platform username (password-grant Connected App)"
+  type        = string
+}
+
+variable "anypoint_password" {
+  description = "Anypoint Platform password"
+  type        = string
+  sensitive   = true
+}
+
 variable "anypoint_base_url" {
   description = "Anypoint Platform base URL"
   type        = string
