@@ -8,8 +8,7 @@ anypoint_username      = "your-anypoint-username"
 anypoint_password      = "your-anypoint-password"
 
 # Anypoint Platform URL
-anypoint_base_url = "https://anypoint.mulesoft.com"  # Production
-# anypoint_base_url = "https://stgx.anypoint.mulesoft.com"  # Staging
+anypoint_base_url = "https://anypoint.mulesoft.com"
 
 # Team Configuration
 org_id = "your-organization-id-here"
