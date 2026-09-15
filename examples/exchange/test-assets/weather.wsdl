@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions name="WeatherService"
+  targetNamespace="http://example.com/weather"
+  xmlns="http://schemas.xmlsoap.org/wsdl/"
+  xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+  xmlns:tns="http://example.com/weather"
+  xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+
+  <types>
+    <xsd:schema targetNamespace="http://example.com/weather">
+      <xsd:element name="GetWeatherRequest">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element name="city" type="xsd:string"/>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+      <xsd:element name="GetWeatherResponse">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element name="temperature" type="xsd:float"/>
+            <xsd:element name="condition" type="xsd:string"/>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+    </xsd:schema>
+  </types>
+
+  <message name="GetWeatherInput">
+    <part name="parameters" element="tns:GetWeatherRequest"/>
+  </message>
+  <message name="GetWeatherOutput">
+    <part name="parameters" element="tns:GetWeatherResponse"/>
+  </message>
+
+  <portType name="WeatherPortType">
+    <operation name="GetWeather">
+      <input message="tns:GetWeatherInput"/>
+      <output message="tns:GetWeatherOutput"/>
+    </operation>
+  </portType>
+
+  <binding name="WeatherBinding" type="tns:WeatherPortType">
+    <soap:binding style="document" transport="http://schemas.xmlsoap.org/soap/http"/>
+    <operation name="GetWeather">
+      <soap:operation soapAction="http://example.com/weather/GetWeather"/>
+      <input><soap:body use="literal"/></input>
+      <output><soap:body use="literal"/></output>
+    </operation>
+  </binding>
+
+  <service name="WeatherService">
+    <port name="WeatherPort" binding="tns:WeatherBinding">
+      <soap:address location="http://example.com/weather"/>
+    </port>
+  </service>
+</definitions>

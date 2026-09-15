@@ -18,11 +18,13 @@ import (
 	dsAgentsTools "github.com/mulesoft/terraform-provider-anypoint/internal/datasource/agentstools"
 	dsApiManagement "github.com/mulesoft/terraform-provider-anypoint/internal/datasource/apimanagement"
 	dsCloudHub2 "github.com/mulesoft/terraform-provider-anypoint/internal/datasource/cloudhub2"
+	dsExchange "github.com/mulesoft/terraform-provider-anypoint/internal/datasource/exchange"
 	dsSecretsManagement "github.com/mulesoft/terraform-provider-anypoint/internal/datasource/secretsmanagement"
 	resourceAccessManagement "github.com/mulesoft/terraform-provider-anypoint/internal/resource/accessmanagement"
 	resourceAgentsTools "github.com/mulesoft/terraform-provider-anypoint/internal/resource/agentstools"
 	resourceApiManagement "github.com/mulesoft/terraform-provider-anypoint/internal/resource/apimanagement"
 	resourceCloudHub2 "github.com/mulesoft/terraform-provider-anypoint/internal/resource/cloudhub2"
+	resourceExchange "github.com/mulesoft/terraform-provider-anypoint/internal/resource/exchange"
 	resourceSecretsManagement "github.com/mulesoft/terraform-provider-anypoint/internal/resource/secretsmanagement"
 )
 
@@ -187,13 +189,33 @@ func (p *AnypointProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
+	// Raw value ("" when unset) — do NOT coerce to "connected_app" here: an UNSET
+	// auth_type must preserve the provider's historical grant inference, whereas an
+	// EXPLICIT "connected_app" is a deliberate opt-out (see below).
+	authType := stringValueOrEnv(config.AuthType, "ANYPOINT_AUTH_TYPE")
+
 	clientConfig := &client.Config{
 		ClientID:     stringValueOrEnv(config.ClientID, "ANYPOINT_CLIENT_ID"),
 		ClientSecret: stringValueOrEnv(config.ClientSecret, "ANYPOINT_CLIENT_SECRET"),
-		Username:     stringValueOrEnv(config.Username, "ANYPOINT_USERNAME"),
-		Password:     stringValueOrEnv(config.Password, "ANYPOINT_PASSWORD"),
 		BaseURL:      stringValueOrEnv(config.BaseURL, "ANYPOINT_BASE_URL"),
 		Timeout:      int(config.Timeout.ValueInt64()),
+		Cache:        client.NewResponseCache(),
+	}
+
+	// Grant selection preserves the provider's long-standing behavior: the client picks
+	// the OAuth grant by Username presence, and Username/Password come from config or
+	// environment. Every user-auth config has always relied on this — including the many
+	// that never set auth_type (the historical default inferred password grant from a
+	// username alone; gating on auth_type=="user" silently flipped those to
+	// client_credentials and broke them — W-23914159 / W-23914162 read-back drift).
+	//
+	// The ONE opt-out is an EXPLICIT auth_type = "connected_app": it forces
+	// client_credentials and ignores any (possibly stray) ANYPOINT_USERNAME in the
+	// environment. Unset auth_type therefore behaves exactly as before (no regression),
+	// while users who want to hard-pin client_credentials can now do so explicitly.
+	if authType != "connected_app" {
+		clientConfig.Username = stringValueOrEnv(config.Username, "ANYPOINT_USERNAME")
+		clientConfig.Password = stringValueOrEnv(config.Password, "ANYPOINT_PASSWORD")
 	}
 
 	resp.DataSourceData = clientConfig
@@ -210,19 +232,26 @@ func (p *AnypointProvider) Resources(_ context.Context) []func() resource.Resour
 		resourceCloudHub2.NewPrivateSpaceAssociationResource,
 		resourceCloudHub2.NewPrivateSpaceUpgradeResource,
 		resourceCloudHub2.NewPrivateSpaceAdvancedConfigResource,
+		resourceCloudHub2.NewTransitGatewayResource,
 		// Access Management resources
 		resourceAccessManagement.NewEnvironmentResource,
 		resourceAccessManagement.NewOrganizationResource,
 		resourceAccessManagement.NewTeamResource,
+		resourceAccessManagement.NewRoleResource,
+		resourceAccessManagement.NewConnectedAppResource,
 		resourceAccessManagement.NewConnectedAppScopesResource,
 		// API Management resources
 		resourceApiManagement.NewManagedOmniGatewayResource,
+		resourceApiManagement.NewSelfManagedGatewayResource,
 		resourceApiManagement.NewAPIInstanceResource,
 		resourceApiManagement.NewAPIPolicyResource,
 		resourceApiManagement.NewSLATierResource,
 		// Agents Tools resources
 		resourceAgentsTools.NewAgentInstanceResource,
 		resourceAgentsTools.NewMCPServerResource,
+		resourceAgentsTools.NewMCPBridgeResource,
+		// Exchange resources
+		resourceExchange.NewAssetResource,
 		// Secrets Management resources
 		resourceSecretsManagement.NewSecretGroupResource,
 		resourceSecretsManagement.NewKeystoreResource,
@@ -246,7 +275,15 @@ func (p *AnypointProvider) DataSources(_ context.Context) []func() datasource.Da
 		dsAccessManagement.NewEnvironmentDataSource,
 		dsAccessManagement.NewOrganizationDataSource,
 		dsAccessManagement.NewTeamDataSource,
+		dsAccessManagement.NewTeamsDataSource,
+		dsAccessManagement.NewRoleDataSource,
+		dsAccessManagement.NewRolesDataSource,
+		dsAccessManagement.NewAvailableRolesDataSource,
+		dsAccessManagement.NewUsersDataSource,
+		dsAccessManagement.NewConnectedAppDataSource,
+		dsAccessManagement.NewConnectedAppsDataSource,
 		dsAccessManagement.NewConnectedAppScopesDataSource,
+		dsAccessManagement.NewScopesCatalogDataSource,
 		// CloudHub 2.0 data sources
 		dsCloudHub2.NewTLSContextDataSource,
 		dsCloudHub2.NewPrivateSpaceAssociationDataSource,
@@ -254,9 +291,14 @@ func (p *AnypointProvider) DataSources(_ context.Context) []func() datasource.Da
 		dsCloudHub2.NewPrivateSpaceConfigDataSource,
 		dsCloudHub2.NewVPNConnectionDataSource,
 		dsCloudHub2.NewPrivateSpaceAdvancedConfigDataSource,
+		dsCloudHub2.NewTransitGatewayDataSource,
+		dsCloudHub2.NewTransitGatewaySingleDataSource,
+		dsCloudHub2.NewPrivateSpacesDataSource,
 		// API Management data sources
 		dsApiManagement.NewManagedOmniGatewayDataSource,
 		dsApiManagement.NewManagedOmniGatewaySingleDataSource,
+		dsApiManagement.NewSelfManagedGatewayDataSource,
+		dsApiManagement.NewSelfManagedGatewaySingleDataSource,
 		dsApiManagement.NewAPIInstanceDataSource,
 		dsApiManagement.NewAPIInstanceSingleDataSource,
 		dsApiManagement.NewAPIUpstreamsDataSource,
@@ -269,6 +311,12 @@ func (p *AnypointProvider) DataSources(_ context.Context) []func() datasource.Da
 		dsAgentsTools.NewAgentInstanceSingleDataSource,
 		dsAgentsTools.NewMCPServerDataSource,
 		dsAgentsTools.NewMCPServerSingleDataSource,
+		dsAgentsTools.NewMCPToolsDataSource,
+		dsAgentsTools.NewMCPBridgeDataSource,
+		dsAgentsTools.NewMCPBridgesDataSource,
+		// Exchange data sources
+		dsExchange.NewAssetDataSource,
+		dsExchange.NewAssetsDataSource,
 		// Secrets Management data sources
 		dsSecretsManagement.NewSecretGroupDataSource,
 		dsSecretsManagement.NewKeystoreDataSource,

@@ -23,8 +23,7 @@ Manages teams in Anypoint Platform with support for:
 
 ```hcl
 resource "anypoint_team" "my_team" {
-  team_name = "My Team"
-  team_type = "internal"
+  name = "My Team"
 }
 ```
 
@@ -32,13 +31,11 @@ resource "anypoint_team" "my_team" {
 
 ```hcl
 resource "anypoint_team" "parent" {
-  team_name = "Parent Team"
-  team_type = "internal"
+  name = "Parent Team"
 }
 
 resource "anypoint_team" "child" {
-  team_name      = "Child Team"
-  team_type      = "internal"
+  name           = "Child Team"
   parent_team_id = anypoint_team.parent.id
 }
 ```

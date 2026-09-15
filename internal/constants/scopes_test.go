@@ -116,6 +116,7 @@ func TestValidScopesMapConsistency(t *testing.T) {
 		ScopeCreateExchange,
 		ScopeCreateExchangeGenAI,
 		ScopeCreateGenerations,
+		ScopeCreateOmniGenAI,
 		ScopeCreateOrgClients,
 		ScopeCreateSubOrgs,
 
@@ -130,6 +131,7 @@ func TestValidScopesMapConsistency(t *testing.T) {
 		ScopeEditAPIQuery,
 		ScopeEditDesignCenter,
 		ScopeEditEnvironment,
+		ScopeEditExchange,
 		ScopeEditFlowDesigner,
 		ScopeEditIdentityProviders,
 		ScopeEditMonitoring,
@@ -139,14 +141,22 @@ func TestValidScopesMapConsistency(t *testing.T) {
 		ScopeEditRPA,
 		ScopeEditVisualizer,
 
+		// Email Scopes
+		ScopeEmail,
+
 		// Execute Scopes
 		ScopeExecuteDocumentActions,
+		ScopeExecutionRPA,
+
+		// Full Scopes
+		ScopeFull,
 
 		// Manage Scopes
 		ScopeManageActivity,
 		ScopeManageAPIAlerts,
 		ScopeManageAPIConfiguration,
 		ScopeManageAPIContracts,
+		ScopeManageAPIContractsAllEnvs,
 		ScopeManageAPIGroups,
 		ScopeManageAPIPolicies,
 		ScopeManageAPIProxies,
@@ -159,6 +169,7 @@ func TestValidScopesMapConsistency(t *testing.T) {
 		ScopeManageApplicationSchedules,
 		ScopeManageApplicationSettings,
 		ScopeManageApplicationTenants,
+		ScopeManageClientApplication,
 		ScopeManageClients,
 		ScopeManageCloudHubNetworking,
 		ScopeManageDataGateway,
@@ -166,6 +177,7 @@ func TestValidScopesMapConsistency(t *testing.T) {
 		ScopeManageExchange,
 		ScopeManageHost,
 		ScopeManageIdentityProviders,
+		ScopeManageOrgClientApplications,
 		ScopeManagePartners,
 		ScopeManagePrivateSpaces,
 		ScopeManageRuntimeFabrics,
@@ -182,11 +194,20 @@ func TestValidScopesMapConsistency(t *testing.T) {
 		// Publish Scopes
 		ScopePublishDestinations,
 
+		// Offline/OpenID/Profile Scopes
+		ScopeOfflineAccess,
+		ScopeOpenID,
+		ScopeOpenIDGoogle,
+		ScopeProfile,
+
 		// Read Scopes
 		ScopeReadActivity,
+		ScopeReadAnypointSalesforceSso,
+		ScopeReadAPIAlerts,
 		ScopeReadAPIConfiguration,
 		ScopeReadAPIContracts,
 		ScopeReadAPIPolicies,
+		ScopeReadAPIPoliciesAllEnvs,
 		ScopeReadAPIQuery,
 		ScopeReadApplicationAlerts,
 		ScopeReadApplications,
@@ -195,7 +216,10 @@ func TestValidScopesMapConsistency(t *testing.T) {
 		ScopeReadCloudHubNetworking,
 		ScopeReadDataGateway,
 		ScopeReadExchange,
+		ScopeReadFull,
 		ScopeReadHostPartners,
+		ScopeReadMavenRepository,
+		ScopeReadOrgClientApplications,
 		ScopeReadOrgClientProviderClients,
 		ScopeReadOrgClientProviders,
 		ScopeReadOrgClients,
@@ -221,6 +245,7 @@ func TestValidScopesMapConsistency(t *testing.T) {
 
 		// View Scopes
 		ScopeViewAccessControls,
+		ScopeViewAllEnvs,
 		ScopeViewAngGovernanceProfiles,
 		ScopeViewClients,
 		ScopeViewDesignCenter,
@@ -245,6 +270,135 @@ func TestValidScopesMapConsistency(t *testing.T) {
 	// Check that ValidScopes doesn't have extra entries
 	if len(ValidScopes) != len(expectedScopes) {
 		t.Errorf("ValidScopes has %d entries, expected %d", len(ValidScopes), len(expectedScopes))
+	}
+}
+
+func TestResolveScopeIdentifier(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		wantScope string
+		wantFound bool
+	}{
+		{
+			name:      "Valid identifier passes through",
+			input:     "read:exchange",
+			wantScope: "read:exchange",
+			wantFound: true,
+		},
+		{
+			name:      "Display name resolves to identifier",
+			input:     "Exchange Viewer",
+			wantScope: "read:exchange",
+			wantFound: true,
+		},
+		{
+			name:      "Cloudhub Organization Admin display name",
+			input:     "Cloudhub Organization Admin",
+			wantScope: "admin:cloudhub",
+			wantFound: true,
+		},
+		{
+			name:      "Audit Log Viewer display name",
+			input:     "Audit Log Viewer",
+			wantScope: "read:audit_logs",
+			wantFound: true,
+		},
+		{
+			name:      "Manage Runtime Fabrics display name",
+			input:     "Manage Runtime Fabrics",
+			wantScope: "manage:runtime_fabrics",
+			wantFound: true,
+		},
+		{
+			name:      "Invalid scope returns false",
+			input:     "Not A Real Scope",
+			wantScope: "Not A Real Scope",
+			wantFound: false,
+		},
+		{
+			name:      "Empty string returns false",
+			input:     "",
+			wantScope: "",
+			wantFound: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, found := ResolveScopeIdentifier(tt.input)
+			if got != tt.wantScope {
+				t.Errorf("ResolveScopeIdentifier(%q) scope = %q, want %q", tt.input, got, tt.wantScope)
+			}
+			if found != tt.wantFound {
+				t.Errorf("ResolveScopeIdentifier(%q) found = %v, want %v", tt.input, found, tt.wantFound)
+			}
+		})
+	}
+}
+
+func TestGetDisplayName(t *testing.T) {
+	tests := []struct {
+		name        string
+		scope       string
+		wantDisplay string
+		wantFound   bool
+	}{
+		{
+			name:        "read:exchange returns Exchange Viewer",
+			scope:       "read:exchange",
+			wantDisplay: "Exchange Viewer",
+			wantFound:   true,
+		},
+		{
+			name:        "admin:cloudhub returns Cloudhub Organization Admin",
+			scope:       "admin:cloudhub",
+			wantDisplay: "Cloudhub Organization Admin",
+			wantFound:   true,
+		},
+		{
+			name:        "invalid scope returns empty",
+			scope:       "invalid:scope",
+			wantDisplay: "",
+			wantFound:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, found := GetDisplayName(tt.scope)
+			if got != tt.wantDisplay {
+				t.Errorf("GetDisplayName(%q) = %q, want %q", tt.scope, got, tt.wantDisplay)
+			}
+			if found != tt.wantFound {
+				t.Errorf("GetDisplayName(%q) found = %v, want %v", tt.scope, found, tt.wantFound)
+			}
+		})
+	}
+}
+
+func TestIsValidScope_AcceptsDisplayNames(t *testing.T) {
+	displayNames := []string{
+		"Exchange Viewer",
+		"Cloudhub Organization Admin",
+		"Audit Log Viewer",
+		"Manage Runtime Fabrics",
+		"Mule Developer Generative AI User",
+	}
+
+	for _, dn := range displayNames {
+		if !IsValidScope(dn) {
+			t.Errorf("IsValidScope(%q) = false, want true (display name should be valid)", dn)
+		}
+	}
+}
+
+func TestDisplayNameToScopeMapConsistency(t *testing.T) {
+	// Every display name in the map must resolve to a valid scope identifier
+	for displayName, scope := range DisplayNameToScope {
+		if !ValidScopes[scope] {
+			t.Errorf("DisplayNameToScope[%q] = %q, but %q is not in ValidScopes", displayName, scope, scope)
+		}
 	}
 }
 

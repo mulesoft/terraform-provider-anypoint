@@ -9,9 +9,9 @@ description: |-
 
 Manages an API instance in Anypoint API Manager. An API instance represents an API specification deployed to a Omni Gateway target with routing rules and upstream backends.
 
--> **Supported gateway type:** This provider currently supports **MuleSoft Managed Omni Gateway** (CloudHub 2.0) only. Self-managed Omni Gateway will be supported in a future release.
+-> **Gateway type:** The provider supports both **MuleSoft Managed Omni Gateway** (CloudHub 2.0, via [`anypoint_managed_omni_gateway`](anypoint_managed_omni_gateway.md)) and **self-managed (connected-mode) Flex/Omni Gateway** that you run on your own infrastructure (via [`anypoint_self_managed_gateway`](anypoint_self_managed_gateway.md)).
 
--> **Connected App:** This resource requires a **standard connected app** (client credentials). An admin connected app is not needed. The connected app must have relevant scopes.
+-> **Authentication:** This resource calls **Gateway Manager / API Manager control-plane APIs** (the gateway lifecycle and/or the `gateway_id` pre-flight). A `client_credentials` Connected App works — grant it **Manage Servers**, **Read Servers**, and **View Organization** (plus API Manager scopes such as **Manage APIs Configuration**, **Manage Policies**, **Deploy API Proxies**, and **Exchange Viewer** for Omni Gateway operations). A Connected App missing these scopes is rejected with `HTTP 401`/`403` before anything is created; the fix is to add the scopes (or use `auth_type = "user"` with a user that has the equivalent permissions). See [Authentication](../index.md#control-plane-resources-need-the-right-scopes-important).
 
 ## Example Usage
 
@@ -287,7 +287,7 @@ The backend assigns `def-456` to the canary entry.
 ### Required
 
 - `environment_id` (String) The environment ID where the API instance will be created.
-- `spec` (Block) The Exchange asset specification backing this API instance. See [below for nested schema](#nestedschema--spec).
+- `spec` (Block) The Exchange asset specification backing this API instance. Required when creating an instance; on import it is populated from the platform, so an imported instance may omit it. See [below for nested schema](#nestedschema--spec).
 
 ### Optional
 
@@ -326,8 +326,9 @@ Required:
 Optional:
 
 - `deployment_type` (String) Deployment type. Valid values: `HY` (hybrid), `CH` (CloudHub), `CH2`, `RF` (Runtime Fabric). Defaults to `HY`.
-- `type` (String) Endpoint protocol type. Valid values: `http`, `rest`, `raml`. Defaults to `http`.
-- `base_path` (String) API base path for the Omni Gateway proxy listener (e.g. `my-api`). The provider constructs the proxy URI as `http://0.0.0.0:8081/<base_path>`.
+- `type` (String) Endpoint protocol type. Valid values: `http`, `rest`, `raml`, `wsdl`, `graphql`, `grpc`, `websocket`. The value must be compatible with the backing Exchange asset's type — e.g. a `graphql` Exchange asset requires endpoint type `graphql`, and a `grpc-api` asset requires `grpc`. Defaults to `http`.
+- `base_path` (String) API base path for the Omni Gateway proxy listener (e.g. `my-api`). The provider constructs the full proxy URI as `http://0.0.0.0:<port>/<base_path>` (see `port` for the listener port). A single gateway can host multiple API instances either on distinct ports or on the same port under distinct, non-root base paths; a base path of `/` is a catch-all that monopolizes the whole port.
+- `port` (Number) Listener port for the Omni/Flex Gateway proxy (the port in the constructed proxy URI `http://0.0.0.0:<port>/<base_path>`). Defaults to `8081` for a newly created instance. Set a distinct port to host multiple API instances on the same gateway without sharing a base path. Omitting it on an existing or imported instance keeps whatever port that instance is already using, so upgrading the provider never moves a live listener.
 - `response_timeout` (Number) Response timeout in milliseconds.
 
 <a id="nestedschema--deployment"></a>

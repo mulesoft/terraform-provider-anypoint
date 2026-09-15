@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package petstore.v1;
+
+option java_multiple_files = true;
+option java_package = "com.example.petstore.v1";
+
+// A minimal gRPC service used to discover how Anypoint Exchange
+// accepts a grpc-api asset publish.
+service PetStore {
+  rpc GetPet (GetPetRequest) returns (Pet) {}
+  rpc ListPets (ListPetsRequest) returns (ListPetsResponse) {}
+}
+
+message GetPetRequest {
+  string id = 1;
+}
+
+message ListPetsRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+}
+
+message Pet {
+  string id = 1;
+  string name = 2;
+  string species = 3;
+}
+
+message ListPetsResponse {
+  repeated Pet pets = 1;
+  string next_page_token = 2;
+}

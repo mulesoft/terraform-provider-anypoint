@@ -1,13 +1,10 @@
 # Anypoint Agents Tools Resources
 
-This directory contains Terraform examples for the new **Agents Tools** category, which includes resources for managing AI agent instances and MCP (Model Context Protocol) servers on the Anypoint Platform.
+This directory contains Terraform examples for the **Agents Tools** category:
 
-## Overview
-
-The Agents Tools category provides two main resources:
-
-1. **Agent Instance** (`anypoint_agent_instance`) - Deploy AI agents that can consume tools and resources from MCP servers
-2. **MCP Server** (`anypoint_mcp_server`) - Deploy MCP servers that expose tools, resources, and prompts to AI agents
+1. **Agent Instance** (`anypoint_agent_instance`) — Deploy AI agent instances that consume tools from MCP servers
+2. **MCP Server** (`anypoint_mcp_server`) — Deploy MCP servers that expose tools, resources, and prompts
+3. **MCP Bridge** (`anypoint_mcp_bridge`) — Turn existing REST APIs into an MCP server without writing MCP code
 
 ## Resources
 
@@ -41,6 +38,17 @@ Creates and manages an MCP (Model Context Protocol) server instance. MCP servers
 
 > **Note:** Only one upstream per route is supported. Multi-upstream weighted routing is not available for MCP servers.
 
+### `anypoint_mcp_bridge`
+
+Turns one or more existing REST APIs into an MCP server without writing MCP code.
+The provider publishes a generated Exchange asset, creates the gateway instance,
+and attaches the MCP transcoding policies.
+
+**Key Features:**
+- Explicit tool declarations, or tools parsed from an Exchange spec (`anypoint_mcp_tools`)
+- Instance settings: label, approval method, consumer endpoint, client provider
+- Optional outbound TLS and per-tool `input_schema` / `http_mapping`
+
 ## Data Sources
 
 ### `anypoint_agent_instances`
@@ -57,24 +65,40 @@ Lists all MCP servers in an environment. Useful for:
 - Inventory management
 - Integration planning
 
+### `anypoint_mcp_bridge` / `anypoint_mcp_bridges`
+
+Look up a single MCP bridge or list all bridges in an environment.
+
+### `anypoint_mcp_tools`
+
+Parses an Exchange REST API spec into a tool list for `anypoint_mcp_bridge`.
+
 ## Examples
 
 ### Basic Examples
 
 1. **[agent_instance/](./agent_instance/)** - Simple agent instance deployments
    - Single agent with basic configuration
-   - A/B testing with weighted routing
-   
+   - Single-upstream routing (`upstream_uri`)
+
 2. **[mcp_server/](./mcp_server/)** - MCP server deployments
    - Atlassian MCP server (Jira/Confluence)
    - Salesforce MCP server
-   - High-availability MCP cluster
+   - Enterprise tools MCP server with MCP / LLM policies
 
-3. **[complete/](./complete/)** - Comprehensive example
+3. **[mcp_bridge/](./mcp_bridge/)** - MCP bridge (REST → MCP)
+   - [explicit/](./mcp_bridge/explicit/) — declare tools by hand
+   - [auto_tools/](./mcp_bridge/auto_tools/) — auto-create tools from an Exchange REST API asset
+
+4. **[complete/](./complete/)** - Comprehensive agent + MCP server example
    - Multiple MCP servers
    - Multiple agent instances
    - Data source queries
    - Complete infrastructure setup
+
+5. **[data-sources/](./data-sources/)** - Read-only lookups
+   - `anypoint_mcp_bridge` / `anypoint_mcp_bridges`
+   - `anypoint_mcp_server` / `anypoint_agent_instance`
 
 ## Quick Start
 
@@ -83,7 +107,7 @@ Lists all MCP servers in an environment. Useful for:
 - Anypoint Platform account
 - Connected App credentials
 - Existing organization and environment
-- Deployed Omni Gateway
+- Deployed Flex or Omni Gateway (managed or self-managed)
 
 ### Deploy an Agent Instance
 
@@ -113,6 +137,20 @@ terraform plan \
 terraform apply
 ```
 
+### Deploy an MCP Bridge
+
+```bash
+cd mcp_bridge/explicit   # or mcp_bridge/auto_tools
+terraform init
+terraform plan \
+  -var="anypoint_client_id=YOUR_CLIENT_ID" \
+  -var="anypoint_client_secret=YOUR_SECRET" \
+  -var="organization_id=YOUR_ORG_ID" \
+  -var="environment_id=YOUR_ENV_ID" \
+  -var="gateway_id=YOUR_GATEWAY_ID"
+terraform apply
+```
+
 ### Deploy Complete Infrastructure
 
 ```bash
@@ -127,37 +165,38 @@ The Agents Tools resources enable this architecture:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                  Anypoint Omni Gateway                      │
+│             Anypoint Flex / Omni Gateway                    │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
-│  ┌─────────────────┐         ┌──────────────────────┐      │
-│  │  Agent          │         │  MCP Servers         │      │
-│  │  Instances      │────────▶│  (Tool Providers)    │      │
-│  │                 │         │                       │      │
-│  │ • Support Agent │         │ • Atlassian MCP      │      │
-│  │ • Sales Agent   │         │ • Salesforce MCP     │      │
-│  │ • Analytics     │         │ • Database MCP       │      │
-│  └─────────────────┘         └──────────────────────┘      │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-         │                                 │
-         ▼                                 ▼
-  ┌─────────────┐                  ┌──────────────┐
-  │  AI Model   │                  │  Enterprise  │
-  │  Backends   │                  │  Systems     │
-  └─────────────┘                  └──────────────┘
+│  ┌──────────────┐    ┌──────────────┐    ┌───────────────┐ │
+│  │ Agent        │    │ MCP Servers  │    │ MCP Bridges   │ │
+│  │ Instances    │───▶│ (MCP specs)  │    │ (REST → MCP)  │ │
+│  │              │    │              │    │               │ │
+│  │ • Support    │    │ • Atlassian  │    │ • Petstore    │ │
+│  │ • Sales      │    │ • Salesforce │    │ • Commerce    │ │
+│  └──────────────┘    └──────────────┘    └───────┬───────┘ │
+│                                                   │         │
+└───────────────────────────────────────────────────┼─────────┘
+         │                    │                     │
+         ▼                    ▼                     ▼
+  ┌─────────────┐      ┌──────────────┐    ┌──────────────┐
+  │  AI Model   │      │  MCP Server  │    │  REST APIs   │
+  │  Backends   │      │  Backends    │    │  (existing)  │
+  └─────────────┘      └──────────────┘    └──────────────┘
 ```
 
 ## Key Concepts
 
-### Agent Instance vs MCP Server
+### Agent Instance vs MCP Server vs MCP Bridge
 
 - **Agent Instance**: The AI agent itself that makes decisions and executes tasks
-- **MCP Server**: The tool provider that agents can call to access enterprise systems
+- **MCP Server**: An MCP tool provider you deploy from an existing MCP server Exchange asset
+- **MCP Bridge**: Turns one or more existing REST APIs into an MCP server without writing MCP code
 
 Think of it like:
 - Agent Instance = The brain (AI model)
-- MCP Server = The hands (tools to interact with systems)
+- MCP Server = Hands you already built as MCP
+- MCP Bridge = Hands generated from REST APIs you already have
 
 ### Routing
 
@@ -205,8 +244,8 @@ This allows:
 ## Best Practices
 
 1. **Resource Naming**: Use descriptive labels that indicate the agent's purpose
-2. **Weighted Routing**: Start with conservative weights (90/10) for A/B tests
-3. **Dependencies**: Use `depends_on` to ensure MCP servers deploy before agents
+2. **Routing**: Prefer `upstream_uri` for a single backend; use multiple routes (not multiple upstreams) when you need read/write separation
+3. **Dependencies**: Use `depends_on` to ensure MCP servers or bridges deploy before agents that call them
 4. **Environment Promotion**: Test in sandbox before promoting to production
 5. **Monitoring**: Add alerts and policies to track agent performance
 
