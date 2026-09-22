@@ -13,7 +13,7 @@ A comprehensive Terraform provider for managing your Anypoint Platform resources
 - **Improve Collaboration:** Use version control to manage your infrastructure, making it easier for teams to collaborate and review changes
 - **Increase Agility:** Spin up or tear down entire environments in minutes, not hours, allowing you to innovate faster
 - **Enhance Governance:** Enforce standards and policies across all your environments by defining them in code
-- **Complete Coverage:** 28 base resources + 96 typed API policy resources across 6 modules supporting the full Anypoint Platform lifecycle
+- **Complete Coverage:** 29 base resources + 96 typed API policy resources across 6 modules supporting the full Anypoint Platform lifecycle
 
 ## Table of Contents
 
@@ -97,14 +97,14 @@ provider "anypoint" {
 
 ## Resources Overview
 
-The provider supports **28 base resources** plus **96 typed API policy resources** across **6 main categories**:
+The provider supports **29 base resources** plus **96 typed API policy resources** across **6 main categories**:
 
 | Category | Resources | Description |
 |----------|-----------|-------------|
 | **Access Management** | 6 | Organizations, environments, teams, role groups, and connected apps (roles, permissions, members, and scopes managed inline) |
 | **API Management** | 5 + 96 typed policies | API instances, generic policy, SLA tiers, managed + self-managed Omni Gateways, and dedicated per-policy-type resources |
 | **CloudHub 2.0** | 7 | Private spaces, VPNs, TLS contexts, associations, upgrades, and Transit Gateway connections |
-| **Agents & Tools** | 2 | Agent instances and MCP servers |
+| **Agents & Tools** | 3 | Agent instances, MCP servers, and MCP bridges |
 | **Exchange** | 1 | Exchange assets (metadata, spec files, docs pages, categories, custom fields, and external instances) |
 | **Secrets Management** | 7 | Secret groups, certificates, keystores, truststores, TLS contexts, and shared secrets |
 
@@ -266,6 +266,9 @@ In addition, each known policy type has a dedicated typed resource of the form `
 |----------|-------------|
 | `anypoint_agent_instance` | Deploy and manage agent instances |
 | `anypoint_mcp_server` | Deploy and manage MCP servers |
+| `anypoint_mcp_bridge` | Turn existing REST APIs into an MCP server without writing MCP code |
+
+**Example:** [Agents Tools Examples](./examples/agentstools)
 
 ###  Exchange Resources
 
@@ -335,6 +338,9 @@ The provider includes data sources for reading existing resources:
 |-------------|-------------|
 | `anypoint_agent_instances` | List agent instances |
 | `anypoint_mcp_servers` | List MCP servers |
+| `anypoint_mcp_bridge` | Read a single MCP bridge by ID |
+| `anypoint_mcp_bridges` | List MCP bridges in an environment |
+| `anypoint_mcp_tools` | Parse an Exchange REST API spec into tools for `anypoint_mcp_bridge` |
 
 ### Exchange
 | Data Source | Description |
@@ -362,6 +368,8 @@ Comprehensive examples are available in the [`examples/`](./examples) directory:
 - **[Access Management](./examples/accessmanagement)** - Teams, organizations, and connected app scopes
 - **[API Management](./examples/apimanagement)** - API instances, policies, and Omni Gateways
 - **[CloudHub 2.0](./examples/cloudhub2)** - Private spaces, VPNs, and TLS contexts
+- **[Agents & Tools](./examples/agentstools)** - Agent instances, MCP servers, and MCP bridges
+- **[Exchange](./examples/exchange)** - Exchange assets (custom, REST, types, import)
 - **[Secrets Management](./examples/secretsmanagement)** - Certificates and secure storage
 
 ### Complete End-to-End Examples
