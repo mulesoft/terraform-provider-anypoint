@@ -114,3 +114,134 @@ func TestLookupPolicy_AllKnown(t *testing.T) {
 		}
 	}
 }
+
+// TestLookupPolicy_GraphQLAndWebSocket asserts the GraphQL Gateway and
+// WebSockets & Streaming policies are registered with the coordinates pulled
+// from Exchange (group 68ef9520-…, version 1.0.0, inbound). Regression guard so
+// these five policy_type aliases cannot be silently dropped.
+func TestLookupPolicy_GraphQLAndWebSocket(t *testing.T) {
+	const muleGroup = "68ef9520-24e9-4cf2-b2f5-620025690913"
+	want := []string{
+		"graphql-schema-validation",
+		"graphql-operation-limits",
+		"graphql-introspection-control",
+		"graphql-static-query-complexity",
+		"websocket-connection-limit",
+	}
+	for _, pt := range want {
+		info, ok := LookupPolicy(pt)
+		if !ok {
+			t.Errorf("LookupPolicy(%q) returned false, want registered", pt)
+			continue
+		}
+		if info.GroupID != muleGroup {
+			t.Errorf("LookupPolicy(%q).GroupID = %q, want %q", pt, info.GroupID, muleGroup)
+		}
+		if info.AssetID != pt {
+			t.Errorf("LookupPolicy(%q).AssetID = %q, want %q", pt, info.AssetID, pt)
+		}
+		if info.DefaultVersion != "1.0.0" {
+			t.Errorf("LookupPolicy(%q).DefaultVersion = %q, want 1.0.0", pt, info.DefaultVersion)
+		}
+		if !info.InboundPolicy {
+			t.Errorf("LookupPolicy(%q) should be an inbound policy", pt)
+		}
+		if info.OutboundPolicy {
+			t.Errorf("LookupPolicy(%q) should not be an outbound policy", pt)
+		}
+	}
+}
+
+// TestValidatePolicyConfiguration_StaticQueryComplexity verifies the one field
+// that Exchange marks required (maximumComplexity) is enforced, and that an
+// unknown field is rejected — the config schema wiring for the new policies.
+func TestValidatePolicyConfiguration_StaticQueryComplexity(t *testing.T) {
+	// Missing the required maximumComplexity → one error.
+	errs := ValidatePolicyConfiguration("graphql-static-query-complexity", map[string]interface{}{})
+	if len(errs) == 0 {
+		t.Error("expected a validation error when maximumComplexity is missing, got none")
+	}
+
+	// Present + only-known fields → no error.
+	errs = ValidatePolicyConfiguration("graphql-static-query-complexity", map[string]interface{}{
+		"maximumComplexity": 100,
+	})
+	if len(errs) != 0 {
+		t.Errorf("expected no validation errors, got %v", errs)
+	}
+
+	// Unknown field → rejected.
+	errs = ValidatePolicyConfiguration("graphql-static-query-complexity", map[string]interface{}{
+		"maximumComplexity": 100,
+		"bogusField":        true,
+	})
+	if len(errs) == 0 {
+		t.Error("expected a validation error for an unknown field, got none")
+	}
+}
+
+// TestApplyPolicyDefaults_WebSocketConnectionLimit checks the int default is
+// injected when the user omits it.
+func TestApplyPolicyDefaults_WebSocketConnectionLimit(t *testing.T) {
+	config := map[string]interface{}{}
+	ApplyPolicyDefaults("websocket-connection-limit", config)
+	if config["maximumConnections"] != 100 {
+		t.Errorf("maximumConnections default = %v, want 100", config["maximumConnections"])
+	}
+}
+
+// TestApplyPolicyDefaults_CredentialInjectionOverwrite is a regression guard for
+// the credential-injection outbound family. The live Platform schema marks
+// `overwrite` as a REQUIRED property and returns HTTP 400
+// ("must have required property 'overwrite'") if a create/update payload omits
+// it — even though the provider exposes it as an optional field. Because
+// ApplyPolicyDefaults runs on both the Create and Update paths (see
+// apipolicy_known.go), a user who leaves `overwrite` unset still gets it sent as
+// its schema default (false), so the typed resource never triggers that 400.
+// This test locks that behaviour in for the whole credential-injection family.
+func TestApplyPolicyDefaults_CredentialInjectionOverwrite(t *testing.T) {
+	t.Run("basic-auth injects overwrite=false when omitted", func(t *testing.T) {
+		config := map[string]interface{}{
+			"username": "svc-user",
+			"password": "svc-pass",
+		}
+		ApplyPolicyDefaults("credential-injection-basic-auth", config)
+		got, ok := config["overwrite"]
+		if !ok {
+			t.Fatal("overwrite was not injected; Platform would return HTTP 400 'must have required property overwrite'")
+		}
+		if got != false {
+			t.Errorf("overwrite default = %v, want false", got)
+		}
+	})
+
+	t.Run("oauth2 injects overwrite + sibling defaults when omitted", func(t *testing.T) {
+		config := map[string]interface{}{
+			"oauthService": "svc",
+			"clientId":     "cid",
+			"clientSecret": "secret",
+		}
+		ApplyPolicyDefaults("credential-injection-oauth2", config)
+		if got, ok := config["overwrite"]; !ok || got != false {
+			t.Errorf("overwrite = %v (present=%v), want false", got, ok)
+		}
+		if got, ok := config["allowRequestWithoutCredential"]; !ok || got != false {
+			t.Errorf("allowRequestWithoutCredential = %v (present=%v), want false", got, ok)
+		}
+		if got, ok := config["tokenFetchTimeout"]; !ok || got != 10000 {
+			t.Errorf("tokenFetchTimeout = %v (present=%v), want 10000", got, ok)
+		}
+	})
+
+	t.Run("explicit overwrite=true is preserved, not clobbered by default", func(t *testing.T) {
+		config := map[string]interface{}{
+			"username":  "svc-user",
+			"password":  "svc-pass",
+			"overwrite": true,
+		}
+		ApplyPolicyDefaults("credential-injection-basic-auth", config)
+		if config["overwrite"] != true {
+			t.Errorf("overwrite = %v, want true (user value must win over default)", config["overwrite"])
+		}
+	})
+}

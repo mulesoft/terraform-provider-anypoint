@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	anypointclient "github.com/mulesoft/terraform-provider-anypoint/internal/client"
@@ -568,4 +569,167 @@ func TestOBOSchema_RequiredFieldsStillRequired(t *testing.T) {
 			t.Errorf("OBO policy field %q should still be required", field)
 		}
 	}
+}
+
+// TestKnownPolicyResource_Read_GraphQLStaticQueryComplexity_LiveShape pins the
+// exact wire shape returned by a live single-policy detail GET, captured from a
+// real apply of anypoint_api_policy_graphql_static_query_complexity (policy
+// 8781305 on instance 21054103, 2026-07-27). It is the hermetic, CI-runnable
+// counterpart to that live probe.
+//
+// The detail endpoint (unlike the LIST endpoint) returns:
+//   - assetVersion at the TOP LEVEL ("1.0.0"), with template:null and
+//     implementationAsset populated. The single-GET path (doGetPolicy) decodes
+//     straight into APIPolicy, which has ONLY a top-level `assetVersion` tag and
+//     no `template` fallback (that fallback lives only in decodePolicyListEntry
+//     for the LIST path). So this pins the contract that the detail API delivers
+//     the version at the top level — if it ever moved to `template` only,
+//     asset_version would silently blank and cause a perpetual diff. (Verified:
+//     mutating the mock to drop the top-level field fails this test.)
+//   - configurationData with camelCase keys, which flattenConfiguration must map
+//     back to the snake_case attributes users write in HCL
+//     (maximumComplexity→maximum_complexity, rejectUnboundedLists→
+//     reject_unbounded_lists, etc.), preserving int/bool typing.
+//
+// Prior-state configuration is null so the mergeConfigFromState path is skipped
+// and this asserts the pure flatten result. (Write-only field preservation is
+// covered separately by TestKnownPolicyResource_mergeConfigFromState.)
+func TestKnownPolicyResource_Read_GraphQLStaticQueryComplexity_LiveShape(t *testing.T) {
+	basePath := "/apimanager/api/v1/organizations/test-org-id/environments/test-env-id/apis/21054103/policies/8781305"
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		basePath: func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"id":               8781305,
+				"apiId":            21054103,
+				"policyTemplateId": "449875",
+				"groupId":          "68ef9520-24e9-4cf2-b2f5-620025690913",
+				"assetId":          "graphql-static-query-complexity",
+				"assetVersion":     "1.0.0", // top-level; template is null below
+				"label":            nil,
+				"order":            1,
+				"disabled":         false,
+				"template":         nil,
+				"implementationAsset": map[string]interface{}{
+					"assetId": "graphql-static-query-complexity-flex",
+					"groupId": "68ef9520-24e9-4cf2-b2f5-620025690913",
+					"version": "1.0.0",
+				},
+				"configurationData": map[string]interface{}{
+					"maximumComplexity":    1000,
+					"defaultFieldCost":     1,
+					"blockOperation":       true,
+					"rejectUnboundedLists": true,
+				},
+			})
+		},
+	}
+	server := testutil.MockHTTPServer(t, handlers)
+
+	fn := NewKnownPolicyResourceFunc("graphql-static-query-complexity")
+	res := fn().(*KnownPolicyResource)
+	res.client = &apimgmtclient.APIPolicyClient{
+		AnypointClient: &anypointclient.AnypointClient{
+			BaseURL:    server.URL,
+			Token:      "mock-token",
+			HTTPClient: &http.Client{},
+			OrgID:      "test-org-id",
+		},
+	}
+
+	ctx := context.Background()
+	schemaResp := &resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, schemaResp)
+	stateType := schemaResp.Schema.Type().TerraformType(ctx)
+	objType := stateType.(tftypes.Object)
+	upstreamIDsElemType := objType.AttributeTypes["upstream_ids"].(tftypes.List).ElementType
+	configObjType := objType.AttributeTypes["configuration"].(tftypes.Object)
+
+	priorStateRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
+		"id":                 tftypes.NewValue(tftypes.String, "8781305"),
+		"organization_id":    tftypes.NewValue(tftypes.String, "test-org-id"),
+		"environment_id":     tftypes.NewValue(tftypes.String, "test-env-id"),
+		"api_instance_id":    tftypes.NewValue(tftypes.String, "21054103"),
+		"label":              tftypes.NewValue(tftypes.String, nil),
+		"configuration":      tftypes.NewValue(configObjType, nil),
+		"order":              tftypes.NewValue(tftypes.Number, nil),
+		"disabled":           tftypes.NewValue(tftypes.Bool, false),
+		"policy_template_id": tftypes.NewValue(tftypes.String, nil),
+		"asset_version":      tftypes.NewValue(tftypes.String, nil),
+		"upstream_ids":       tftypes.NewValue(tftypes.List{ElementType: upstreamIDsElemType}, nil),
+		"pointcut_data":      tftypes.NewValue(tftypes.String, nil),
+	})
+
+	req := resource.ReadRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
+	resp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
+	res.Read(ctx, req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("Read() reported errors: %v", resp.Diagnostics.Errors())
+	}
+
+	var got KnownPolicyResourceModel
+	if diags := resp.State.Get(ctx, &got); diags.HasError() {
+		t.Fatalf("State.Get errors: %v", diags.Errors())
+	}
+
+	// Top-level assetVersion must survive the direct decode (template was null).
+	if got.AssetVersion.ValueString() != "1.0.0" {
+		t.Errorf("asset_version = %q, want 1.0.0 (from top-level assetVersion)", got.AssetVersion.ValueString())
+	}
+	if got.PolicyTemplateID.ValueString() != "449875" {
+		t.Errorf("policy_template_id = %q, want 449875", got.PolicyTemplateID.ValueString())
+	}
+	if got.APIInstanceID.ValueString() != "21054103" {
+		t.Errorf("api_instance_id = %q, want 21054103", got.APIInstanceID.ValueString())
+	}
+
+	if got.Configuration.IsNull() || got.Configuration.IsUnknown() {
+		t.Fatalf("configuration should be populated, got %v", got.Configuration)
+	}
+	cfg := got.Configuration.Attributes()
+
+	// camelCase → snake_case, with int/bool typing preserved.
+	wantInt := func(attr string, want float64) {
+		t.Helper()
+		n, ok := cfg[attr].(types.Number)
+		if !ok || n.IsNull() {
+			t.Errorf("configuration.%s missing/null, want %v", attr, want)
+			return
+		}
+		if f, _ := n.ValueBigFloat().Float64(); f != want {
+			t.Errorf("configuration.%s = %v, want %v", attr, f, want)
+		}
+	}
+	wantBool := func(attr string, want bool) {
+		t.Helper()
+		b, ok := cfg[attr].(types.Bool)
+		if !ok || b.IsNull() {
+			t.Errorf("configuration.%s missing/null, want %v", attr, want)
+			return
+		}
+		if b.ValueBool() != want {
+			t.Errorf("configuration.%s = %v, want %v", attr, b.ValueBool(), want)
+		}
+	}
+	wantNullString := func(attr string) {
+		t.Helper()
+		s, ok := cfg[attr].(types.String)
+		if !ok {
+			t.Errorf("configuration.%s not a string attr", attr)
+			return
+		}
+		if !s.IsNull() {
+			t.Errorf("configuration.%s = %q, want null (field absent from API response)", attr, s.ValueString())
+		}
+	}
+
+	wantInt("maximum_complexity", 1000)
+	wantInt("default_field_cost", 1)
+	wantBool("block_operation", true)
+	wantBool("reject_unbounded_lists", true)
+	// Optional strings not returned by the API must flatten to null (no spurious diff).
+	wantNullString("directive_name")
+	wantNullString("value_argument")
+	wantNullString("multipliers_argument")
 }

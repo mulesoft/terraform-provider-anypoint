@@ -27,6 +27,7 @@ type APIInstanceDataSourceModel struct {
 	ID             types.String           `tfsdk:"id"`
 	OrganizationID types.String           `tfsdk:"organization_id"`
 	EnvironmentID  types.String           `tfsdk:"environment_id"`
+	GatewayID      types.String           `tfsdk:"gateway_id"`
 	Instances      []APIInstanceItemModel `tfsdk:"instances"`
 }
 
@@ -40,6 +41,7 @@ type APIInstanceItemModel struct {
 	InstanceLabel             types.String `tfsdk:"instance_label"`
 	Status                    types.String `tfsdk:"status"`
 	EndpointURI               types.String `tfsdk:"endpoint_uri"`
+	GatewayID                 types.String `tfsdk:"gateway_id"`
 	AutodiscoveryInstanceName types.String `tfsdk:"autodiscovery_instance_name"`
 }
 
@@ -67,6 +69,12 @@ func (d *APIInstanceDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 			"environment_id": schema.StringAttribute{
 				Description: "The environment ID to list API instances from.",
 				Required:    true,
+			},
+			"gateway_id": schema.StringAttribute{
+				Description: "Optional filter: only return API instances deployed to the gateway (target) with this ID. " +
+					"Matches the instance deployment's target ID (e.g. a self-managed gateway ID). " +
+					"When omitted, all instances in the environment are returned.",
+				Optional: true,
 			},
 			"instances": schema.ListNestedAttribute{
 				Description: "List of API instances.",
@@ -108,6 +116,11 @@ func (d *APIInstanceDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 						"endpoint_uri": schema.StringAttribute{
 							Description: "The endpoint URI for the API instance.",
 							Computed:    true,
+						},
+						"gateway_id": schema.StringAttribute{
+							Description: "The ID of the gateway (deployment target) this API instance is deployed to, if any. " +
+								"Null for instances without a gateway deployment (e.g. CloudHub/basic-endpoint instances).",
+							Computed: true,
 						},
 						"autodiscovery_instance_name": schema.StringAttribute{
 							Description: "The autodiscovery instance name.",
@@ -174,7 +187,17 @@ func (d *APIInstanceDataSource) Read(ctx context.Context, req datasource.ReadReq
 	data.OrganizationID = types.StringValue(orgID)
 	data.Instances = make([]APIInstanceItemModel, 0, len(instances))
 
+	// Optional server-independent filter: keep only instances deployed to the
+	// requested gateway (deployment target). The list endpoint already returns
+	// every instance's deployment.targetId, so this needs no extra API calls.
+	gatewayFilter := data.GatewayID.ValueString()
+
 	for _, inst := range instances {
+		if gatewayFilter != "" {
+			if inst.Deployment == nil || inst.Deployment.TargetID != gatewayFilter {
+				continue
+			}
+		}
 		data.Instances = append(data.Instances, mapAPIInstanceToItemModel(inst))
 	}
 
@@ -200,6 +223,11 @@ func mapAPIInstanceToItemModel(inst apimanagement.APIInstance) APIInstanceItemMo
 		instanceLabel = types.StringValue(inst.InstanceLabel)
 	}
 
+	gatewayID := types.StringNull()
+	if inst.Deployment != nil && inst.Deployment.TargetID != "" {
+		gatewayID = types.StringValue(inst.Deployment.TargetID)
+	}
+
 	return APIInstanceItemModel{
 		ID:                        types.StringValue(strconv.Itoa(inst.ID)),
 		AssetID:                   types.StringValue(inst.AssetID),
@@ -210,6 +238,7 @@ func mapAPIInstanceToItemModel(inst apimanagement.APIInstance) APIInstanceItemMo
 		InstanceLabel:             instanceLabel,
 		Status:                    types.StringValue(inst.Status),
 		EndpointURI:               endpointURI,
+		GatewayID:                 gatewayID,
 		AutodiscoveryInstanceName: autodiscovery,
 	}
 }

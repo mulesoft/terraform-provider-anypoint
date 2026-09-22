@@ -1,0 +1,9 @@
+#%Policy Definition 0.1
+name: Example Custom Policy
+description: Minimal policy metadata for a live classifier probe
+category: Custom
+type: custom
+resourceLevelSupported: true
+standalone: true
+requiredCharacteristics: []
+providedCharacteristics: []

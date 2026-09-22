@@ -3,7 +3,9 @@ package apimanagement
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -52,6 +54,7 @@ var (
 		"deployment_type":  types.StringType,
 		"type":             types.StringType,
 		"base_path":        types.StringType,
+		"port":             types.Int64Type,
 		"response_timeout": types.Int64Type,
 	}
 	dsDeploymentAttrTypes = map[string]attr.Type{
@@ -172,6 +175,10 @@ func (d *APIInstanceSingleDataSource) Schema(_ context.Context, _ datasource.Sch
 					"base_path": schema.StringAttribute{
 						Computed:    true,
 						Description: "API base path for the Omni Gateway proxy listener (extracted from proxyUri).",
+					},
+					"port": schema.Int64Attribute{
+						Computed:    true,
+						Description: "Listener port for the Omni/Flex Gateway proxy (extracted from proxyUri; 8081 when unspecified).",
 					},
 					"response_timeout": schema.Int64Attribute{
 						Computed:    true,
@@ -364,8 +371,11 @@ func (d *APIInstanceSingleDataSource) Read(ctx context.Context, req datasource.R
 	// endpoint
 	if instance.Endpoint != nil {
 		basePath := types.StringNull()
+		port := types.Int64Value(defaultProxyPort)
 		if instance.Endpoint.ProxyURI != nil && *instance.Endpoint.ProxyURI != "" {
-			basePath = types.StringValue(extractBasePath(*instance.Endpoint.ProxyURI))
+			bp, p := parseProxyURI(*instance.Endpoint.ProxyURI)
+			basePath = types.StringValue(bp)
+			port = types.Int64Value(p)
 		}
 		responseTimeout := types.Int64Null()
 		if instance.Endpoint.ResponseTimeout != nil {
@@ -375,6 +385,7 @@ func (d *APIInstanceSingleDataSource) Read(ctx context.Context, req datasource.R
 			"deployment_type":  types.StringValue(instance.Endpoint.DeploymentType),
 			"type":             types.StringValue(instance.Endpoint.Type),
 			"base_path":        basePath,
+			"port":             port,
 			"response_timeout": responseTimeout,
 		})
 		data.Endpoint = endpointObj
@@ -477,13 +488,28 @@ func (d *APIInstanceSingleDataSource) Read(ctx context.Context, req datasource.R
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-// extractBasePath removes the "http://0.0.0.0:8081/" prefix from the proxyUri
-func extractBasePath(proxyURI string) string {
-	const prefix = "http://0.0.0.0:8081/"
-	if len(proxyURI) > len(prefix) {
-		return proxyURI[len(prefix):]
+// defaultProxyPort is the Omni/Flex Gateway listener port assumed when a proxyUri
+// does not carry an explicit port. Mirrors the resource-side default.
+const defaultProxyPort int64 = 8081
+
+// parseProxyURI recovers the base_path and listener port from a proxyUri the
+// platform returns (e.g. "http://0.0.0.0:8082/my-api"). It parses generically so
+// instances on any port — not just the legacy hardcoded 8081 — surface a correct
+// base_path (the old fixed-prefix strip corrupted non-8081 URIs). base_path is
+// returned with no leading slash; port falls back to 8081 when absent/unparseable.
+func parseProxyURI(proxyURI string) (basePath string, port int64) {
+	port = defaultProxyPort
+	u, err := url.Parse(proxyURI)
+	if err != nil {
+		return strings.TrimPrefix(proxyURI, "http://0.0.0.0:8081/"), port
 	}
-	return ""
+	basePath = strings.TrimPrefix(u.Path, "/")
+	if p := u.Port(); p != "" {
+		if pi, e := strconv.ParseInt(p, 10, 64); e == nil {
+			port = pi
+		}
+	}
+	return basePath, port
 }
 
 // technologyFromAPI converts API technology names to user-facing names

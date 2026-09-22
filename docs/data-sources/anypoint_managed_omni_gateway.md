@@ -43,7 +43,7 @@ output "gateway_public_url" {
 - `runtime_version` (String) The runtime version of the gateway.
 - `release_channel` (String) The release channel (`lts` or `edge`).
 - `size` (String) The gateway size (`small`, `large`).
-- `status` (String) The current status of the gateway (e.g., `APPLIED`).
+- `status` (String) The current status of the gateway (e.g., `APPLYING` while provisioning, `RUNNING` once ready).
 - `desired_status` (String) The desired status of the gateway (e.g., `STARTED`).
 - `status_message` (String) Additional status message from the gateway.
 - `date_created` (String) Timestamp when the gateway was created.

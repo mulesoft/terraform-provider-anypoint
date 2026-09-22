@@ -1,0 +1,15 @@
+# Copy this file to terraform.tfvars and fill in real values:
+#   cp terraform.tfvars.example terraform.tfvars
+#
+# This example uses auth_type = "user". You need a Connected App that
+# allows the password grant, plus your Anypoint username and password.
+# A client_credentials-only app (the kind used for Exchange / MCP) will 401.
+
+anypoint_client_id     = "<client_id>"
+anypoint_client_secret = "<client_secret>"
+anypoint_username      = "<username>"
+anypoint_password      = "<password>"
+anypoint_base_url      = "https://anypoint.mulesoft.com"
+
+org_id = "<org_id>"
+env_id = "<env_id>"
