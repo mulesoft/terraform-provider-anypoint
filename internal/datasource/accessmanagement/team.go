@@ -119,6 +119,7 @@ func (d *TeamDataSource) Configure(_ context.Context, req datasource.ConfigureRe
 		Username:     config.Username,
 		Password:     config.Password,
 		Timeout:      config.Timeout,
+		UserAgent:    config.UserAgent,
 	}
 
 	// Create the team client

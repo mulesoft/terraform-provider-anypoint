@@ -28,6 +28,10 @@ type Config struct {
 	Username     string
 	Password     string
 	Timeout      int
+	// UserAgent is stamped on every outbound request so the Anypoint backend can
+	// attribute API traffic to this provider and its version. May be empty (e.g.
+	// in unit tests), in which case no User-Agent override is applied.
+	UserAgent string
 	// Token and OrgID are populated on the first NewAnypointClient call and
 	// reused by all subsequent calls within the same terraform apply, so that
 	// N resources sharing this Config do not each make a parallel auth request.
@@ -50,6 +54,7 @@ func (c *Config) ToUserClientConfig() *UserClientConfig {
 		Username:     c.Username,
 		Password:     c.Password,
 		Timeout:      c.Timeout,
+		UserAgent:    c.UserAgent,
 		Token:        token,
 		OrgID:        orgID,
 	}
@@ -83,6 +88,9 @@ func NewAnypointClient(config *Config) (*AnypointClient, error) {
 			Timeout: timeout,
 		},
 	}
+	// Stamp the provider User-Agent on every request this client makes,
+	// including the authentication and getMe calls below.
+	withUserAgent(c.HTTPClient, config.UserAgent)
 
 	config.mu.Lock()
 	if config.Token != "" {
