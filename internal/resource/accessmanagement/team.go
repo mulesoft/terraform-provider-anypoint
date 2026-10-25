@@ -117,6 +117,7 @@ func (r *TeamResource) Configure(_ context.Context, req resource.ConfigureReques
 		Username:     config.Username,
 		Password:     config.Password,
 		Timeout:      config.Timeout,
+		UserAgent:    config.UserAgent,
 	}
 
 	teamClient, err := accessmanagement.NewTeamClient(userConfig)

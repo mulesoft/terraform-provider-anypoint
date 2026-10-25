@@ -327,6 +327,7 @@ func (d *OrganizationDataSource) Configure(_ context.Context, req datasource.Con
 		ClientSecret: config.ClientSecret,
 		BaseURL:      config.BaseURL,
 		Timeout:      config.Timeout,
+		UserAgent:    config.UserAgent,
 		Username:     config.Username,
 		Password:     config.Password,
 	}

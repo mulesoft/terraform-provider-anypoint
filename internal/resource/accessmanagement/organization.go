@@ -962,6 +962,7 @@ func (r *OrganizationResource) Configure(_ context.Context, req resource.Configu
 		ClientSecret: config.ClientSecret,
 		BaseURL:      config.BaseURL,
 		Timeout:      config.Timeout,
+		UserAgent:    config.UserAgent,
 		Username:     config.Username,
 		Password:     config.Password,
 	}

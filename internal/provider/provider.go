@@ -194,6 +194,9 @@ func (p *AnypointProvider) Configure(ctx context.Context, req provider.Configure
 		Password:     stringValueOrEnv(config.Password, "ANYPOINT_PASSWORD"),
 		BaseURL:      stringValueOrEnv(config.BaseURL, "ANYPOINT_BASE_URL"),
 		Timeout:      int(config.Timeout.ValueInt64()),
+		// Identify this provider (and the Terraform core driving it) on every
+		// Anypoint API request so backend traffic can be attributed to it.
+		UserAgent: client.UserAgent(p.version, req.TerraformVersion),
 	}
 
 	resp.DataSourceData = clientConfig

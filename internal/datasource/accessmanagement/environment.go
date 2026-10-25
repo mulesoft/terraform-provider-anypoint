@@ -115,6 +115,7 @@ func (d *EnvironmentDataSource) Configure(_ context.Context, req datasource.Conf
 		Username:     config.Username,
 		Password:     config.Password,
 		Timeout:      config.Timeout,
+		UserAgent:    config.UserAgent,
 	}
 
 	// Create the environment client

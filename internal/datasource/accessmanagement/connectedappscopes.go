@@ -105,6 +105,7 @@ func (d *ConnectedAppScopesDataSource) Configure(_ context.Context, req datasour
 		Username:     config.Username,
 		Password:     config.Password,
 		Timeout:      config.Timeout,
+		UserAgent:    config.UserAgent,
 	}
 
 	// Create the connected app scopes client
