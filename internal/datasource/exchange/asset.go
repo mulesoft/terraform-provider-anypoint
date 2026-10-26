@@ -322,7 +322,7 @@ func (d *AssetDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 	data.ID = types.StringValue(fmt.Sprintf("%s/%s/%s", asset.GroupID, asset.AssetID, asset.Version))
 	data.Name = types.StringValue(asset.Name)
 	data.Description = types.StringValue(asset.Description)
-	data.Type = types.StringValue(asset.Type)
+	data.Type = types.StringValue(userAssetType(asset.Type))
 	data.Status = types.StringValue(asset.Status)
 	data.IsPublic = types.BoolValue(asset.IsPublic)
 	data.IsSnapshot = types.BoolValue(asset.IsSnapshot)

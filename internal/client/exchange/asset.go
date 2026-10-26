@@ -96,6 +96,57 @@ type CustomField struct {
 	Key   string      `json:"key"`
 }
 
+// customFieldValueKeys are the keys a custom field's value can arrive under. The asset
+// GET uses one key per dataType (verified live); the tags PUT response uses "value".
+var customFieldValueKeys = []string{"value", "textValue", "numberValue", "dateValue", "enumValue", "textListValue", "numberListValue"}
+
+// UnmarshalJSON normalises the value to a string (text, number, date) or []string
+// (enum, text-list, number-list). Without this every custom field read back as empty.
+func (f *CustomField) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	f.Key, f.Value = "", nil
+	if k, ok := raw["key"]; ok {
+		if err := json.Unmarshal(k, &f.Key); err != nil {
+			return err
+		}
+	}
+	for _, name := range customFieldValueKeys {
+		v, ok := raw[name]
+		if !ok || string(v) == "null" {
+			continue
+		}
+		var list []json.RawMessage
+		if json.Unmarshal(v, &list) == nil {
+			values := make([]string, 0, len(list))
+			for _, item := range list {
+				values = append(values, jsonScalarString(item))
+			}
+			f.Value = values
+		} else {
+			f.Value = jsonScalarString(v)
+		}
+		break
+	}
+	return nil
+}
+
+// jsonScalarString returns a JSON string's content, or a number/bool literal as written.
+func jsonScalarString(raw json.RawMessage) string {
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	return string(bytes.TrimSpace(raw))
+}
+
+// tagPutOK reports a successful tags PUT; Exchange answers 201 Created.
+func tagPutOK(status int) bool {
+	return status == http.StatusOK || status == http.StatusCreated || status == http.StatusNoContent
+}
+
 // AssetFile represents a file attached to an asset.
 type AssetFile struct {
 	Classifier  string `json:"classifier"`
@@ -1083,12 +1134,13 @@ func (c *AssetClient) DeleteExternalInstance(ctx context.Context, groupID, asset
 
 // SetCategory assigns category values to an asset version.
 // API: PUT /exchange/api/v2/assets/{groupId}/{assetId}/{version}/tags/categories/{tagKey}
-// Body: array of string values (e.g. ["Finance", "HR"])
+// Body: {"tagValue": ["Finance", "HR"]}; a bare array is rejected with 400 "request/body
+// must be object", and so is a scalar tagValue.
 func (c *AssetClient) SetCategory(ctx context.Context, groupID, assetID, version, categoryKey string, values []string) error {
 	url := fmt.Sprintf("%s/exchange/api/v2/assets/%s/%s/%s/tags/categories/%s",
 		c.BaseURL, groupID, assetID, version, categoryKey)
 
-	jsonData, err := json.Marshal(values)
+	jsonData, err := json.Marshal(map[string]interface{}{"tagValue": values})
 	if err != nil {
 		return fmt.Errorf("failed to marshal category values: %w", err)
 	}
@@ -1111,7 +1163,7 @@ func (c *AssetClient) SetCategory(ctx context.Context, groupID, assetID, version
 		return client.NewNotFoundError("exchange asset or category")
 	}
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+	if !tagPutOK(resp.StatusCode) {
 		respBody, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to set category '%s' with status %d: %s", categoryKey, resp.StatusCode, string(respBody))
 	}
@@ -1152,40 +1204,53 @@ func (c *AssetClient) DeleteCategory(ctx context.Context, groupID, assetID, vers
 
 // SetCustomField assigns a custom field value to an asset version.
 // API: PUT /exchange/api/v2/assets/{groupId}/{assetId}/{version}/tags/fields/{tagKey}
-// Body: array of string values (e.g. ["value1", "value2"]) — even single-valued fields use an array.
+// Body: {"tagValue": <v>}. Verified live per dataType: text needs a scalar, enum /
+// text-list need an array, number / date / number-list accept either. The field's
+// dataType is not known here, so a single value is sent as a scalar first and resent as
+// a one-element array when Exchange answers 400 "Invalid value for dataType".
 func (c *AssetClient) SetCustomField(ctx context.Context, groupID, assetID, version, fieldKey string, values []string) error {
 	url := fmt.Sprintf("%s/exchange/api/v2/assets/%s/%s/%s/tags/fields/%s",
 		c.BaseURL, groupID, assetID, version, fieldKey)
 
-	jsonData, err := json.Marshal(values)
-	if err != nil {
-		return fmt.Errorf("failed to marshal custom field values: %w", err)
+	bodies := []interface{}{values}
+	if len(values) == 1 {
+		bodies = []interface{}{values[0], values}
 	}
+	var lastErr error
+	for i, tagValue := range bodies {
+		jsonData, err := json.Marshal(map[string]interface{}{"tagValue": tagValue})
+		if err != nil {
+			return fmt.Errorf("failed to marshal custom field values: %w", err)
+		}
 
-	req, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
+		req, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewBuffer(jsonData))
+		if err != nil {
+			return fmt.Errorf("failed to create request: %w", err)
+		}
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+c.Token)
 
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return client.NewNotFoundError("exchange asset or custom field")
-	}
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		resp, err := c.HTTPClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("failed to send request: %w", err)
+		}
 		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to set custom field '%s' with status %d: %s", fieldKey, resp.StatusCode, string(respBody))
-	}
+		_ = resp.Body.Close()
 
-	return nil
+		if resp.StatusCode == http.StatusNotFound {
+			return client.NewNotFoundError("exchange asset or custom field")
+		}
+		if tagPutOK(resp.StatusCode) {
+			return nil
+		}
+		lastErr = fmt.Errorf("failed to set custom field '%s' with status %d: %s", fieldKey, resp.StatusCode, string(respBody))
+		if i+1 < len(bodies) && resp.StatusCode == http.StatusBadRequest && bytes.Contains(respBody, []byte("Invalid value for dataType")) {
+			continue
+		}
+		break
+	}
+	return lastErr
 }
 
 // DeleteCustomField removes a custom field assignment from an asset version.

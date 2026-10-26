@@ -322,7 +322,7 @@ Required:
 Required:
 
 - `key` (String) The custom field key (must match an existing org-level field definition).
-- `values` (List of String) The field values to assign (e.g. `["v1.2", "stable"]`).
+- `values` (List of String) The field values to assign, as strings. Use one value for a `text`, `number` or `date` field (e.g. `["v1.2"]`, `["5"]`, `["2026-10-26"]`) and one or more for an `enum`, `text-list` or `number-list` field (e.g. `["stable", "beta"]`). Exchange returns dates as ISO-8601 instants and numbers in canonical form; an equivalent configured spelling is kept, so neither shows a diff.
 
 <a id="nestedschema--additional_file"></a>
 ### Nested Schema for `additional_file`

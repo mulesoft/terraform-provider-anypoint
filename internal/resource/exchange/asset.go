@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -19,6 +20,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -832,6 +834,34 @@ func assetReplaceTriggered(state, plan *AssetResourceModel) bool {
 		listChanged(state.AdditionalFiles, plan.AdditionalFiles)
 }
 
+// privateKeyOwnedGAV records, in private state, the group/asset/version an instance
+// owns. Terraform core plans the create half of a replace with a NULL prior state but
+// passes the private data from the first plan call (node_resource_abstract_instance.go,
+// action.IsReplace), so without this the version-collision guard sees that call as a
+// brand-new create of an existing GAV and blocks every same-version replace.
+const privateKeyOwnedGAV = "owned_gav"
+
+// ownedGAVForReplan records the instance's GAV on a plan with prior state and returns
+// the recorded GAV on a null-prior (create) call; "" when there is none.
+func ownedGAVForReplan(ctx context.Context, creating bool, state *AssetResourceModel, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) string {
+	if creating {
+		b, diags := req.Private.GetKey(ctx, privateKeyOwnedGAV)
+		var gav string
+		if diags.HasError() || len(b) == 0 || json.Unmarshal(b, &gav) != nil {
+			return ""
+		}
+		return gav
+	}
+	if resp.Private == nil || state.GroupID.ValueString() == "" || state.AssetID.ValueString() == "" || state.Version.ValueString() == "" {
+		return ""
+	}
+	b, err := json.Marshal(state.GroupID.ValueString() + "/" + state.AssetID.ValueString() + "/" + state.Version.ValueString())
+	if err == nil {
+		resp.Diagnostics.Append(resp.Private.SetKey(ctx, privateKeyOwnedGAV, b)...)
+	}
+	return ""
+}
+
 // ModifyPlan converts a specific silent-data-loss footgun into a loud plan-time
 // error: publishing (create) or replacing a file-backed asset type with no
 // file_path set. Without this guard, such a plan applies, Exchange rejects the
@@ -851,6 +881,7 @@ func (r *AssetResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 	if req.Plan.Raw.IsNull() {
 		return
 	}
+	defer keepUpdatedDateWhenNoOp(ctx, req, resp)
 
 	var plan AssetResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -883,7 +914,7 @@ func (r *AssetResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 	// published in Exchange — before any destroy runs — instead of letting apply hit
 	// the raw 409 ASSET_PRE_CONDITIONS_FAILED. Adds a diagnostic only; falls through so
 	// the file/api_version/status guards can also report on the same plan.
-	r.checkVersionCollisionAtPlan(ctx, creating, &state, &plan, resp)
+	r.checkVersionCollisionAtPlan(ctx, creating, ownedGAVForReplan(ctx, creating, &state, req, resp), &state, &plan, resp)
 
 	// --- #67: keyed UseStateForUnknown for computed children of CONFIGURED lists. ---
 	// pages (page_path) and instances (instance_id, is_public) are Optional+Computed
@@ -931,6 +962,36 @@ func (r *AssetResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 				"To have a version in the development state, publish a NEW version with "+
 				"status = \"development\" (change the version attribute, which forces replacement) "+
 				"rather than editing the status of an already-published version in place.",
+		)
+	}
+
+	// --- Guard #1.1: `deprecated` cannot be published (create/replace). ---
+	// The multipart publish accepts only {development, published}; live-verified
+	// 2026-10-26: 400 INVALID_ASSET_STATUS "status: deprecated doesn't have a valid
+	// value (development, published)". On a replace (version bump) the old version is
+	// destroyed BEFORE that failing publish, so both versions are lost. Raise it at
+	// plan time, before any destroy. Read the CONFIG, not the plan: with status omitted,
+	// UseStateForUnknown carries a prior "deprecated" (e.g. set in the UI) into a
+	// version-bump plan, and that publish sends no status, so it must not be blocked.
+	var cfgStatus types.String
+	if creating || replacing {
+		resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("status"), &cfgStatus)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+	if (creating || replacing) &&
+		!cfgStatus.IsNull() && !cfgStatus.IsUnknown() &&
+		cfgStatus.ValueString() == "deprecated" {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("status"),
+			"Cannot publish an asset version with status \"deprecated\"",
+			"Exchange only accepts \"development\" or \"published\" when a version is first "+
+				"published, and this plan publishes one (a create, or a replacement such as a version "+
+				"bump). On a replacement the current version would be deleted before the publish "+
+				"fails with 400 INVALID_ASSET_STATUS, losing both.\n\n"+
+				"Set status = \"published\" for this apply, then change it to \"deprecated\" in a "+
+				"separate apply (an in-place update).",
 		)
 	}
 
@@ -1060,6 +1121,33 @@ func (r *AssetResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 			plan.Type.ValueString(), action,
 		),
 	)
+}
+
+// keepUpdatedDateWhenNoOp restores the prior updated_date when that turns the plan
+// into a true no-op. When the config omits categories/custom_fields and the asset has
+// some (set in the UI, or after import), core proposes null for them (their key/values
+// are not computed), so the framework marks computed attributes unknown. The list
+// modifiers put categories/custom_fields back, but updated_date (deliberately no
+// UseStateForUnknown) stays unknown and the plan never settles. Restoring it only
+// when plan == state means no Update runs, so it can never be inconsistent.
+func keepUpdatedDateWhenNoOp(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if resp.Diagnostics.HasError() || req.State.Raw.IsNull() || resp.Plan.Raw.IsNull() {
+		return
+	}
+	updated := path.Root("updated_date")
+	var planned, prior types.String
+	resp.Diagnostics.Append(resp.Plan.GetAttribute(ctx, updated, &planned)...)
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, updated, &prior)...)
+	if resp.Diagnostics.HasError() || !planned.IsUnknown() {
+		return
+	}
+	probe := tfsdk.Plan{Schema: resp.Plan.Schema, Raw: resp.Plan.Raw.Copy()}
+	if diags := probe.SetAttribute(ctx, updated, prior); diags.HasError() {
+		return
+	}
+	if probe.Raw.Equal(req.State.Raw) {
+		resp.Plan = probe
+	}
 }
 
 // fillComputedChildrenFromState is the keyed generalization of UseStateForUnknown for
@@ -1231,7 +1319,7 @@ func nextPatchVersionHint(version string) string {
 //   - A NotFound (404) means the version is free → proceed silently. Any OTHER GET error
 //     (network, auth, 5xx) is NON-fatal: we never block a plan on a transient probe
 //     failure; the apply-time 409 remains the backstop.
-func (r *AssetResource) checkVersionCollisionAtPlan(ctx context.Context, creating bool, state, plan *AssetResourceModel, resp *resource.ModifyPlanResponse) {
+func (r *AssetResource) checkVersionCollisionAtPlan(ctx context.Context, creating bool, ownedGAV string, state, plan *AssetResourceModel, resp *resource.ModifyPlanResponse) {
 	if r.client == nil {
 		return
 	}
@@ -1241,6 +1329,11 @@ func (r *AssetResource) checkVersionCollisionAtPlan(ctx context.Context, creatin
 	}
 	g, a, v := plan.GroupID, plan.AssetID, plan.Version
 	if g.IsNull() || g.IsUnknown() || a.IsNull() || a.IsUnknown() || v.IsNull() || v.IsUnknown() {
+		return
+	}
+	// The create half of a SAME-version replace: this instance owns the GAV and its
+	// destroy (a hard delete) frees it before the publish. See ownedGAVForReplan.
+	if creating && ownedGAV != "" && ownedGAV == g.ValueString()+"/"+a.ValueString()+"/"+v.ValueString() {
 		return
 	}
 
@@ -1275,7 +1368,9 @@ func (r *AssetResource) checkVersionCollisionAtPlan(ctx context.Context, creatin
 				"old version and then fail to publish the new one. Resolve it by either:\n"+
 				"  - bump `version` to a new value (e.g. %q) to publish fresh content, or\n"+
 				"  - import the existing version instead of creating it:\n"+
-				"      terraform import <address> %s/%s/%s",
+				"      terraform import <address> %s/%s/%s\n"+
+				"If this resource is tainted (an earlier apply failed after publishing this version), "+
+				"run `terraform untaint <address>` instead.",
 			v.ValueString(), g.ValueString(), a.ValueString(), action,
 			nextPatchVersionHint(v.ValueString()),
 			g.ValueString(), a.ValueString(), v.ValueString(),
@@ -3352,7 +3447,9 @@ func (r *AssetResource) readCustomFieldsIntoState(ctx context.Context, state *As
 			}
 		}
 
-		// Reorder to the prior inner order (see priorFieldValues).
+		// Keep the configured spelling of normalised dates/numbers, then reorder to the
+		// prior inner order (see priorFieldValues).
+		values = keepEquivalentPriorValues(values, priorFieldValues[field.Key])
 		values = reorderByKey(values, priorFieldValues[field.Key], func(s string) string { return s })
 		valueAttrs := make([]attr.Value, len(values))
 		for i, val := range values {

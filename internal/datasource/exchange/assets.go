@@ -168,7 +168,7 @@ func (d *AssetsDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 		listReq.Search = data.Search.ValueString()
 	}
 	if !data.Type.IsNull() && !data.Type.IsUnknown() {
-		listReq.Type = data.Type.ValueString()
+		listReq.Type = storedAssetType(data.Type.ValueString())
 	}
 
 	// ListAllAssets paginates: without it, an org with more matching assets than a
@@ -211,7 +211,7 @@ func (d *AssetsDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 				"version":      types.StringValue(asset.Version),
 				"name":         types.StringValue(asset.Name),
 				"description":  types.StringValue(asset.Description),
-				"type":         types.StringValue(asset.Type),
+				"type":         types.StringValue(userAssetType(asset.Type)),
 				"status":       types.StringValue(asset.Status),
 				"is_public":    types.BoolValue(asset.IsPublic),
 				"created_date": types.StringValue(asset.CreatedDate),
