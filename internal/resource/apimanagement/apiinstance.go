@@ -19,6 +19,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
@@ -137,6 +138,24 @@ func endpointToObject(ep *EndpointModel) types.Object {
 // defaultProxyPort is the Omni/Flex Gateway listener port used when the endpoint
 // does not specify one. The platform's "Add API" flow also defaults to 8081.
 const defaultProxyPort int64 = 8081
+
+// settleEndpointPort returns kept (the planned or prior-state endpoint that is
+// restored into state) with an unknown or null port replaced by the port
+// flattened from the API response, falling back to defaultProxyPort. Without
+// this, a config that omits port (Optional+Computed, UseStateForUnknown) leaves
+// port unknown after Create, and a state written before port existed keeps it
+// null, so the first Update plans it unknown and fails the same way.
+func settleEndpointPort(kept, fromAPI types.Object) types.Object {
+	ep := endpointFromObject(kept)
+	if ep == nil || (!ep.Port.IsUnknown() && !ep.Port.IsNull()) {
+		return kept
+	}
+	ep.Port = types.Int64Value(defaultProxyPort)
+	if api := endpointFromObject(fromAPI); api != nil && !api.Port.IsNull() && !api.Port.IsUnknown() {
+		ep.Port = api.Port
+	}
+	return endpointToObject(ep)
+}
 
 // buildProxyURI constructs the Omni/Flex Gateway proxy URI the platform expects
 // for an API instance: http://0.0.0.0:<port>/<base_path>. The port defaults to
@@ -357,9 +376,10 @@ func (r *APIInstanceResource) Schema(_ context.Context, _ resource.SchemaRequest
 			"status": schema.StringAttribute{
 				Description: "The current status of the API instance.",
 				Computed:    true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
+				// No UseStateForUnknown: the platform moves status on its own
+				// (unregistered -> active once the gateway picks the API up), so
+				// copying the prior value into an update plan makes the apply fail
+				// with "inconsistent result" whenever it moved in between.
 			},
 			"asset_id": schema.StringAttribute{
 				Description: "The Exchange asset ID (computed from API response).",
@@ -752,7 +772,7 @@ func (r *APIInstanceResource) Create(ctx context.Context, req resource.CreateReq
 		data.Routing = plannedRouting
 	}
 	if !plannedEndpoint.IsNull() && !plannedEndpoint.IsUnknown() {
-		data.Endpoint = plannedEndpoint
+		data.Endpoint = settleEndpointPort(plannedEndpoint, data.Endpoint)
 	}
 	data.Deployment = mergeDeploymentObjects(data.Deployment, plannedDeployment)
 	if !plannedConsumerEndpoint.IsNull() && !plannedConsumerEndpoint.IsUnknown() {
@@ -828,7 +848,7 @@ func (r *APIInstanceResource) Read(ctx context.Context, req resource.ReadRequest
 		data.Routing = existingRouting
 	}
 	if !existingEndpoint.IsNull() && !existingEndpoint.IsUnknown() {
-		data.Endpoint = existingEndpoint
+		data.Endpoint = settleEndpointPort(existingEndpoint, data.Endpoint)
 	}
 	data.Deployment = mergeDeploymentObjects(data.Deployment, existingDeployment)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -872,6 +892,33 @@ func (r *APIInstanceResource) ModifyPlan(ctx context.Context, req resource.Modif
 		// expects it to be recomputed during apply.
 		plan.AssetVersion = types.StringUnknown()
 		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+	}
+	keepStatusWhenNoOp(ctx, req, resp)
+}
+
+// keepStatusWhenNoOp restores the prior status when that turns the plan into a
+// true no-op. status has no UseStateForUnknown (the platform moves it on its own),
+// so whenever the framework marks computed attributes unknown, e.g. because core
+// proposes null for an omitted deployment block, status alone stays unknown and
+// the plan never settles. Restoring it only when plan == state means no Update
+// runs, so there is no apply result for it to be inconsistent with.
+func keepStatusWhenNoOp(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	statusPath := path.Root("status")
+	var planned, prior types.String
+	resp.Diagnostics.Append(resp.Plan.GetAttribute(ctx, statusPath, &planned)...)
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, statusPath, &prior)...)
+	if resp.Diagnostics.HasError() || !planned.IsUnknown() {
+		return
+	}
+	probe := tfsdk.Plan{Schema: resp.Plan.Schema, Raw: resp.Plan.Raw.Copy()}
+	if diags := probe.SetAttribute(ctx, statusPath, prior); diags.HasError() {
+		return
+	}
+	if probe.Raw.Equal(req.State.Raw) {
+		resp.Plan = probe
 	}
 }
 
@@ -973,6 +1020,7 @@ func (r *APIInstanceResource) Update(ctx context.Context, req resource.UpdateReq
 	gatewayID := plan.GatewayID
 	plannedRouting := plan.Routing
 	plannedEndpoint := plan.Endpoint
+	plannedDeployment := plan.Deployment
 	plannedUpstreamURI := plan.UpstreamURI
 	r.flattenInstance(ctx, instance, &plan, orgID, envID)
 	plan.GatewayID = gatewayID
@@ -983,8 +1031,12 @@ func (r *APIInstanceResource) Update(ctx context.Context, req resource.UpdateReq
 		plan.Routing = plannedRouting
 	}
 	if !plannedEndpoint.IsNull() && !plannedEndpoint.IsUnknown() {
-		plan.Endpoint = plannedEndpoint
+		plan.Endpoint = settleEndpointPort(plannedEndpoint, plan.Endpoint)
 	}
+	// Same as Create/Read: known planned deployment values win over the live GET,
+	// otherwise a value the platform fills in later (gateway_version "" -> "1.14.4")
+	// makes the first Update fail with "inconsistent result after apply".
+	plan.Deployment = mergeDeploymentObjects(plan.Deployment, plannedDeployment)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
