@@ -23,6 +23,7 @@ var (
 	_ resource.Resource                = &TeamResource{}
 	_ resource.ResourceWithConfigure   = &TeamResource{}
 	_ resource.ResourceWithImportState = &TeamResource{}
+	_ resource.ResourceWithModifyPlan  = &TeamResource{}
 )
 
 // TeamResource is the resource implementation.
@@ -440,16 +441,25 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 
 	teamID := state.ID.ValueString()
 
-	managePermissions := !plan.Permissions.IsNull() && !plan.Permissions.IsUnknown()
-	manageMembers := !plan.Members.IsNull() && !plan.Members.IsUnknown()
+	// Authoritative only when the config sets them: ModifyPlan copies the prior value
+	// into the plan for an omitted (unmanaged) attribute.
+	managePermissions := configSets(ctx, req.Config, "permissions") && !plan.Permissions.IsUnknown()
+	manageMembers := configSets(ctx, req.Config, "members") && !plan.Members.IsUnknown()
+	permissionsToApply, membersToApply := plan.Permissions, plan.Members
+	if !managePermissions {
+		permissionsToApply = types.SetNull(teamPermissionObjectType)
+	}
+	if !manageMembers {
+		membersToApply = types.SetNull(teamMemberObjectType)
+	}
 
 	// Resolve (validate) desired permissions/members before mutating anything.
-	desiredPermissions, err := r.resolveTeamPermissions(ctx, plan.Permissions)
+	desiredPermissions, err := r.resolveTeamPermissions(ctx, permissionsToApply)
 	if err != nil {
 		resp.Diagnostics.AddError("Invalid permission", err.Error())
 		return
 	}
-	desiredMembers, err := r.resolveTeamMembers(ctx, orgID, plan.Members)
+	desiredMembers, err := r.resolveTeamMembers(ctx, orgID, membersToApply)
 	if err != nil {
 		resp.Diagnostics.AddError("Invalid member", err.Error())
 		return
@@ -537,8 +547,11 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 
 	tflog.Trace(ctx, "updated team")
 
-	// For unmanaged attributes (config omitted → plan is unknown), populate from API.
-	if !managePermissions {
+	// For unmanaged attributes (config omitted), populate from API only when the plan
+	// left them unknown. ModifyPlan plans the prior value for an omitted set; state must
+	// then match it (a live read could differ after an out-of-band change and fail the
+	// apply with "inconsistent result"). The next refresh picks up any such change.
+	if !managePermissions && plan.Permissions.IsUnknown() {
 		permissions, permErr := r.reconcileTeamPermissionsIntoState(ctx, orgID, teamID, plan.Permissions)
 		if permErr != nil {
 			resp.Diagnostics.AddError("Error reading permissions after update", permErr.Error())
@@ -546,7 +559,7 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		}
 		plan.Permissions = permissions
 	}
-	if !manageMembers {
+	if !manageMembers && plan.Members.IsUnknown() {
 		members, membersErr := r.reconcileTeamMembersIntoState(ctx, orgID, teamID, plan.Members)
 		if membersErr != nil {
 			resp.Diagnostics.AddError("Error reading members after update", membersErr.Error())
@@ -557,6 +570,11 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+// ModifyPlan keeps omitted permissions/members out of the plan (see keepUnmanagedSetsFromState).
+func (r *TeamResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	keepUnmanagedSetsFromState(ctx, req, resp, "permissions", "members")
 }
 
 // Delete deletes the resource and removes the Terraform state on success.

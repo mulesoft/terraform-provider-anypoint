@@ -389,6 +389,16 @@ var ScopesRequiringEnvID = map[string]bool{
 	ScopeReadServers:                true,
 	ScopeRestartApplications:        true,
 	ScopeViewEnvironment:            true,
+	// Verified live (prod): with only `org` these fail at apply with 400 "Context
+	// parameters are invalid for this scope and domain", after the app was created.
+	ScopeReadActivity:     true,
+	ScopeReadAPIQuery:     true,
+	ScopeReadDataGateway:  true,
+	ScopeReadHostPartners: true,
+	ScopeReadStore:        true,
+	ScopeReadStoreClients: true,
+	ScopeViewClients:      true,
+	ScopeViewDestinations: true,
 }
 
 // DisplayNameToScope maps the EXACT display names from the Anypoint Platform

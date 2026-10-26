@@ -40,6 +40,14 @@ func (c *ResponseCache) Set(key string, value interface{}) {
 	c.store[key] = value
 }
 
+// Delete drops a cached entry, so the next GetOrFetch for key fetches again. Callers
+// use it after a write that changes the cached response.
+func (c *ResponseCache) Delete(key string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.store, key)
+}
+
 // GetOrFetch atomically checks the cache and, if missing, calls fetch() to populate it.
 // This is the recommended way to use the cache — avoids the thundering-herd problem
 // where N goroutines all miss the cache and fire N identical API calls.

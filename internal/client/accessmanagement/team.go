@@ -74,6 +74,7 @@ type UpdateTeamParentRequest struct {
 
 // CreateTeam creates a new team in Anypoint
 func (c *TeamClient) CreateTeam(ctx context.Context, orgID string, team *CreateTeamRequest) (*Team, error) {
+	defer c.invalidateTeamList(orgID)
 	url := fmt.Sprintf("%s/accounts/api/organizations/%s/teams", c.BaseURL, orgID)
 
 	jsonData, err := json.Marshal(team)
@@ -149,6 +150,7 @@ func (c *TeamClient) GetTeam(ctx context.Context, orgID, teamID string) (*Team, 
 
 // UpdateTeam updates an existing team using PATCH
 func (c *TeamClient) UpdateTeam(ctx context.Context, orgID, teamID string, team *UpdateTeamRequest) (*Team, error) {
+	defer c.invalidateTeamList(orgID)
 	url := fmt.Sprintf("%s/accounts/api/organizations/%s/teams/%s", c.BaseURL, orgID, teamID)
 
 	jsonData, err := json.Marshal(team)
@@ -190,6 +192,7 @@ func (c *TeamClient) UpdateTeam(ctx context.Context, orgID, teamID string, team 
 
 // UpdateTeamParent updates a team's parent using the PUT parent API
 func (c *TeamClient) UpdateTeamParent(ctx context.Context, orgID, teamID string, req *UpdateTeamParentRequest) error {
+	defer c.invalidateTeamList(orgID)
 	url := fmt.Sprintf("%s/accounts/api/organizations/%s/teams/%s/parent", c.BaseURL, orgID, teamID)
 
 	jsonData, err := json.Marshal(req)
@@ -243,7 +246,7 @@ type ListTeamsResponse struct {
 // ListTeams lists all teams in the organization with pagination.
 // API: GET /accounts/api/organizations/{orgId}/teams
 // Results are cached per-apply per org: the team list is used for root-team
-// resolution and parent_team lookups, and does not change within a run.
+// resolution and parent_team lookups. Team writes drop the entry (invalidateTeamList).
 func (c *TeamClient) ListTeams(ctx context.Context, orgID string) ([]TeamListItem, error) {
 	cacheKey := "teams:" + orgID
 
@@ -257,6 +260,15 @@ func (c *TeamClient) ListTeams(ctx context.Context, orgID string) ([]TeamListIte
 		return v.([]TeamListItem), nil
 	}
 	return c.listTeamsFromAPI(ctx, orgID)
+}
+
+// invalidateTeamList drops the cached team list after a team write. Without it,
+// creating a team lists teams first (root team lookup) and caches the list, so an
+// anypoint_teams data source read later in the same apply misses the new team.
+func (c *TeamClient) invalidateTeamList(orgID string) {
+	if c.Cache != nil {
+		c.Cache.Delete("teams:" + orgID)
+	}
 }
 
 // listTeamsFromAPI performs the actual paginated API call.
@@ -306,6 +318,7 @@ func (c *TeamClient) listTeamsFromAPI(ctx context.Context, orgID string) ([]Team
 
 // DeleteTeam deletes a team by ID
 func (c *TeamClient) DeleteTeam(ctx context.Context, orgID, teamID string) error {
+	defer c.invalidateTeamList(orgID)
 	url := fmt.Sprintf("%s/accounts/api/organizations/%s/teams/%s", c.BaseURL, orgID, teamID)
 
 	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)

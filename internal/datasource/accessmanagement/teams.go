@@ -163,7 +163,8 @@ func (d *TeamsDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 	// Apply name filter if provided
 	nameFilter := strings.ToLower(data.NameFilter.ValueString())
 
-	var teamItems []TeamItemModel
+	// Non-nil so "no match" is an empty list, not null (a null list breaks length()/for).
+	teamItems := make([]TeamItemModel, 0, len(teams))
 	for _, t := range teams {
 		if nameFilter != "" && !strings.Contains(strings.ToLower(t.TeamName), nameFilter) {
 			continue
