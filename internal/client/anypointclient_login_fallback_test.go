@@ -19,14 +19,14 @@ func opaqueTokenPlane(t *testing.T, hits *[]string) *httptest.Server {
 		*hits = append(*hits, r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
 
-		switch {
-		case r.URL.Path == "/accounts/api/v2/oauth2/token":
+		switch r.URL.Path {
+		case "/accounts/api/v2/oauth2/token":
 			_, _ = w.Write([]byte(`{"access_token":"opaque-token"}`))
 
-		case r.URL.Path == "/accounts/login":
+		case "/accounts/login":
 			_, _ = w.Write([]byte(`{"access_token":"` + loginToken + `"}`))
 
-		case r.URL.Path == "/accounts/api/me":
+		case "/accounts/api/me":
 			if r.Header.Get("Authorization") != "Bearer "+loginToken {
 				w.WriteHeader(http.StatusUnauthorized)
 				return
