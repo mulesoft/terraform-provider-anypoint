@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -51,7 +52,7 @@ type PrivateSpaceConfigResourceModel struct {
 	ManagedFirewallRules    types.List          `tfsdk:"managed_firewall_rules"`
 	GlobalSpaceStatus       types.Map           `tfsdk:"global_space_status"`
 	Network                 *NetworkConfigModel `tfsdk:"network"`
-	FirewallRules           []FirewallRuleModel `tfsdk:"firewall_rules"`
+	FirewallRules           types.List          `tfsdk:"firewall_rules"`
 }
 
 type NetworkConfigModel struct {
@@ -377,9 +378,10 @@ func (r *PrivateSpaceConfigResource) Create(ctx context.Context, req resource.Cr
 
 	// Step 3: Set firewall rules (if provided).
 	var spaceAfterFirewall *cloudhub2.PrivateSpace
-	if len(data.FirewallRules) > 0 {
+	firewallRules := firewallRulesFromList(ctx, data.FirewallRules)
+	if len(firewallRules) > 0 {
 		firewallReq := &cloudhub2.UpdateFirewallRulesRequest{
-			ManagedFirewallRules: mapFirewallRulesToAPI(data.FirewallRules),
+			ManagedFirewallRules: mapFirewallRulesToAPI(firewallRules),
 		}
 		spaceAfterFirewall, err = r.firewallClient.UpdateFirewallRules(ctx, orgID, spaceID, firewallReq)
 		if err != nil {
@@ -429,16 +431,16 @@ func (r *PrivateSpaceConfigResource) Read(ctx context.Context, req resource.Read
 	stateEnableEgress := data.EnableEgress
 	stateEnableIAMRole := data.EnableIAMRole
 	// Remember whether the user was managing firewall rules before this read.
-	prevFirewallRules := data.FirewallRules
+	prevFirewallManaged := !data.FirewallRules.IsNull()
 
 	mapSpaceConfigToModel(ctx, &data, space.ID, orgID, space, space, space)
 	data.EnableEgress = stateEnableEgress
 	data.EnableIAMRole = stateEnableIAMRole
 
 	// On import, always capture firewall rules from the API. On a normal read,
-	// only keep them when the user explicitly manages them (prevFirewallRules != nil).
+	// only keep them when the user explicitly manages them (prevFirewallManaged).
 	if isImport {
-		data.FirewallRules = mapFirewallRulesFromAPI(space.ManagedFirewallRules)
+		data.FirewallRules = firewallRulesToList(ctx, mapFirewallRulesFromAPI(space.ManagedFirewallRules))
 		// Seed defaults for bool flags so the plan doesn't trigger a spurious update.
 		if data.EnableEgress.IsNull() || data.EnableEgress.IsUnknown() {
 			data.EnableEgress = types.BoolValue(false)
@@ -446,8 +448,8 @@ func (r *PrivateSpaceConfigResource) Read(ctx context.Context, req resource.Read
 		if data.EnableIAMRole.IsNull() || data.EnableIAMRole.IsUnknown() {
 			data.EnableIAMRole = types.BoolValue(false)
 		}
-	} else if prevFirewallRules == nil {
-		data.FirewallRules = nil
+	} else if !prevFirewallManaged {
+		data.FirewallRules = types.ListNull(firewallRuleElementType)
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -518,9 +520,9 @@ func (r *PrivateSpaceConfigResource) Update(ctx context.Context, req resource.Up
 	}
 
 	// Update firewall rules if changed.
-	if !firewallRulesEqual(plan.FirewallRules, state.FirewallRules) {
+	if !plan.FirewallRules.Equal(state.FirewallRules) {
 		firewallReq := &cloudhub2.UpdateFirewallRulesRequest{
-			ManagedFirewallRules: mapFirewallRulesToAPI(plan.FirewallRules),
+			ManagedFirewallRules: mapFirewallRulesToAPI(firewallRulesFromList(ctx, plan.FirewallRules)),
 		}
 		updated, err := r.firewallClient.UpdateFirewallRules(ctx, orgID, spaceID, firewallReq)
 		if err != nil {
@@ -546,7 +548,17 @@ func (r *PrivateSpaceConfigResource) Update(ctx context.Context, req resource.Up
 			plan.Network.DNSTarget = state.Network.DNSTarget
 		}
 	} else {
-		mapSpaceConfigToModel(ctx, &plan, spaceID, orgID, latestSpace, latestSpace, latestSpace)
+		// The mutation endpoints (space PUT, network PATCH, firewall PATCH) each
+		// return only a partial body — e.g. the firewall PATCH response omits
+		// computed network data such as outbound static IPs. Re-fetch the full
+		// private space so we flatten from a complete response and avoid a
+		// "provider produced inconsistent result after apply" error.
+		finalSpace, err := r.spaceClient.GetPrivateSpace(ctx, orgID, spaceID)
+		if err != nil {
+			resp.Diagnostics.AddError("Error reading private space after update", err.Error())
+			return
+		}
+		mapSpaceConfigToModel(ctx, &plan, spaceID, orgID, finalSpace, finalSpace, finalSpace)
 	}
 
 	plan.OrganizationID = types.StringValue(orgID)
@@ -648,12 +660,12 @@ func mapSpaceConfigToModel(
 	}
 
 	// Only sync firewall rules from the API when the user explicitly manages them
-	// (i.e. data.FirewallRules was non-nil coming in from state or plan). If the
-	// user left firewall_rules unset (nil), the API may still assign default rules —
+	// (i.e. data.FirewallRules was non-null coming in from state or plan). If the
+	// user left firewall_rules unset (null), the API may still assign default rules —
 	// we intentionally ignore those to avoid drift on resources that don't manage
 	// firewall rules.
-	if data.FirewallRules != nil && firewallSrc != nil {
-		data.FirewallRules = mapFirewallRulesFromAPI(firewallSrc.ManagedFirewallRules)
+	if !data.FirewallRules.IsNull() && firewallSrc != nil {
+		data.FirewallRules = firewallRulesToList(ctx, mapFirewallRulesFromAPI(firewallSrc.ManagedFirewallRules))
 	}
 }
 
@@ -685,6 +697,40 @@ type FirewallRuleModel struct {
 	FromPort  types.Int64  `tfsdk:"from_port"`
 	ToPort    types.Int64  `tfsdk:"to_port"`
 	Type      types.String `tfsdk:"type"`
+}
+
+// firewallRuleAttrTypes mirrors the firewall_rules ListNestedAttribute object.
+// It must stay in sync with the schema definition above.
+var firewallRuleAttrTypes = map[string]attr.Type{
+	"cidr_block": types.StringType,
+	"protocol":   types.StringType,
+	"from_port":  types.Int64Type,
+	"to_port":    types.Int64Type,
+	"type":       types.StringType,
+}
+
+// firewallRuleElementType is the element type of the firewall_rules list.
+var firewallRuleElementType = types.ObjectType{AttrTypes: firewallRuleAttrTypes}
+
+// firewallRulesFromList extracts the Go model slice from a types.List, returning
+// nil for a null or unknown list. Storing firewall_rules as a types.List (rather
+// than a []FirewallRuleModel) lets the framework hold "unknown" — required when
+// the value is supplied through a variable or module input (otherwise a Value
+// Conversion Error is raised during terraform validate).
+func firewallRulesFromList(ctx context.Context, l types.List) []FirewallRuleModel {
+	if l.IsNull() || l.IsUnknown() {
+		return nil
+	}
+	var out []FirewallRuleModel
+	l.ElementsAs(ctx, &out, false)
+	return out
+}
+
+// firewallRulesToList wraps a Go model slice in a types.List of the firewall rule
+// element type.
+func firewallRulesToList(ctx context.Context, rules []FirewallRuleModel) types.List {
+	l, _ := types.ListValueFrom(ctx, firewallRuleElementType, rules)
+	return l
 }
 
 func mapFirewallRulesToAPI(rules []FirewallRuleModel) []cloudhub2.FirewallRule {

@@ -38,10 +38,13 @@ type UserClientConfig struct {
 	Username     string
 	Password     string
 	Timeout      int
-	mu           sync.Mutex
-	Token        string
-	OrgID        string
-	Cache        *ResponseCache
+	// UserAgent is stamped on every outbound request so the Anypoint backend can
+	// attribute API traffic to this provider and its version. May be empty.
+	UserAgent string
+	mu        sync.Mutex
+	Token     string
+	OrgID     string
+	Cache     *ResponseCache
 }
 
 // NewUserAnypointClient creates a new User-based Anypoint API client using password grant
@@ -101,6 +104,9 @@ func NewUserAnypointClient(config *UserClientConfig) (*UserAnypointClient, error
 		},
 		Cache: cache,
 	}
+	// Stamp the provider User-Agent on every request this client makes,
+	// including the authentication call below.
+	withUserAgent(c.HTTPClient, config.UserAgent)
 
 	config.mu.Lock()
 	if config.Token != "" {

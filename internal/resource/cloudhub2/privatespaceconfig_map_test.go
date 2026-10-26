@@ -128,29 +128,27 @@ func TestMapSpaceConfigToModel(t *testing.T) {
 		}
 	})
 
-	t.Run("firewall rules synced only when data.FirewallRules is non-nil", func(t *testing.T) {
+	t.Run("firewall rules synced only when data.FirewallRules is non-null", func(t *testing.T) {
 		firewallSrc := &ch2client.PrivateSpace{
 			ManagedFirewallRules: []ch2client.FirewallRule{
 				{CidrBlock: "10.0.0.0/8", Protocol: "TCP", FromPort: 443, ToPort: 443, Type: "INBOUND"},
 			},
 		}
-		// Case 1: data.FirewallRules is nil (empty slice is non-nil in Go but len==0 is treated as nil pointer) — check actual semantics
-		// Actually FirewallRules is []FirewallRuleModel, not a pointer.
-		// The guard in mapSpaceConfigToModel checks `data.FirewallRules != nil` which in Go
-		// means the slice itself must be non-nil (not just empty).
-		data := &PrivateSpaceConfigResourceModel{FirewallRules: nil}
+		// Case 1: data.FirewallRules is a null list — the user does not manage
+		// firewall rules, so the API's rules must be ignored.
+		data := &PrivateSpaceConfigResourceModel{FirewallRules: types.ListNull(firewallRuleElementType)}
 		mapSpaceConfigToModel(ctx, data, "ps-1", "org-1", nil, nil, firewallSrc)
-		if data.FirewallRules != nil {
-			t.Error("FirewallRules should remain nil when not managed")
+		if !data.FirewallRules.IsNull() {
+			t.Error("FirewallRules should remain null when not managed")
 		}
 
-		// Case 2: data.FirewallRules is non-nil slice (even empty) — should sync
+		// Case 2: data.FirewallRules is a non-null (even empty) list — should sync.
 		data2 := &PrivateSpaceConfigResourceModel{
-			FirewallRules: []FirewallRuleModel{},
+			FirewallRules: firewallRulesToList(ctx, []FirewallRuleModel{}),
 		}
 		mapSpaceConfigToModel(ctx, data2, "ps-1", "org-1", nil, nil, firewallSrc)
-		if len(data2.FirewallRules) != 1 {
-			t.Errorf("FirewallRules should be synced, got %v", data2.FirewallRules)
+		if l := len(data2.FirewallRules.Elements()); l != 1 {
+			t.Errorf("FirewallRules should be synced, got %d elements", l)
 		}
 	})
 }

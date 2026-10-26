@@ -103,6 +103,107 @@ func TestReconcileTracing(t *testing.T) {
 	})
 }
 
+// --- reconcileIngressURLs ---
+
+func TestReconcileIngressURLs(t *testing.T) {
+	makeIngressObj := func(publicURL, internalURL attr.Value) types.Object {
+		obj, _ := types.ObjectValue(ingressAttrTypes, map[string]attr.Value{
+			"public_url":          publicURL,
+			"internal_url":        internalURL,
+			"forward_ssl_session": types.BoolValue(true),
+			"last_mile_security":  types.BoolValue(true),
+		})
+		return obj
+	}
+
+	t.Run("null fromAPI returns plan", func(t *testing.T) {
+		plan := makeIngressObj(types.StringValue("https://custom.example.com/"), types.StringValue("https://int.example.com/"))
+		result := reconcileIngressURLs(plan, types.ObjectNull(ingressAttrTypes))
+		if !result.Equal(plan) {
+			t.Error("Expected plan when fromAPI is null")
+		}
+	})
+
+	t.Run("unknown plan returns fromAPI", func(t *testing.T) {
+		fromAPI := makeIngressObj(types.StringValue("https://derived.cloudhub.io"), types.StringValue("https://int.cloudhub.io"))
+		result := reconcileIngressURLs(types.ObjectUnknown(ingressAttrTypes), fromAPI)
+		if !result.Equal(fromAPI) {
+			t.Error("Expected fromAPI when plan is unknown")
+		}
+	})
+
+	t.Run("null plan returns fromAPI", func(t *testing.T) {
+		fromAPI := makeIngressObj(types.StringValue("https://derived.cloudhub.io"), types.StringValue("https://int.cloudhub.io"))
+		result := reconcileIngressURLs(types.ObjectNull(ingressAttrTypes), fromAPI)
+		if !result.Equal(fromAPI) {
+			t.Error("Expected fromAPI when plan is null")
+		}
+	})
+
+	// The core regression: the PUT echoes a stale (comma-joined) public_url, but
+	// the practitioner configured a concrete value. State must keep the plan value.
+	t.Run("configured public_url wins over stale API value", func(t *testing.T) {
+		plan := makeIngressObj(types.StringValue("https://custom.example.com/"), types.StringUnknown())
+		fromAPI := makeIngressObj(
+			types.StringValue("https://derived-gw.cloudhub.io,https://custom.example.com/"),
+			types.StringValue("https://int.cloudhub.io"),
+		)
+		result := reconcileIngressURLs(plan, fromAPI)
+		attrs := result.Attributes()
+		if got := attrs["public_url"].(types.String).ValueString(); got != "https://custom.example.com/" {
+			t.Errorf("public_url = %q, want the configured value", got)
+		}
+		// internal_url was unknown in the plan (auto-derived) — trust the API value.
+		if got := attrs["internal_url"].(types.String).ValueString(); got != "https://int.cloudhub.io" {
+			t.Errorf("internal_url = %q, want the API value", got)
+		}
+	})
+
+	t.Run("both URLs configured are preserved", func(t *testing.T) {
+		plan := makeIngressObj(types.StringValue("https://pub.example.com/"), types.StringValue("https://int.example.com/"))
+		fromAPI := makeIngressObj(types.StringValue("https://stale-pub.cloudhub.io"), types.StringValue("https://stale-int.cloudhub.io"))
+		result := reconcileIngressURLs(plan, fromAPI)
+		attrs := result.Attributes()
+		if got := attrs["public_url"].(types.String).ValueString(); got != "https://pub.example.com/" {
+			t.Errorf("public_url = %q, want configured value", got)
+		}
+		if got := attrs["internal_url"].(types.String).ValueString(); got != "https://int.example.com/" {
+			t.Errorf("internal_url = %q, want configured value", got)
+		}
+	})
+
+	t.Run("unknown URLs fall back to API (auto-derived)", func(t *testing.T) {
+		plan := makeIngressObj(types.StringUnknown(), types.StringUnknown())
+		fromAPI := makeIngressObj(types.StringValue("https://derived-pub.cloudhub.io"), types.StringValue("https://derived-int.cloudhub.io"))
+		result := reconcileIngressURLs(plan, fromAPI)
+		attrs := result.Attributes()
+		if got := attrs["public_url"].(types.String).ValueString(); got != "https://derived-pub.cloudhub.io" {
+			t.Errorf("public_url = %q, want API-derived value", got)
+		}
+		if got := attrs["internal_url"].(types.String).ValueString(); got != "https://derived-int.cloudhub.io" {
+			t.Errorf("internal_url = %q, want API-derived value", got)
+		}
+	})
+
+	t.Run("non-URL fields always come from API", func(t *testing.T) {
+		plan := makeIngressObj(types.StringValue("https://pub.example.com/"), types.StringUnknown())
+		apiObj, _ := types.ObjectValue(ingressAttrTypes, map[string]attr.Value{
+			"public_url":          types.StringValue("https://stale.cloudhub.io"),
+			"internal_url":        types.StringValue("https://int.cloudhub.io"),
+			"forward_ssl_session": types.BoolValue(false),
+			"last_mile_security":  types.BoolValue(false),
+		})
+		result := reconcileIngressURLs(plan, apiObj)
+		attrs := result.Attributes()
+		if attrs["forward_ssl_session"].(types.Bool).ValueBool() {
+			t.Error("forward_ssl_session should come from API (false)")
+		}
+		if attrs["last_mile_security"].(types.Bool).ValueBool() {
+			t.Error("last_mile_security should come from API (false)")
+		}
+	})
+}
+
 // --- flattenGateway ---
 
 func TestManagedOmniGatewayResource_flattenGateway(t *testing.T) {

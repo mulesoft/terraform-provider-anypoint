@@ -509,6 +509,10 @@ func (r *ManagedOmniGatewayResource) Create(ctx context.Context, req resource.Cr
 	// echo configuration.tracing back, which would leave Enabled=false and
 	// trigger a "provider produced an unexpected new value" framework error.
 	planTracing := data.Tracing
+	// Save plan ingress before the API call — the Create response echoes stale
+	// ingress URLs (see reconcileIngressURLs), which must not clobber the
+	// practitioner-configured public_url/internal_url.
+	planIngress := data.Ingress
 
 	gw, err := r.client.CreateManagedOmniGateway(ctx, orgID, envID, createReq)
 	if err != nil {
@@ -517,6 +521,7 @@ func (r *ManagedOmniGatewayResource) Create(ctx context.Context, req resource.Cr
 	}
 
 	r.flattenGateway(gw, &data, orgID, envID)
+	data.Ingress = reconcileIngressURLs(planIngress, data.Ingress)
 	data.Tracing = reconcileTracing(planTracing, data.Tracing)
 	// The create (api/v1) response may omit targetType; fall back to the value we
 	// detected so the computed attribute settles to a concrete value on create.
@@ -626,6 +631,11 @@ func (r *ManagedOmniGatewayResource) Update(ctx context.Context, req resource.Up
 	// Save plan tracing before the API call — the Update response may not
 	// echo configuration.tracing back (same issue as Create).
 	planTracing := plan.Tracing
+	// Save plan ingress before the API call — the Gateway Manager PUT returns the
+	// pre-update ingress URLs when public_url/internal_url change, so flattening
+	// the response would overwrite the practitioner's configured values with the
+	// stale ones. See reconcileIngressURLs.
+	planIngress := plan.Ingress
 
 	gw, err := r.client.UpdateManagedOmniGateway(ctx, orgID, envID, state.ID.ValueString(), updateReq)
 	if err != nil {
@@ -634,6 +644,7 @@ func (r *ManagedOmniGatewayResource) Update(ctx context.Context, req resource.Up
 	}
 
 	r.flattenGateway(gw, &plan, orgID, envID)
+	plan.Ingress = reconcileIngressURLs(planIngress, plan.Ingress)
 	plan.Tracing = reconcileTracing(planTracing, plan.Tracing)
 	// Retain prior status to avoid a Terraform consistency-check error when the
 	// gateway re-enters its async provisioning cycle (RUNNING → APPLYING) after a
@@ -853,6 +864,56 @@ func (r *ManagedOmniGatewayResource) flattenGateway(gw *apimanagement.ManagedOmn
 	} else {
 		data.Tracing = tracingObj
 	}
+}
+
+// reconcileIngressURLs keeps the practitioner-configured ingress URLs in state
+// instead of the values echoed by the Gateway Manager POST/PUT response.
+//
+// The Gateway Manager update endpoint returns the *pre-update*
+// configuration.ingress.publicUrl (and internalUrl) when those fields change —
+// the rest of the configuration is echoed with its new values, and a GET
+// immediately afterwards returns the new value. Writing the stale response value
+// into state makes the applied public_url/internal_url differ from the plan,
+// which Terraform rejects with "Provider produced inconsistent result after
+// apply" (and leaves state holding a stale, often comma-joined, URL).
+//
+// For public_url and internal_url we therefore keep the plan value whenever it
+// is known — the practitioner set a concrete value, which the backend stores as
+// sent, so the plan value is the source of truth. When the plan value is
+// null/unknown the URL is computed (auto-derived because it was left empty), so
+// we trust the API value. All other ingress fields (forward_ssl_session,
+// last_mile_security) are taken from the API response. Read() always reflects
+// the live API value.
+func reconcileIngressURLs(plan, fromAPI types.Object) types.Object {
+	if fromAPI.IsNull() || fromAPI.IsUnknown() {
+		return plan
+	}
+	if plan.IsNull() || plan.IsUnknown() {
+		return fromAPI
+	}
+	planAttrs := plan.Attributes()
+	apiAttrs := fromAPI.Attributes()
+	if planAttrs == nil || apiAttrs == nil {
+		return fromAPI
+	}
+
+	merged := make(map[string]attr.Value, len(apiAttrs))
+	for k, v := range apiAttrs {
+		merged[k] = v
+	}
+	for _, field := range []string{"public_url", "internal_url"} {
+		pv, ok := planAttrs[field].(types.String)
+		if !ok || pv.IsNull() || pv.IsUnknown() {
+			continue // computed/auto-derived — trust the API value
+		}
+		merged[field] = pv
+	}
+
+	obj, diags := types.ObjectValue(ingressAttrTypes, merged)
+	if diags.HasError() {
+		return fromAPI
+	}
+	return obj
 }
 
 // reconcileTracing returns the API-returned tracing value when the API response

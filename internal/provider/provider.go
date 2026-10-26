@@ -200,6 +200,9 @@ func (p *AnypointProvider) Configure(ctx context.Context, req provider.Configure
 		BaseURL:      stringValueOrEnv(config.BaseURL, "ANYPOINT_BASE_URL"),
 		Timeout:      int(config.Timeout.ValueInt64()),
 		Cache:        client.NewResponseCache(),
+		// Identify this provider (and the Terraform core driving it) on every
+		// Anypoint API request so backend traffic can be attributed to it.
+		UserAgent: client.UserAgent(p.version, req.TerraformVersion),
 	}
 
 	// Grant selection preserves the provider's long-standing behavior: the client picks
