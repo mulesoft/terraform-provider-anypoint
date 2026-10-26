@@ -81,7 +81,7 @@ resource "anypoint_managed_omni_gateway" "example" {
 
 Optional:
 
-- `public_url` (String) The public URL for the gateway ingress. Auto-derived from the target domain when empty.
+- `public_url` (String) The public URL for the gateway ingress. Auto-derived from the target domain when empty. On a shared space the platform assigns it and rejects changes, so leave it unset there.
 - `internal_url` (String) The internal URL for the gateway ingress. Auto-derived from the target domain when empty.
 - `forward_ssl_session` (Boolean) Whether to forward SSL sessions to upstream services. Defaults to `true`.
 - `last_mile_security` (Boolean) Whether to enable last-mile security (TLS between gateway and upstream). Defaults to `true`.

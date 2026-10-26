@@ -40,7 +40,7 @@ resource "anypoint_api_policy_mcp_transcoding" "example" {
         description = "Fetch a single pet by its identifier"
         method      = "GET"
         path        = "/pets/{petId}"
-        hasBody     = false
+        has_body    = false
       }
     ]
   }
@@ -75,7 +75,7 @@ resource "anypoint_api_policy_mcp_transcoding" "example" {
 
 Required:
 
-- `tools` (Dynamic) The full tool mapping for this upstream. Each entry describes one MCP tool and the HTTP operation it transcodes to — typically `name`, `description`, `method`, `path`, and whether the operation takes a request body.
+- `tools` (Dynamic) The full tool mapping for this upstream. Each entry describes one MCP tool and the HTTP operation it transcodes to — typically `name`, `description`, `method`, `path`, and `has_body` (whether the operation takes a request body). Write keys in snake_case: they are converted to the platform's camelCase on write and back on read, so a camelCase key such as `hasBody` shows a diff on every plan.
 
 ## Pointcut Data
 

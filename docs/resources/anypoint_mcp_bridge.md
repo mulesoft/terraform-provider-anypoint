@@ -191,7 +191,7 @@ The instance-level fields (`instance_label`, `approval_method`, `consumer_endpoi
 
 Changing a source API's **structure** requires replacement: its `label`, `upstream_uri`, `tls_context_id`, `asset_id`, `group_id` or `version`, or adding and removing whole `source_apis` entries. These live on the bridge's routing and upstreams, which the platform only accepts at create time. Terraform reports this as a "requires replacement" error; use `terraform apply -replace` to recreate the bridge. `port` and `base_path` are structural for the same reason.
 
-Destroying a bridge removes its instance and policies but deliberately leaves the generated Exchange asset published, so any client still referencing that asset version keeps working. Manage the asset with [`anypoint_exchange_asset`](anypoint_exchange_asset.md) if you want it removed too.
+Destroying a bridge removes its instance and policies and hard-deletes the current generated Exchange asset version (`asset_version`). Earlier versions published by tool edits are not deleted. To remove them, import each into [`anypoint_exchange_asset`](anypoint_exchange_asset.md) and destroy it.
 
 ## Schema
 
@@ -216,7 +216,7 @@ Destroying a bridge removes its instance and policies but deliberately leaves th
 
 - `id` (String) The numeric identifier of the MCP bridge instance, stored as a string.
 - `asset_id` (String) The generated Exchange asset ID.
-- `asset_version` (String) The generated Exchange asset version, starting at `1.0.0`. It advances whenever a tool edit republishes the asset, and instance-level edits leave it alone. It moves to the next **unused** patch version rather than always `+1`: destroying a bridge leaves its published asset versions behind, so a bridge recreated under the same name starts at `1.0.0` and skips past whatever its predecessor published.
+- `asset_version` (String) The generated Exchange asset version, starting at `1.0.0`. It advances whenever a tool edit republishes the asset, and instance-level edits leave it alone. It moves to the next **unused** patch version rather than always `+1`: destroying a bridge leaves its earlier asset versions behind, so a bridge recreated under the same name republishes `1.0.0` over its predecessor's, and its later tool edits skip past the other versions its predecessor left.
 - `product_version` (String) The product version.
 - `status` (String) The current status of the MCP bridge.
 - `technology` (String) The gateway technology backing the bridge.

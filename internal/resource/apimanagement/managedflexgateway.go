@@ -190,7 +190,8 @@ func (r *ManagedOmniGatewayResource) Schema(_ context.Context, _ resource.Schema
 				Attributes: map[string]schema.Attribute{
 					"public_url": schema.StringAttribute{
 						Description: "The public URL for the gateway ingress. " +
-							"Auto-derived from the target domain when empty.",
+							"Auto-derived from the target domain when empty. " +
+							"On a shared space the platform assigns it and rejects changes, so leave it unset there.",
 						Optional: true,
 						Computed: true,
 					},
