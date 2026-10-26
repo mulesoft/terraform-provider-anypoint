@@ -214,12 +214,23 @@ func (c *APIInstanceClient) GetGatewayInfo(ctx context.Context, orgID, envID, ga
 
 // --- CRUD Operations ---
 
+// createAPIInstanceRetryDelay is the backoff between CreateAPIInstance attempts (a var so
+// tests can shorten it).
+var createAPIInstanceRetryDelay = 20 * time.Second
+
+// apiNameRaceMessage is API Manager's 409 body when two instances of an asset that has no
+// instance yet are created at the same time: both try to create the asset's API record and
+// the loser is rejected although nothing conflicts. Live-verified 2026-10-27: the same
+// request succeeds once the record exists (e.g. terraform apply of 4 instances on one
+// asset, -parallelism=3).
+const apiNameRaceMessage = "This API (name) already exists"
+
 // CreateAPIInstance creates a new API instance in API Manager.
-// Retries up to 5 times with 20s backoff on GatewayNotReadyError,
-// which occurs when the gateway is still starting up.
+// Retries up to 5 times with 20s backoff on GatewayNotReadyError, which occurs when the
+// gateway is still starting up, and on the concurrent-create 409 (apiNameRaceMessage).
 func (c *APIInstanceClient) CreateAPIInstance(ctx context.Context, orgID, envID string, request *CreateAPIInstanceRequest) (*APIInstance, error) {
 	const maxRetries = 5
-	const retryDelay = 20 * time.Second
+	retryDelay := createAPIInstanceRetryDelay
 
 	url := fmt.Sprintf("%s/apimanager/xapi/v1/organizations/%s/environments/%s/apis", c.BaseURL, orgID, envID)
 
@@ -270,11 +281,14 @@ func (c *APIInstanceClient) CreateAPIInstance(ctx context.Context, orgID, envID 
 		if resp.StatusCode == http.StatusBadRequest && strings.Contains(string(body), "GatewayNotReadyError") {
 			continue
 		}
+		if resp.StatusCode == http.StatusConflict && strings.Contains(string(body), apiNameRaceMessage) {
+			continue
+		}
 
 		return nil, lastErr
 	}
 
-	return nil, fmt.Errorf("gateway not ready after %d retries: %w", maxRetries, lastErr)
+	return nil, fmt.Errorf("API instance not created after %d retries: %w", maxRetries, lastErr)
 }
 
 // GetAPIInstance retrieves an API instance by its numeric ID
