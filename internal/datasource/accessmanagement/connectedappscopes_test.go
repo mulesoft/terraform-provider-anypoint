@@ -138,7 +138,7 @@ func TestConnectedAppScopesDataSource_ReadClientTests(t *testing.T) {
 			mockHandler: func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertHTTPRequest(t, r, "GET", "/accounts/api/connectedApplications/test-app-id/scopes")
 				testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
-					"scopes": []map[string]interface{}{
+					"data": []map[string]interface{}{
 						{
 							"scope": "admin:cloudhub",
 							"context_params": map[string]interface{}{
@@ -150,6 +150,7 @@ func TestConnectedAppScopesDataSource_ReadClientTests(t *testing.T) {
 							"context_params": map[string]interface{}{},
 						},
 					},
+					"total": 2,
 				})
 			},
 			wantErr:        false,
@@ -161,7 +162,8 @@ func TestConnectedAppScopesDataSource_ReadClientTests(t *testing.T) {
 			mockHandler: func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertHTTPRequest(t, r, "GET", "/accounts/api/connectedApplications/test-app-id-no-scopes/scopes")
 				testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
-					"scopes": []map[string]interface{}{},
+					"data":  []map[string]interface{}{},
+					"total": 0,
 				})
 			},
 			wantErr:        false,
@@ -202,16 +204,16 @@ func TestConnectedAppScopesDataSource_ReadClientTests(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create handlers for different connected app IDs
 			handlers := map[string]func(w http.ResponseWriter, r *http.Request){
-				"/accounts/api/connectedApplications/test-app-id/scopes":                 tt.mockHandler,
-				"/accounts/api/connectedApplications/test-app-id-no-scopes/scopes":       tt.mockHandler,
-				"/accounts/api/connectedApplications/nonexistent-app-id/scopes":          tt.mockHandler,
-				"/accounts/api/connectedApplications/test-app-id-malformed-json/scopes":  tt.mockHandler,
+				"/accounts/api/connectedApplications/test-app-id/scopes":                tt.mockHandler,
+				"/accounts/api/connectedApplications/test-app-id-no-scopes/scopes":      tt.mockHandler,
+				"/accounts/api/connectedApplications/nonexistent-app-id/scopes":         tt.mockHandler,
+				"/accounts/api/connectedApplications/test-app-id-malformed-json/scopes": tt.mockHandler,
 			}
 			server := testutil.MockHTTPServer(t, handlers)
 
 			// Create client with mock server
 			scopesClient := &accessmanagement.ConnectedAppScopesClient{
-				UserAnypointClient: &client.UserAnypointClient{
+				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},
@@ -255,7 +257,7 @@ func TestConnectedAppScopesDataSource_Read(t *testing.T) {
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 		basePath: func(w http.ResponseWriter, r *http.Request) {
 			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
-				"scopes": []map[string]interface{}{
+				"data": []map[string]interface{}{
 					{
 						"scope": "admin:cloudhub",
 						"context_params": map[string]interface{}{
@@ -263,6 +265,7 @@ func TestConnectedAppScopesDataSource_Read(t *testing.T) {
 						},
 					},
 				},
+				"total": 1,
 			})
 		},
 	}
@@ -270,7 +273,7 @@ func TestConnectedAppScopesDataSource_Read(t *testing.T) {
 
 	ds := NewConnectedAppScopesDataSource().(*ConnectedAppScopesDataSource)
 	ds.client = &accessmanagement.ConnectedAppScopesClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -286,6 +289,7 @@ func TestConnectedAppScopesDataSource_Read(t *testing.T) {
 	scopeObjectType := tftypes.Object{
 		AttributeTypes: map[string]tftypes.Type{
 			"scope":          tftypes.String,
+			"display_name":   tftypes.String,
 			"context_params": tftypes.Map{ElementType: tftypes.String},
 		},
 	}
@@ -327,7 +331,7 @@ func TestConnectedAppScopesDataSource_Read_Error(t *testing.T) {
 
 	ds := NewConnectedAppScopesDataSource().(*ConnectedAppScopesDataSource)
 	ds.client = &accessmanagement.ConnectedAppScopesClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -343,6 +347,7 @@ func TestConnectedAppScopesDataSource_Read_Error(t *testing.T) {
 	scopeObjectType := tftypes.Object{
 		AttributeTypes: map[string]tftypes.Type{
 			"scope":          tftypes.String,
+			"display_name":   tftypes.String,
 			"context_params": tftypes.Map{ElementType: tftypes.String},
 		},
 	}

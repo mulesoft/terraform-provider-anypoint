@@ -4,11 +4,11 @@
 # Anypoint Platform Credentials
 anypoint_client_id     = "your-actual-client-id-here"
 anypoint_client_secret = "your-actual-client-secret-here"
+anypoint_username      = "your-anypoint-username"
+anypoint_password      = "your-anypoint-password"
 
 # Anypoint Platform URL
-anypoint_base_url = "https://anypoint.mulesoft.com"  # Production
-# anypoint_base_url = "https://stgx.anypoint.mulesoft.com"  # Staging
+anypoint_base_url = "https://anypoint.mulesoft.com"
 
 # Team Configuration
-org_id         = "your-organization-id-here"
-parent_team_id = "your-parent-team-id-here"  # Use organization ID for root team
+org_id = "your-organization-id-here"

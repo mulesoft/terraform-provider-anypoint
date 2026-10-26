@@ -168,6 +168,12 @@ func (c *ManagedOmniGatewayClient) CreateManagedOmniGateway(ctx context.Context,
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		// Gateway Manager requires the connected app to hold Runtime Manager server
+		// scopes (Manage/Read Servers, View Organization); a token missing them is
+		// rejected with 401/403. Surface actionable scope guidance, not a bare status.
+		if authErr := client.AuthContextErrorIfUnauthorized(resp.StatusCode, url, string(body)); authErr != nil {
+			return nil, authErr
+		}
 		return nil, fmt.Errorf("failed to create managed omni gateway with status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -213,6 +219,70 @@ func (c *ManagedOmniGatewayClient) GetManagedOmniGateway(ctx context.Context, or
 	}
 
 	return &gw, nil
+}
+
+// GetManagedOmniGatewayWithCounters reads a gateway and fills in the two fields the
+// xapi/v1 view leaves null: apiLimit and desiredStatus.
+//
+// The two views disagree on purpose. xapi/v1 reports a lifecycle status ("RUNNING")
+// while api/v1 reports the last applied configuration state ("APPLIED"), so status must
+// keep coming from xapi/v1; only the missing counters are taken from api/v1. Reading
+// everything from api/v1 instead would silently change what `status` means.
+//
+// Hydration is best-effort: a gateway that reads fine from xapi/v1 is returned as-is if
+// the supplementary call fails, rather than failing an otherwise successful read.
+func (c *ManagedOmniGatewayClient) GetManagedOmniGatewayWithCounters(ctx context.Context, orgID, envID, gatewayID string) (*ManagedOmniGateway, error) {
+	gw, err := c.GetManagedOmniGateway(ctx, orgID, envID, gatewayID)
+	if err != nil {
+		return nil, err
+	}
+
+	counters, err := c.getGatewayCounters(ctx, orgID, envID, gatewayID)
+	if err != nil {
+		return gw, nil
+	}
+	if gw.APILimit == 0 {
+		gw.APILimit = counters.APILimit
+	}
+	if gw.DesiredStatus == "" {
+		gw.DesiredStatus = counters.DesiredStatus
+	}
+	return gw, nil
+}
+
+// gatewayCounters is the slice of the api/v1 gateway view that xapi/v1 does not carry.
+type gatewayCounters struct {
+	APILimit      int    `json:"apiLimit"`
+	DesiredStatus string `json:"desiredStatus"`
+}
+
+func (c *ManagedOmniGatewayClient) getGatewayCounters(ctx context.Context, orgID, envID, gatewayID string) (*gatewayCounters, error) {
+	url := fmt.Sprintf("%s/gatewaymanager/api/v1/organizations/%s/environments/%s/gateways/%s", c.BaseURL, orgID, envID, gatewayID)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	req.Header.Set("X-ANYPNT-ORG-ID", orgID)
+	req.Header.Set("X-ANYPNT-ENV-ID", envID)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get gateway counters with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var out gatewayCounters
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+	return &out, nil
 }
 
 // UpdateManagedOmniGateway replaces an existing managed Omni Gateway (PUT).
@@ -308,6 +378,79 @@ func BuildIngressURLs(gwName string, domains []string) (publicURLs []string, int
 		}
 	}
 	return
+}
+
+// TargetTypeSharedSpace is the target type for a CloudHub 2.0 shared space.
+// Shared-space targets expose no per-target ingress domains and receive a
+// platform-assigned public URL (with a random slug the client cannot derive),
+// so the provider skips client-side ingress-URL derivation for them.
+const TargetTypeSharedSpace = "shared-space"
+
+// TargetTypePrivateSpace is the target type for a customer private space.
+// Private-space targets have provisioned ingress domains and the provider
+// derives the public/internal ingress URLs from them.
+const TargetTypePrivateSpace = "private-space"
+
+// GatewayTarget is a single deployable target (private space or shared space)
+// returned by the Runtime Fabric targets endpoint. Type is "private-space" for
+// a customer private space (ID is a UUID) or "shared-space" for a CloudHub 2.0
+// shared space (ID is a region slug like "cloudhub-us-east-1").
+type GatewayTarget struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+// ListTargets returns all deployment targets (private + shared spaces) available
+// to the org. The Runtime Fabric endpoint returns a bare JSON array; shared
+// spaces are region-wide and appear regardless of environment, so no environment
+// filter is applied.
+func (c *ManagedOmniGatewayClient) ListTargets(ctx context.Context, orgID string) ([]GatewayTarget, error) {
+	url := fmt.Sprintf("%s/runtimefabric/api/organizations/%s/targets", c.BaseURL, orgID)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	req.Header.Set("X-ANYPNT-ORG-ID", orgID)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to list deployment targets with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var targets []GatewayTarget
+	if err := json.NewDecoder(resp.Body).Decode(&targets); err != nil {
+		return nil, fmt.Errorf("failed to decode targets response: %w", err)
+	}
+
+	return targets, nil
+}
+
+// GetTargetType resolves the type ("private-space" | "shared-space") of a target
+// by matching targetID against the deployment-targets list. It returns an empty
+// string (and no error) when the target is not found, so callers can safely
+// default to the private-space behavior for backward compatibility.
+func (c *ManagedOmniGatewayClient) GetTargetType(ctx context.Context, orgID, targetID string) (string, error) {
+	targets, err := c.ListTargets(ctx, orgID)
+	if err != nil {
+		return "", err
+	}
+	for _, t := range targets {
+		if t.ID == targetID {
+			return t.Type, nil
+		}
+	}
+	return "", nil
 }
 
 // DeleteManagedOmniGateway deletes a managed Omni Gateway by ID

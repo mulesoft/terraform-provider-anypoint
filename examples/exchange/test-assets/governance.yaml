@@ -1,0 +1,12 @@
+#%Validation Profile 1.0
+profile: TF Demo Ruleset
+description: Minimal governance ruleset
+violation:
+  - operation-must-have-description
+validations:
+  operation-must-have-description:
+    message: Operations must have a description
+    targetClass: apiContract.Operation
+    propertyConstraints:
+      core.description:
+        minCount: 1

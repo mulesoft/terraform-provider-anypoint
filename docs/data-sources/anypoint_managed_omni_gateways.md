@@ -45,6 +45,6 @@ Read-Only:
 - `id` (String) The unique identifier of the gateway.
 - `name` (String) The name of the gateway.
 - `target_id` (String) The target (private space) ID the gateway is deployed to.
-- `status` (String) The current status of the gateway (e.g., `APPLIED`, `RUNNING`).
+- `status` (String) The current status of the gateway (e.g., `APPLYING` while provisioning, `RUNNING` once ready).
 - `date_created` (String) Timestamp when the gateway was created.
 - `last_updated` (String) Timestamp of the last update to the gateway.

@@ -48,6 +48,29 @@ This directory contains examples for managing Anypoint Platform API Management r
 
 ---
 
+### [Self-Managed Gateway](./self_managed_gateway/)
+- **Resource**: `anypoint_self_managed_gateway`
+- **Description**: Register a self-managed (connected-mode) Flex/Omni Gateway that you run on your own infrastructure. The platform does not provision a runtime — the resource mints a registration token you feed to `flexctl`, then tracks/deletes the gateway once the runtime self-registers.
+- **API**: `/standalone/api/v1/organizations/{orgId}/environments/{envId}/gatewaytokens` (mint) and `.../gateways` (list/get/delete) — *base paths verified on prod 2026-07-21*
+- **Use Cases**:
+  - Mint a connected-mode registration token without leaking key material into state
+  - Track a self-registered gateway's `gateway_id` / `status` / `last_update`
+  - Import an existing self-managed gateway (2-part `env/name` or 3-part `org/env/name` ID)
+- **Note**: Deleting a self-managed gateway is an async soft-delete — the platform flips the object's status to `DELETED` but keeps it in the list forever (a tombstone). Destroy is idempotent, and the resource skips tombstones when resolving by name.
+
+---
+
+### [Self-Managed Gateways Datasource](./self_managed_gateway_ds/)
+- **Data Source**: `anypoint_self_managed_gateways`
+- **Description**: List all self-managed (connected-mode) Flex gateways that have registered in an environment
+- **API**: `/standalone/api/v1/organizations/{orgId}/environments/{envId}/gateways` — *base path verified on prod 2026-07-21*
+- **Use Cases**:
+  - Enumerate registered gateways with their ID, name, status, `last_update`, tags, and per-status replica counts
+  - Filter to gateways currently reporting `CONNECTED`
+  - Set `include_deleted = true` to also surface soft-deleted (`DELETED`) tombstones for auditing
+
+---
+
 ### [API Policies](./policies/)
 - **Resource**: `anypoint_api_policy`
 - **Description**: Apply and configure API policies for security, rate limiting, and traffic management

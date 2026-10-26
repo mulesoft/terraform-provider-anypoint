@@ -1,0 +1,10 @@
+# Copy to terraform.tfvars and fill in real values:
+#   cp terraform.tfvars.example terraform.tfvars
+
+anypoint_client_id     = "<client_id>"
+anypoint_client_secret = "<client_secret>"
+anypoint_base_url      = "https://anypoint.mulesoft.com"
+
+org_id = "<org_id>"
+
+# connector_jar_path = "target/my-connector-mule-plugin.jar"

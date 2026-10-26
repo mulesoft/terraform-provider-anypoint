@@ -2,16 +2,18 @@
 page_title: "anypoint_connected_app_scopes Resource - terraform-provider-anypoint"
 subcategory: "Access Management"
 description: |-
-  Manages scopes for an Anypoint Connected Application using user authentication.
+  DEPRECATED. Manages scopes for an Anypoint Connected Application using user authentication.
 ---
 
 # anypoint_connected_app_scopes (Resource)
 
+!> **Deprecated:** Use the inline `scopes` attribute on the [`anypoint_connected_app`](anypoint_connected_app.md) resource instead, which manages the app and its scopes as a single authoritative resource. This standalone resource will be removed in a future release. **Migration:** move the `scopes = [...]` block into the corresponding `anypoint_connected_app` resource and remove this resource (a follow-up `terraform apply` reconciles the state — no scope changes occur on the platform since the inline attribute is authoritative over the same list).
+
 Manages scopes for an Anypoint Connected Application using user authentication.
 
-~> **Note:** This is an Access Management resource and requires the **admin provider** (`anypoint.admin`), which uses admin user credentials along with the `client_id` and `client_secret` of a connected app to authenticate on behalf of the user (`auth_type = "user"`). You must set `provider = anypoint.admin` on this resource. The default provider (connected app credentials only) does not have sufficient privileges for Access Management operations.
+~> **Authentication:** This Access Management resource works with a standard **client_credentials** connected app configured in the provider block — the same auth path as `anypoint_team`; a separate admin/user provider is **not** required. What matters is that the connected app holds the right **scopes / organization permissions** for the operation; a missing scope surfaces as `HTTP 401`/`403` (that is a missing-scope error, not a wrong auth mode). See [Authentication](../index.md).
 
--> **Connected App:** This resource requires an **admin connected app** configured with `auth_type = "user"` (user credentials + connected app client credentials). Use the `anypoint.admin` provider alias. A standard connected app (client credentials only) does not have sufficient privileges for Access Management operations.
+-> **User-based alternative (optional):** If you would rather rely on a user's permissions than grant the connected app the scopes directly, you can use an admin connected app with `auth_type = "user"` via the `anypoint.admin` provider alias. This is optional — a client_credentials app with the right scopes is sufficient.
 
 ## Example Usage
 

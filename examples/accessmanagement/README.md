@@ -31,7 +31,7 @@ All examples in this category require:
    terraform {
      required_providers {
        anypoint = {
-         source = "example.com/ankitsarda/anypoint"
+         source = "mulesoft/anypoint"
        }
      }
    }

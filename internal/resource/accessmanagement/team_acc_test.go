@@ -28,7 +28,7 @@ func TestAccTeamResource_basic(t *testing.T) {
 				Config: testAccTeamResource_basic(teamName),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckTeamExists(resourceName),
-					resource.TestCheckResourceAttr(resourceName, "team_name", teamName),
+					resource.TestCheckResourceAttr(resourceName, "name", teamName),
 					resource.TestCheckResourceAttr(resourceName, "team_type", "internal"),
 					resource.TestCheckResourceAttrSet(resourceName, "id"),
 					resource.TestCheckResourceAttrSet(resourceName, "organization_id"),
@@ -61,7 +61,7 @@ func TestAccTeamResource_complete(t *testing.T) {
 				Config: testAccTeamResource_withParent(parentTeamName, teamName),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckTeamExists(resourceName),
-					resource.TestCheckResourceAttr(resourceName, "team_name", teamName),
+					resource.TestCheckResourceAttr(resourceName, "name", teamName),
 					resource.TestCheckResourceAttr(resourceName, "team_type", "internal"),
 					resource.TestCheckResourceAttrSet(resourceName, "parent_team_id"),
 				),
@@ -85,7 +85,7 @@ func TestAccTeamResource_update(t *testing.T) {
 				Config: testAccTeamResource_basic(teamName),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckTeamExists(resourceName),
-					resource.TestCheckResourceAttr(resourceName, "team_name", teamName),
+					resource.TestCheckResourceAttr(resourceName, "name", teamName),
 				),
 			},
 			// Update and Read testing
@@ -93,7 +93,7 @@ func TestAccTeamResource_update(t *testing.T) {
 				Config: testAccTeamResource_basic(teamNameUpdated),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckTeamExists(resourceName),
-					resource.TestCheckResourceAttr(resourceName, "team_name", teamNameUpdated),
+					resource.TestCheckResourceAttr(resourceName, "name", teamNameUpdated),
 				),
 			},
 		},
@@ -137,9 +137,9 @@ func TestAccTeamResource_disappears(t *testing.T) {
 }
 
 func testAccCheckTeamDestroy(s *terraform.State) error {
-	userClient := acctest.CreateUserTestClient(nil) // This will use env vars
+	userClient := acctest.CreateTestClient(nil) // This will use env vars
 	teamClient := &accessmanagement.TeamClient{
-		UserAnypointClient: userClient,
+		AnypointClient: userClient,
 	}
 
 	for _, rs := range s.RootModule().Resources {
@@ -171,9 +171,9 @@ func testAccCheckTeamExists(resourceName string) resource.TestCheckFunc {
 			return fmt.Errorf("resource ID is not set")
 		}
 
-		userClient := acctest.CreateUserTestClient(nil) // This will use env vars
+		userClient := acctest.CreateTestClient(nil) // This will use env vars
 		teamClient := &accessmanagement.TeamClient{
-			UserAnypointClient: userClient,
+			AnypointClient: userClient,
 		}
 
 		_, err := teamClient.GetTeam(context.Background(), rs.Primary.Attributes["organization_id"], rs.Primary.ID)
@@ -192,9 +192,9 @@ func testAccCheckTeamResourceDisappears(resourceName string) resource.TestCheckF
 			return fmt.Errorf("resource not found: %s", resourceName)
 		}
 
-		userClient := acctest.CreateUserTestClient(nil) // This will use env vars
+		userClient := acctest.CreateTestClient(nil) // This will use env vars
 		teamClient := &accessmanagement.TeamClient{
-			UserAnypointClient: userClient,
+			AnypointClient: userClient,
 		}
 
 		return teamClient.DeleteTeam(context.Background(), rs.Primary.Attributes["organization_id"], rs.Primary.ID)
@@ -205,7 +205,7 @@ func testAccCheckTeamResourceDisappears(resourceName string) resource.TestCheckF
 func testAccTeamResource_basic(name string) string {
 	return fmt.Sprintf(`
 resource "anypoint_team" "test" {
-  team_name = %[1]q
+  name = %[1]q
   team_type = "internal"
 }
 `, name)
@@ -214,12 +214,12 @@ resource "anypoint_team" "test" {
 func testAccTeamResource_withParent(parentName, childName string) string {
 	return fmt.Sprintf(`
 resource "anypoint_team" "parent" {
-  team_name = %[1]q
+  name = %[1]q
   team_type = "internal"
 }
 
 resource "anypoint_team" "test" {
-  team_name      = %[2]q
+  name           = %[2]q
   team_type      = "internal"
   parent_team_id = anypoint_team.parent.id
 }
@@ -229,7 +229,7 @@ resource "anypoint_team" "test" {
 func testAccTeamResource_invalidType(name string) string {
 	return fmt.Sprintf(`
 resource "anypoint_team" "test" {
-  team_name = %[1]q
+  name = %[1]q
   team_type = "invalid_type"
 }
 `, name)

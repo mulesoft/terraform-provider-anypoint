@@ -138,7 +138,7 @@ func (d *ManagedOmniGatewaySingleDataSource) Schema(_ context.Context, _ datasou
 			},
 			"status": schema.StringAttribute{
 				Computed:    true,
-				Description: "The current status of the gateway (e.g. APPLIED).",
+				Description: "The current status of the gateway (e.g. APPLYING while provisioning, RUNNING once ready).",
 			},
 			"desired_status": schema.StringAttribute{
 				Computed:    true,
@@ -263,7 +263,7 @@ func (d *ManagedOmniGatewaySingleDataSource) Read(ctx context.Context, req datas
 	envID := data.EnvironmentID.ValueString()
 	gatewayID := data.ID.ValueString()
 
-	gw, err := d.client.GetManagedOmniGateway(ctx, orgID, envID, gatewayID)
+	gw, err := d.client.GetManagedOmniGatewayWithCounters(ctx, orgID, envID, gatewayID)
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading managed Omni Gateway", err.Error())
 		return

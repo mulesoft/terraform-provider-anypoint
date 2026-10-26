@@ -22,7 +22,8 @@ var (
 
 // ConnectedAppScopesDataSource is the data source implementation.
 type ConnectedAppScopesDataSource struct {
-	client *accessmanagement.ConnectedAppScopesClient
+	client        *accessmanagement.ConnectedAppScopesClient
+	catalogClient *accessmanagement.ScopesCatalogClient
 }
 
 // ConnectedAppScopesDataSourceModel describes the data source data model.
@@ -35,6 +36,7 @@ type ConnectedAppScopesDataSourceModel struct {
 // ScopeDataSourceModel represents a single scope within the set
 type ScopeDataSourceModel struct {
 	Scope         types.String `tfsdk:"scope"`
+	DisplayName   types.String `tfsdk:"display_name"`
 	ContextParams types.Map    `tfsdk:"context_params"`
 }
 
@@ -66,11 +68,15 @@ func (d *ConnectedAppScopesDataSource) Schema(_ context.Context, _ datasource.Sc
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"scope": schema.StringAttribute{
-							Description: "The scope name (e.g., 'admin:cloudhub', 'read:applications').",
+							Description: "The scope identifier (e.g., 'read:applications', 'create:generations').",
+							Computed:    true,
+						},
+						"display_name": schema.StringAttribute{
+							Description: "The human-readable display name shown in the Anypoint UI (e.g., 'Read Applications', 'Mule Developer Generative AI User'). Resolved from the scopes catalog.",
 							Computed:    true,
 						},
 						"context_params": schema.MapAttribute{
-							Description: "Context parameters for the scope (e.g., organization ID).",
+							Description: "Context parameters for the scope (e.g., organization ID, environment ID).",
 							Computed:    true,
 							ElementType: types.StringType,
 						},
@@ -97,18 +103,8 @@ func (d *ConnectedAppScopesDataSource) Configure(_ context.Context, req datasour
 		return
 	}
 
-	// Create user client config - ConnectedAppScopesClient requires UserClientConfig
-	userConfig := &client.UserClientConfig{
-		BaseURL:      config.BaseURL,
-		ClientID:     config.ClientID,
-		ClientSecret: config.ClientSecret,
-		Username:     config.Username,
-		Password:     config.Password,
-		Timeout:      config.Timeout,
-	}
-
 	// Create the connected app scopes client
-	scopesClient, err := accessmanagement.NewConnectedAppScopesClient(userConfig)
+	scopesClient, err := accessmanagement.NewConnectedAppScopesClient(config)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Anypoint Connected App Scopes API Client",
@@ -119,7 +115,18 @@ func (d *ConnectedAppScopesDataSource) Configure(_ context.Context, req datasour
 		return
 	}
 
+	// Create catalog client for display name resolution
+	catalogClient, err := accessmanagement.NewScopesCatalogClient(config)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to Create Scopes Catalog Client",
+			"Client Error: "+err.Error(),
+		)
+		return
+	}
+
 	d.client = scopesClient
+	d.catalogClient = catalogClient
 }
 
 // Read refreshes the Terraform state with the latest data.
@@ -144,11 +151,24 @@ func (d *ConnectedAppScopesDataSource) Read(ctx context.Context, req datasource.
 		return
 	}
 
+	// Fetch the scopes catalog for display name resolution
+	var displayNameMap map[string]string
+	if d.catalogClient != nil {
+		catalog, err := d.catalogClient.ListScopesCatalog(ctx)
+		if err == nil {
+			displayNameMap = make(map[string]string, len(catalog))
+			for _, entry := range catalog {
+				displayNameMap[entry.Scope] = entry.DisplayName
+			}
+		}
+		// Non-fatal: if catalog fetch fails, display_name will just be empty
+	}
+
 	// Set the ID to the connected app ID
 	data.ID = types.StringValue(connectedAppID)
 
 	// Convert API response to Terraform state
-	if err := d.updateStateFromAPI(ctx, &data, scopes); err != nil {
+	if err := d.updateStateFromAPI(ctx, &data, scopes, displayNameMap); err != nil {
 		resp.Diagnostics.AddError(
 			"Error updating state",
 			"Could not update state from API response: "+err.Error(),
@@ -160,8 +180,9 @@ func (d *ConnectedAppScopesDataSource) Read(ctx context.Context, req datasource.
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-// updateStateFromAPI is a helper function to convert API response to Terraform state
-func (d *ConnectedAppScopesDataSource) updateStateFromAPI(_ context.Context, data *ConnectedAppScopesDataSourceModel, apiScopes *accessmanagement.ConnectedAppScopes) error {
+// updateStateFromAPI is a helper function to convert API response to Terraform state.
+// displayNameMap maps scope identifiers to their UI display names (from the catalog).
+func (d *ConnectedAppScopesDataSource) updateStateFromAPI(_ context.Context, data *ConnectedAppScopesDataSourceModel, apiScopes *accessmanagement.ConnectedAppScopes, displayNameMap map[string]string) error {
 	// Convert API scopes to Terraform attribute values
 	var scopeObjects []attr.Value
 
@@ -190,14 +211,24 @@ func (d *ConnectedAppScopesDataSource) updateStateFromAPI(_ context.Context, dat
 			}
 		}
 
+		// Resolve display name from catalog
+		displayName := ""
+		if displayNameMap != nil {
+			if dn, ok := displayNameMap[apiScope.Scope]; ok {
+				displayName = dn
+			}
+		}
+
 		// Create scope object
 		scopeAttrs := map[string]attr.Value{
 			"scope":          types.StringValue(apiScope.Scope),
+			"display_name":   types.StringValue(displayName),
 			"context_params": contextParams,
 		}
 
 		scopeObject, diags := types.ObjectValue(map[string]attr.Type{
 			"scope":          types.StringType,
+			"display_name":   types.StringType,
 			"context_params": types.MapType{ElemType: types.StringType},
 		}, scopeAttrs)
 
@@ -212,6 +243,7 @@ func (d *ConnectedAppScopesDataSource) updateStateFromAPI(_ context.Context, dat
 	scopesSet, diags := types.SetValue(types.ObjectType{
 		AttrTypes: map[string]attr.Type{
 			"scope":          types.StringType,
+			"display_name":   types.StringType,
 			"context_params": types.MapType{ElemType: types.StringType},
 		},
 	}, scopeObjects)

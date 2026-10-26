@@ -410,11 +410,20 @@ func (r *SLATierResource) flattenTier(ctx context.Context, tier *apimanagement.S
 	data.Name = types.StringValue(tier.Name)
 	data.AutoApprove = types.BoolValue(tier.AutoApprove)
 
+	// description and status are Optional+Computed, so the plan carries them as unknown
+	// whenever they are not set in configuration. The tier endpoints do not always echo
+	// them back on update; leaving the unknown in place then fails the apply with
+	// "Provider returned invalid result object after apply". Resolve them to null when
+	// the platform reports nothing, so every computed value is known once apply returns.
 	if tier.Description != "" {
 		data.Description = types.StringValue(tier.Description)
+	} else if data.Description.IsUnknown() {
+		data.Description = types.StringNull()
 	}
 	if tier.Status != "" {
 		data.Status = types.StringValue(tier.Status)
+	} else if data.Status.IsUnknown() {
+		data.Status = types.StringNull()
 	}
 
 	limitModels := make([]SLALimitModel, len(tier.Limits))
