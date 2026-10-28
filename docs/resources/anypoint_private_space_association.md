@@ -9,9 +9,13 @@ description: |-
 
 Creates and manages associations between a CloudHub 2.0 private space and environments.
 
--> **Authentication:** This resource calls the **CloudHub 2.0 private-space (Runtime Manager) control-plane API**. A `client_credentials` Connected App works — grant it the **Cloudhub Organization Admin** (`admin:cloudhub`) scope (plus **Manage Runtime Fabrics** for some operations). A Connected App missing these scopes is rejected with `HTTP 401`/`403` before anything is created; the fix is to add the scopes (or use `auth_type = "user"` with a user that has the equivalent permissions). See [Authentication](../index.md#control-plane-resources-need-the-right-scopes-important).
+-> **Authentication:** This resource calls the **CloudHub 2.0 private-space (Runtime Manager) control-plane API**. A `client_credentials` Connected App works — grant it the **Cloudhub Organization Admin** (`admin:cloudhub`) scope (plus **Manage Runtime Fabrics** for some operations) on the organization that **owns** the private space. A Connected App missing these scopes is rejected with `HTTP 401`/`403` before anything is created; the fix is to add the scopes (or use `auth_type = "user"` with a user that has the equivalent permissions). See [Authentication](../index.md#control-plane-resources-need-the-right-scopes-important).
+
+!> **Owning organization:** Set top-level `organization_id` to the organization that **owns** the private space. When a CloudHub 2.0 private space is created under a Business Group (sub-org), omitting `organization_id` falls back to the connected app's org (often the root). The control-plane API then returns `404 "Private space … not found"` even though the ID is correct. Nested `associations[].organization_id` is which org/env to associate — it is not a substitute for the owning org on the resource.
 
 ## Example Usage
+
+**Private space owned by the connected app's default org** (root org is typical):
 
 ```terraform
 resource "anypoint_private_space_association" "example" {
@@ -26,6 +30,22 @@ resource "anypoint_private_space_association" "example" {
 }
 ```
 
+**Private space owned by a Business Group** — set resource-level `organization_id` to that BG:
+
+```terraform
+resource "anypoint_private_space_association" "bg_owned" {
+  organization_id  = var.business_group_id # must be the org that owns the private space
+  private_space_id = var.private_space_id
+
+  associations = [
+    {
+      organization_id = var.business_group_id
+      environment     = var.environment_id
+    }
+  ]
+}
+```
+
 ## Schema
 
 ### Required
@@ -34,7 +54,7 @@ resource "anypoint_private_space_association" "example" {
 
 ### Optional
 
-- `organization_id` (String) The organization ID. If not provided, the organization ID will be inferred from the connected app credentials.
+- `organization_id` (String) The organization ID that **owns** the private space. Required when the private space belongs to a Business Group (sub-org) rather than the connected app's default org. The associations API path is `/organizations/{organization_id}/privatespaces/{id}/...`; using any other org returns HTTP 404 `"Private space not found"`. If omitted, the organization ID is inferred from the connected app credentials.
 - `associations` (Block List) List of associations to create between the private space and environments. When omitted, the provider reads the existing associations from the API and populates this field automatically. See [below for nested schema](#nestedschema--associations).
 
 ### Read-Only

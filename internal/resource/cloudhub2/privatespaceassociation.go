@@ -65,9 +65,13 @@ func (r *PrivateSpaceAssociationResource) Schema(_ context.Context, _ resource.S
 				Required:    true,
 			},
 			"organization_id": schema.StringAttribute{
-				Description: "The organization ID. If not provided, the provider's default organization will be used.",
-				Optional:    true,
-				Computed:    true,
+				Description: "The organization ID that **owns** the private space. Required when the private space " +
+					"belongs to a Business Group (sub-org) rather than the connected app's default org. " +
+					"The associations API path is `/organizations/{organization_id}/privatespaces/{id}/...`; " +
+					"using any other org returns HTTP 404 \"Private space not found\". " +
+					"If omitted, the provider's default organization (from connected-app credentials) is used.",
+				Optional: true,
+				Computed: true,
 			},
 			"associations": schema.ListNestedAttribute{
 				Description: "List of associations to create between the private space and environments.",

@@ -13,8 +13,11 @@ provider "anypoint" {
   base_url      = var.anypoint_base_url
 }
 
-# Create Private Space Associations
+# Create Private Space Associations.
+# organization_id must be the org that OWNS the private space. If the PS lives
+# under a Business Group and you omit it, the API returns 404 "Private space not found".
 resource "anypoint_private_space_association" "example" {
+  # organization_id  = var.organization_id # set when the private space is BG-owned
   private_space_id = var.private_space_id
   associations = [
     # {
