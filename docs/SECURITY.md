@@ -152,7 +152,7 @@ Concrete examples:
    Most CloudHub 2.0, API Manager, and DLB endpoints accept client_credentials
    and do not need user context. Reserve the admin username/password for
    Access Management resources (`anypoint_organization`, `anypoint_role`,
-   `anypoint_team_roles`, …) that genuinely need user-context tokens.
+   `anypoint_team`, …) that genuinely need user-context tokens.
 
 3. **Keep one connected app per automation boundary.**
    One god-mode connected app used by three teams is a rotation hazard. Issue

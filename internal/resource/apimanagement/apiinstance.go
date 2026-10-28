@@ -3,6 +3,7 @@ package apimanagement
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -12,11 +13,13 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
@@ -71,6 +74,7 @@ type EndpointModel struct {
 	DeploymentType  types.String `tfsdk:"deployment_type"`
 	Type            types.String `tfsdk:"type"`
 	BasePath        types.String `tfsdk:"base_path"`
+	Port            types.Int64  `tfsdk:"port"`
 	ResponseTimeout types.Int64  `tfsdk:"response_timeout"`
 }
 
@@ -92,6 +96,7 @@ var endpointAttrTypes = map[string]attr.Type{
 	"deployment_type":  types.StringType,
 	"type":             types.StringType,
 	"base_path":        types.StringType,
+	"port":             types.Int64Type,
 	"response_timeout": types.Int64Type,
 }
 
@@ -106,6 +111,7 @@ func endpointFromObject(obj types.Object) *EndpointModel {
 		DeploymentType:  attrs["deployment_type"].(types.String),
 		Type:            attrs["type"].(types.String),
 		BasePath:        attrs["base_path"].(types.String),
+		Port:            attrs["port"].(types.Int64),
 		ResponseTimeout: attrs["response_timeout"].(types.Int64),
 	}
 }
@@ -120,12 +126,76 @@ func endpointToObject(ep *EndpointModel) types.Object {
 		"deployment_type":  ep.DeploymentType,
 		"type":             ep.Type,
 		"base_path":        ep.BasePath,
+		"port":             ep.Port,
 		"response_timeout": ep.ResponseTimeout,
 	})
 	if diags.HasError() {
 		return types.ObjectNull(endpointAttrTypes)
 	}
 	return obj
+}
+
+// defaultProxyPort is the Omni/Flex Gateway listener port used when the endpoint
+// does not specify one. The platform's "Add API" flow also defaults to 8081.
+const defaultProxyPort int64 = 8081
+
+// settleEndpointPort returns kept (the planned or prior-state endpoint that is
+// restored into state) with an unknown or null port replaced by the port
+// flattened from the API response, falling back to defaultProxyPort. Without
+// this, a config that omits port (Optional+Computed, UseStateForUnknown) leaves
+// port unknown after Create, and a state written before port existed keeps it
+// null, so the first Update plans it unknown and fails the same way.
+func settleEndpointPort(kept, fromAPI types.Object) types.Object {
+	ep := endpointFromObject(kept)
+	if ep == nil || (!ep.Port.IsUnknown() && !ep.Port.IsNull()) {
+		return kept
+	}
+	ep.Port = types.Int64Value(defaultProxyPort)
+	if api := endpointFromObject(fromAPI); api != nil && !api.Port.IsNull() && !api.Port.IsUnknown() {
+		ep.Port = api.Port
+	}
+	return endpointToObject(ep)
+}
+
+// buildProxyURI constructs the Omni/Flex Gateway proxy URI the platform expects
+// for an API instance: http://0.0.0.0:<port>/<base_path>. The port defaults to
+// 8081 when the endpoint's port is null/unknown so that instances written before
+// the port field existed (and configs that omit it) keep their historical URI.
+// A leading slash on base_path is trimmed so callers can write "/my-api" or
+// "my-api" interchangeably.
+func buildProxyURI(ep *EndpointModel) string {
+	port := defaultProxyPort
+	if ep != nil && !ep.Port.IsNull() && !ep.Port.IsUnknown() {
+		port = ep.Port.ValueInt64()
+	}
+	basePath := ""
+	if ep != nil && !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
+		basePath = strings.TrimPrefix(ep.BasePath.ValueString(), "/")
+	}
+	return fmt.Sprintf("http://0.0.0.0:%d/%s", port, basePath)
+}
+
+// parseProxyURI recovers the base_path and listener port from a proxy URI the
+// platform returns (e.g. "http://0.0.0.0:8082/my-api"). It parses generically so
+// that instances on any port — not just the legacy hardcoded 8081 — round-trip
+// correctly. When the port cannot be determined it falls back to 8081. basePath
+// is returned as a bare path with no leading slash (empty string for a root "/"
+// listener), mirroring what buildProxyURI accepts.
+func parseProxyURI(proxyURI string) (basePath string, port int64) {
+	port = defaultProxyPort
+	u, err := url.Parse(proxyURI)
+	if err != nil {
+		// Fall back to the legacy literal-prefix strip so a malformed but
+		// 8081-shaped URI still yields a sensible base path.
+		return strings.TrimPrefix(proxyURI, "http://0.0.0.0:8081/"), port
+	}
+	basePath = strings.TrimPrefix(u.Path, "/")
+	if p := u.Port(); p != "" {
+		if pi, e := strconv.ParseInt(p, 10, 64); e == nil {
+			port = pi
+		}
+	}
+	return basePath, port
 }
 
 // deploymentAttrTypes maps DeploymentModel field names to their Terraform types.
@@ -306,9 +376,10 @@ func (r *APIInstanceResource) Schema(_ context.Context, _ resource.SchemaRequest
 			"status": schema.StringAttribute{
 				Description: "The current status of the API instance.",
 				Computed:    true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
+				// No UseStateForUnknown: the platform moves status on its own
+				// (unregistered -> active once the gateway picks the API up), so
+				// copying the prior value into an update plan makes the apply fail
+				// with "inconsistent result" whenever it moved in between.
 			},
 			"asset_id": schema.StringAttribute{
 				Description: "The Exchange asset ID (computed from API response).",
@@ -372,18 +443,44 @@ func (r *APIInstanceResource) Schema(_ context.Context, _ resource.SchemaRequest
 						},
 					},
 					"type": schema.StringAttribute{
-						Description: "Endpoint protocol type. Valid values: 'http', 'rest', 'raml'.",
-						Optional:    true,
-						Computed:    true,
-						Default:     stringdefault.StaticString("http"),
+						Description: "Endpoint protocol type. Valid values: 'http', 'rest', 'raml', 'wsdl', " +
+							"'graphql', 'grpc', 'websocket'. The value must be compatible with the backing " +
+							"Exchange asset's type — e.g. a 'graphql' Exchange asset requires endpoint type " +
+							"'graphql', and a 'grpc-api' asset requires 'grpc'. Defaults to 'http'.",
+						Optional: true,
+						Computed: true,
+						Default:  stringdefault.StaticString("http"),
 						Validators: []validator.String{
-							stringvalidator.OneOf("http", "rest", "raml"),
+							stringvalidator.OneOf("http", "rest", "raml", "wsdl", "graphql", "grpc", "websocket"),
 						},
 					},
 					"base_path": schema.StringAttribute{
 						Description: "API base path for the Omni Gateway proxy listener (e.g. 'my-api'). " +
-							"The provider constructs the full proxy URI as http://0.0.0.0:8081/<base_path>.",
+							"The provider constructs the full proxy URI as http://0.0.0.0:<port>/<base_path> " +
+							"(see 'port' for the listener port). A single gateway can host multiple API " +
+							"instances either on distinct ports or on the same port under distinct, non-root " +
+							"base paths; a base path of '/' is a catch-all that monopolizes the whole port.",
 						Optional: true,
+					},
+					"port": schema.Int64Attribute{
+						Description: "Listener port for the Omni/Flex Gateway proxy (the port in the constructed " +
+							"proxy URI http://0.0.0.0:<port>/<base_path>). Defaults to 8081. Set a distinct " +
+							"port to host multiple API instances on the same gateway without sharing a base path. " +
+							"Omitting it on an existing instance keeps whatever port that instance is already using.",
+						Optional: true,
+						Computed: true,
+						PlanModifiers: []planmodifier.Int64{
+							// Deliberately NOT a static Default of 8081, for the same reason
+							// anypoint_mcp_bridge's port is not: a Default wins over prior state
+							// whenever the config omits the attribute. `port` is NEW, so no
+							// existing config can mention it — every upgraded instance would
+							// plan <live port> -> 8081 and the apply would PATCH the proxy URI,
+							// silently moving a production listener off its port.
+							// UseStateForUnknown makes "omitted" mean "leave it alone"; new
+							// instances still land on 8081 because buildProxyURI and
+							// flattenInstance both fall back to defaultProxyPort.
+							int64planmodifier.UseStateForUnknown(),
+						},
 					},
 					"response_timeout": schema.Int64Attribute{
 						Description: "Response timeout in milliseconds.",
@@ -675,7 +772,7 @@ func (r *APIInstanceResource) Create(ctx context.Context, req resource.CreateReq
 		data.Routing = plannedRouting
 	}
 	if !plannedEndpoint.IsNull() && !plannedEndpoint.IsUnknown() {
-		data.Endpoint = plannedEndpoint
+		data.Endpoint = settleEndpointPort(plannedEndpoint, data.Endpoint)
 	}
 	data.Deployment = mergeDeploymentObjects(data.Deployment, plannedDeployment)
 	if !plannedConsumerEndpoint.IsNull() && !plannedConsumerEndpoint.IsUnknown() {
@@ -751,7 +848,7 @@ func (r *APIInstanceResource) Read(ctx context.Context, req resource.ReadRequest
 		data.Routing = existingRouting
 	}
 	if !existingEndpoint.IsNull() && !existingEndpoint.IsUnknown() {
-		data.Endpoint = existingEndpoint
+		data.Endpoint = settleEndpointPort(existingEndpoint, data.Endpoint)
 	}
 	data.Deployment = mergeDeploymentObjects(data.Deployment, existingDeployment)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -795,6 +892,33 @@ func (r *APIInstanceResource) ModifyPlan(ctx context.Context, req resource.Modif
 		// expects it to be recomputed during apply.
 		plan.AssetVersion = types.StringUnknown()
 		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+	}
+	keepStatusWhenNoOp(ctx, req, resp)
+}
+
+// keepStatusWhenNoOp restores the prior status when that turns the plan into a
+// true no-op. status has no UseStateForUnknown (the platform moves it on its own),
+// so whenever the framework marks computed attributes unknown, e.g. because core
+// proposes null for an omitted deployment block, status alone stays unknown and
+// the plan never settles. Restoring it only when plan == state means no Update
+// runs, so there is no apply result for it to be inconsistent with.
+func keepStatusWhenNoOp(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	statusPath := path.Root("status")
+	var planned, prior types.String
+	resp.Diagnostics.Append(resp.Plan.GetAttribute(ctx, statusPath, &planned)...)
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, statusPath, &prior)...)
+	if resp.Diagnostics.HasError() || !planned.IsUnknown() {
+		return
+	}
+	probe := tfsdk.Plan{Schema: resp.Plan.Schema, Raw: resp.Plan.Raw.Copy()}
+	if diags := probe.SetAttribute(ctx, statusPath, prior); diags.HasError() {
+		return
+	}
+	if probe.Raw.Equal(req.State.Raw) {
+		resp.Plan = probe
 	}
 }
 
@@ -896,6 +1020,7 @@ func (r *APIInstanceResource) Update(ctx context.Context, req resource.UpdateReq
 	gatewayID := plan.GatewayID
 	plannedRouting := plan.Routing
 	plannedEndpoint := plan.Endpoint
+	plannedDeployment := plan.Deployment
 	plannedUpstreamURI := plan.UpstreamURI
 	r.flattenInstance(ctx, instance, &plan, orgID, envID)
 	plan.GatewayID = gatewayID
@@ -906,8 +1031,12 @@ func (r *APIInstanceResource) Update(ctx context.Context, req resource.UpdateReq
 		plan.Routing = plannedRouting
 	}
 	if !plannedEndpoint.IsNull() && !plannedEndpoint.IsUnknown() {
-		plan.Endpoint = plannedEndpoint
+		plan.Endpoint = settleEndpointPort(plannedEndpoint, plan.Endpoint)
 	}
+	// Same as Create/Read: known planned deployment values win over the live GET,
+	// otherwise a value the platform fills in later (gateway_version "" -> "1.14.4")
+	// makes the first Update fail with "inconsistent result after apply".
+	plan.Deployment = mergeDeploymentObjects(plan.Deployment, plannedDeployment)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -1019,11 +1148,7 @@ func (r *APIInstanceResource) expandCreateRequest(ctx context.Context, data APII
 
 		req.Endpoint.TLSContexts = &apimanagement.APIInstanceTLSContexts{}
 
-		basePath := ""
-		if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
-			basePath = strings.TrimPrefix(ep.BasePath.ValueString(), "/")
-		}
-		proxyURI := "http://0.0.0.0:8081/" + basePath
+		proxyURI := buildProxyURI(ep)
 		req.Endpoint.ProxyURI = &proxyURI
 	}
 
@@ -1078,11 +1203,7 @@ func (r *APIInstanceResource) expandUpdateRequest(ctx context.Context, data APII
 
 		req.Endpoint.TLSContexts = &apimanagement.APIInstanceTLSContexts{}
 
-		basePath := ""
-		if !ep.BasePath.IsNull() && !ep.BasePath.IsUnknown() {
-			basePath = strings.TrimPrefix(ep.BasePath.ValueString(), "/")
-		}
-		proxyURI := "http://0.0.0.0:8081/" + basePath
+		proxyURI := buildProxyURI(ep)
 		req.Endpoint.ProxyURI = &proxyURI
 	}
 
@@ -1470,9 +1591,12 @@ func (r *APIInstanceResource) flattenInstance(_ context.Context, inst *apimanage
 		}
 
 		if inst.Endpoint.ProxyURI != nil && *inst.Endpoint.ProxyURI != "" {
-			ep.BasePath = types.StringValue(strings.TrimPrefix(*inst.Endpoint.ProxyURI, "http://0.0.0.0:8081/"))
+			basePath, port := parseProxyURI(*inst.Endpoint.ProxyURI)
+			ep.BasePath = types.StringValue(basePath)
+			ep.Port = types.Int64Value(port)
 		} else {
 			ep.BasePath = types.StringNull()
+			ep.Port = types.Int64Value(defaultProxyPort)
 		}
 
 		if inst.Endpoint.ResponseTimeout != nil {

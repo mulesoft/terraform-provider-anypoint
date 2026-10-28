@@ -35,3 +35,9 @@ variable "instance_label" {
   type        = string
   default     = "orders-api"
 }
+
+variable "gateway_id" {
+  description = "Gateway (deployment target) ID to filter API instances by, e.g. a self-managed gateway ID"
+  type        = string
+  default     = "<gateway_id>"
+}

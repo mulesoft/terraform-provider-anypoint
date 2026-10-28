@@ -14,13 +14,13 @@ import (
 func TestNewConnectedAppScopesClient(t *testing.T) {
 	tests := []struct {
 		name        string
-		config      *client.UserClientConfig
+		config      *client.Config
 		wantErr     bool
 		errContains string
 	}{
 		{
 			name: "valid config",
-			config: &client.UserClientConfig{
+			config: &client.Config{
 				ClientID:     "test-client-id",
 				ClientSecret: "test-client-secret",
 				Username:     "test-user",
@@ -30,7 +30,7 @@ func TestNewConnectedAppScopesClient(t *testing.T) {
 		},
 		{
 			name: "missing client ID",
-			config: &client.UserClientConfig{
+			config: &client.Config{
 				ClientSecret: "test-client-secret",
 			},
 			wantErr:     true,
@@ -38,7 +38,7 @@ func TestNewConnectedAppScopesClient(t *testing.T) {
 		},
 		{
 			name: "missing client secret",
-			config: &client.UserClientConfig{
+			config: &client.Config{
 				ClientID: "test-client-id",
 			},
 			wantErr:     true,
@@ -129,7 +129,7 @@ func TestConnectedAppScopesClient_UpdateConnectedAppScopes(t *testing.T) {
 			server := testutil.MockHTTPServer(t, handlers)
 
 			client := &ConnectedAppScopesClient{
-				UserAnypointClient: &client.UserAnypointClient{
+				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},
@@ -196,7 +196,7 @@ func TestConnectedAppScopesClient_GetConnectedAppScopes(t *testing.T) {
 			server := testutil.MockHTTPServer(t, handlers)
 
 			client := &ConnectedAppScopesClient{
-				UserAnypointClient: &client.UserAnypointClient{
+				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},

@@ -8,8 +8,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
-	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	anypointclient "github.com/mulesoft/terraform-provider-anypoint/internal/client"
 	apimgmtclient "github.com/mulesoft/terraform-provider-anypoint/internal/client/apimanagement"
@@ -129,24 +129,24 @@ func nullAPIInstanceState(t *testing.T, r *APIInstanceResource) map[string]tftyp
 	stateType := schemaResp.Schema.Type().TerraformType(ctx)
 	objType := stateType.(tftypes.Object)
 	return map[string]tftypes.Value{
-		"id":               tftypes.NewValue(tftypes.String, nil),
-		"organization_id":  tftypes.NewValue(tftypes.String, nil),
-		"environment_id":   tftypes.NewValue(tftypes.String, "env-1"),
-		"technology":       tftypes.NewValue(tftypes.String, "omniGateway"),
-		"provider_id":      tftypes.NewValue(tftypes.String, nil),
-		"instance_label":   tftypes.NewValue(tftypes.String, nil),
-		"approval_method":  tftypes.NewValue(tftypes.String, nil),
-		"status":           tftypes.NewValue(tftypes.String, nil),
-		"asset_id":         tftypes.NewValue(tftypes.String, nil),
-		"asset_version":    tftypes.NewValue(tftypes.String, nil),
-		"product_version":  tftypes.NewValue(tftypes.String, nil),
+		"id":                tftypes.NewValue(tftypes.String, nil),
+		"organization_id":   tftypes.NewValue(tftypes.String, nil),
+		"environment_id":    tftypes.NewValue(tftypes.String, "env-1"),
+		"technology":        tftypes.NewValue(tftypes.String, "omniGateway"),
+		"provider_id":       tftypes.NewValue(tftypes.String, nil),
+		"instance_label":    tftypes.NewValue(tftypes.String, nil),
+		"approval_method":   tftypes.NewValue(tftypes.String, nil),
+		"status":            tftypes.NewValue(tftypes.String, nil),
+		"asset_id":          tftypes.NewValue(tftypes.String, nil),
+		"asset_version":     tftypes.NewValue(tftypes.String, nil),
+		"product_version":   tftypes.NewValue(tftypes.String, nil),
 		"consumer_endpoint": tftypes.NewValue(tftypes.String, nil),
-		"upstream_uri":     tftypes.NewValue(tftypes.String, nil),
-		"gateway_id":       tftypes.NewValue(tftypes.String, nil),
-		"spec":             tftypes.NewValue(objType.AttributeTypes["spec"], nil),
-		"endpoint":         tftypes.NewValue(objType.AttributeTypes["endpoint"], nil),
-		"deployment":       tftypes.NewValue(objType.AttributeTypes["deployment"], nil),
-		"routing":          tftypes.NewValue(objType.AttributeTypes["routing"], nil),
+		"upstream_uri":      tftypes.NewValue(tftypes.String, nil),
+		"gateway_id":        tftypes.NewValue(tftypes.String, nil),
+		"spec":              tftypes.NewValue(objType.AttributeTypes["spec"], nil),
+		"endpoint":          tftypes.NewValue(objType.AttributeTypes["endpoint"], nil),
+		"deployment":        tftypes.NewValue(objType.AttributeTypes["deployment"], nil),
+		"routing":           tftypes.NewValue(objType.AttributeTypes["routing"], nil),
 	}
 }
 
@@ -175,6 +175,7 @@ func TestAPIInstanceResource_ValidateConfig(t *testing.T) {
 			"deployment_type":  tftypes.NewValue(tftypes.String, "CH"),
 			"type":             tftypes.NewValue(tftypes.String, "http"),
 			"base_path":        tftypes.NewValue(tftypes.String, nil),
+			"port":             tftypes.NewValue(tftypes.Number, nil),
 			"response_timeout": tftypes.NewValue(tftypes.Number, 5000),
 		})
 
@@ -254,24 +255,24 @@ func TestAPIInstanceResource_Read_Error(t *testing.T) {
 	objType := stateType.(tftypes.Object)
 
 	priorStateRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
-		"id":               tftypes.NewValue(tftypes.String, "42"),
-		"organization_id":  tftypes.NewValue(tftypes.String, "test-org-id"),
-		"environment_id":   tftypes.NewValue(tftypes.String, "test-env-id"),
-		"technology":       tftypes.NewValue(tftypes.String, "omniGateway"),
-		"provider_id":      tftypes.NewValue(tftypes.String, nil),
-		"instance_label":   tftypes.NewValue(tftypes.String, nil),
-		"approval_method":  tftypes.NewValue(tftypes.String, nil),
-		"status":           tftypes.NewValue(tftypes.String, nil),
-		"asset_id":         tftypes.NewValue(tftypes.String, nil),
-		"asset_version":    tftypes.NewValue(tftypes.String, nil),
-		"product_version":  tftypes.NewValue(tftypes.String, nil),
+		"id":                tftypes.NewValue(tftypes.String, "42"),
+		"organization_id":   tftypes.NewValue(tftypes.String, "test-org-id"),
+		"environment_id":    tftypes.NewValue(tftypes.String, "test-env-id"),
+		"technology":        tftypes.NewValue(tftypes.String, "omniGateway"),
+		"provider_id":       tftypes.NewValue(tftypes.String, nil),
+		"instance_label":    tftypes.NewValue(tftypes.String, nil),
+		"approval_method":   tftypes.NewValue(tftypes.String, nil),
+		"status":            tftypes.NewValue(tftypes.String, nil),
+		"asset_id":          tftypes.NewValue(tftypes.String, nil),
+		"asset_version":     tftypes.NewValue(tftypes.String, nil),
+		"product_version":   tftypes.NewValue(tftypes.String, nil),
 		"consumer_endpoint": tftypes.NewValue(tftypes.String, nil),
-		"upstream_uri":     tftypes.NewValue(tftypes.String, nil),
-		"gateway_id":       tftypes.NewValue(tftypes.String, nil),
-		"spec":             tftypes.NewValue(objType.AttributeTypes["spec"], nil),
-		"endpoint":         tftypes.NewValue(objType.AttributeTypes["endpoint"], nil),
-		"deployment":       tftypes.NewValue(objType.AttributeTypes["deployment"], nil),
-		"routing":          tftypes.NewValue(objType.AttributeTypes["routing"], nil),
+		"upstream_uri":      tftypes.NewValue(tftypes.String, nil),
+		"gateway_id":        tftypes.NewValue(tftypes.String, nil),
+		"spec":              tftypes.NewValue(objType.AttributeTypes["spec"], nil),
+		"endpoint":          tftypes.NewValue(objType.AttributeTypes["endpoint"], nil),
+		"deployment":        tftypes.NewValue(objType.AttributeTypes["deployment"], nil),
+		"routing":           tftypes.NewValue(objType.AttributeTypes["routing"], nil),
 	})
 
 	req := resource.ReadRequest{State: tfsdk.State{Schema: schemaResp.Schema, Raw: priorStateRaw}}
@@ -439,24 +440,24 @@ func TestAPIInstanceResource_ImportState_IDParsing(t *testing.T) {
 	stateType := schemaResp.Schema.Type().TerraformType(ctx)
 	objType := stateType.(tftypes.Object)
 	rawState := tftypes.NewValue(stateType, map[string]tftypes.Value{
-		"id":               tftypes.NewValue(tftypes.String, nil),
-		"organization_id":  tftypes.NewValue(tftypes.String, nil),
-		"environment_id":   tftypes.NewValue(tftypes.String, nil),
-		"technology":       tftypes.NewValue(tftypes.String, nil),
-		"provider_id":      tftypes.NewValue(tftypes.String, nil),
-		"instance_label":   tftypes.NewValue(tftypes.String, nil),
-		"approval_method":  tftypes.NewValue(tftypes.String, nil),
-		"status":           tftypes.NewValue(tftypes.String, nil),
-		"asset_id":         tftypes.NewValue(tftypes.String, nil),
-		"asset_version":    tftypes.NewValue(tftypes.String, nil),
-		"product_version":  tftypes.NewValue(tftypes.String, nil),
+		"id":                tftypes.NewValue(tftypes.String, nil),
+		"organization_id":   tftypes.NewValue(tftypes.String, nil),
+		"environment_id":    tftypes.NewValue(tftypes.String, nil),
+		"technology":        tftypes.NewValue(tftypes.String, nil),
+		"provider_id":       tftypes.NewValue(tftypes.String, nil),
+		"instance_label":    tftypes.NewValue(tftypes.String, nil),
+		"approval_method":   tftypes.NewValue(tftypes.String, nil),
+		"status":            tftypes.NewValue(tftypes.String, nil),
+		"asset_id":          tftypes.NewValue(tftypes.String, nil),
+		"asset_version":     tftypes.NewValue(tftypes.String, nil),
+		"product_version":   tftypes.NewValue(tftypes.String, nil),
 		"consumer_endpoint": tftypes.NewValue(tftypes.String, nil),
-		"upstream_uri":     tftypes.NewValue(tftypes.String, nil),
-		"gateway_id":       tftypes.NewValue(tftypes.String, nil),
-		"spec":             tftypes.NewValue(objType.AttributeTypes["spec"], nil),
-		"endpoint":         tftypes.NewValue(objType.AttributeTypes["endpoint"], nil),
-		"deployment":       tftypes.NewValue(objType.AttributeTypes["deployment"], nil),
-		"routing":          tftypes.NewValue(objType.AttributeTypes["routing"], nil),
+		"upstream_uri":      tftypes.NewValue(tftypes.String, nil),
+		"gateway_id":        tftypes.NewValue(tftypes.String, nil),
+		"spec":              tftypes.NewValue(objType.AttributeTypes["spec"], nil),
+		"endpoint":          tftypes.NewValue(objType.AttributeTypes["endpoint"], nil),
+		"deployment":        tftypes.NewValue(objType.AttributeTypes["deployment"], nil),
+		"routing":           tftypes.NewValue(objType.AttributeTypes["routing"], nil),
 	})
 
 	t.Run("valid 3-part ID parses correctly", func(t *testing.T) {
@@ -643,9 +644,9 @@ func TestImmutableFieldValidation(t *testing.T) {
 		}
 
 		plan := &SpecModel{
-			AssetID: types.StringValue("my-api"),       // Same
-			GroupID: types.StringValue("org-123"),      // Same
-			Version: types.StringValue("2.0.0"),        // CHANGED
+			AssetID: types.StringValue("my-api"),  // Same
+			GroupID: types.StringValue("org-123"), // Same
+			Version: types.StringValue("2.0.0"),   // CHANGED
 		}
 
 		if !state.AssetID.Equal(plan.AssetID) {

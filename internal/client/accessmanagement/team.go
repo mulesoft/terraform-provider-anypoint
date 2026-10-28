@@ -11,29 +11,45 @@ import (
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
 )
 
-// TeamClient wraps the UserAnypointClient for team operations.
-// The Anypoint Teams API requires user-level (password grant) authentication.
+// TeamClient wraps the AnypointClient for team operations.
 type TeamClient struct {
-	*client.UserAnypointClient
+	*client.AnypointClient
 }
 
 // NewTeamClient creates a new TeamClient
-func NewTeamClient(config *client.UserClientConfig) (*TeamClient, error) {
-	userAnypointClient, err := client.NewUserAnypointClient(config)
+func NewTeamClient(config *client.Config) (*TeamClient, error) {
+	anypointClient, err := client.NewAnypointClient(config)
 	if err != nil {
 		return nil, err
 	}
-	return &TeamClient{UserAnypointClient: userAnypointClient}, nil
+	return &TeamClient{AnypointClient: anypointClient}, nil
 }
 
 // Team represents an Anypoint team
 type Team struct {
-	ID        string `json:"team_id"`
-	TeamName  string `json:"team_name"`
-	OrgID     string `json:"org_id"`
-	TeamType  string `json:"team_type"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
+	ID              string   `json:"team_id"`
+	TeamName        string   `json:"team_name"`
+	OrgID           string   `json:"org_id"`
+	TeamType        string   `json:"team_type"`
+	AncestorTeamIDs []string `json:"ancestor_team_ids"`
+	CreatedAt       string   `json:"created_at"`
+	UpdatedAt       string   `json:"updated_at"`
+}
+
+// DirectParentID returns the team's immediate parent team ID, or "" for the root
+// team (which has no ancestors).
+//
+// The platform orders ancestor_team_ids from the ROOT down to the DIRECT PARENT —
+// i.e. root first, direct parent LAST. For a team nested as root > A > B, team B's
+// ancestor_team_ids is ["<root>", "<A>"], so the direct parent is the last element,
+// NOT the first. (Indexing [0] returns the root, which is only coincidentally the
+// direct parent for teams sitting one level below root — the reason this was missed
+// until the first 2-level-deep team was created.)
+func (t *Team) DirectParentID() string {
+	if len(t.AncestorTeamIDs) == 0 {
+		return ""
+	}
+	return t.AncestorTeamIDs[len(t.AncestorTeamIDs)-1]
 }
 
 // CreateTeamRequest represents the request to create a team
@@ -44,9 +60,11 @@ type CreateTeamRequest struct {
 }
 
 // UpdateTeamRequest represents the request to update a team (partial update)
-// Note: The PATCH API currently only supports updating team_name
+// The PATCH API supports updating team_name and team_type.
+// Note: team_type changes require the target type to be enabled in the organization.
 type UpdateTeamRequest struct {
 	TeamName *string `json:"team_name,omitempty"`
+	TeamType *string `json:"team_type,omitempty"`
 }
 
 // UpdateTeamParentRequest represents the request to update a team's parent
@@ -56,6 +74,7 @@ type UpdateTeamParentRequest struct {
 
 // CreateTeam creates a new team in Anypoint
 func (c *TeamClient) CreateTeam(ctx context.Context, orgID string, team *CreateTeamRequest) (*Team, error) {
+	defer c.invalidateTeamList(orgID)
 	url := fmt.Sprintf("%s/accounts/api/organizations/%s/teams", c.BaseURL, orgID)
 
 	jsonData, err := json.Marshal(team)
@@ -131,6 +150,7 @@ func (c *TeamClient) GetTeam(ctx context.Context, orgID, teamID string) (*Team, 
 
 // UpdateTeam updates an existing team using PATCH
 func (c *TeamClient) UpdateTeam(ctx context.Context, orgID, teamID string, team *UpdateTeamRequest) (*Team, error) {
+	defer c.invalidateTeamList(orgID)
 	url := fmt.Sprintf("%s/accounts/api/organizations/%s/teams/%s", c.BaseURL, orgID, teamID)
 
 	jsonData, err := json.Marshal(team)
@@ -172,6 +192,7 @@ func (c *TeamClient) UpdateTeam(ctx context.Context, orgID, teamID string, team 
 
 // UpdateTeamParent updates a team's parent using the PUT parent API
 func (c *TeamClient) UpdateTeamParent(ctx context.Context, orgID, teamID string, req *UpdateTeamParentRequest) error {
+	defer c.invalidateTeamList(orgID)
 	url := fmt.Sprintf("%s/accounts/api/organizations/%s/teams/%s/parent", c.BaseURL, orgID, teamID)
 
 	jsonData, err := json.Marshal(req)
@@ -205,8 +226,99 @@ func (c *TeamClient) UpdateTeamParent(ctx context.Context, orgID, teamID string,
 	return nil
 }
 
+// TeamListItem represents a team in the list response (has more fields than the single-team GET)
+type TeamListItem struct {
+	ID              string   `json:"team_id"`
+	TeamName        string   `json:"team_name"`
+	OrgID           string   `json:"org_id"`
+	TeamType        string   `json:"team_type"`
+	AncestorTeamIDs []string `json:"ancestor_team_ids"`
+	CreatedAt       string   `json:"created_at"`
+	UpdatedAt       string   `json:"updated_at"`
+}
+
+// ListTeamsResponse wraps the GET /teams response
+type ListTeamsResponse struct {
+	Data  []TeamListItem `json:"data"`
+	Total int            `json:"total"`
+}
+
+// ListTeams lists all teams in the organization with pagination.
+// API: GET /accounts/api/organizations/{orgId}/teams
+// Results are cached per-apply per org: the team list is used for root-team
+// resolution and parent_team lookups. Team writes drop the entry (invalidateTeamList).
+func (c *TeamClient) ListTeams(ctx context.Context, orgID string) ([]TeamListItem, error) {
+	cacheKey := "teams:" + orgID
+
+	if c.Cache != nil {
+		v, err := c.Cache.GetOrFetch(cacheKey, func() (interface{}, error) {
+			return c.listTeamsFromAPI(ctx, orgID)
+		})
+		if err != nil {
+			return nil, err
+		}
+		return v.([]TeamListItem), nil
+	}
+	return c.listTeamsFromAPI(ctx, orgID)
+}
+
+// invalidateTeamList drops the cached team list after a team write. Without it,
+// creating a team lists teams first (root team lookup) and caches the list, so an
+// anypoint_teams data source read later in the same apply misses the new team.
+func (c *TeamClient) invalidateTeamList(orgID string) {
+	if c.Cache != nil {
+		c.Cache.Delete("teams:" + orgID)
+	}
+}
+
+// listTeamsFromAPI performs the actual paginated API call.
+func (c *TeamClient) listTeamsFromAPI(ctx context.Context, orgID string) ([]TeamListItem, error) {
+	var allTeams []TeamListItem
+	limit := 100
+	offset := 0
+
+	for {
+		url := fmt.Sprintf("%s/accounts/api/organizations/%s/teams?limit=%d&offset=%d", c.BaseURL, orgID, limit, offset)
+
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+
+		req.Header.Set("Authorization", "Bearer "+c.Token)
+
+		resp, err := c.HTTPClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to send request: %w", err)
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			return nil, fmt.Errorf("failed to list teams with status %d: %s", resp.StatusCode, string(body))
+		}
+
+		var listResp ListTeamsResponse
+		if err := json.NewDecoder(resp.Body).Decode(&listResp); err != nil {
+			_ = resp.Body.Close()
+			return nil, fmt.Errorf("failed to decode response: %w", err)
+		}
+		_ = resp.Body.Close()
+
+		allTeams = append(allTeams, listResp.Data...)
+
+		if len(listResp.Data) < limit || len(allTeams) >= listResp.Total {
+			break
+		}
+		offset += limit
+	}
+
+	return allTeams, nil
+}
+
 // DeleteTeam deletes a team by ID
 func (c *TeamClient) DeleteTeam(ctx context.Context, orgID, teamID string) error {
+	defer c.invalidateTeamList(orgID)
 	url := fmt.Sprintf("%s/accounts/api/organizations/%s/teams/%s", c.BaseURL, orgID, teamID)
 
 	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)

@@ -134,7 +134,12 @@ resource "anypoint_agent_instance" "customer_support" {
   ]
 }
 
-# Sales Agent - Provides sales assistance with A/B testing
+# Sales Agent - Provides sales assistance
+#
+# NOTE: Agent instances route to a SINGLE upstream only. Multi-upstream weighted
+# routing (e.g. an 80/20 A/B test) is rejected at plan time for agents — that
+# capability is available on `anypoint_api_instance`, not `anypoint_agent_instance`.
+# Use `upstream_uri` (or a single-upstream `routing` block) here.
 resource "anypoint_agent_instance" "sales" {
   organization_id = var.organization_id
   environment_id  = var.environment_id
@@ -152,26 +157,8 @@ resource "anypoint_agent_instance" "sales" {
     base_path       = "agent/sales"
   }
 
-  gateway_id = var.gateway_id
-
-  # A/B test: 80% stable model, 20% new model
-  routing = [
-    {
-      label = "Sales Agent A/B Test"
-      upstreams = [
-        {
-          weight = 80
-          uri    = "http://sales-agent-stable.internal:8080"
-          label  = "Stable Model"
-        },
-        {
-          weight = 20
-          uri    = "http://sales-agent-new.internal:8080"
-          label  = "New Model"
-        }
-      ]
-    }
-  ]
+  gateway_id   = var.gateway_id
+  upstream_uri = "http://sales-agent-stable.internal:8080"
 
   depends_on = [
     anypoint_mcp_server.salesforce,

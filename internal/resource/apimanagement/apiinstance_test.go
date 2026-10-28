@@ -204,6 +204,7 @@ func TestAPIInstanceResource_ValidateConfig_ResponseTimeoutOmniGateway(t *testin
 			"deployment_type":  tftypes.NewValue(tftypes.String, "HY"),
 			"type":             tftypes.NewValue(tftypes.String, "http"),
 			"base_path":        tftypes.NewValue(tftypes.String, nil),
+			"port":             tftypes.NewValue(tftypes.Number, nil),
 			"response_timeout": tftypes.NewValue(tftypes.Number, 3000),
 		}),
 		"deployment": tftypes.NewValue(deploymentObjType, nil),
@@ -218,7 +219,6 @@ func TestAPIInstanceResource_ValidateConfig_ResponseTimeoutOmniGateway(t *testin
 		t.Error("ValidateConfig() should error when response_timeout is set with technology='omniGateway'")
 	}
 }
-
 
 func TestAPIInstanceResource_ImportState_Valid(t *testing.T) {
 	res := NewAPIInstanceResource().(*APIInstanceResource)

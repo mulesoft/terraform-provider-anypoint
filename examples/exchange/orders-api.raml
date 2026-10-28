@@ -1,0 +1,65 @@
+#%RAML 1.0
+title: Orders API
+version: v1
+baseUri: https://api.example.com/{version}
+
+types:
+  Order:
+    properties:
+      id: string
+      customerName: string
+      amount: number
+      status:
+        enum: [pending, confirmed, shipped, delivered]
+      createdAt: datetime
+
+/orders:
+  get:
+    description: List all orders
+    queryParameters:
+      status:
+        type: string
+        required: false
+    responses:
+      200:
+        body:
+          application/json:
+            type: Order[]
+  post:
+    description: Create a new order
+    body:
+      application/json:
+        properties:
+          customerName: string
+          amount: number
+    responses:
+      201:
+        body:
+          application/json:
+            type: Order
+
+  /{orderId}:
+    get:
+      description: Get order by ID
+      responses:
+        200:
+          body:
+            application/json:
+              type: Order
+        404:
+          body:
+            application/json:
+              example: |
+                {"error": "Order not found"}
+    patch:
+      description: Update order status
+      body:
+        application/json:
+          properties:
+            status:
+              enum: [pending, confirmed, shipped, delivered]
+      responses:
+        200:
+          body:
+            application/json:
+              type: Order

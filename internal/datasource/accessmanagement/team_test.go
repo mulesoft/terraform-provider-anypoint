@@ -8,6 +8,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/mulesoft/terraform-provider-anypoint/internal/client"
@@ -225,7 +226,7 @@ func TestTeamDataSource_Read(t *testing.T) {
 
 			// Create client with mock server
 			teamClient := &accessmanagement.TeamClient{
-				UserAnypointClient: &client.UserAnypointClient{
+				AnypointClient: &client.AnypointClient{
 					BaseURL:    server.URL,
 					Token:      "mock-token",
 					HTTPClient: &http.Client{},
@@ -284,35 +285,109 @@ func TestTeamDataSource_Read_Direct(t *testing.T) {
 				"updated_at": "2024-01-01T00:00:00Z",
 			})
 		},
+		// Team role assignments: one normal + one internal (internal must be
+		// excluded) + one platform-injected phantom whose role_id is NOT in the
+		// catalog (e.g. "Business Group Viewer") — that must be excluded too,
+		// otherwise it surfaces with an empty name.
+		basePath + "/roles": func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"data": []map[string]interface{}{
+					{
+						"role_id":        "role-exchange-viewer",
+						"name":           "Exchange Viewer",
+						"internal":       false,
+						"context_params": map[string]string{"org": "test-org-id"},
+					},
+					{
+						"role_id":        "role-internal",
+						"name":           "Internal System Role",
+						"internal":       true,
+						"context_params": map[string]string{},
+					},
+					{
+						"role_id":        "role-business-group-viewer",
+						"name":           "Business Group Viewer",
+						"internal":       false,
+						"context_params": map[string]string{"org": "test-org-id"},
+					},
+				},
+				"total": 3,
+			})
+		},
+		// Available-roles catalog (role_id -> display name).
+		"/accounts/api/roles": func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"data": []map[string]interface{}{
+					{"role_id": "role-exchange-viewer", "name": "Exchange Viewer", "internal": false},
+					{"role_id": "role-internal", "name": "Internal System Role", "internal": true},
+				},
+				"total": 2,
+			})
+		},
+		// Team members: one normal + one external-group member (both real org users,
+		// both surface) + one platform-injected group identity whose id is NOT an org
+		// user (e.g. the member the platform adds once a team gains a child team) —
+		// that must be excluded, otherwise it surfaces with an empty username.
+		basePath + "/members": func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"data": []map[string]interface{}{
+					{"id": "user-1", "membership_type": "member", "is_assigned_via_external_groups": false},
+					{"id": "user-2", "membership_type": "maintainer", "is_assigned_via_external_groups": true},
+					{"id": "group-identity-phantom", "membership_type": "member", "is_assigned_via_external_groups": false},
+				},
+				"total": 3,
+			})
+		},
+		// Org users (user_id -> username).
+		"/accounts/api/organizations/test-org-id/users": func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, map[string]interface{}{
+				"data": []map[string]interface{}{
+					{"id": "user-1", "username": "alice"},
+					{"id": "user-2", "username": "bob"},
+				},
+				"total": 2,
+			})
+		},
 	}
 	server := testutil.MockHTTPServer(t, handlers)
 
-	ds := NewTeamDataSource().(*TeamDataSource)
-	ds.client = &accessmanagement.TeamClient{
-		UserAnypointClient: &client.UserAnypointClient{
-			BaseURL:    server.URL,
-			Token:      "mock-token",
-			HTTPClient: &http.Client{},
-			OrgID:      "test-org-id",
-		},
+	userClient := &client.AnypointClient{
+		BaseURL:    server.URL,
+		Token:      "mock-token",
+		HTTPClient: &http.Client{},
+		OrgID:      "test-org-id",
 	}
+	ds := NewTeamDataSource().(*TeamDataSource)
+	ds.client = &accessmanagement.TeamClient{AnypointClient: userClient}
+	ds.rolesClient = &accessmanagement.TeamRolesClient{AnypointClient: userClient}
+	ds.membersClient = &accessmanagement.TeamMembersClient{AnypointClient: userClient}
+	ds.usersClient = &accessmanagement.RoleUsersClient{AnypointClient: userClient}
+	ds.catalogClient = &accessmanagement.RolePermissionClient{AnypointClient: userClient}
 
 	ctx := context.Background()
 	schemaResp := &datasource.SchemaResponse{}
 	ds.Schema(ctx, datasource.SchemaRequest{}, schemaResp)
 	stateType := schemaResp.Schema.Type().TerraformType(ctx)
 
+	roleObjType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"name":           tftypes.String,
+		"context_params": tftypes.Map{ElementType: tftypes.String},
+	}}
+	memberObjType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"username":                        tftypes.String,
+		"membership_type":                 tftypes.String,
+		"is_assigned_via_external_groups": tftypes.Bool,
+	}}
 	configRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
-		"id":             tftypes.NewValue(tftypes.String, "test-team-id"),
-		"name":           tftypes.NewValue(tftypes.String, nil),
-		"parent_team_id": tftypes.NewValue(tftypes.String, nil),
-		"team_type":      tftypes.NewValue(tftypes.String, nil),
+		"id":              tftypes.NewValue(tftypes.String, "test-team-id"),
+		"name":            tftypes.NewValue(tftypes.String, nil),
+		"parent_team_id":  tftypes.NewValue(tftypes.String, nil),
+		"team_type":       tftypes.NewValue(tftypes.String, nil),
 		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
-		"created_date":   tftypes.NewValue(tftypes.String, nil),
-		"updated_date":   tftypes.NewValue(tftypes.String, nil),
-		"member_count":   tftypes.NewValue(tftypes.Number, nil),
-		"created_at":     tftypes.NewValue(tftypes.String, nil),
-		"updated_at":     tftypes.NewValue(tftypes.String, nil),
+		"permissions":     tftypes.NewValue(tftypes.List{ElementType: roleObjType}, nil),
+		"members":         tftypes.NewValue(tftypes.List{ElementType: memberObjType}, nil),
+		"created_at":      tftypes.NewValue(tftypes.String, nil),
+		"updated_at":      tftypes.NewValue(tftypes.String, nil),
 	})
 
 	req := datasource.ReadRequest{Config: tfsdk.Config{Schema: schemaResp.Schema, Raw: configRaw}}
@@ -329,6 +404,42 @@ func TestTeamDataSource_Read_Direct(t *testing.T) {
 	if got.Name.ValueString() != "Test Team" {
 		t.Errorf("Expected Name 'Test Team', got %s", got.Name.ValueString())
 	}
+	// Roles: only the non-internal, in-catalog assignment should surface, labeled
+	// by display name. The internal role and the non-catalog "Business Group
+	// Viewer" phantom must both be excluded.
+	if got.Permissions.IsNull() {
+		t.Fatalf("Expected roles to be populated, got null")
+	}
+	if n := len(got.Permissions.Elements()); n != 1 {
+		t.Errorf("Expected 1 (non-internal, in-catalog) role, got %d", n)
+	}
+	// The surviving role must be the catalog role — never the empty-named phantom.
+	for _, el := range got.Permissions.Elements() {
+		obj := el.(types.Object)
+		name := obj.Attributes()["name"].(types.String).ValueString()
+		if name == "" {
+			t.Errorf("A role surfaced with an empty name — the Business Group Viewer phantom leaked through the filter")
+		}
+		if name != "Exchange Viewer" {
+			t.Errorf("Expected surviving role 'Exchange Viewer', got %q", name)
+		}
+	}
+	// Members: the two real org users surface (the external-group flag is reported,
+	// not filtered); the non-org-user "group identity" phantom must be excluded, so
+	// no member may have an empty username.
+	if got.Members.IsNull() {
+		t.Fatalf("Expected members to be populated, got null")
+	}
+	if n := len(got.Members.Elements()); n != 2 {
+		t.Errorf("Expected 2 members (group-identity phantom excluded), got %d", n)
+	}
+	for _, el := range got.Members.Elements() {
+		obj := el.(types.Object)
+		username := obj.Attributes()["username"].(types.String).ValueString()
+		if username == "" {
+			t.Errorf("A member surfaced with an empty username — the non-org-user group-identity phantom leaked through the filter")
+		}
+	}
 }
 
 func TestTeamDataSource_Read_Direct_Error(t *testing.T) {
@@ -343,7 +454,7 @@ func TestTeamDataSource_Read_Direct_Error(t *testing.T) {
 
 	ds := NewTeamDataSource().(*TeamDataSource)
 	ds.client = &accessmanagement.TeamClient{
-		UserAnypointClient: &client.UserAnypointClient{
+		AnypointClient: &client.AnypointClient{
 			BaseURL:    server.URL,
 			Token:      "mock-token",
 			HTTPClient: &http.Client{},
@@ -356,17 +467,25 @@ func TestTeamDataSource_Read_Direct_Error(t *testing.T) {
 	ds.Schema(ctx, datasource.SchemaRequest{}, schemaResp)
 	stateType := schemaResp.Schema.Type().TerraformType(ctx)
 
+	roleObjType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"name":           tftypes.String,
+		"context_params": tftypes.Map{ElementType: tftypes.String},
+	}}
+	memberObjType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"username":                        tftypes.String,
+		"membership_type":                 tftypes.String,
+		"is_assigned_via_external_groups": tftypes.Bool,
+	}}
 	configRaw := tftypes.NewValue(stateType, map[string]tftypes.Value{
-		"id":             tftypes.NewValue(tftypes.String, "test-team-id"),
-		"name":           tftypes.NewValue(tftypes.String, nil),
-		"parent_team_id": tftypes.NewValue(tftypes.String, nil),
-		"team_type":      tftypes.NewValue(tftypes.String, nil),
+		"id":              tftypes.NewValue(tftypes.String, "test-team-id"),
+		"name":            tftypes.NewValue(tftypes.String, nil),
+		"parent_team_id":  tftypes.NewValue(tftypes.String, nil),
+		"team_type":       tftypes.NewValue(tftypes.String, nil),
 		"organization_id": tftypes.NewValue(tftypes.String, "test-org-id"),
-		"created_date":   tftypes.NewValue(tftypes.String, nil),
-		"updated_date":   tftypes.NewValue(tftypes.String, nil),
-		"member_count":   tftypes.NewValue(tftypes.Number, nil),
-		"created_at":     tftypes.NewValue(tftypes.String, nil),
-		"updated_at":     tftypes.NewValue(tftypes.String, nil),
+		"permissions":     tftypes.NewValue(tftypes.List{ElementType: roleObjType}, nil),
+		"members":         tftypes.NewValue(tftypes.List{ElementType: memberObjType}, nil),
+		"created_at":      tftypes.NewValue(tftypes.String, nil),
+		"updated_at":      tftypes.NewValue(tftypes.String, nil),
 	})
 
 	req := datasource.ReadRequest{Config: tfsdk.Config{Schema: schemaResp.Schema, Raw: configRaw}}

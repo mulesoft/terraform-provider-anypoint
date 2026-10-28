@@ -570,6 +570,170 @@ func TestManagedOmniGatewayClient_ListManagedOmniGateways(t *testing.T) {
 	}
 }
 
+func TestManagedOmniGatewayClient_ListTargets(t *testing.T) {
+	// The Runtime Fabric targets endpoint returns a BARE JSON array (not an
+	// envelope). It mixes private-space targets (UUID ids) with shared-space
+	// targets (region-slug ids). Verified live against stgx.
+	mockTargets := []GatewayTarget{
+		{ID: "0a1b2c3d-1111-2222-3333-444455556666", Name: "my-private-space", Type: TargetTypePrivateSpace},
+		{ID: "cloudhub-us-east-1", Name: "US East (N. Virginia)", Type: TargetTypeSharedSpace},
+	}
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		"/runtimefabric/api/organizations/test-org-id/targets": func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != "GET" {
+				testutil.ErrorResponse(w, http.StatusMethodNotAllowed, "method not allowed")
+				return
+			}
+			testutil.AssertHTTPRequest(t, r, "GET", "/runtimefabric/api/organizations/test-org-id/targets")
+			testutil.JSONResponse(w, http.StatusOK, mockTargets)
+		},
+		"/accounts/api/v2/oauth2/token": testutil.StandardMockHandlers()["/accounts/api/v2/oauth2/token"],
+		"/accounts/api/me":              testutil.StandardMockHandlers()["/accounts/api/me"],
+	}
+
+	server := testutil.MockHTTPServer(t, handlers)
+	anypointClient, err := client.NewAnypointClient(&client.Config{
+		ClientID:     "test-client-id",
+		ClientSecret: "test-client-secret",
+		BaseURL:      server.URL,
+		Timeout:      30,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+	gwClient := &ManagedOmniGatewayClient{AnypointClient: anypointClient}
+
+	targets, err := gwClient.ListTargets(context.Background(), "test-org-id")
+	if err != nil {
+		t.Fatalf("ListTargets() unexpected error: %v", err)
+	}
+	if len(targets) != 2 {
+		t.Fatalf("Expected 2 targets, got %d", len(targets))
+	}
+	if targets[0].Type != TargetTypePrivateSpace {
+		t.Errorf("Expected first target type %q, got %q", TargetTypePrivateSpace, targets[0].Type)
+	}
+	if targets[1].ID != "cloudhub-us-east-1" || targets[1].Type != TargetTypeSharedSpace {
+		t.Errorf("Expected shared-space region slug, got id=%q type=%q", targets[1].ID, targets[1].Type)
+	}
+}
+
+func TestManagedOmniGatewayClient_ListTargets_Error(t *testing.T) {
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		"/runtimefabric/api/organizations/test-org-id/targets": func(w http.ResponseWriter, r *http.Request) {
+			testutil.ErrorResponse(w, http.StatusInternalServerError, "internal error")
+		},
+		"/accounts/api/v2/oauth2/token": testutil.StandardMockHandlers()["/accounts/api/v2/oauth2/token"],
+		"/accounts/api/me":              testutil.StandardMockHandlers()["/accounts/api/me"],
+	}
+
+	server := testutil.MockHTTPServer(t, handlers)
+	anypointClient, err := client.NewAnypointClient(&client.Config{
+		ClientID:     "test-client-id",
+		ClientSecret: "test-client-secret",
+		BaseURL:      server.URL,
+		Timeout:      30,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+	gwClient := &ManagedOmniGatewayClient{AnypointClient: anypointClient}
+
+	_, err = gwClient.ListTargets(context.Background(), "test-org-id")
+	if err == nil {
+		t.Fatal("Expected error, got nil")
+	}
+}
+
+func TestManagedOmniGatewayClient_GetTargetType(t *testing.T) {
+	mockTargets := []GatewayTarget{
+		{ID: "0a1b2c3d-1111-2222-3333-444455556666", Name: "my-private-space", Type: TargetTypePrivateSpace},
+		{ID: "cloudhub-us-east-1", Name: "US East (N. Virginia)", Type: TargetTypeSharedSpace},
+	}
+
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		"/runtimefabric/api/organizations/test-org-id/targets": func(w http.ResponseWriter, r *http.Request) {
+			testutil.JSONResponse(w, http.StatusOK, mockTargets)
+		},
+		"/accounts/api/v2/oauth2/token": testutil.StandardMockHandlers()["/accounts/api/v2/oauth2/token"],
+		"/accounts/api/me":              testutil.StandardMockHandlers()["/accounts/api/me"],
+	}
+
+	server := testutil.MockHTTPServer(t, handlers)
+	anypointClient, err := client.NewAnypointClient(&client.Config{
+		ClientID:     "test-client-id",
+		ClientSecret: "test-client-secret",
+		BaseURL:      server.URL,
+		Timeout:      30,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+	gwClient := &ManagedOmniGatewayClient{AnypointClient: anypointClient}
+
+	t.Run("resolves shared-space", func(t *testing.T) {
+		got, err := gwClient.GetTargetType(context.Background(), "test-org-id", "cloudhub-us-east-1")
+		if err != nil {
+			t.Fatalf("GetTargetType() unexpected error: %v", err)
+		}
+		if got != TargetTypeSharedSpace {
+			t.Errorf("Expected %q, got %q", TargetTypeSharedSpace, got)
+		}
+	})
+
+	t.Run("resolves private-space", func(t *testing.T) {
+		got, err := gwClient.GetTargetType(context.Background(), "test-org-id", "0a1b2c3d-1111-2222-3333-444455556666")
+		if err != nil {
+			t.Fatalf("GetTargetType() unexpected error: %v", err)
+		}
+		if got != TargetTypePrivateSpace {
+			t.Errorf("Expected %q, got %q", TargetTypePrivateSpace, got)
+		}
+	})
+
+	t.Run("unknown target returns empty string and no error", func(t *testing.T) {
+		// Not-found must NOT error — callers default to private-space behavior
+		// for backward compatibility.
+		got, err := gwClient.GetTargetType(context.Background(), "test-org-id", "does-not-exist")
+		if err != nil {
+			t.Fatalf("GetTargetType() should not error for unknown target: %v", err)
+		}
+		if got != "" {
+			t.Errorf("Expected empty string for unknown target, got %q", got)
+		}
+	})
+}
+
+func TestManagedOmniGatewayClient_GetTargetType_Error(t *testing.T) {
+	// When the underlying ListTargets call fails, GetTargetType must propagate
+	// the error (the resource then logs a warning and falls back to private-space).
+	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
+		"/runtimefabric/api/organizations/test-org-id/targets": func(w http.ResponseWriter, r *http.Request) {
+			testutil.ErrorResponse(w, http.StatusInternalServerError, "internal error")
+		},
+		"/accounts/api/v2/oauth2/token": testutil.StandardMockHandlers()["/accounts/api/v2/oauth2/token"],
+		"/accounts/api/me":              testutil.StandardMockHandlers()["/accounts/api/me"],
+	}
+
+	server := testutil.MockHTTPServer(t, handlers)
+	anypointClient, err := client.NewAnypointClient(&client.Config{
+		ClientID:     "test-client-id",
+		ClientSecret: "test-client-secret",
+		BaseURL:      server.URL,
+		Timeout:      30,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+	gwClient := &ManagedOmniGatewayClient{AnypointClient: anypointClient}
+
+	_, err = gwClient.GetTargetType(context.Background(), "test-org-id", "cloudhub-us-east-1")
+	if err == nil {
+		t.Fatal("Expected error to propagate from ListTargets, got nil")
+	}
+}
+
 func TestManagedOmniGatewayClient_ListManagedOmniGateways_Error(t *testing.T) {
 	handlers := map[string]func(w http.ResponseWriter, r *http.Request){
 		"/gatewaymanager/api/v1/organizations/test-org-id/environments/test-env-id/gateways": func(w http.ResponseWriter, r *http.Request) {

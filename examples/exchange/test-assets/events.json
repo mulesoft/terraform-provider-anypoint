@@ -1,0 +1,63 @@
+{
+  "asyncapi": "2.6.0",
+  "info": {
+    "title": "Order Events API",
+    "version": "1.0.0",
+    "description": "Publishes order lifecycle events"
+  },
+  "channels": {
+    "orders/created": {
+      "description": "Channel for new order events",
+      "subscribe": {
+        "operationId": "onOrderCreated",
+        "message": {
+          "payload": {
+            "type": "object",
+            "properties": {
+              "orderId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "customerId": {
+                "type": "string"
+              },
+              "totalAmount": {
+                "type": "number"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": ["orderId", "customerId", "totalAmount", "createdAt"]
+          }
+        }
+      }
+    },
+    "orders/updated": {
+      "description": "Channel for order update events",
+      "subscribe": {
+        "operationId": "onOrderUpdated",
+        "message": {
+          "payload": {
+            "type": "object",
+            "properties": {
+              "orderId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["pending", "processing", "shipped", "delivered", "cancelled"]
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
