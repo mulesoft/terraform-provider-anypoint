@@ -9,9 +9,9 @@ description: |-
 
 Creates and manages an Anypoint Platform organization (business group).
 
-~> **Note:** This is an Access Management resource and requires the **admin provider** (`anypoint.admin`), which uses admin user credentials along with the `client_id` and `client_secret` of a connected app to authenticate on behalf of the user (`auth_type = "user"`). You must set `provider = anypoint.admin` on this resource. The default provider (connected app credentials only) does not have sufficient privileges for Access Management operations.
+~> **Note:** Creating, updating, or deleting an organization (business group) requires an **on-behalf-of-user connected app** using `auth_type = "user"` (admin user credentials together with a connected app's `client_id`/`client_secret`). Use the `anypoint.admin` provider alias and set `provider = anypoint.admin` on this resource. The acting user must be an **Organization Administrator of the parent organization**, because setting entitlements on a business group requires parent-org admin privileges — a standard connected app (client credentials only) fails with HTTP 403: `Only an admin of the parent sub organization can update the entitlements`.
 
--> **Connected App:** This resource requires an **admin connected app** configured with `auth_type = "user"` (user credentials + connected app client credentials). Use the `anypoint.admin` provider alias. A standard connected app (client credentials only) does not have sufficient privileges for Access Management operations.
+-> **Reading vs. writing:** Only create/update/delete need user auth. *Reading* an organization — via the [`anypoint_organization` data source](../data-sources/anypoint_organization.md) or a `terraform plan` refresh — works with a standard connected app (client credentials, the default `auth_type = "connected_app"`) that has the `profile` and `read:organization` scopes. See the `examples/accessmanagement/organization_read` (read) and `examples/accessmanagement/organization_create` (create) examples.
 
 ## Entitlement State Behaviour
 

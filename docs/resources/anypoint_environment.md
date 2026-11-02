@@ -9,9 +9,9 @@ description: |-
 
 Manages an Anypoint Platform environment.
 
-~> **Note:** This is an Access Management resource and requires the **admin provider** (`anypoint.admin`), which uses admin user credentials along with the `client_id` and `client_secret` of a connected app to authenticate on behalf of the user (`auth_type = "user"`). You must set `provider = anypoint.admin` on this resource. The default provider (connected app credentials only) does not have sufficient privileges for Access Management operations.
+~> **Note:** Creating, updating, or deleting an environment requires an **on-behalf-of-user connected app** using `auth_type = "user"` (admin user credentials together with a connected app's `client_id`/`client_secret`). Use the `anypoint.admin` provider alias and set `provider = anypoint.admin` on this resource. A standard connected app (client credentials only) does not have sufficient privileges for these write operations.
 
--> **Connected App:** This resource requires an **admin connected app** configured with `auth_type = "user"` (user credentials + connected app client credentials). Use the `anypoint.admin` provider alias. A standard connected app (client credentials only) does not have sufficient privileges for Access Management operations.
+-> **Reading vs. writing:** Only create/update/delete need user auth. *Reading* an environment — via the [`anypoint_environment` data source](../data-sources/anypoint_environment.md) or a `terraform plan` refresh — works with a standard connected app (client credentials, the default `auth_type = "connected_app"`) that has the appropriate environment read scopes.
 
 ## Example Usage
 

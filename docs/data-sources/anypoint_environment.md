@@ -9,6 +9,8 @@ description: |-
 
 Fetches information about an Anypoint Platform environment.
 
+-> **Authentication:** Reading an environment works with a standard connected app (client credentials — the default `auth_type = "connected_app"`) that has the appropriate environment read scopes. User authentication (`auth_type = "user"`) is only required to create or update environments (see the [`anypoint_environment` resource](../resources/anypoint_environment.md)).
+
 ## Example Usage
 
 ```terraform

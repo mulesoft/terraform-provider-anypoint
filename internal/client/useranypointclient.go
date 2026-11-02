@@ -47,7 +47,10 @@ type UserClientConfig struct {
 	Cache     *ResponseCache
 }
 
-// NewUserAnypointClient creates a new User-based Anypoint API client using password grant
+// NewUserAnypointClient creates an Anypoint API client for the resources that historically
+// only supported password grant (Environment, Organization). It selects the grant by whether
+// a username/password resolves: password grant (auth_type = "user") when both are set,
+// client_credentials grant (auth_type = "connected_app", the default) when neither is.
 func NewUserAnypointClient(config *UserClientConfig) (*UserAnypointClient, error) {
 	if config.ClientID == "" {
 		return nil, fmt.Errorf("client_id is required")
@@ -55,26 +58,29 @@ func NewUserAnypointClient(config *UserClientConfig) (*UserAnypointClient, error
 	if config.ClientSecret == "" {
 		return nil, fmt.Errorf("client_secret is required")
 	}
-	// Allow username/password to be empty if they can be filled from environment variables.
+	// Username/password are only required for the password grant (auth_type = "user").
 	// The provider-level Configure already folds in ANYPOINT_USERNAME / ANYPOINT_PASSWORD
 	// before we get here, so config.Username / config.Password may be non-empty via either
 	// the provider block or those env vars. As a final safety net we also honor
 	// ANYPOINT_ADMIN_USERNAME / ANYPOINT_ADMIN_PASSWORD for call sites that bypass the
-	// provider-level resolution.
+	// provider-level resolution. If neither resolves we fall back to the client_credentials
+	// grant — the expected path for auth_type = "connected_app" (the documented default).
 	username := config.Username
 	if username == "" {
 		username = os.Getenv("ANYPOINT_ADMIN_USERNAME")
-	}
-	if username == "" {
-		return nil, fmt.Errorf("username is required (set it on the provider configuration, or via the ANYPOINT_USERNAME or ANYPOINT_ADMIN_USERNAME environment variable)")
 	}
 
 	password := config.Password
 	if password == "" {
 		password = os.Getenv("ANYPOINT_ADMIN_PASSWORD")
 	}
-	if password == "" {
-		return nil, fmt.Errorf("password is required (set it on the provider configuration, or via the ANYPOINT_PASSWORD or ANYPOINT_ADMIN_PASSWORD environment variable)")
+
+	// Password grant needs both halves. Having exactly one is a configuration mistake;
+	// having neither is the valid client_credentials path and must not error here.
+	if (username == "") != (password == "") {
+		return nil, fmt.Errorf("username and password must be set together for password grant auth " +
+			"(set both on the provider configuration, or via ANYPOINT_USERNAME/ANYPOINT_PASSWORD or " +
+			"ANYPOINT_ADMIN_USERNAME/ANYPOINT_ADMIN_PASSWORD) — or leave both unset to use client_credentials grant")
 	}
 
 	baseURL := config.BaseURL
@@ -131,24 +137,28 @@ func NewUserAnypointClient(config *UserClientConfig) (*UserAnypointClient, error
 	return c, nil
 }
 
-// authenticate performs user authentication using password grant and stores the access token.
-// It first tries the OAuth2 password grant endpoint. If the resulting token cannot access
-// /accounts/api/me (production Anypoint returns opaque tokens that lack user context),
-// it falls back to the /accounts/login endpoint which always returns user-context tokens.
+// authenticate obtains an access token and resolves the caller's org.
+//
+// It first hits the OAuth2 token endpoint via authenticateOAuth2, which uses the password
+// grant when a username is set and the client_credentials grant otherwise (auth_type =
+// "connected_app", the documented default). For password grant the resulting token can be
+// opaque on production Anypoint and unable to read /accounts/api/me, so user auth falls back
+// to /accounts/login which always returns a user-context token. client_credentials has no
+// such fallback — there is no user to log in as — so it errors instead.
 func (c *UserAnypointClient) authenticate() error {
-	// Try OAuth2 password grant first (works on devx and environments that issue JWTs)
 	token, err := c.authenticateOAuth2()
 	if err == nil {
 		c.Token = token
-		me, meErr := c.getMe()
-		if meErr == nil {
-			orgID, orgErr := c.extractOrgID(me)
-			if orgErr == nil {
-				c.OrgID = orgID
-				return nil
-			}
+		if orgErr := c.resolveOrg(); orgErr == nil {
+			return nil
+		} else if c.Username == "" {
+			// client_credentials token that cannot identify its org — nothing to fall back to.
+			return fmt.Errorf("failed to resolve organization for client_credentials token: %w", orgErr)
 		}
-		// OAuth2 token didn't work for /me — fall through to login endpoint
+		// OAuth2 token didn't work for /me — fall through to the login endpoint.
+	} else if c.Username == "" {
+		// client_credentials grant itself failed — no user login fallback is possible.
+		return err
 	}
 
 	// Fallback: use /accounts/login (always returns tokens with user context)
@@ -161,29 +171,44 @@ func (c *UserAnypointClient) authenticate() error {
 	}
 	c.Token = loginToken
 
+	if orgErr := c.resolveOrg(); orgErr != nil {
+		return orgErr
+	}
+
+	return nil
+}
+
+// resolveOrg reads the caller identity for the current token and stores its org.
+func (c *UserAnypointClient) resolveOrg() error {
 	me, err := c.getMe()
 	if err != nil {
-		return fmt.Errorf("failed to get user info after login: %w", err)
+		return fmt.Errorf("failed to get user info: %w", err)
 	}
 	orgID, err := c.extractOrgID(me)
 	if err != nil {
 		return fmt.Errorf("failed to extract organization ID: %w", err)
 	}
 	c.OrgID = orgID
-
 	return nil
 }
 
-// authenticateOAuth2 performs the OAuth2 password grant flow.
+// authenticateOAuth2 runs the OAuth2 token endpoint. It uses the password grant when a
+// username is set ("acts on behalf of user" connected app / auth_type = "user") and the
+// client_credentials grant otherwise ("acts on its own behalf" connected app /
+// auth_type = "connected_app"), mirroring AnypointClient.authenticateOAuth2.
 func (c *UserAnypointClient) authenticateOAuth2() (string, error) {
 	authURL := fmt.Sprintf("%s/accounts/api/v2/oauth2/token", c.BaseURL)
 
 	authData := map[string]string{
-		"grant_type":    "password",
 		"client_id":     c.ClientID,
 		"client_secret": c.ClientSecret,
-		"username":      c.Username,
-		"password":      c.Password,
+	}
+	if c.Username != "" {
+		authData["grant_type"] = "password"
+		authData["username"] = c.Username
+		authData["password"] = c.Password
+	} else {
+		authData["grant_type"] = "client_credentials"
 	}
 
 	jsonData, err := json.Marshal(authData)

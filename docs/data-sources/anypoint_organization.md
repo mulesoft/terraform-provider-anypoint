@@ -9,6 +9,8 @@ description: |-
 
 Fetches information about an Anypoint Platform organization.
 
+-> **Authentication:** Reading an organization works with a standard connected app (client credentials — the default `auth_type = "connected_app"`). Grant the connected app the `profile` and `read:organization` scopes on the target organization. User authentication (`auth_type = "user"`) is **not** required for reads; it is only needed to create or update organizations (see the [`anypoint_organization` resource](../resources/anypoint_organization.md)).
+
 -> **Entitlements:** The `entitlements` attribute is returned as a JSON string. Use the `jsondecode()` function to access individual fields (e.g., `jsondecode(data.anypoint_organization.main.entitlements).workerClouds`).
 
 ## Example Usage
