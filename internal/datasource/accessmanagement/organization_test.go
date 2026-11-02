@@ -95,7 +95,12 @@ func TestOrganizationDataSource_Configure(t *testing.T) {
 		t.Errorf("Configure() with nil provider data should not error: %v", resp.Diagnostics.Errors())
 	}
 
-	// Test with valid provider data but missing username (expected to fail)
+	// Client credentials only: no username or password. That is a valid read path.
+	t.Setenv("ANYPOINT_ADMIN_USERNAME", "")
+	t.Setenv("ANYPOINT_ADMIN_PASSWORD", "")
+	t.Setenv("ANYPOINT_USERNAME", "")
+	t.Setenv("ANYPOINT_PASSWORD", "")
+
 	server := testutil.MockHTTPServer(t, testutil.StandardMockHandlers())
 	config := &client.Config{
 		ClientID:     "test-client-id",
@@ -106,21 +111,11 @@ func TestOrganizationDataSource_Configure(t *testing.T) {
 	resp = &datasource.ConfigureResponse{}
 	dataSource.Configure(ctx, req, resp)
 
-	// This should error because username is required for organization operations
-	if !resp.Diagnostics.HasError() {
-		t.Error("Configure() should have errors when username is missing")
+	if resp.Diagnostics.HasError() {
+		t.Errorf("Configure() with client credentials and no user should succeed: %v", resp.Diagnostics.Errors())
 	}
-
-	// Verify error message contains username requirement
-	hasUsernameError := false
-	for _, err := range resp.Diagnostics.Errors() {
-		if strings.Contains(err.Detail(), "username is required") {
-			hasUsernameError = true
-			break
-		}
-	}
-	if !hasUsernameError {
-		t.Error("Configure() should report username is required error")
+	if dataSource.client == nil {
+		t.Error("Configure() should set the organization client")
 	}
 }
 
