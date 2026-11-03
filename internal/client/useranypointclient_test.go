@@ -83,7 +83,9 @@ func TestNewUserAnypointClient(t *testing.T) {
 			errContains: "client_secret is required",
 		},
 		{
-			name: "missing username - no env var",
+			// Password without username is an incomplete password grant, not a
+			// client_credentials config — must be rejected.
+			name: "only password set - no username",
 			config: &UserClientConfig{
 				ClientID:     "test-client-id",
 				ClientSecret: "test-client-secret",
@@ -93,10 +95,11 @@ func TestNewUserAnypointClient(t *testing.T) {
 				"ANYPOINT_ADMIN_USERNAME": "",
 			},
 			wantErr:     true,
-			errContains: "username is required",
+			errContains: "must be set together",
 		},
 		{
-			name: "missing password - no env var",
+			// Username without password is likewise incomplete.
+			name: "only username set - no password",
 			config: &UserClientConfig{
 				ClientID:     "test-client-id",
 				ClientSecret: "test-client-secret",
@@ -106,7 +109,21 @@ func TestNewUserAnypointClient(t *testing.T) {
 				"ANYPOINT_ADMIN_PASSWORD": "",
 			},
 			wantErr:     true,
-			errContains: "password is required",
+			errContains: "must be set together",
+		},
+		{
+			// No username/password at all — client_credentials grant
+			// (auth_type = "connected_app", the default). Must succeed.
+			name: "client_credentials - no username or password",
+			config: &UserClientConfig{
+				ClientID:     "test-client-id",
+				ClientSecret: "test-client-secret",
+			},
+			envVars: map[string]string{
+				"ANYPOINT_ADMIN_USERNAME": "",
+				"ANYPOINT_ADMIN_PASSWORD": "",
+			},
+			wantErr: false,
 		},
 	}
 
