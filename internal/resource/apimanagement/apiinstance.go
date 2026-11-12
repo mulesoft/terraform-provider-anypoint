@@ -1287,6 +1287,15 @@ func (r *APIInstanceResource) buildUpdateRoutingAndCatalog(
 
 	resolveID := upstreamIDResolver(existing)
 
+	// Track which existing upstreams currently carry a TLS context, so we can tell
+	// a genuine removal (plan drops tls_context_id) apart from "never had one".
+	hadTLSByID := make(map[string]bool, len(existing))
+	for _, us := range existing {
+		if us.ID != "" && us.TLSContext != nil {
+			hadTLSByID[us.ID] = true
+		}
+	}
+
 	routing := make([]apimanagement.APIInstanceRoute, 0, len(planRoutes))
 	catalog := make([]apimanagement.APIInstanceUpstream, 0)
 	seenCatalog := make(map[string]bool)
@@ -1314,6 +1323,9 @@ func (r *APIInstanceResource) buildUpdateRoutingAndCatalog(
 					Label:      us.Label,
 					URI:        us.URI,
 					TLSContext: us.TLSContext,
+					// The plan removed tls_context_id but the server still has one:
+					// force an explicit null so the PATCH actually detaches it.
+					ClearTLSContext: us.TLSContext == nil && hadTLSByID[id],
 				})
 			}
 		}

@@ -342,6 +342,88 @@ func TestAPIInstance_JSONSerialization(t *testing.T) {
 	}
 }
 
+// TestAPIInstanceUpstream_MarshalJSON pins the tlsContext serialization for the
+// three cases that matter on PATCH: context set, never set, and being removed.
+// The last case (W-24883407) must reach the wire as "tlsContext": null, otherwise
+// API Manager keeps the old context attached and HTTPS -> HTTP never takes effect.
+func TestAPIInstanceUpstream_MarshalJSON(t *testing.T) {
+	tests := []struct {
+		name         string
+		upstream     APIInstanceUpstream
+		wantTLSKey   bool        // whether "tlsContext" key is present at all
+		wantTLSValue interface{} // expected value when present
+	}{
+		{
+			name: "tls context set is serialized as object",
+			upstream: APIInstanceUpstream{
+				ID:     "us-1",
+				Weight: 100,
+				TLSContext: &APIInstanceUpstreamTLS{
+					SecretGroupID: "sg-1",
+					TLSContextID:  "tls-1",
+				},
+			},
+			wantTLSKey:   true,
+			wantTLSValue: map[string]interface{}{"secretGroupId": "sg-1", "tlsContextId": "tls-1"},
+		},
+		{
+			name: "no tls context and no clear flag omits the key",
+			upstream: APIInstanceUpstream{
+				ID:     "us-1",
+				Weight: 100,
+			},
+			wantTLSKey: false,
+		},
+		{
+			name: "clear flag forces explicit null",
+			upstream: APIInstanceUpstream{
+				ID:              "us-1",
+				Weight:          100,
+				ClearTLSContext: true,
+			},
+			wantTLSKey:   true,
+			wantTLSValue: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := json.Marshal(tt.upstream)
+			if err != nil {
+				t.Fatalf("Marshal failed: %v", err)
+			}
+			var m map[string]interface{}
+			if err := json.Unmarshal(data, &m); err != nil {
+				t.Fatalf("Unmarshal failed: %v", err)
+			}
+
+			val, present := m["tlsContext"]
+			if present != tt.wantTLSKey {
+				t.Fatalf("tlsContext present=%v, want %v (raw: %s)", present, tt.wantTLSKey, data)
+			}
+			if !tt.wantTLSKey {
+				return
+			}
+			switch want := tt.wantTLSValue.(type) {
+			case nil:
+				if val != nil {
+					t.Errorf("tlsContext = %v, want explicit null (raw: %s)", val, data)
+				}
+			case map[string]interface{}:
+				got, ok := val.(map[string]interface{})
+				if !ok {
+					t.Fatalf("tlsContext = %v, want object (raw: %s)", val, data)
+				}
+				for k, v := range want {
+					if got[k] != v {
+						t.Errorf("tlsContext[%q] = %v, want %v", k, got[k], v)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestAPIInstanceClient_GetGatewayInfo(t *testing.T) {
 	mockGW := &GatewayInfo{
 		Name:           "my-gateway",
