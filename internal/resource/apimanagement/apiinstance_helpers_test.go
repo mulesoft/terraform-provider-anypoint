@@ -207,6 +207,87 @@ func TestAPIInstanceResource_expandRouting(t *testing.T) {
 	})
 }
 
+// --- buildUpdateRoutingAndCatalog (TLS removal, W-24883407) ---
+
+func TestAPIInstanceResource_buildUpdateRoutingAndCatalog_TLSRemoval(t *testing.T) {
+	r := &APIInstanceResource{}
+	ctx := context.Background()
+
+	upstreamObjType := types.ObjectType{AttrTypes: map[string]attr.Type{
+		"weight":         types.Int64Type,
+		"uri":            types.StringType,
+		"label":          types.StringType,
+		"tls_context_id": types.StringType,
+	}}
+	rulesObjType := types.ObjectType{AttrTypes: map[string]attr.Type{
+		"methods": types.StringType,
+		"path":    types.StringType,
+		"host":    types.StringType,
+		"headers": types.MapType{ElemType: types.StringType},
+	}}
+	routeObjType := types.ObjectType{AttrTypes: map[string]attr.Type{
+		"label":     types.StringType,
+		"rules":     rulesObjType,
+		"upstreams": types.ListType{ElemType: upstreamObjType},
+	}}
+
+	// Plan: one upstream whose tls_context_id has been removed (null).
+	usObj := types.ObjectValueMust(upstreamObjType.AttrTypes, map[string]attr.Value{
+		"weight":         types.Int64Value(100),
+		"uri":            types.StringValue("http://backend.example.com"),
+		"label":          types.StringValue("backend"),
+		"tls_context_id": types.StringNull(),
+	})
+	usList := types.ListValueMust(upstreamObjType, []attr.Value{usObj})
+	routeObj := types.ObjectValueMust(routeObjType.AttrTypes, map[string]attr.Value{
+		"label":     types.StringValue("route-1"),
+		"rules":     types.ObjectNull(rulesObjType.AttrTypes),
+		"upstreams": usList,
+	})
+	routingList := types.ListValueMust(routeObjType, []attr.Value{routeObj})
+
+	plan := APIInstanceResourceModel{
+		Routing:     routingList,
+		UpstreamURI: types.StringNull(),
+	}
+
+	t.Run("removal forces ClearTLSContext when server had a context", func(t *testing.T) {
+		existing := []apimgmtclient.APIUpstream{
+			{
+				ID:    "us-1",
+				Label: "backend",
+				URI:   "http://backend.example.com",
+				TLSContext: &apimgmtclient.APIInstanceUpstreamTLS{
+					SecretGroupID: "sg", TLSContextID: "tls",
+				},
+			},
+		}
+		_, catalog := r.buildUpdateRoutingAndCatalog(ctx, plan, existing)
+		if len(catalog) != 1 {
+			t.Fatalf("expected 1 catalog entry, got %d", len(catalog))
+		}
+		if catalog[0].TLSContext != nil {
+			t.Errorf("TLSContext should be nil after removal, got %v", catalog[0].TLSContext)
+		}
+		if !catalog[0].ClearTLSContext {
+			t.Error("ClearTLSContext should be true when server had TLS and plan removed it")
+		}
+	})
+
+	t.Run("no clear when server never had a context", func(t *testing.T) {
+		existing := []apimgmtclient.APIUpstream{
+			{ID: "us-1", Label: "backend", URI: "http://backend.example.com"},
+		}
+		_, catalog := r.buildUpdateRoutingAndCatalog(ctx, plan, existing)
+		if len(catalog) != 1 {
+			t.Fatalf("expected 1 catalog entry, got %d", len(catalog))
+		}
+		if catalog[0].ClearTLSContext {
+			t.Error("ClearTLSContext should be false when server had no TLS context")
+		}
+	})
+}
+
 // --- flattenInstance ---
 
 func TestAPIInstanceResource_flattenInstance(t *testing.T) {

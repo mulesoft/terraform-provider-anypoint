@@ -97,6 +97,38 @@ type APIInstanceUpstream struct {
 	URI        string                  `json:"uri,omitempty"`
 	Label      string                  `json:"label,omitempty"`
 	TLSContext *APIInstanceUpstreamTLS `json:"tlsContext,omitempty"`
+	// ClearTLSContext forces an explicit "tlsContext": null into the PATCH body
+	// so API Manager detaches a TLS context that an upstream previously had.
+	// Without it, a nil TLSContext is dropped by omitempty and the API treats the
+	// absent field as "no change", leaving the old context attached — which blocks
+	// HTTPS -> HTTP transitions. Not serialized itself; see MarshalJSON.
+	ClearTLSContext bool `json:"-"`
+}
+
+// MarshalJSON renders an upstream, emitting "tlsContext": null when the caller
+// has asked to clear a previously-set TLS context (ClearTLSContext). The default
+// struct tags cannot express "send null vs. omit" conditionally, so the body is
+// assembled by hand. Omit/zero semantics otherwise match the struct tags above.
+func (u APIInstanceUpstream) MarshalJSON() ([]byte, error) {
+	m := map[string]interface{}{
+		"weight": u.Weight,
+	}
+	if u.ID != "" {
+		m["id"] = u.ID
+	}
+	if u.URI != "" {
+		m["uri"] = u.URI
+	}
+	if u.Label != "" {
+		m["label"] = u.Label
+	}
+	switch {
+	case u.TLSContext != nil:
+		m["tlsContext"] = u.TLSContext
+	case u.ClearTLSContext:
+		m["tlsContext"] = nil
+	}
+	return json.Marshal(m)
 }
 
 // APIInstanceUpstreamTLS holds TLS context for an upstream backend
